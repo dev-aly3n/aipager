@@ -2506,7 +2506,7 @@ class MiniAppServer:
         """
         from aiohttp import web
 
-        from aipager.bot.session_ops import await_default_saved, await_model_change
+        from aipager.bot.session_ops import await_model_change, settle_default
         from aipager.config import MODEL_CHOICES
         from aipager.miniapp.launch import validate_model
         from aipager.miniapp.sessions import MODEL_SWITCH_UNCONFIRMED
@@ -2560,10 +2560,12 @@ class MiniAppServer:
         new_model = await await_model_change(
             sess, outcome.previous_model, timeout=self.model_confirm_seconds,
         )
+        # Claude Code saves a typed /model as the default for new sessions
+        # too: the page says so when it did. A member's switch puts the old
+        # default back instead, confirmed or not.
+        saved = await settle_default(self.bot, sess, user_id, scope_chat_id,
+                                     confirmed=bool(new_model))
         if new_model:
-            # Claude Code saves a typed /model as the default for new
-            # sessions too: the page says so when it did.
-            saved = await await_default_saved(sess)
             return web.json_response({
                 "status": "switched", "label": outcome.label,
                 "model": new_model, "previous_model": outcome.previous_model,

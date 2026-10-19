@@ -54,12 +54,12 @@ from aipager.bot import (
 from aipager.bot.session_ops import (
     MODEL_DEFAULT_SAVED,
     MODEL_UNCONFIRMED,
-    await_default_saved,
     await_model_change,
     clear_model_switch_pending,
     mark_model_switch_sent,
     model_refusal_text,
     model_switch_refusal,
+    settle_default,
 )
 from aipager.bot import callbacks as callbacks_mod
 from aipager.bot.mode_switch import (
@@ -2957,7 +2957,10 @@ class CommandHandlersMixin:
                 # The same message then shows the model the session
                 # actually reports, once its statusline says so.
                 task = asyncio.create_task(
-                    self._confirm_model_feedback(sent, sess, previous_model, header),
+                    self._confirm_model_feedback(
+                        sent, sess, previous_model, header,
+                        user_id=driver_id_from_update(update),
+                        chat_id=calling_chat_id(update)),
                 )
                 _MODEL_CONFIRM_TASKS.add(task)
                 task.add_done_callback(_MODEL_CONFIRM_TASKS.discard)
@@ -2977,25 +2980,32 @@ class CommandHandlersMixin:
 
     async def _confirm_model_feedback(
         self, message, sess, previous_model: str, header: str,
-        *, timeout: float | None = None,
+        *, timeout: float | None = None, user_id: int | None = None,
+        chat_id: int | None = None,
     ) -> None:
         """Edit a ``/model`` feedback message once the switch is known.
 
         Appends the model the statusline now reports, or — when nothing
         changed within the wait — says it was not confirmed. One edit,
         through the same flood-aware helper every other edit uses; a
-        muted chat or a reply that was never sent simply skips it.
+        muted chat or a reply that was never sent simply skips it. Either
+        way a member's switch first gets Claude Code's default put back
+        (``session_ops.settle_default``).
         """
+        new_model = await await_model_change(sess, previous_model, timeout=timeout)
+        # Whatever happens to the reply: a member's switch must not stay the
+        # owner's default (session_ops.settle_default).
+        saved = await settle_default(self, sess, user_id, chat_id, confirmed=bool(new_model))
         if message is None or message is MUTED:
             return
-        new_model = await await_model_change(sess, previous_model, timeout=timeout)
         # The session's chat, where the reply is (one argument fewer than a
         # stand-in may take: resolved here).
         tr = i18n.for_sess(sess)
         if new_model:
             text = f"{header}\n{tr.html(MODEL_NOW, model=new_model)}"
-            if await await_default_saved(sess):
-                # As in the terminal: Claude Code made it the default too.
+            if saved:
+                # As in the terminal: Claude Code made it the default too
+                # (a member's switch puts the old default back instead).
                 text += f"\n{tr.html(MODEL_DEFAULT_SAVED)}"
         else:
             text = f"{header}\n{tr.html(WARNING_LINE, text=tr.text(MODEL_UNCONFIRMED))}"

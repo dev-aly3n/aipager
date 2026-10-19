@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`aipager resume <name>` brings a session back on its own model.** A session started on a model you picked, or switched with `/model`, came back from the terminal on Claude Code's default model. It now gets the same model as a resume or restart from Telegram. Claude's last answer, which it prints, no longer loses the text of a Markdown link or stops with an error on a stray `[/x]`.
 - **`aipager status` shows a model name as it is written.** A model name with square brackets in it was read as styling, and one like `[/x]` stopped the command with an error.
 - **A message sent right after a model switch reaches Claude.** Claude Code checks a new model with a request before it switches, and a message typed meanwhile was lost. aipager now holds it (👀) until the session reports the new model, or for up to 17 seconds.
-- **A model switch says when Claude Code made that model the default for new sessions.** Claude Code saves a model switched with `/model` as the default for every new session, as it says in the terminal. The chat reply, the new session's card and the Mini App now say so too.
+- **A model switch says when Claude Code made that model the default for new sessions.** Claude Code saves a model switched with `/model` as the default for every new session, as it says in the terminal. The chat reply, the new session's card and the Mini App now say so too. In a group, a member whose role cannot manage the chat switches only their own session: aipager puts the default back.
 
 ## [1.3.7] - 2026-10-18
 

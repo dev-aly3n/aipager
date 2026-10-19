@@ -440,7 +440,7 @@ def mark_model_switch_sent(sess, model: str) -> str:
     sess.model_switch_pending_until = now + MODEL_SWITCH_PENDING_SECONDS
     sess.model_switch_pending_from = previous
     sess.model_check_until = now + MODEL_CHECK_HOLD_SECONDS
-    sess.model_default_from = claude_default_model()
+    sess.model_default_known, sess.model_default_from = _read_default()
     sess.model_switch_to = model
     if not model_switch_marker.write_marker(
         _marker_dir(), sess.name, model, sess.claude_session_id or "",
@@ -460,6 +460,28 @@ def claude_default_model(path=None) -> str | None:
         path = claude_paths.for_sessions().user_settings
     model = claude_paths.read_settings(path).get("model")
     return model.strip() if isinstance(model, str) and model.strip() else None
+
+
+def _read_default(path=None) -> tuple[bool, str | None]:
+    """``(readable, model)`` for Claude Code's default model in the sessions'
+    user settings: a missing file reads as no default; one that cannot be
+    read whole, or is not a JSON object, as unknown (``(False, None)``)."""
+    import json
+
+    from aipager import claude_paths  # local: keeps this module light
+
+    if path is None:
+        path = claude_paths.for_sessions().user_settings
+    try:
+        data = json.loads(path.read_bytes())
+    except FileNotFoundError:
+        return True, None
+    except (OSError, ValueError, RecursionError):
+        return False, None
+    if not isinstance(data, dict):
+        return False, None
+    model = data.get("model")
+    return True, (model.strip() if isinstance(model, str) and model.strip() else None)
 
 
 async def await_default_saved(
@@ -495,6 +517,103 @@ async def await_default_saved(
         if remaining <= 0:
             return None
         await _sleep(min(interval, remaining))
+
+
+def holds_member_to_default(bot, user_id, chat_id) -> bool:
+    """Does a model switch by *user_id* in *chat_id* change only that
+    session? Yes for a person held to the chat's root folder
+    (:func:`aipager.member_root.restricted_root`: a role without
+    ``can_manage``, and, failing closed, someone who is not a member or has
+    an unknown role): Claude Code's default model for new sessions is the
+    machine owner's choice, so it is put back
+    (:func:`restore_default_model`). Not in personal mode, nor for an owner
+    or admin, who keep Claude Code's own behaviour and are told."""
+    from aipager import member_root  # local: keeps this module light
+
+    return member_root.restricted_root(bot, user_id, chat_id) is not None
+
+
+#: What :func:`restore_default_model` did.
+RESTORED, NOT_OURS, RESTORE_FAILED = "restored", "not_ours", "failed"
+
+
+def restore_default_model(sess, saved: str, *, before=None, known=None) -> str:
+    """Put Claude Code's default model back to what it was when the switch
+    was typed (``model_default_from``; the key removed when there was none),
+    in the sessions' user settings. Only while that file still holds
+    *saved*, the model this switch saved: a change someone else made
+    meanwhile is kept (:data:`NOT_OURS`). :data:`RESTORED` when the old
+    default is back; :data:`RESTORE_FAILED` when it could not be written,
+    or the file could not be read when the switch was typed (the owner's
+    default is unknown then, so it is not guessed).
+
+    Measured with Claude Code 2.1.303: a running session keeps the model it
+    switched to when its settings file's ``model`` changes under it (by an
+    atomic replace or an in-place write), so only new sessions see the old
+    default again. Never written in a relative config folder (one inside
+    each session's own folder), nor when the file cannot be read whole
+    (``claude_bootstrap._update_json``)."""
+    from aipager import claude_bootstrap, claude_paths  # local: keeps this module light
+
+    if known is None:
+        known, before = sess.model_default_known, sess.model_default_from
+    paths = claude_paths.for_sessions()
+    if paths.relative or not known:
+        return RESTORE_FAILED
+    ours = {"still": None}
+
+    def change(data: dict) -> bool:
+        current = data.get("model")
+        ours["still"] = isinstance(current, str) and current.strip() == saved
+        if not ours["still"]:
+            return False
+        if before is None:
+            data.pop("model", None)
+        else:
+            data["model"] = before
+        return True
+
+    if claude_bootstrap._update_json(paths.user_settings, change):
+        return RESTORED
+    return NOT_OURS if ours["still"] is False else RESTORE_FAILED
+
+
+async def settle_default(bot, sess, user_id, chat_id, *, confirmed: bool = True) -> str | None:
+    """After a typed switch: the default Claude Code saved that the person
+    should be told about, or ``None``. *confirmed*: the statusline reported
+    the switch.
+
+    Anyone :func:`holds_member_to_default` does not hold is told, after a
+    confirmed switch, as in the terminal. For a held member the old default
+    is put back whatever the statusline said (Claude Code saves the default
+    only once it switched, which can be as late as the check's window), and
+    nothing is said: the switch is that session's only. A default someone
+    else changed meanwhile is left as it is, also silently. Only when the
+    restore fails (the file cannot be written, or could not be read when
+    the switch was typed) is the member told, as anyone else is."""
+    if not holds_member_to_default(bot, user_id, chat_id):
+        return await await_default_saved(sess) if confirmed else None
+    # As they were when this switch was typed: another switch of the same
+    # session during the wait records its own.
+    known, before = sess.model_default_known, sess.model_default_from
+    wait = MODEL_DEFAULT_SAVE_SECONDS
+    if not confirmed:
+        wait = max(wait, sess.model_check_until - time.monotonic() + wait)
+    saved = await await_default_saved(sess, timeout=wait)
+    if saved is None:
+        return None
+    result = restore_default_model(sess, saved, before=before, known=known)
+    if result == RESTORED:
+        log.info("[%s] model switch by a member: Claude Code's default model put back",
+                 sess.label)
+        return None
+    if result == NOT_OURS:
+        log.info("[%s] model switch by a member: Claude Code's default model changed "
+                 "again meanwhile; left as it is", sess.label)
+        return None
+    log.warning("[%s] model switch by a member: Claude Code's default model could not "
+                "be put back", sess.label)
+    return saved
 
 
 #: Under a confirmed switch (the chat's reply, the Ready card).

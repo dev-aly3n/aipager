@@ -1112,18 +1112,21 @@ def _ready_taps(bot: TelegramBot, chat_id: int, msg_id) -> int:
 
 async def _say_default_saved(
     bot: TelegramBot, update: Update, chat_id: int, msg_id, sess: TrackedSession,
-    previous: str, changed: str, taps: int,
+    previous: str, changed: str, taps: int, actor: int | None = None,
 ) -> None:
     """After a model switch from the Ready card: once the session reports it,
     the card says when Claude Code also made it the default for new
     sessions, as the chat's /model reply does. Left alone when the card was
     tapped again meanwhile (it may show the model list or another change),
-    or the session ended. Never raises."""
-    from aipager.bot.session_ops import await_default_saved, await_model_change
+    or the session ended. A member's switch puts the old default back and
+    says nothing (``session_ops.settle_default``). Never raises."""
+    from aipager.bot.session_ops import await_model_change, settle_default
     try:
-        if not await await_model_change(sess, previous):
-            return
-        if not await await_default_saved(sess):
+        new_model = await await_model_change(sess, previous)
+        # Also for a switch the statusline did not confirm: a member's must
+        # not stay the owner's default (session_ops.settle_default).
+        saved = await settle_default(bot, sess, actor, chat_id, confirmed=bool(new_model))
+        if not new_model or not saved:
             return
         if _ready_taps(bot, chat_id, msg_id) != taps or sess.status is Status.GONE:
             return
@@ -1260,12 +1263,13 @@ async def _handle_ready_callback(
         changed = tr.text(CHANGED_MODEL, model=label, person=Command(by)) if by else ""
         text, kb = render_ready(bot, update, sess, model_label=label, changed=changed)
         await _edit_at(bot, chat_id, msg_id, text, kb)
-        if outcome.previous_model:
-            task = asyncio.create_task(_say_default_saved(
-                bot, update, chat_id, msg_id, sess, outcome.previous_model, changed,
-                _ready_taps(bot, chat_id, msg_id)))
-            _READY_FOLLOW_TASKS.add(task)
-            task.add_done_callback(_READY_FOLLOW_TASKS.discard)
+        # Started even with no statusline yet: a member's switch must not
+        # stay the owner's default whether or not it is confirmed.
+        task = asyncio.create_task(_say_default_saved(
+            bot, update, chat_id, msg_id, sess, outcome.previous_model, changed,
+            _ready_taps(bot, chat_id, msg_id), actor))
+        _READY_FOLLOW_TASKS.add(task)
+        task.add_done_callback(_READY_FOLLOW_TASKS.discard)
         return
 
     await bot._safe_answer(query, person.text(language_menu.INVALID_CALLBACK))

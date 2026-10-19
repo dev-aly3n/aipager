@@ -469,6 +469,94 @@ def test_the_page_is_told_when_claude_code_made_it_the_default(
     run_async(_run())
 
 
+def test_a_members_switch_puts_claude_codes_default_back(
+    server, run_async, monkeypatch, tmp_path,
+):
+    """A member whose role cannot manage the chat switches only the
+    session: the old default is put back and the page is not told it
+    changed."""
+    from aipager import claude_paths
+
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    settings = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"model": "sonnet"}))
+
+    async def _run():
+        sess = _mk_session(server, "dev", model_name="Sonnet 5")
+        sess.cwd = str(tmp_path)
+        monkeypatch.setattr("aipager.member_root.restricted_root",
+                            lambda bot, user_id, chat_id: str(tmp_path)
+                            if (user_id, chat_id) == (DEVELOPER_ID, SCOPE_CHAT_ID) else None)
+        send = _pty(monkeypatch)
+        server.model_confirm_seconds = 5.0
+
+        async def _switch_later(*_a, **_k):
+            def _switched():
+                settings.write_text(json.dumps({"model": "claude-opus-5-5"}))
+                sess.model_name = "Opus 5.5"
+            asyncio.get_running_loop().call_later(0.1, _switched)
+            return True
+        send.side_effect = _switch_later
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, "dev", {"model": "claude-opus-5-5"},
+                               user_id=DEVELOPER_ID)
+            body = await resp.json()
+            assert body["status"] == "switched", body
+            assert body["saved_default"] is False
+        finally:
+            await client.close()
+    run_async(_run())
+    assert json.loads(settings.read_text()) == {"model": "sonnet"}
+
+
+def test_an_unconfirmed_switch_by_a_member_is_undone_too(
+    server, run_async, monkeypatch, tmp_path,
+):
+    """The statusline never reports the switch, but Claude Code saved the
+    default: a member's is put back all the same."""
+    import time as _time
+
+    from aipager import claude_paths
+    from aipager.bot import session_ops
+
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.setattr(session_ops, "MODEL_DEFAULT_SAVE_SECONDS", 0.1)
+    settings = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"model": "sonnet"}))
+
+    async def _run():
+        sess = _mk_session(server, "dev", model_name="Sonnet 5")
+        sess.cwd = str(tmp_path)
+        monkeypatch.setattr("aipager.member_root.restricted_root",
+                            lambda bot, user_id, chat_id: str(tmp_path)
+                            if (user_id, chat_id) == (DEVELOPER_ID, SCOPE_CHAT_ID) else None)
+        send = _pty(monkeypatch)
+        server.model_confirm_seconds = 0.05
+
+        async def _saved_late(*_a, **_k):
+            sess.model_check_until = _time.monotonic() + 0.6
+            asyncio.get_running_loop().call_later(
+                0.4, settings.write_text, json.dumps({"model": "claude-opus-5-5"}))
+            return True
+        send.side_effect = _saved_late
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, "dev", {"model": "claude-opus-5-5"},
+                               user_id=DEVELOPER_ID)
+            body = await resp.json()
+            assert body["status"] == "unconfirmed", body
+            # Past Claude Code's late save in any case, so the check below
+            # sees what became of it.
+            await asyncio.sleep(0.5)
+        finally:
+            await client.close()
+    run_async(_run())
+    assert json.loads(settings.read_text()) == {"model": "sonnet"}
+
+
 def test_the_page_shows_the_default_line_only_when_told():
     """The page picks its notice by the answer's flag, never by text."""
     from aipager.miniapp.static import _app

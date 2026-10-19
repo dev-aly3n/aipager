@@ -823,6 +823,10 @@ class TrackedSession:
     # settings) when the switch was typed: it saves a typed `/model` there,
     # and the switch's confirmation says so when it changed.
     model_default_from: str | None = None
+    # That file could be read then (a missing one counts: no default). An
+    # unreadable one says nothing about the owner's default, so a member's
+    # switch is not undone from it (session_ops.restore_default_model).
+    model_default_known: bool = False
     # The model that switch typed: the default Claude Code saves must be it.
     model_switch_to: str = ""
     turn_hook_at: float = 0.0

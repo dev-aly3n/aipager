@@ -226,7 +226,9 @@ A live session's page has a **Model** control showing the model the session repo
   model of its own starts on it. The chat reply, the session's Ready
   card and the Mini App say so when that happens. A session started
   with its own model (on `/new`'s model step, or from the `/settings`
-  defaults) keeps it.
+  defaults) keeps it. In a group, a member whose role cannot manage the
+  chat (`user`, `read_only`) switches only their own session: aipager
+  puts Claude Code's default back.
 
 ## The pinned status bar
 
