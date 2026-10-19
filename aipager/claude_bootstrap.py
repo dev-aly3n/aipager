@@ -724,9 +724,12 @@ def _wire_and_check(paths: claude_paths.ClaudePaths) -> bool:
                      _HOOK_CMD, paths.user_settings)
     except Exception:
         log.debug("claude bootstrap: failed to wire hooks", exc_info=True)
+    # Stamp first, then read: an edit between the two leaves a stamp that
+    # no longer matches, so the next launch reads the file again.
+    real = os.path.realpath(paths.user_settings)
+    stamp = _file_stamp(real)
     if hooks_wired(paths.user_settings):
-        real = os.path.realpath(paths.user_settings)
-        _WIRED[real] = _file_stamp(real)
+        _WIRED[real] = stamp
         return True
     log.warning("claude bootstrap: sessions will start without aipager's hooks: %s has no "
                 "%s entry (is %s on PATH, and is the file valid JSON?) - run `aipager "

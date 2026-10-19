@@ -231,6 +231,31 @@ def test_a_file_that_lost_its_hooks_is_wired_again_before_a_launch(
     assert "lost aipager's hooks since they were wired" in caplog.text
 
 
+def test_an_edit_while_the_hooks_are_checked_is_not_remembered_as_wired(
+        cfg, tmp_path, monkeypatch, caplog):
+    """The file is stat'ed before it is read: an edit that takes the hooks
+    out between the two must not be remembered as a wired file."""
+    _hooks_on_path(monkeypatch)
+    paths = claude_paths.for_sessions()
+    real_check = claude_bootstrap.hooks_wired
+
+    def _check_then_edit(path):
+        found = real_check(path)
+        _write(Path(path), {"theirs": True, "padding": "x" * 64})
+        return found
+
+    monkeypatch.setattr(claude_bootstrap, "hooks_wired", _check_then_edit)
+    assert claude_bootstrap.ensure_session_hooks(paths) is True
+    monkeypatch.setattr(claude_bootstrap, "hooks_wired", real_check)
+    assert not real_check(paths.user_settings)
+    caplog.clear()
+
+    with caplog.at_level(logging.WARNING):
+        assert claude_bootstrap.ensure_session_hooks(paths) is True
+    assert real_check(paths.user_settings)
+    assert "lost aipager's hooks since they were wired" in caplog.text
+
+
 def test_a_file_that_lost_its_hooks_and_cannot_be_wired_says_so(
         cfg, tmp_path, monkeypatch, caplog):
     _hooks_on_path(monkeypatch)
