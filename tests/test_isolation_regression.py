@@ -118,11 +118,14 @@ def test_home_write_targets_are_isolated(dotted, real):
     )
 
 
-@pytest.mark.parametrize("name", ["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_CUSTOM_OAUTH_URL"])
+@pytest.mark.parametrize("name", ["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+                                  "CREDENTIALS_DIRECTORY"])
 def test_claude_config_env_is_scrubbed(name):
-    """Either one moves Claude Code's files (aipager.claude_paths) away from
+    """Each one moves Claude Code's files (aipager.claude_paths) away from
     the redirected defaults above, to wherever the operator's shell points
-    them, so a test never sees one it did not set itself."""
+    them (CREDENTIALS_DIRECTORY through the claude_oauth file the session
+    env reads before daemon.env), so a test never sees one it did not set
+    itself."""
     import os
 
     assert name not in os.environ

@@ -356,6 +356,11 @@ def _isolate_home_paths(tmp_path, monkeypatch):
     # (aipager.claude_paths): a test that wants one sets it itself.
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_CUSTOM_OAUTH_URL", raising=False)
+    # Under a systemd service the session env reads
+    # $CREDENTIALS_DIRECTORY/claude_oauth before the redirected daemon.env
+    # (aipager.daemon_secrets), so a CLAUDE_CONFIG_DIR there would point
+    # every test at the operator's real config folder.
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
     # The settings files this process wired hooks into: per test.
     monkeypatch.setattr(import_module("aipager.claude_bootstrap"), "_WIRED", set())
     return originals
