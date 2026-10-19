@@ -1,6 +1,6 @@
 # Commandes et interface du bot
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Un clavier fixe se trouve sous le champ de saisie de la discussion. Les rangées
 
 - **Modèles** : les messages que vous vous surprenez à taper encore et encore, par exemple « Écrivez des tests », « Expliquez le plan », « Mettez à jour la mémoire ».
 - **Commandes** : les commandes slash que comprend Claude Code lui-même (`/compact`, `/clear`, etc.), tapées tout de suite. Une commande ou un modèle nomme la session à laquelle il est allé (`🧹 /clear envoyé à x1`). Effacer la conversation est refusé pendant que la session travaille (`⚠️ Impossible d'effacer la conversation pendant que la session travaille`).
-- **Modèles IA** : des changements rapides de modèle pour la session active. Il y a les alias de famille (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), qui désignent toujours le modèle le plus récent de cette famille, et les modèles fixes (`claude-opus-5-5`, `claude-opus-5-5[1m]` avec la fenêtre de contexte de 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Les sélecteurs de lancement et de session de la Mini App utilisent la même liste. Un changement est refusé pendant que la session travaille ou qu'une demande est ouverte. La réponse `🔄` change ensuite pour montrer le modèle que signale la session, ou dit que le changement n'a pas été confirmé (voir [Changer le modèle d'une session en cours](#switching-a-running-sessions-model)).
+- **Modèles IA** : des changements rapides de modèle pour la session active. Il y a les alias de famille (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), qui désignent toujours le modèle le plus récent de cette famille, et les modèles fixes (`claude-opus-5-5`, `claude-opus-5-5[1m]` avec la fenêtre de contexte de 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Les sélecteurs de lancement et de session de la Mini App utilisent la même liste. Un changement est refusé pendant que la session travaille ou qu'une demande est ouverte. La réponse `🔄` change ensuite pour montrer le modèle que signale la session, ou dit que le changement n'a pas été confirmé (voir [Changer le modèle d'une session en cours](#switching-a-running-sessions-model)). Tout autre modèle se saisit par son nom à l'étape du modèle de `/new` ou dans la Mini App, tel que Claude Code ou votre fournisseur l'écrit : jusqu'à 128 caractères parmi les lettres, les chiffres et `. _ - : / @ ~ ,`, avec `[1m]` permis à la fin ([fournisseurs](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Pour changer la disposition par défaut, écrivez `~/.config/aipager/keyboard.json` :
 

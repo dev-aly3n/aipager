@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Một bàn phím cố định nằm dưới ô nhập của chat. Các hàng, t�
 
 - **Mẫu**: những tin nhắn bạn thấy mình gõ đi gõ lại, ví dụ “Viết test”, “Giải thích kế hoạch”, “Cập nhật bộ nhớ”.
 - **Lệnh**: các lệnh slash mà Claude Code tự xử lý (`/compact`, `/clear`, v.v.), được gõ vào ngay. Một lệnh hay một mẫu nêu tên phiên mà nó đã đến (`🧹 Đã gửi /clear đến x1`). “Xóa cuộc trò chuyện” bị từ chối trong lúc phiên đang làm việc (`⚠️ Không thể xóa cuộc trò chuyện khi phiên đang làm việc`).
-- **Mô hình**: đổi nhanh mô hình cho phiên đang chọn. Có các bí danh theo dòng (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), luôn chỉ mô hình mới nhất của dòng đó, và các mô hình được ghim (`claude-opus-5-5`, `claude-opus-5-5[1m]` với ngữ cảnh 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Bộ chọn lúc khởi động và trang phiên của Mini App dùng cùng danh sách này. Một lần đổi bị từ chối trong lúc phiên đang làm việc hoặc đang có một yêu cầu mở. Sau đó câu trả lời `🔄` đổi thành mô hình mà phiên báo về, hoặc nói rằng lần đổi chưa được xác nhận (xem [Đổi mô hình của một phiên đang chạy](#switching-a-running-sessions-model)).
+- **Mô hình**: đổi nhanh mô hình cho phiên đang chọn. Có các bí danh theo dòng (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), luôn chỉ mô hình mới nhất của dòng đó, và các mô hình được ghim (`claude-opus-5-5`, `claude-opus-5-5[1m]` với ngữ cảnh 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Bộ chọn lúc khởi động và trang phiên của Mini App dùng cùng danh sách này. Một lần đổi bị từ chối trong lúc phiên đang làm việc hoặc đang có một yêu cầu mở. Sau đó câu trả lời `🔄` đổi thành mô hình mà phiên báo về, hoặc nói rằng lần đổi chưa được xác nhận (xem [Đổi mô hình của một phiên đang chạy](#switching-a-running-sessions-model)). Mô hình khác có thể gõ tên ở bước chọn mô hình của `/new` hoặc trong Mini App, đúng như Claude Code hoặc nhà cung cấp của bạn viết: tối đa 128 ký tự gồm chữ cái, chữ số và `. _ - : / @ ~ ,`, cho phép `[1m]` ở cuối ([nhà cung cấp](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Để thay bố cục mặc định, hãy ghi `~/.config/aipager/keyboard.json`:
 

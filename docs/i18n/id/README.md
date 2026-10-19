@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>Claude jadi satu chat lagi.</h3>
 
@@ -353,6 +353,15 @@ Kirim `/update`: perintah ini memeriksa aipager dan Claude Code dan memasang yan
 <br>
 
 Menu **Model** di keyboard dan Mini App menawarkan alias keluarga Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) dan model tetap seperti `claude-opus-5-5` dan `claude-sonnet-5-5`. Di API Anthropic, setiap alias mengarah ke model terbaru dalam keluarganya. Di Bedrock dan Vertex alias yang sama bisa mengarah ke versi yang lebih lama, tergantung apa yang ditawarkan penyedia layananmu; kirim `/model <full-id>` untuk memilih model yang persis.
+
+</details>
+
+<details>
+<summary><b>Saya memakai kunci API, gateway, atau penyedia lain. Apakah aipager bisa dipakai?</b></summary>
+
+<br>
+
+Bisa. aipager menjalankan Claude Code sesuai pengaturanmu, dan menjawab pertanyaan yang diajukan Claude Code saat mulai (folder, kunci API, layar saat pertama kali dijalankan), supaya sesi yang dimulai dari Telegram tidak berhenti di situ. Taruh pengaturannya di blok `env` pada `~/.claude/settings.json`, atau di `~/.config/aipager/daemon.env` (satu baris `KEY=value` per pengaturan, tanpa tanda kutip). Tombol Opus, Sonnet, dan Haiku mengikuti `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, dan `ANTHROPIC_DEFAULT_HAIKU_MODEL`, dan model lain bisa diketik namanya. Anthropic hanya mendukung Claude Code dengan model Claude. Lihat [Pemecahan masalah](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider).
 
 </details>
 

@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Unter dem Eingabefeld des Chats sitzt eine feste Tastatur. Reihen, von oben nach
 
 - **Vorlagen**: Nachrichten, die du immer wieder tippst, zum Beispiel „Tests schreiben“, „Plan erklären“, „Notizen aktualisieren“.
 - **Befehle**: Slash-Befehle, die Claude Code selbst versteht (`/compact`, `/clear` usw.), sofort eingetippt. Ein Befehl oder eine Vorlage nennt die Sitzung, an die er gegangen ist (`🧹 /clear an x1 gesendet`). Die Unterhaltung zu leeren wird abgelehnt, solange die Sitzung arbeitet (`⚠️ Die Unterhaltung lässt sich nicht leeren, solange die Sitzung arbeitet`).
-- **Modelle**: schnelle Modellwechsel für die aktive Sitzung. Es gibt die Familien-Aliase (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), die immer das neueste Modell dieser Familie meinen, und feste Modelle (`claude-opus-5-5`, `claude-opus-5-5[1m]` mit 1M Kontext, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Die Auswahl beim Start und auf der Sitzungsseite der Mini App nutzen dieselbe Liste. Ein Wechsel wird abgelehnt, solange die Sitzung arbeitet oder eine Anfrage offen ist. Die Antwort mit `🔄` ändert sich danach, um das Modell zu zeigen, das die Sitzung meldet, oder sagt, dass der Wechsel nicht bestätigt wurde (siehe [Das Modell einer laufenden Sitzung wechseln](#switching-a-running-sessions-model)).
+- **Modelle**: schnelle Modellwechsel für die aktive Sitzung. Es gibt die Familien-Aliase (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), die immer das neueste Modell dieser Familie meinen, und feste Modelle (`claude-opus-5-5`, `claude-opus-5-5[1m]` mit 1M Kontext, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Die Auswahl beim Start und auf der Sitzungsseite der Mini App nutzen dieselbe Liste. Ein Wechsel wird abgelehnt, solange die Sitzung arbeitet oder eine Anfrage offen ist. Die Antwort mit `🔄` ändert sich danach, um das Modell zu zeigen, das die Sitzung meldet, oder sagt, dass der Wechsel nicht bestätigt wurde (siehe [Das Modell einer laufenden Sitzung wechseln](#switching-a-running-sessions-model)). Jedes andere Modell tippst du im Modell-Schritt von `/new` oder in der Mini App mit seinem Namen ein, so wie Claude Code oder dein Anbieter ihn schreibt: bis zu 128 Zeichen aus Buchstaben, Ziffern und `. _ - : / @ ~ ,`, mit `[1m]` am Ende ([Anbieter](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Um das Standardlayout zu ändern, schreib `~/.config/aipager/keyboard.json`:
 

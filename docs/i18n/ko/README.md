@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>이제 Claude도 채팅 하나예요.</h3>
 
@@ -353,6 +353,15 @@ aipager는 내 채팅에서 보이는 것만 내 봇 token으로 Telegram에 보
 <br>
 
 키보드의 **모델** 메뉴와 Mini App은 Claude Code의 계열 별칭(`sonnet`, `opus`, `haiku`, `fable`, `opusplan`)과 `claude-opus-5-5`, `claude-sonnet-5-5` 같은 고정 모델을 보여 줘요. Anthropic API에서 별칭은 그 계열의 최신 모델을 가리켜요. Bedrock과 Vertex에서는 제공자가 가진 버전에 따라 같은 별칭이 더 오래된 버전을 가리킬 수 있어요. 정확한 모델을 고르려면 `/model <full-id>`를 보내세요.
+
+</details>
+
+<details>
+<summary><b>API 키, 게이트웨이, 다른 제공자를 써요. aipager가 동작하나요?</b></summary>
+
+<br>
+
+네. aipager는 설정해 둔 그대로 Claude Code를 실행하고, Claude Code가 시작할 때 묻는 질문(폴더, API 키, 첫 실행 화면)에 대신 답해서 Telegram에서 시작한 세션이 거기서 멈추지 않게 해요. 설정은 `~/.claude/settings.json`의 `env` 블록이나 `~/.config/aipager/daemon.env`에 넣으세요(한 줄에 `KEY=value` 하나, 따옴표 없이). Opus, Sonnet, Haiku 버튼은 `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`을 따르고, 다른 모델은 이름을 직접 입력하면 돼요. Anthropic은 Claude 모델에서만 Claude Code를 지원해요. [문제 해결](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)을 참고하세요.
 
 </details>
 

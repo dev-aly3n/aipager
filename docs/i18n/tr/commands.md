@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Sohbetin giriş alanının altında kalıcı bir klavye vardır. Sıralar yukar�
 
 - **Şablonlar**: kendini tekrar tekrar yazarken bulduğun mesajlar, örneğin “Test yaz”, “Planı açıkla”, “Belleği güncelle”.
 - **Komutlar**: Claude Code'un kendisinin anladığı slash komutları (`/compact`, `/clear` ve diğerleri) hemen yazılır. Bir komut ya da şablon nereye gittiğini söyler (`🧹 /clear gönderildi: x1`). Oturum çalışırken konuşmayı temizlemek reddedilir (`⚠️ Oturum çalışırken konuşma temizlenemez`).
-- **Modeller**: etkin oturum için hızlı model değişikliği. Her zaman ailelerinin en yeni modelini ifade eden aile takma adları (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) ve sabitlenmiş modeller (`claude-opus-5-5`, 1M bağlam pencereli `claude-opus-5-5[1m]`, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`) vardır. Başlatma seçicisi ve Mini App'teki oturum sayfası aynı listeyi kullanır. Oturum çalışırken ya da bir istek açıkken değişiklik reddedilir. `🔄` yanıtı sonra değişir ve oturumun bildirdiği modeli gösterir ya da değişikliğin onaylanmadığını söyler (bkz. [Çalışan bir oturumun modelini değiştirmek](#switching-a-running-sessions-model)).
+- **Modeller**: etkin oturum için hızlı model değişikliği. Her zaman ailelerinin en yeni modelini ifade eden aile takma adları (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) ve sabitlenmiş modeller (`claude-opus-5-5`, 1M bağlam pencereli `claude-opus-5-5[1m]`, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`) vardır. Başlatma seçicisi ve Mini App'teki oturum sayfası aynı listeyi kullanır. Oturum çalışırken ya da bir istek açıkken değişiklik reddedilir. `🔄` yanıtı sonra değişir ve oturumun bildirdiği modeli gösterir ya da değişikliğin onaylanmadığını söyler (bkz. [Çalışan bir oturumun modelini değiştirmek](#switching-a-running-sessions-model)). Başka bir model, `/new` komutunun model adımında ya da Mini App'te, Claude Code'un veya sağlayıcının yazdığı gibi adıyla yazılabilir: harf, rakam ve `. _ - : / @ ~ ,` karakterlerinden en fazla 128 karakter; sonda `[1m]` olabilir ([sağlayıcılar](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Varsayılan düzeni değiştirmek için `~/.config/aipager/keyboard.json` dosyasını yaz:
 

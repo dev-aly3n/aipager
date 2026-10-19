@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Ada keyboard tetap di bawah kolom input chat. Barisnya dari atas ke bawah:
 
 - **Templat**: pesan yang sering kamu ketik berulang kali, misalnya “Tulis tes”, “Jelaskan rencana”, “Perbarui memori”.
 - **Perintah**: perintah slash yang dipahami Claude Code sendiri (`/compact`, `/clear`, dan seterusnya) langsung diketik. Perintah atau templat menyebut sesi tujuannya (`🧹 /clear dikirim ke x1`). Menghapus percakapan ditolak selama sesinya bekerja (`⚠️ Percakapan tidak bisa dihapus saat sesi sedang bekerja`).
-- **Model**: penggantian model cepat untuk sesi aktif. Ada alias keluarga (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), yang selalu berarti model terbaru di keluarganya, dan model yang dikunci (`claude-opus-5-5`, `claude-opus-5-5[1m]` dengan jendela konteks 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Pemilih saat peluncuran dan halaman sesi di Mini App memakai daftar yang sama. Pergantian ditolak selama sesinya bekerja atau ada permintaan terbuka. Balasan `🔄` kemudian berubah untuk menampilkan model yang dilaporkan sesi itu, atau menyebut bahwa pergantiannya belum dikonfirmasi (lihat [Mengganti model sesi yang sedang berjalan](#switching-a-running-sessions-model)).
+- **Model**: penggantian model cepat untuk sesi aktif. Ada alias keluarga (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), yang selalu berarti model terbaru di keluarganya, dan model yang dikunci (`claude-opus-5-5`, `claude-opus-5-5[1m]` dengan jendela konteks 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Pemilih saat peluncuran dan halaman sesi di Mini App memakai daftar yang sama. Pergantian ditolak selama sesinya bekerja atau ada permintaan terbuka. Balasan `🔄` kemudian berubah untuk menampilkan model yang dilaporkan sesi itu, atau menyebut bahwa pergantiannya belum dikonfirmasi (lihat [Mengganti model sesi yang sedang berjalan](#switching-a-running-sessions-model)). Model lain bisa diketik namanya di langkah model `/new` atau di Mini App, persis seperti yang ditulis Claude Code atau penyediamu: sampai 128 karakter berupa huruf, angka, dan `. _ - : / @ ~ ,`, dengan `[1m]` boleh di akhir ([penyedia](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Untuk mengubah tata letak bawaan, tulis `~/.config/aipager/keyboard.json`:
 

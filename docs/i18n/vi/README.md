@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>Claude giờ chỉ là thêm một cuộc chat.</h3>
 
@@ -353,6 +353,15 @@ Gửi `/update`: nó kiểm tra aipager và Claude Code rồi cài bản mới, 
 <br>
 
 Menu **Mô hình** trên bàn phím và Mini App đưa ra các bí danh theo họ của Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) và các mô hình cố định như `claude-opus-5-5` và `claude-sonnet-5-5`. Trên API của Anthropic, một bí danh trỏ tới mô hình mới nhất trong họ của nó. Trên Bedrock và Vertex, cùng bí danh đó có thể trỏ tới một bản cũ hơn, tùy vào những gì nhà cung cấp của bạn có; hãy gửi `/model <full-id>` để chọn đúng một mô hình.
+
+</details>
+
+<details>
+<summary><b>Tôi dùng khóa API, gateway hoặc một nhà cung cấp khác. aipager có chạy được không?</b></summary>
+
+<br>
+
+Có. aipager chạy Claude Code đúng như bạn đã thiết lập, và trả lời các câu hỏi Claude Code đặt ra lúc khởi động (thư mục, khóa API, các màn hình chạy lần đầu), để phiên bắt đầu từ Telegram không bị dừng ở đó. Đặt thiết lập trong khối `env` của `~/.claude/settings.json`, hoặc trong `~/.config/aipager/daemon.env` (mỗi dòng một `KEY=value`, không có dấu ngoặc kép). Các nút Opus, Sonnet và Haiku theo `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` và `ANTHROPIC_DEFAULT_HAIKU_MODEL`, còn mô hình khác thì gõ tên vào là được. Anthropic chỉ hỗ trợ Claude Code với các mô hình Claude. Xem [Xử lý sự cố](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider).
 
 </details>
 

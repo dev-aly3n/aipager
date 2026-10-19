@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ Sıra önemlidir: her kontrol öncekilerin geçtiğini varsayar. Beklenmedik bir
 | `role_shell_access` | Bash çalıştırabilen her üye rolü için bir kez uyarır (o rolün güvenlik kuralları elden geldiğince çalışır, bir sınır değildir; bkz. [gruplar](groups.md#roles)) | bu role `policy.yaml` içinde Bash verme ya da kabullen |
 | `peer_messages` | Claude oturumları arasındaki mesajlar: makbuzlarının nerede tutulduğu ve bu klasörün kapalı olup olmadığı, bu sistemin gönderenin başlangıç zamanını doğrulayıp doğrulayamayacağı ve bir kuralın SendMessage izni verdiği her rol için bir uyarı (bkz. [güvenlik](security.md#messages-between-claude-sessions)) | paylaşılan makbuz klasörünü kaldır (aipager yeniden oluşturur) ya da bu role SendMessage verme |
 | `claude` | `claude` programını her başlatmanın bulduğu gibi bulur (`aipager.yaml` içindeki `claude_path` ya da `$AIPAGER_CLAUDE_BIN` hemen kazanır; yoksa `~/.local/bin`, PATH ve Homebrew içindeki en yenisi) ve bulunan DİĞER her kurulumu listeler | Claude Code'u kur ya da `claude_path` / `AIPAGER_CLAUDE_BIN` ayarla |
-| `claude_auth` | Gerçek bir oturumun aldığı ortamda `claude auth status` dener. **Asla başarısız olmaz**: “giriş yapılmamış” ve “denemenin kendisi başarısız oldu” farklı gösterilir ve ikisi de oturum başlatmayı engellemez | `claude auth login` ya da bir API anahtarı / `CLAUDE_CODE_OAUTH_TOKEN` ayarla |
+| `claude_auth` | Gerçek bir oturumun aldığı ortamda `claude auth status` dener. **Asla başarısız olmaz**: “giriş yapılmamış” ve “denemenin kendisi başarısız oldu” farklı gösterilir ve ikisi de oturum başlatmayı engellemez. Ayrıca Claude Code'a oturumların `ANTHROPIC_API_KEY` değerini kullanmaması söylenmişse ve onlara başka hiçbir şey giriş yaptırmıyorsa uyarır. | `claude auth login` ya da bir API anahtarı / `CLAUDE_CODE_OAUTH_TOKEN` ayarla; `ANTHROPIC_BASE_URL` ayarlıysa o adresin anahtarı ([sağlayıcılar](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | `dtach` programı bulundu (aipager'ın kendi `dtach-bin` paketi ya da PATH'teki) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` ve `aipager-statusline` PATH'te | `uv tool install --reinstall aipager` |
 | `settings_json` | `~/.claude/settings.json` içinde aipager hook'ları bağlı | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 Bu dosyanın neye karşı koruduğu ve neye karşı korumadığı için bkz. [Güvenlik modeli: Claude kimlik bilgileri](security.md#the-claude-credential-what-actually-protects-it).
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>API anahtarı, gateway ya da başka bir sağlayıcıyla
+
+aipager, Claude Code'u senin kurduğun gibi çalıştırır; bu yüzden Telegram'dan başlatılan bir oturum, terminalindeki `claude` gibi giriş yapar: bir claude.ai girişiyle, Anthropic'in bir API anahtarıyla, bir gateway üzerinden (LiteLLM, Vercel, Cloudflare ve benzerleri) ya da `ANTHROPIC_BASE_URL` içine yazılmış, başka bir şirketin Anthropic biçimindeki adresiyle. Anthropic, Claude Code'u yalnızca Claude modelleriyle destekler; başka modeller farklı davranabilir.
+
+- **Ayarlar nereye konur.** Her Claude Code oturumunun okuduğu `~/.claude/settings.json` dosyasındaki `env` bloğuna ya da yalnızca aipager'ın başlattığı oturumlara giden `~/.config/aipager/daemon.env` dosyasına: her ayar için bir `KEY=value` satırı, tırnaksız (tırnaklar değerin parçası olur). Bir servis (`aipager service install`) kabuğunun profilini hiç okumaz, yani oradaki bir `export` ona ulaşmaz. `daemon.env` dosyasını değiştirdikten sonra aipager'ı yeniden başlat.
+- **Hangi anahtar ayarı.** Bir gateway ya da başka bir sağlayıcı için Claude Code'un belgeleri `ANTHROPIC_AUTH_TOKEN` önerir; Claude Code bunu hiç sormaz. `ANTHROPIC_API_KEY` için bir kez “Do you want to use this API key?” diye sorar ve Telegram'dan başlatılan bir oturum yanıt veremez; bu yüzden aipager, oturum başlamadan hemen önce `~/.claude.json` içinde yanıtlar:
+  - Evet: anahtar `settings.json` ya da `daemon.env` içindeyse veya oturuma başka hiçbir şey giriş yaptıramıyorsa.
+  - Hayır: anahtar yalnızca aipager'ın başlatıldığı ortamdan geliyorsa ve Claude'a başka bir yoldan zaten giriş yapılmışsa; oturumların o girişte ve onun planında kalır. Anahtarı kullanmak için, anahtarın tanımlı olduğu bir terminal oturumunda onu `/config` ve “Use custom API key” ile aç.
+  - Kendi verdiğin bir yanıt kalır; tek istisna, başka hiçbir şey oturuma giriş yaptıramıyorken `settings.json` ya da `daemon.env` içindeki bir anahtar için verilmiş bir Hayır'dır. Bir Hayır oturumları girişsiz bıraktığında `aipager doctor` bunu söyler; anahtarı bir terminalde `/config` ve “Use custom API key” ile yeniden aç.
+- **İlk açılış ekranları.** Claude Code'un ilk açılışını hiç bitirmediği yerde (yeni bir makine ya da container), oturumun giriş bilgisi varsa aipager bunu bitmiş olarak işaretler; böylece oturum tema seçiminde takılmaz. Hiç giriş bilgisi yoksa bir terminalde bir kez `claude` çalıştır ve giriş yap.
+- **Modeller.** Opus, Sonnet ve Haiku düğmeleri Claude Code'un `opus`, `sonnet` ve `haiku` adlarını gönderir; `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` ve `ANTHROPIC_DEFAULT_HAIKU_MODEL` ayarlıysa Claude Code bunları sağlayıcının modellerine eşler. `claude-...` düğmeleri bu modellere sahip bir sağlayıcı ister. Başka bir modeli `/new` komutunun model adımında ya da Mini App'te sağlayıcının yazdığı gibi yaz: harf, rakam ve `. _ - : / @ ~ ,` karakterlerinden en fazla 128 karakter; Claude Code'un `[1m]` eki de olabilir. Düğmeleri `keyboard.json` değiştirir ([Kalıcı klavye](commands.md#persistent-keyboard) bölümüne bak).
+- **Anahtarsız `ANTHROPIC_BASE_URL`.** O zaman Claude Code claude.ai girişini o adrese gönderir. Adres, girişini Anthropic'e iletmek için kurulmuş bir gateway değilse sağlayıcının anahtarını da ayarla.
+- **Desteklenmez:** Claude Code'u yerel bir proxy üzerinden başka bir şirketin sohbet aboneliğiyle (örneğin bir ChatGPT planıyla) çalıştıran araçlar. O şirket Claude Code'u kendi planları için onaylamadı ve böyle bir kullanım o hesabı riske atabilir.
 
 ## <a id="the-daemons-control-socket-moved"></a>aipager'ın kontrol soketi taşındı
 

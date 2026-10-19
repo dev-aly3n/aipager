@@ -1,6 +1,6 @@
 # 문제 해결
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ dtach가 거부한 시작은 채팅에 이유를 한 줄로 보여 줘요(소켓
 | `role_shell_access` | 멤버가 가진 역할 가운데 Bash를 실행할 수 있는 역할마다 한 번 경고해요(그 안전 규칙은 최선의 노력일 뿐 경계가 아니에요. [그룹](groups.md#roles) 참고) | `policy.yaml`에서 그 역할에 Bash를 주지 않거나, 받아들이기 |
 | `peer_messages` | Claude 세션 사이의 메시지: 영수증을 어디에 보관하고 그 폴더가 비공개인지, 이 시스템이 보낸 쪽의 시작 시각을 확인할 수 있는지, 그리고 규칙이 SendMessage를 허용하는 역할마다 경고해요([보안](security.md#messages-between-claude-sessions) 참고) | 함께 쓰는 영수증 폴더를 지우거나(aipager가 다시 만들어요), 그 역할에 SendMessage를 주지 않기 |
 | `claude` | 모든 시작이 하는 방식 그대로 `claude` 프로그램을 찾고(`aipager.yaml`의 `claude_path`나 `$AIPAGER_CLAUDE_BIN`이 바로 이겨요. 아니면 `~/.local/bin`, PATH, Homebrew 가운데 가장 새것), 찾은 다른 설치를 모두 나열해요 | Claude Code를 설치하거나, `claude_path` / `AIPAGER_CLAUDE_BIN`을 설정 |
-| `claude_auth` | 실제 세션이 받는 것과 같은 환경에서 `claude auth status`를 시험해요. **절대 FAIL이 아니에요**: “로그인 안 됨”과 “시험 자체가 실패함”을 따로 알려 주고, 둘 다 세션 시작을 막지 않아요 | `claude auth login`, 또는 API 키 / `CLAUDE_CODE_OAUTH_TOKEN` 설정 |
+| `claude_auth` | 실제 세션이 받는 것과 같은 환경에서 `claude auth status`를 시험해요. **절대 FAIL이 아니에요**: “로그인 안 됨”과 “시험 자체가 실패함”을 따로 알려 주고, 둘 다 세션 시작을 막지 않아요. 세션의 `ANTHROPIC_API_KEY`를 쓰지 말라는 답이 Claude Code에 기록되어 있고 다른 로그인 방법이 없을 때도 경고해요. | `claude auth login`, 또는 API 키 / `CLAUDE_CODE_OAUTH_TOKEN` 설정; `ANTHROPIC_BASE_URL`이 설정되어 있으면 그 주소의 키([제공자](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | `dtach` 프로그램을 찾았어요(aipager 자체의 `dtach-bin`, 또는 PATH에 있는 것) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook`과 `aipager-statusline`이 PATH에 있어요 | `uv tool install --reinstall aipager` |
 | `settings_json` | `~/.claude/settings.json`에 aipager hook이 연결되어 있어요 | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 이 파일이 무엇을 지키고 무엇을 지키지 못하는지는 [보안 모델: Claude 로그인 정보](security.md#the-claude-credential-what-actually-protects-it)를 보세요.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>API 키, 게이트웨이, 다른 제공자를 쓸 때
+
+aipager는 설정해 둔 그대로 Claude Code를 실행해요. 그래서 Telegram에서 시작한 세션도 터미널의 `claude`와 같은 방법으로 로그인해요. claude.ai 로그인, Anthropic API 키, 게이트웨이(LiteLLM, Vercel, Cloudflare 등), 또는 `ANTHROPIC_BASE_URL`에 넣은 다른 회사의 Anthropic 형식 주소 중 하나로요. Anthropic은 Claude 모델에서만 Claude Code를 지원하고, 다른 모델은 다르게 동작할 수 있어요.
+
+- **설정을 넣는 곳.** 모든 Claude Code 세션이 읽는 `~/.claude/settings.json`의 `env` 블록, 또는 aipager가 시작하는 세션만 받는 `~/.config/aipager/daemon.env`에 넣으세요. 한 줄에 `KEY=value` 하나씩, 따옴표 없이 써요(따옴표는 값의 일부가 돼요). 서비스(`aipager service install`)는 셸 프로필을 읽지 않으니 거기 있는 `export`는 닿지 않아요. `daemon.env`를 바꾼 뒤에는 aipager를 다시 시작하세요.
+- **어떤 키 설정을 쓸지.** 게이트웨이나 다른 제공자에는 Claude Code 문서가 `ANTHROPIC_AUTH_TOKEN`을 권하고, 이 값은 Claude Code가 묻지 않아요. `ANTHROPIC_API_KEY`는 한 번 “Do you want to use this API key?”라고 묻는데, Telegram에서 시작한 세션은 답할 수 없어서 세션이 시작되기 바로 전에 aipager가 `~/.claude.json`에 답해요.
+  - 예: 키가 `settings.json`이나 `daemon.env`에 있거나, 세션에 로그인시킬 다른 방법이 없을 때.
+  - 아니요: 키가 aipager를 시작한 환경에서만 오고 다른 방법으로 Claude에 이미 로그인되어 있을 때. 세션은 그 로그인과 요금제를 그대로 써요. 키를 쓰려면 그 키가 있는 터미널 세션에서 `/config`의 “Use custom API key”로 켜세요.
+  - 직접 한 답은 그대로 둬요. 다만 세션에 로그인시킬 다른 방법이 없을 때 `settings.json`이나 `daemon.env`에 있는 키에 대한 아니요는 바꿔요. 아니요 때문에 세션이 로그인할 수 없으면 `aipager doctor`가 알려 줘요. 터미널에서 `/config`의 “Use custom API key”로 키를 다시 켜세요.
+- **첫 실행 화면.** Claude Code가 첫 실행을 끝낸 적이 없는 곳(새 컴퓨터나 컨테이너)에서는 세션에 로그인 정보가 있으면 aipager가 첫 실행을 끝난 것으로 표시해서, 세션이 테마 선택 화면에서 멈추지 않게 해요. 로그인 정보가 하나도 없으면 터미널에서 `claude`를 한 번 실행해 로그인하세요.
+- **모델.** Opus, Sonnet, Haiku 버튼은 Claude Code의 `opus`, `sonnet`, `haiku`를 보내고, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`을 설정하면 Claude Code가 이를 제공자의 모델로 연결해요. `claude-...` 버튼은 그 모델이 있는 제공자에서만 돼요. 다른 모델은 `/new`의 모델 단계나 Mini App에서 제공자가 쓰는 이름 그대로 입력하세요. 글자, 숫자, `. _ - : / @ ~ ,`로 최대 128자이고, Claude Code의 `[1m]` 접미사도 붙일 수 있어요. 버튼은 `keyboard.json`으로 바꿔요([고정 키보드](commands.md#persistent-keyboard) 참고).
+- **키 없는 `ANTHROPIC_BASE_URL`.** 이때 Claude Code는 claude.ai 로그인을 그 주소로 보내요. 그 주소가 로그인을 Anthropic에 넘겨 주도록 만든 게이트웨이가 아니라면 제공자의 키도 설정하세요.
+- **지원하지 않음:** 로컬 프록시를 거쳐 다른 회사의 채팅 구독(예를 들어 ChatGPT 요금제)으로 Claude Code를 돌리는 도구. 그 회사는 자사 요금제에 Claude Code를 승인하지 않았고, 이렇게 쓰면 그 계정이 위험해질 수 있어요.
 
 ## <a id="the-daemons-control-socket-moved"></a>aipager의 제어 소켓 위치가 바뀌었어요
 

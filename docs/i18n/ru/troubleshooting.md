@@ -1,6 +1,6 @@
 # Решение проблем
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ aipager хранит свои сессии в `~/.claude/aipager-sessions.json` 
 | `role_shell_access` | Один раз предупреждает о каждой роли участника, которая может запускать Bash (её правила безопасности работают в меру возможного, это не граница; см. [группы](groups.md#roles)) | не давать этой роли Bash в `policy.yaml` или смириться |
 | `peer_messages` | Сообщения между сессиями Claude: где хранятся их квитанции и закрыта ли эта папка, может ли эта система проверить время запуска отправителя, и предупреждение о каждой роли, которой правило разрешает SendMessage (см. [безопасность](security.md#messages-between-claude-sessions)) | убрать общую папку квитанций (aipager создаст её заново) или не давать этой роли SendMessage |
 | `claude` | Находит программу `claude` так же, как каждый запуск (`claude_path` в `aipager.yaml` или `$AIPAGER_CLAUDE_BIN` побеждают сразу; иначе самая новая из `~/.local/bin`, PATH и Homebrew), и перечисляет каждую ДРУГУЮ найденную установку | установить Claude Code или задать `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | Пробует `claude auth status` в том же окружении, что получает настоящая сессия. **Никогда не проваливается**: «не выполнен вход» и «сама проба не удалась» показываются по-разному, и ни то ни другое не мешает запуску сессии | `claude auth login` или задать ключ API / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | Пробует `claude auth status` в том же окружении, что получает настоящая сессия. **Никогда не проваливается**: «не выполнен вход» и «сама проба не удалась» показываются по-разному, и ни то ни другое не мешает запуску сессии. Также предупреждает, когда Claude Code было сказано не использовать `ANTHROPIC_API_KEY` сессий, а больше ничто не выполняет для них вход. | `claude auth login` или задать ключ API / `CLAUDE_CODE_OAUTH_TOKEN`; если задан `ANTHROPIC_BASE_URL`, ключ для этого адреса ([провайдеры](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | Программа `dtach` найдена (собственный `dtach-bin` aipager или та, что в PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` и `aipager-statusline` есть в PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | В `~/.claude/settings.json` подключены hooks aipager | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 См. [Модель безопасности: учётные данные Claude](security.md#the-claude-credential-what-actually-protects-it) о том, от чего этот файл защищает и от чего нет.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>С API-ключом, шлюзом или другим провайдером
+
+aipager запускает Claude Code так, как он у тебя настроен, поэтому сессия, запущенная из Telegram, входит так же, как `claude` в твоём терминале: через вход claude.ai, API-ключ Anthropic, шлюз (LiteLLM, Vercel, Cloudflare и подобные) или адрес другой компании в формате Anthropic, заданный в `ANTHROPIC_BASE_URL`. Anthropic поддерживает Claude Code только с моделями Claude; другие модели могут вести себя иначе.
+
+- **Куда класть настройки.** В блок `env` файла `~/.claude/settings.json`, который читает каждая сессия Claude Code, или в `~/.config/aipager/daemon.env`, который получают только сессии, запущенные aipager: одна строка `KEY=value` на настройку, без кавычек (иначе они станут частью значения). Служба (`aipager service install`) никогда не читает профиль твоей оболочки, так что `export` там до неё не доходит. После изменения `daemon.env` перезапусти aipager.
+- **Какую настройку взять для ключа.** Для шлюза или другого провайдера документация Claude Code советует `ANTHROPIC_AUTH_TOKEN`, о котором Claude Code никогда не спрашивает. Про `ANTHROPIC_API_KEY` он один раз спрашивает «Do you want to use this API key?», а сессия, запущенная из Telegram, ответить не может, поэтому aipager отвечает в `~/.claude.json` прямо перед стартом сессии:
+  - Да, если ключ задан в `settings.json` или `daemon.env` или если больше ничто не может выполнить вход для сессии.
+  - Нет, если ключ приходит только из окружения, в котором запущен aipager, а вход в Claude у тебя уже есть другим способом: сессии остаются на этом входе и его тарифе. Чтобы пользоваться ключом, включи его в сессии терминала, где он задан, через `/config` и «Use custom API key».
+  - Твой собственный ответ остаётся, кроме «Нет» для ключа из `settings.json` или `daemon.env`, когда больше ничто не может выполнить вход для сессии. `aipager doctor` сообщает, когда «Нет» оставляет сессии без входа; снова включи ключ в терминале через `/config` и «Use custom API key».
+- **Экраны первого запуска.** Там, где Claude Code ни разу не завершил первый запуск (новая машина или контейнер), aipager отмечает его завершённым, когда у сессии есть чем войти, чтобы она не застряла на выборе темы. Если входа нет совсем, один раз запусти `claude` в терминале и войди.
+- **Модели.** Кнопки Opus, Sonnet и Haiku отправляют `opus`, `sonnet` и `haiku` Claude Code, а он сопоставляет их с моделями твоего провайдера, если задать `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` и `ANTHROPIC_DEFAULT_HAIKU_MODEL`. Кнопкам `claude-...` нужен провайдер, у которого есть эти модели. Любую другую модель вводи на шаге модели в `/new` или в Mini App так, как её пишет провайдер: до 128 символов из букв, цифр и `. _ - : / @ ~ ,`, можно и с окончанием `[1m]` от Claude Code. `keyboard.json` меняет кнопки (см. [Постоянная клавиатура](commands.md#persistent-keyboard)).
+- **`ANTHROPIC_BASE_URL` без ключа.** Тогда Claude Code отправляет на этот адрес твой вход claude.ai. Задай и ключ провайдера, если только этот адрес не шлюз, который должен передавать твой вход в Anthropic.
+- **Не поддерживается:** инструменты, которые запускают Claude Code на чат-подписке другой компании (например, на тарифе ChatGPT) через локальный прокси. Эта компания не одобряла Claude Code для своих тарифов, и такое использование может поставить этот аккаунт под угрозу.
 
 ## <a id="the-daemons-control-socket-moved"></a>Управляющий сокет aipager переехал
 

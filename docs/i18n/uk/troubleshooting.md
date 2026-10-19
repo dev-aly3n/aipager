@@ -1,6 +1,6 @@
 # Розв'язання проблем
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ aipager зберігає свої сесії в `~/.claude/aipager-sessions.json
 | `role_shell_access` | Один раз попереджає про кожну роль учасника, яка може запускати Bash (її правила безпеки працюють лише наскільки можливо і не є межею; див. [групи](groups.md#roles)) | не давати цій ролі Bash у `policy.yaml` або змиритися |
 | `peer_messages` | Повідомлення між сесіями Claude: де зберігаються їхні квитанції та чи закрита ця папка, чи може ця система перевірити час запуску відправника, і попередження про кожну роль, якій правило дозволяє SendMessage (див. [безпека](security.md#messages-between-claude-sessions)) | прибрати спільну папку квитанцій (aipager створить її заново) або не давати цій ролі SendMessage |
 | `claude` | Знаходить програму `claude` так само, як кожен запуск (`claude_path` в `aipager.yaml` або `$AIPAGER_CLAUDE_BIN` перемагають одразу; інакше найновіша з `~/.local/bin`, PATH і Homebrew), і перелічує кожне ІНШЕ знайдене встановлення | встановити Claude Code або задати `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | Пробує `claude auth status` у тому самому оточенні, яке отримує справжня сесія. **Ніколи не провалюється**: «вхід не виконано» і «сама проба не вдалася» показуються по-різному, і ні те, ні те не заважає запуску сесії | `claude auth login` або задати ключ API / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | Пробує `claude auth status` у тому самому оточенні, яке отримує справжня сесія. **Ніколи не провалюється**: «вхід не виконано» і «сама проба не вдалася» показуються по-різному, і ні те, ні те не заважає запуску сесії. Також попереджає, коли Claude Code сказали не використовувати `ANTHROPIC_API_KEY` сесій, а більше ніщо не виконує для них вхід. | `claude auth login` або задати ключ API / `CLAUDE_CODE_OAUTH_TOKEN`; якщо задано `ANTHROPIC_BASE_URL`, ключ для цієї адреси ([провайдери](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | Програму `dtach` знайдено (власний `dtach-bin` aipager або та, що в PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` і `aipager-statusline` є в PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | У `~/.claude/settings.json` підключено hooks aipager | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 Див. [Модель безпеки: облікові дані Claude](security.md#the-claude-credential-what-actually-protects-it) про те, від чого цей файл захищає, а від чого ні.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>З API-ключем, шлюзом або іншим провайдером
+
+aipager запускає Claude Code так, як він у тебе налаштований, тому сесія, запущена з Telegram, входить так само, як `claude` у твоєму терміналі: через вхід claude.ai, API-ключ Anthropic, шлюз (LiteLLM, Vercel, Cloudflare й подібні) або адресу іншої компанії у форматі Anthropic, задану в `ANTHROPIC_BASE_URL`. Anthropic підтримує Claude Code лише з моделями Claude; інші моделі можуть поводитися інакше.
+
+- **Куди класти налаштування.** У блок `env` файлу `~/.claude/settings.json`, який читає кожна сесія Claude Code, або в `~/.config/aipager/daemon.env`, який отримують лише сесії, запущені aipager: один рядок `KEY=value` на налаштування, без лапок (інакше вони стануть частиною значення). Служба (`aipager service install`) ніколи не читає профіль твоєї оболонки, тож `export` там до неї не доходить. Після зміни `daemon.env` перезапусти aipager.
+- **Яке налаштування взяти для ключа.** Для шлюзу чи іншого провайдера документація Claude Code радить `ANTHROPIC_AUTH_TOKEN`, про який Claude Code ніколи не питає. Про `ANTHROPIC_API_KEY` він один раз питає «Do you want to use this API key?», а сесія, запущена з Telegram, відповісти не може, тому aipager відповідає в `~/.claude.json` просто перед стартом сесії:
+  - Так, якщо ключ задано в `settings.json` чи `daemon.env` або якщо більше ніщо не може виконати вхід для сесії.
+  - Ні, якщо ключ приходить лише з оточення, у якому запущено aipager, а вхід у Claude в тебе вже є іншим способом: сесії лишаються на цьому вході та його тарифі. Щоб користуватися ключем, увімкни його в сесії термінала, де він заданий, через `/config` і «Use custom API key».
+  - Твоя власна відповідь лишається, крім «Ні» для ключа з `settings.json` чи `daemon.env`, коли більше ніщо не може виконати вхід для сесії. `aipager doctor` повідомляє, коли «Ні» лишає сесії без входу; знову ввімкни ключ у терміналі через `/config` і «Use custom API key».
+- **Екрани першого запуску.** Там, де Claude Code жодного разу не завершив перший запуск (нова машина чи контейнер), aipager позначає його завершеним, коли сесія має чим увійти, щоб вона не застрягла на виборі теми. Якщо входу немає зовсім, один раз запусти `claude` у терміналі й увійди.
+- **Моделі.** Кнопки Opus, Sonnet і Haiku надсилають `opus`, `sonnet` і `haiku` Claude Code, а він зіставляє їх із моделями твого провайдера, якщо задати `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` і `ANTHROPIC_DEFAULT_HAIKU_MODEL`. Кнопкам `claude-...` потрібен провайдер, у якого є ці моделі. Будь-яку іншу модель вводь на кроці моделі в `/new` або в Mini App так, як її пише провайдер: до 128 символів із літер, цифр і `. _ - : / @ ~ ,`, можна й із закінченням `[1m]` від Claude Code. `keyboard.json` змінює кнопки (див. [Постійна клавіатура](commands.md#persistent-keyboard)).
+- **`ANTHROPIC_BASE_URL` без ключа.** Тоді Claude Code надсилає на цю адресу твій вхід claude.ai. Задай і ключ провайдера, хіба що ця адреса є шлюзом, який має передавати твій вхід до Anthropic.
+- **Не підтримується:** інструменти, які запускають Claude Code на чат-підписці іншої компанії (наприклад, на тарифі ChatGPT) через локальний проксі. Ця компанія не схвалювала Claude Code для своїх тарифів, і таке використання може поставити цей акаунт під загрозу.
 
 ## <a id="the-daemons-control-socket-moved"></a>Керувальний сокет aipager переїхав
 

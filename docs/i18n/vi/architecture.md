@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
+<!-- i18n-source: docs/architecture.md @ 2d10247 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -114,7 +114,7 @@ Việc tự khởi động lại từ Telegram dựa vào việc toàn bộ trì
 | `~/aipager-users/<label>/` | [Thư mục gốc](groups.md#root-folders) mặc định của các thành viên (quyền 0700), nơi các thành viên `user` và `read_only` bắt đầu phiên của mình; `aipager uninstall` giữ lại chúng | aipager (tạo ra ở lần `/new` đầu tiên hoặc lần “Phiên mới” đầu tiên trong Mini App của một thành viên) |
 | `~/.claude/settings.json` | Cấu hình hook của Claude Code | `aipager config` / `aipager setup`; mỗi lần khởi động, aipager thêm hook hoặc dòng trạng thái aipager còn thiếu và đặt `skipDangerousModePermissionPrompt` ([bảo mật](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Bản sao lưu trước mỗi lần ghi lại | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | File của chính Claude Code: aipager đánh dấu thư mục nơi một phiên bắt đầu là đáng tin ngay trước khi phiên bắt đầu (kể cả thư mục home, không bao giờ `/` hay một thư mục phía trên thư mục home), để câu hỏi về độ tin cậy của Claude Code không chặn một phiên bắt đầu từ Telegram. Lúc aipager khởi động, không có gì được đánh dấu. Không bao giờ bị ghi đè khi không đọc được trọn vẹn hoặc một Claude đang chạy đã thay đổi nó trong lúc đó | aipager |
+| `~/.claude.json` | File của chính Claude Code: aipager đánh dấu thư mục nơi một phiên bắt đầu là đáng tin ngay trước khi phiên bắt đầu (kể cả thư mục home, không bao giờ `/` hay một thư mục phía trên thư mục home), để câu hỏi về độ tin cậy của Claude Code không chặn một phiên bắt đầu từ Telegram. Lúc aipager khởi động, không có gì được đánh dấu. Không bao giờ bị ghi đè khi không đọc được trọn vẹn hoặc một Claude đang chạy đã thay đổi nó trong lúc đó. Theo cách đó, nó cũng trả lời câu hỏi “use this API key?” cho `ANTHROPIC_API_KEY` của phiên (`customApiKeyResponses`, 20 ký tự cuối của khóa) và đánh dấu lần chạy đầu của Claude Code là đã xong khi phiên có thông tin đăng nhập (`hasCompletedOnboarding`), để các câu hỏi này cũng không chặn phiên bắt đầu từ Telegram ([nhà cung cấp](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | File đăng nhập của Claude Code, được cất sang một bên khi một phiên bắt đầu với `CLAUDE_CODE_OAUTH_TOKEN` được đặt mà file chỉ chứa một lần đăng nhập đã hết hạn hoặc trống (nếu không, file sẽ được ưu tiên hơn token); muốn hoàn tác thì chuyển nó về chỗ cũ | aipager |
 | `~/.config/aipager/aipager.yaml` | Token bot, các chat, thành viên + vai trò, cài đặt Mini App | `aipager config` (quyền 600); aipager chuyển mục của một nhóm khi Telegram nâng cấp nó thành supergroup, và giữ một bản `aipager.yaml.bak.<time>` khi chuyển cài đặt Mini App cũ vào đó |
 | `~/.config/aipager/policy.yaml` | Quy tắc theo vai trò + phần bổ sung cho mức an toàn | bạn (kiểm tra bằng `aipager policy validate`); một bản mẫu có chú thích được ghi một lần khi chuyển một bản cài cũ sang |

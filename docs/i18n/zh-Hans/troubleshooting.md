@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -225,7 +225,7 @@ aipager 把它的会话保存在 `~/.claude/aipager-sessions.json` 里，以原�
 | `role_shell_access` | 对成员拥有的每个能运行 Bash 的角色警告一次（它的安全规则只是尽力而为，不是边界；见[群组](groups.md#roles)） | 在 `policy.yaml` 里不给那个角色 Bash，或者接受这一点 |
 | `peer_messages` | Claude 会话之间的消息：它们的回执保存在哪里、那个文件夹是否私密、这个系统能否核对发送者的启动时间，并对每个被规则允许使用 SendMessage 的角色发出警告（见[安全](security.md#messages-between-claude-sessions)） | 删除共用的回执文件夹（aipager 会重新创建），或者不给那个角色 SendMessage |
 | `claude` | 用每次启动时相同的方式找到 `claude` 程序（`aipager.yaml` 里的 `claude_path` 或 `$AIPAGER_CLAUDE_BIN` 直接优先；否则在 `~/.local/bin`、PATH 和 Homebrew 中选最新的），并列出找到的所有其他安装 | 安装 Claude Code，或者设置 `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | 在真实会话得到的同样环境里试运行 `claude auth status`。**从不 FAIL**：“未登录”和“试运行本身失败”会分别报告，两者都不会阻止会话启动 | `claude auth login`，或者设置 API 密钥 / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | 在真实会话得到的同样环境里试运行 `claude auth status`。**从不 FAIL**：“未登录”和“试运行本身失败”会分别报告，两者都不会阻止会话启动。当 Claude Code 被告知不要使用会话的 `ANTHROPIC_API_KEY`、而又没有别的方式让会话登录时，它也会警告。 | `claude auth login`，或者设置 API 密钥 / `CLAUDE_CODE_OAUTH_TOKEN`；设置了 `ANTHROPIC_BASE_URL` 时，是那个地址的密钥（[服务商](#using-an-api-key-a-gateway-or-another-provider)） |
 | `dtach` | 找到了 `dtach` 程序（aipager 自带的 `dtach-bin`，或 PATH 上的） | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` 和 `aipager-statusline` 在 PATH 上 | `uv tool install --reinstall aipager` |
 | `settings_json` | `~/.claude/settings.json` 已接入 aipager 的 hook | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 这个文件能防护什么、不能防护什么，见[安全模型：Claude 的登录信息](security.md#the-claude-credential-what-actually-protects-it)。
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>使用 API 密钥、网关或其他服务商
+
+aipager 按你的设置运行 Claude Code，所以从 Telegram 启动的会话和你终端里的 `claude` 用同样的方式登录：claude.ai 登录、Anthropic 的 API 密钥、网关（LiteLLM、Vercel、Cloudflare 等），或写在 `ANTHROPIC_BASE_URL` 里的其他公司的 Anthropic 格式地址。Anthropic 只支持 Claude Code 搭配 Claude 模型使用；其他模型的表现可能不同。
+
+- **设置放在哪里。**放进 `~/.claude/settings.json` 的 `env` 块（每个 Claude Code 会话都会读取），或放进 `~/.config/aipager/daemon.env`（只有 aipager 启动的会话会拿到）：每行一个 `KEY=value`，不加引号（引号会变成值的一部分）。服务（`aipager service install`）从不读取你 shell 的配置文件，所以写在那里的 `export` 到不了服务。改完 `daemon.env` 后重启 aipager。
+- **用哪个密钥设置。**对网关或其他服务商，Claude Code 的文档建议用 `ANTHROPIC_AUTH_TOKEN`，Claude Code 从不为它提问。对 `ANTHROPIC_API_KEY`，它会问一次“Do you want to use this API key?”，而从 Telegram 启动的会话无法回答，所以 aipager 会在会话启动前一刻在 `~/.claude.json` 里替你回答：
+  - 是：密钥写在 `settings.json` 或 `daemon.env` 里，或者没有别的方式能让会话登录。
+  - 否：密钥只来自启动 aipager 的环境，而你已经用别的方式登录了 Claude；你的会话继续用那个登录和它的套餐。要用这个密钥，在带有这个密钥的终端会话里用 `/config` 的“Use custom API key”打开它。
+  - 你自己给过的回答会保留，只有一种例外：没有别的方式能让会话登录时，对写在 `settings.json` 或 `daemon.env` 里的密钥的“否”。当“否”让会话无法登录时，`aipager doctor` 会提示；在终端里用 `/config` 的“Use custom API key”重新打开这个密钥。
+- **首次运行的界面。**在 Claude Code 从没完成首次运行的地方（新机器或新容器），只要会话有登录凭据，aipager 就把首次运行标记为已完成，会话就不会停在主题选择界面。如果完全没有凭据，就在终端里运行一次 `claude` 并登录。
+- **模型。**Opus、Sonnet 和 Haiku 按钮发送 Claude Code 的 `opus`、`sonnet` 和 `haiku`；设置了 `ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 和 `ANTHROPIC_DEFAULT_HAIKU_MODEL` 后，Claude Code 会把它们对应到你服务商的模型。`claude-...` 按钮需要服务商有这些模型。其他模型在 `/new` 的模型步骤或 Mini App 里按服务商的写法输入：最多 128 个字符，由字母、数字和 `. _ - : / @ ~ ,` 组成，可以带 Claude Code 的 `[1m]` 后缀。`keyboard.json` 可以改按钮（见[固定键盘](commands.md#persistent-keyboard)）。
+- **没有密钥的 `ANTHROPIC_BASE_URL`。**这时 Claude Code 会把你的 claude.ai 登录发到那个地址。除非那个地址是专门把你的登录转给 Anthropic 的网关，否则也要设置服务商的密钥。
+- **不支持：**通过本地代理、用另一家公司的聊天订阅（比如 ChatGPT 套餐）运行 Claude Code 的工具。那家公司没有批准 Claude Code 用于它的套餐，这样用可能让那个账号面临风险。
 
 ## <a id="the-daemons-control-socket-moved"></a>aipager 的控制套接字换了位置
 

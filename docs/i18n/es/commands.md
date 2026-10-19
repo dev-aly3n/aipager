@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Debajo del campo de escritura del chat hay un teclado fijo. Filas, de arriba aba
 
 - **Plantillas**: mensajes que te encuentras escribiendo una y otra vez, por ejemplo «Escribe tests», «Explica el plan», «Actualiza la memoria».
 - **Comandos**: comandos de barra que entiende el propio Claude Code (`/compact`, `/clear`, etc.), que se escriben al momento. Un comando o una plantilla nombra la sesión a la que fue (`🧹 /clear enviado a x1`). Borrar la conversación se rechaza mientras la sesión trabaja (`⚠️ No se puede borrar la conversación mientras la sesión trabaja`).
-- **Modelos**: cambios rápidos de modelo para la sesión activa. Están los alias de familia (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), que siempre significan el modelo más nuevo de esa familia, y los modelos fijos (`claude-opus-5-5`, `claude-opus-5-5[1m]` con la ventana de contexto de 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Los selectores de creación y de sesión de la Mini App usan la misma lista. Un cambio se rechaza mientras la sesión trabaja o hay una solicitud abierta. La respuesta `🔄` cambia luego para mostrar el modelo que informa la sesión, o dice que el cambio no se confirmó (mira [Cambiar el modelo de una sesión en marcha](#switching-a-running-sessions-model)).
+- **Modelos**: cambios rápidos de modelo para la sesión activa. Están los alias de familia (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), que siempre significan el modelo más nuevo de esa familia, y los modelos fijos (`claude-opus-5-5`, `claude-opus-5-5[1m]` con la ventana de contexto de 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Los selectores de creación y de sesión de la Mini App usan la misma lista. Un cambio se rechaza mientras la sesión trabaja o hay una solicitud abierta. La respuesta `🔄` cambia luego para mostrar el modelo que informa la sesión, o dice que el cambio no se confirmó (mira [Cambiar el modelo de una sesión en marcha](#switching-a-running-sessions-model)). Cualquier otro modelo se escribe por su nombre en el paso de modelo de `/new` o en la Mini App, tal como lo escribe Claude Code o tu proveedor: hasta 128 caracteres de letras, dígitos y `. _ - : / @ ~ ,`, con `[1m]` permitido al final ([proveedores](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Para cambiar la disposición por defecto, escribe `~/.config/aipager/keyboard.json`:
 

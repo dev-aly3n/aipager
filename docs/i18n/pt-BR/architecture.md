@@ -1,6 +1,6 @@
 # Arquitetura
 
-<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
+<!-- i18n-source: docs/architecture.md @ 2d10247 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../architecture.md))
 
@@ -114,7 +114,7 @@ O reinício feito pelo Telegram depende de todo esse caminho terminar antes de o
 | `~/aipager-users/<label>/` | As [pastas raiz](groups.md#root-folders) padrão dos membros (permissões 0700), onde os membros `user` e `read_only` criam as sessões deles; o `aipager uninstall` as mantém | aipager (cria no primeiro `/new` ou “Nova sessão” do Mini App de um membro) |
 | `~/.claude/settings.json` | A configuração de hooks do Claude Code | `aipager config` / `aipager setup`; a cada início o aipager adiciona qualquer hook ou linha de status que falte e define `skipDangerousModePermissionPrompt` ([Modelo de segurança](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Cópias de segurança antes de cada reescrita | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | O arquivo do próprio Claude Code: o aipager marca como confiável a pasta onde uma sessão começa logo antes de ela começar (inclusive a pasta pessoal, nunca `/` nem uma pasta acima da pasta pessoal), para a pergunta de confiança do Claude Code não travar uma sessão criada pelo Telegram. Nada é marcado quando o aipager inicia. Nunca é reescrito quando não dá para lê-lo inteiro ou quando um Claude em execução o mudou nesse meio-tempo | aipager |
+| `~/.claude.json` | O arquivo do próprio Claude Code: o aipager marca como confiável a pasta onde uma sessão começa logo antes de ela começar (inclusive a pasta pessoal, nunca `/` nem uma pasta acima da pasta pessoal), para a pergunta de confiança do Claude Code não travar uma sessão criada pelo Telegram. Nada é marcado quando o aipager inicia. Nunca é reescrito quando não dá para lê-lo inteiro ou quando um Claude em execução o mudou nesse meio-tempo. Do mesmo jeito, responde à pergunta “use this API key?” para o `ANTHROPIC_API_KEY` da sessão (`customApiKeyResponses`, os últimos 20 caracteres da chave) e marca o primeiro uso do Claude Code como feito quando a sessão tem como entrar (`hasCompletedOnboarding`), para essas perguntas também não travarem uma sessão iniciada pelo Telegram ([provedores](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | O arquivo de login do Claude Code, tirado do caminho quando uma sessão inicia com `CLAUDE_CODE_OAUTH_TOKEN` definido e o arquivo só tem um login vencido ou vazio (senão ele ganharia do token); coloque de volta para desfazer | aipager |
 | `~/.config/aipager/aipager.yaml` | Token do bot, chats, membros e funções, configurações do Mini App | `aipager config` (permissões 600); o aipager move a entrada de um grupo quando o Telegram o transforma em supergrupo, e guarda uma cópia `aipager.yaml.bak.<time>` quando passa para lá configurações antigas do Mini App |
 | `~/.config/aipager/policy.yaml` | Regras por função e regras de segurança adicionais | você (conferido com `aipager policy validate`); um exemplo comentado é escrito uma vez quando uma instalação antiga é migrada |

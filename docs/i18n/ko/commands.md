@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ aipager가 대화하는 모든 채팅(내 개인 채팅과 모든 그룹)에는 
 
 - **템플릿**: 계속 반복해서 입력하게 되는 메시지예요. 예: “테스트 작성”, “계획 설명”, “메모리 업데이트”.
 - **명령어**: Claude Code가 직접 처리하는 슬래시 명령(`/compact`, `/clear` 등)이고, 바로 입력돼요. 명령이나 템플릿은 어느 세션으로 갔는지 적어요(`🧹 x1 세션으로 보냈어요: /clear`). 세션이 작업 중이면 대화 지우기는 거부돼요(`⚠️ 세션이 작업 중이라 대화를 지울 수 없어요`).
-- **모델**: 현재 세션의 모델을 빠르게 바꿔요. 계열 별칭(`sonnet`, `opus`, `haiku`, `fable`, `opusplan`)은 항상 그 계열의 최신 모델을 가리키고, 고정 모델(`claude-opus-5-5`, 1M 컨텍스트의 `claude-opus-5-5[1m]`, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`)도 있어요. 시작할 때의 선택기와 Mini App의 세션 페이지도 같은 목록을 써요. 세션이 작업 중이거나 열린 요청이 있으면 변경은 거부돼요. 그 뒤 `🔄` 답은 세션이 알려 오는 모델로 바뀌거나, 변경이 확인되지 않았다고 알려 줘요([실행 중인 세션의 모델 바꾸기](#switching-a-running-sessions-model) 참고).
+- **모델**: 현재 세션의 모델을 빠르게 바꿔요. 계열 별칭(`sonnet`, `opus`, `haiku`, `fable`, `opusplan`)은 항상 그 계열의 최신 모델을 가리키고, 고정 모델(`claude-opus-5-5`, 1M 컨텍스트의 `claude-opus-5-5[1m]`, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`)도 있어요. 시작할 때의 선택기와 Mini App의 세션 페이지도 같은 목록을 써요. 세션이 작업 중이거나 열린 요청이 있으면 변경은 거부돼요. 그 뒤 `🔄` 답은 세션이 알려 오는 모델로 바뀌거나, 변경이 확인되지 않았다고 알려 줘요([실행 중인 세션의 모델 바꾸기](#switching-a-running-sessions-model) 참고). 다른 모델은 `/new`의 모델 단계나 Mini App에서 Claude Code나 제공자가 쓰는 이름 그대로 입력할 수 있어요. 글자, 숫자, `. _ - : / @ ~ ,`로 최대 128자이고, 끝에 `[1m]`을 붙일 수 있어요([제공자](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 기본 배치를 바꾸려면 `~/.config/aipager/keyboard.json`을 쓰세요:
 

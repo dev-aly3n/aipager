@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de3425 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ Urutannya penting: setiap pemeriksaan menganggap pemeriksaan sebelumnya sudah lo
 | `role_shell_access` | Memperingatkan sekali untuk setiap peran anggota yang bisa menjalankan Bash (aturan keamanannya bekerja sebisanya, bukan batas; lihat [grup](groups.md#roles)) | jangan beri peran itu Bash di `policy.yaml`, atau terima saja |
 | `peer_messages` | Pesan antarsesi Claude: di mana tanda terimanya disimpan dan apakah folder itu tertutup, apakah sistem ini bisa memeriksa waktu mulai pengirim, dan peringatan untuk setiap peran yang diberi SendMessage lewat aturan (lihat [keamanan](security.md#messages-between-claude-sessions)) | hapus folder tanda terima bersama (aipager membuatnya lagi), atau jangan beri peran itu SendMessage |
 | `claude` | Menemukan program `claude` dengan cara yang sama seperti setiap peluncuran (`claude_path` di `aipager.yaml` atau `$AIPAGER_CLAUDE_BIN` langsung menang; kalau tidak, yang terbaru dari `~/.local/bin`, PATH, dan Homebrew), dan mencantumkan setiap instalasi LAIN yang ditemukan | pasang Claude Code atau atur `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | Mencoba `claude auth status` di environment yang sama dengan yang didapat sesi sungguhan. **Tidak pernah gagal**: “belum login” dan “percobaannya sendiri gagal” ditampilkan berbeda, dan keduanya tidak menghalangi peluncuran sesi | `claude auth login`, atau atur kunci API / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | Mencoba `claude auth status` di environment yang sama dengan yang didapat sesi sungguhan. **Tidak pernah gagal**: “belum login” dan “percobaannya sendiri gagal” ditampilkan berbeda, dan keduanya tidak menghalangi peluncuran sesi. Juga memberi peringatan kalau Claude Code diminta tidak memakai `ANTHROPIC_API_KEY` milik sesi dan tidak ada hal lain yang membuat sesi masuk. | `claude auth login`, atau atur kunci API / `CLAUDE_CODE_OAUTH_TOKEN`; kalau `ANTHROPIC_BASE_URL` diisi, kunci untuk alamat itu ([penyedia](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | Program `dtach` ditemukan (`dtach-bin` milik aipager sendiri atau yang ada di PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` dan `aipager-statusline` ada di PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | Hook aipager terpasang di `~/.claude/settings.json` | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 Lihat [Model keamanan: kredensial Claude](security.md#the-claude-credential-what-actually-protects-it) tentang apa yang dilindungi file ini dan apa yang tidak.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>Dengan kunci API, gateway, atau penyedia lain
+
+aipager menjalankan Claude Code sesuai pengaturanmu, jadi sesi yang dimulai dari Telegram masuk dengan cara yang sama seperti `claude` di terminalmu: dengan login claude.ai, kunci API Anthropic, gateway (LiteLLM, Vercel, Cloudflare, dan sejenisnya), atau alamat berformat Anthropic milik perusahaan lain yang diisi di `ANTHROPIC_BASE_URL`. Anthropic hanya mendukung Claude Code dengan model Claude; model lain bisa berperilaku berbeda.
+
+- **Tempat pengaturannya.** Di blok `env` pada `~/.claude/settings.json`, yang dibaca setiap sesi Claude Code, atau di `~/.config/aipager/daemon.env`, yang hanya diterima sesi yang dimulai aipager: satu baris `KEY=value` per pengaturan, tanpa tanda kutip (tanda kutip akan ikut jadi bagian nilainya). Layanan (`aipager service install`) tidak pernah membaca profil shell-mu, jadi `export` di sana tidak sampai ke layanan itu. Mulai ulang aipager setelah mengubah `daemon.env`.
+- **Pengaturan kunci yang mana.** Untuk gateway atau penyedia lain, dokumentasi Claude Code menyarankan `ANTHROPIC_AUTH_TOKEN`, yang tidak pernah ditanyakan Claude Code. Untuk `ANTHROPIC_API_KEY`, Claude Code bertanya sekali “Do you want to use this API key?”, dan sesi yang dimulai dari Telegram tidak bisa menjawab, jadi aipager menjawabnya di `~/.claude.json` tepat sebelum sesi dimulai:
+  - Ya, kalau kuncinya ada di `settings.json` atau `daemon.env`, atau kalau tidak ada hal lain yang bisa membuat sesi masuk.
+  - Tidak, kalau kuncinya hanya berasal dari lingkungan tempat aipager dijalankan dan kamu sudah masuk ke Claude dengan cara lain: sesimu tetap memakai login itu dan paketnya. Untuk memakai kuncinya, nyalakan di sesi terminal yang punya kunci itu, lewat `/config` dan “Use custom API key”.
+  - Jawaban yang kamu berikan sendiri tetap dipakai, kecuali Tidak untuk kunci di `settings.json` atau `daemon.env` saat tidak ada hal lain yang bisa membuat sesi masuk. `aipager doctor` memberi tahu kalau sebuah Tidak membuat sesi tidak punya login; nyalakan lagi kuncinya di terminal lewat `/config` dan “Use custom API key”.
+- **Layar saat pertama kali dijalankan.** Di tempat Claude Code belum pernah menyelesaikan proses pertamanya (mesin atau container baru), aipager menandainya selesai kalau sesi punya kredensial, supaya sesi tidak berhenti di pemilihan tema. Kalau tidak ada kredensial sama sekali, jalankan `claude` sekali di terminal dan login.
+- **Model.** Tombol Opus, Sonnet, dan Haiku mengirim `opus`, `sonnet`, dan `haiku` milik Claude Code, yang dipetakan ke model penyedia kalau kamu mengisi `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, dan `ANTHROPIC_DEFAULT_HAIKU_MODEL`. Tombol `claude-...` butuh penyedia yang punya model itu. Model lain diketik di langkah model `/new` atau di Mini App, persis seperti yang ditulis penyedia: sampai 128 karakter berupa huruf, angka, dan `. _ - : / @ ~ ,`, boleh dengan akhiran `[1m]` milik Claude Code. `keyboard.json` mengubah tombolnya (lihat [Keyboard tetap](commands.md#persistent-keyboard)).
+- **`ANTHROPIC_BASE_URL` tanpa kunci.** Claude Code lalu mengirim login claude.ai-mu ke alamat itu. Isi juga kunci penyedianya, kecuali alamat itu gateway yang memang dibuat untuk meneruskan login-mu ke Anthropic.
+- **Tidak didukung:** alat yang menjalankan Claude Code dengan langganan chat perusahaan lain (misalnya paket ChatGPT) lewat proxy lokal. Perusahaan itu tidak menyetujui Claude Code untuk paketnya, dan pemakaian seperti itu bisa membahayakan akun tersebut.
 
 ## <a id="the-daemons-control-socket-moved"></a>Soket kontrol aipager pindah
 

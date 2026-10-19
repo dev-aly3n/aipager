@@ -1,6 +1,6 @@
 # Comandos e interface do bot
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../commands.md))
 
@@ -152,7 +152,7 @@ Embaixo do campo de digitação do chat fica um teclado fixo. Fileiras, de cima 
 
 - **Templates**: mensagens que você se pega digitando várias vezes, por exemplo “Escreva testes”, “Explique o plano”, “Atualize a memória”.
 - **Comandos**: comandos de barra que o próprio Claude Code entende (`/compact`, `/clear` etc.), digitados na hora. Um comando ou um template cita a sessão para a qual foi (`🧹 /clear enviado para x1`). Limpar a conversa é recusado enquanto a sessão trabalha (`⚠️ Não dá para limpar a conversa enquanto a sessão trabalha`).
-- **Modelos**: trocas rápidas de modelo para a sessão ativa. Há os apelidos de família (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), que sempre querem dizer o modelo mais novo dessa família, e os modelos fixos (`claude-opus-5-5`, `claude-opus-5-5[1m]` com o contexto de 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Os seletores de criação e de sessão do Mini App usam a mesma lista. Uma troca é recusada enquanto a sessão trabalha ou um pedido está aberto. A resposta `🔄` muda depois para mostrar o modelo que a sessão informa, ou diz que a troca não foi confirmada (veja [Trocar o modelo de uma sessão rodando](#switching-a-running-sessions-model)).
+- **Modelos**: trocas rápidas de modelo para a sessão ativa. Há os apelidos de família (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), que sempre querem dizer o modelo mais novo dessa família, e os modelos fixos (`claude-opus-5-5`, `claude-opus-5-5[1m]` com o contexto de 1M, `claude-sonnet-5-5`, `claude-fable-5-1`, `claude-haiku-5-5`). Os seletores de criação e de sessão do Mini App usam a mesma lista. Uma troca é recusada enquanto a sessão trabalha ou um pedido está aberto. A resposta `🔄` muda depois para mostrar o modelo que a sessão informa, ou diz que a troca não foi confirmada (veja [Trocar o modelo de uma sessão rodando](#switching-a-running-sessions-model)). Qualquer outro modelo se digita pelo nome na etapa de modelo do `/new` ou no Mini App, do jeito que o Claude Code ou o seu provedor escreve: até 128 caracteres entre letras, números e `. _ - : / @ ~ ,`, com `[1m]` permitido no final ([provedores](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
 
 Para mudar o layout padrão, escreva `~/.config/aipager/keyboard.json`:
 

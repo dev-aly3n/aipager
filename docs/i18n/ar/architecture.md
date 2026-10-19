@@ -2,7 +2,7 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
+<!-- i18n-source: docs/architecture.md @ 2d10247 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 
@@ -120,7 +120,7 @@ flowchart LR
 | &lrm;`~/aipager-users/<label>/`&lrm; | [المجلدات الجذرية](groups.md#root-folders) الافتراضية للأعضاء (الصلاحية 0700)، حيث يبدأ أعضاء `user` و`read_only` جلساتهم؛ ويحتفظ بها `aipager uninstall` | aipager (يُنشئها عند أول &lrm;`/new` أو أول «جلسة جديدة» في Mini App لعضو) |
 | &lrm;`~/.claude/settings.json` | إعداد الهوكات في Claude Code | `aipager config` /&rlm; `aipager setup`؛ وعند كل بدء يضيف aipager أي هوك أو سطر حالة لـ aipager ينقص ويضبط `skipDangerousModePermissionPrompt` ([الأمان](security.md#who-decides-whether-a-tool-call-runs)) |
 | &lrm;`~/.claude/settings.json.bak.*`&lrm; | نسخ احتياطية قبل كل إعادة كتابة | `aipager config`،&rlm; `aipager setup`،&rlm; `aipager uninstall` |
-| &lrm;`~/.claude.json` | ملف Claude Code نفسه: يعلّم aipager المجلد الذي تبدأ فيه الجلسة بأنه موثوق قبل بدئها مباشرة (بما في ذلك المجلد الرئيسي، وليس `/` أو مجلدًا أعلى من المجلد الرئيسي أبدًا)، حتى لا يوقف سؤال الثقة في Claude Code جلسة بدأت من Telegram. لا يُعلَّم أي شيء عند بدء aipager. ولا تُعاد كتابته أبدًا إذا تعذّرت قراءته كاملًا أو غيّره Claude يعمل في الأثناء | aipager |
+| &lrm;`~/.claude.json` | ملف Claude Code نفسه: يعلّم aipager المجلد الذي تبدأ فيه الجلسة بأنه موثوق قبل بدئها مباشرة (بما في ذلك المجلد الرئيسي، وليس `/` أو مجلدًا أعلى من المجلد الرئيسي أبدًا)، حتى لا يوقف سؤال الثقة في Claude Code جلسة بدأت من Telegram. لا يُعلَّم أي شيء عند بدء aipager. ولا تُعاد كتابته أبدًا إذا تعذّرت قراءته كاملًا أو غيّره Claude يعمل في الأثناء. وبالطريقة نفسها يجيب عن سؤال «use this API key?» بشأن `ANTHROPIC_API_KEY` الخاص بالجلسة (`customApiKeyResponses`، آخر ٢٠ حرفًا من المفتاح)، ويعلّم التشغيل الأول لـ Claude Code مكتملًا إذا كان لدى الجلسة ما تسجّل به الدخول (`hasCompletedOnboarding`)، حتى لا توقف هذه الأسئلة أيضًا جلسة بدأت من Telegram ([المزوّدون](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | &lrm;`~/.claude/.credentials.json` ← `.credentials.json.stale` | ملف تسجيل الدخول في Claude Code، يُنقل جانبًا عندما تبدأ جلسة مع ضبط `CLAUDE_CODE_OAUTH_TOKEN` والملف لا يحتوي إلا على تسجيل دخول منتهٍ أو فارغ (وإلا لتقدّم على التوكن)؛ وللتراجع يُعاد إلى مكانه | aipager |
 | &lrm;`~/.config/aipager/aipager.yaml` | توكن البوت، والدردشات، والأعضاء مع الأدوار، وإعدادات Mini App | `aipager config` (الصلاحية 600)؛ وينقل aipager مدخل المجموعة عندما يرقّيها Telegram إلى supergroup، ويحتفظ بنسخة `aipager.yaml.bak.<time>`&lrm; عندما ينقل إليه إعدادات Mini App القديمة |
 | &lrm;`~/.config/aipager/policy.yaml` | قواعد كل دور + إضافات الحد الأدنى للأمان | أنت (يُتحقق منه بـ `aipager policy validate`)؛ ويُكتب قالب عليه تعليقات مرة واحدة عند ترحيل تثبيت قديم |

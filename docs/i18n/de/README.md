@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>Claude ist einfach ein Chat mehr.</h3>
 
@@ -353,6 +353,15 @@ Schick `/update`: Es prüft aipager und Claude Code und installiert, was neu ist
 <br>
 
 Das Menü **Modell** der Tastatur und die Mini App bieten die Familien-Aliase von Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) und feste Modelle wie `claude-opus-5-5` und `claude-sonnet-5-5` an. Über die API von Anthropic zeigt ein Alias auf das neueste Modell seiner Familie. Auf Bedrock und Vertex kann derselbe Alias je nach Angebot deines Anbieters auf einen älteren Stand zeigen; schick `/model <full-id>`, um ein genaues Modell zu wählen.
+
+</details>
+
+<details>
+<summary><b>Ich nutze einen API-Schlüssel, ein Gateway oder einen anderen Anbieter. Funktioniert aipager?</b></summary>
+
+<br>
+
+Ja. aipager startet Claude Code so, wie du es eingerichtet hast, und beantwortet die Fragen, die Claude Code beim Start stellt (der Ordner, der API-Schlüssel, die Bildschirme beim ersten Start), damit eine aus Telegram gestartete Session nicht daran hängen bleibt. Trag die Einstellungen in den `env`-Block von `~/.claude/settings.json` ein oder in `~/.config/aipager/daemon.env` (eine Zeile `KEY=value` pro Einstellung, ohne Anführungszeichen). Die Buttons Opus, Sonnet und Haiku folgen `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` und `ANTHROPIC_DEFAULT_HAIKU_MODEL`, und jedes andere Modell kannst du mit seinem Namen eintippen. Anthropic unterstützt Claude Code nur mit Claude-Modellen. Mehr dazu unter [Fehlerbehebung](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider).
 
 </details>
 

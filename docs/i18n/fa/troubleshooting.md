@@ -2,7 +2,7 @@
 
 # رفع مشکل
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de3425 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../troubleshooting.md))
 
@@ -253,7 +253,7 @@ uv tool install --reinstall aipager
 | `role_shell_access` | برای هر نقشی که عضوی دارد و می‌تواند Bash اجرا کند یک بار هشدار می‌دهد (قانون‌های ایمنی‌اش در حد تلاش است، نه یک مرز؛ [استفادهٔ تیمی](groups.md#roles) را ببینید) | در `policy.yaml` به آن نقش Bash ندهید، یا قبولش کنید |
 | `peer_messages` | پیام‌های بین سشن‌های Claude: رسیدهایشان کجا نگه داشته می‌شود و آن پوشه خصوصی است یا نه، این سیستم می‌تواند زمان شروع فرستنده را چک کند یا نه، و یک هشدار برای هر نقشی که یک policy به آن اجازهٔ SendMessage داده ([مدل امنیتی](security.md#messages-between-claude-sessions) را ببینید) | پوشهٔ رسیدی را که مشترک شده پاک کنید (aipager دوباره می‌سازدش)، یا به آن نقش SendMessage ندهید |
 | `claude` | فایل اجرایی `claude` را همان‌طور که هر شروع سشن پیدا می‌کند پیدا می‌کند (`claude_path` در `aipager.yaml` یا &lrm;`$AIPAGER_CLAUDE_BIN` بی‌چون‌وچرا برنده‌اند؛ وگرنه جدیدترین نسخه بین &lrm;`~/.local/bin`،&rlm; PATH و Homebrew)، و هر نصب جداگانهٔ دیگری را که پیدا شد فهرست می‌کند | Claude Code را نصب کنید، یا `claude_path` /&rlm; `AIPAGER_CLAUDE_BIN` را تنظیم کنید |
-| `claude_auth` | `claude auth status` را در همان محیطی که یک سشن واقعی می‌گیرد اجرا می‌کند. **هیچ‌وقت FAIL نمی‌شود**: «لاگین نیست» و «خود بررسی شکست خورد» جدا از هم گزارش می‌شوند و هیچ‌کدام جلوی شروع سشن را نمی‌گیرد | `claude auth login`، یا یک کلید API یا `CLAUDE_CODE_OAUTH_TOKEN` تنظیم کنید |
+| `claude_auth` | `claude auth status` را در همان محیطی که یک سشن واقعی می‌گیرد اجرا می‌کند. **هیچ‌وقت FAIL نمی‌شود**: «لاگین نیست» و «خود بررسی شکست خورد» جدا از هم گزارش می‌شوند و هیچ‌کدام جلوی شروع سشن را نمی‌گیرد. همچنین وقتی به Claude Code گفته شده از `ANTHROPIC_API_KEY` سشن‌ها استفاده نکند و چیز دیگری واردشان نمی‌کند، هشدار می‌دهد. | `claude auth login`، یا یک کلید API یا `CLAUDE_CODE_OAUTH_TOKEN` تنظیم کنید؛ اگر `ANTHROPIC_BASE_URL` گذاشته شده، کلید همان آدرس ([ارائه‌دهنده‌ها](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | فایل اجرایی `dtach` پیدا شد (`dtach-bin` خود aipager، یا یکی در PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` و `aipager-statusline` در PATH هستند | `uv tool install --reinstall aipager` |
 | `settings_json` | هوک‌های aipager در &lrm;`~/.claude/settings.json` وصل شده‌اند | `aipager config` |
@@ -296,6 +296,20 @@ aipager service stop && aipager service start
 </div>
 
 برای اینکه این فایل از چه چیزی محافظت می‌کند و از چه چیزی نه، [مدل امنیتی ← اطلاعات ورود Claude](security.md#the-claude-credential-what-actually-protects-it) را ببینید.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>استفاده از کلید API، گیت‌وی یا ارائه‌دهندهٔ دیگر
+
+&rlm;aipager همان Claude Code را اجرا می‌کند که خودتان تنظیم کرده‌اید، پس سشنی که از تلگرام شروع می‌شود همان‌طور وارد می‌شود که `claude` در ترمینالتان: با ورود claude.ai، کلید API از Anthropic، یک گیت‌وی (LiteLLM،&rlm; Vercel،&rlm; Cloudflare و مانند این‌ها) یا آدرسی با قالب Anthropic از شرکتی دیگر که در `ANTHROPIC_BASE_URL` گذاشته شده. Anthropic فقط Claude Code با مدل‌های Claude را پشتیبانی می‌کند؛ مدل‌های دیگر ممکن است جور دیگری رفتار کنند.
+
+- **تنظیمات کجا بروند.** در بخش `env` فایل &lrm;`~/.claude/settings.json` که همهٔ سشن‌های Claude Code می‌خوانندش، یا در &lrm;`~/.config/aipager/daemon.env` که فقط به سشن‌هایی می‌رسد که aipager شروع می‌کند: هر خط یک `KEY=value`، بدون کوتیشن (کوتیشن جزو مقدار می‌شود). سرویس (`aipager service install`) هیچ‌وقت پروفایل شل شما را نمی‌خواند، پس `export` آنجا به آن نمی‌رسد. بعد از تغییر `daemon.env`،&rlm; aipager را ری‌استارت کنید.
+- **کدام تنظیم برای کلید.** برای گیت‌وی یا ارائه‌دهندهٔ دیگر، راهنمای Claude Code `ANTHROPIC_AUTH_TOKEN` را پیشنهاد می‌کند که Claude Code هیچ‌وقت درباره‌اش سؤال نمی‌کند. برای `ANTHROPIC_API_KEY` یک بار می‌پرسد «Do you want to use this API key?» و سشنی که از تلگرام شروع شده نمی‌تواند جواب بدهد، پس aipager درست پیش از شروع سشن در &lrm;`~/.claude.json` جواب می‌دهد:
+  - بله، وقتی کلید در `settings.json` یا `daemon.env` گذاشته شده، یا وقتی چیز دیگری نمی‌تواند سشن را وارد کند.
+  - نه، وقتی کلید فقط از محیطی می‌آید که aipager در آن اجرا شده و شما از راه دیگری وارد Claude شده‌اید: سشن‌هایتان روی همان ورود و اشتراکش می‌مانند. برای استفاده از کلید، در یک سشن ترمینال که کلید را دارد، آن را با &lrm;`/config` و «Use custom API key» روشن کنید.
+  - جوابی که خودتان داده‌اید می‌ماند، مگر «نه» برای کلیدی که در `settings.json` یا `daemon.env` است، وقتی چیز دیگری نمی‌تواند سشن را وارد کند. `aipager doctor` می‌گوید کِی یک «نه» سشن‌ها را بی‌ورود گذاشته؛ در ترمینال با &lrm;`/config` و «Use custom API key» کلید را دوباره روشن کنید.
+- **صفحه‌های اجرای اول.** جایی که Claude Code هیچ‌وقت اجرای اولش را تمام نکرده (دستگاه یا کانتینر تازه)، aipager وقتی سشن اطلاعات ورود دارد آن را تمام‌شده علامت می‌زند، تا سشن روی صفحهٔ انتخاب تم نماند. اگر هیچ اطلاعات ورودی نیست، یک بار `claude` را در ترمینال اجرا کنید و وارد شوید.
+- **مدل‌ها.** دکمه‌های Opus،&rlm; Sonnet و Haiku همان `opus`،&rlm; `sonnet` و `haiku` در Claude Code را می‌فرستند که اگر `ANTHROPIC_DEFAULT_OPUS_MODEL`،&rlm; `ANTHROPIC_DEFAULT_SONNET_MODEL` و `ANTHROPIC_DEFAULT_HAIKU_MODEL` را بگذارید، به مدل‌های ارائه‌دهنده‌تان می‌رسند. دکمه‌های `claude-...`&lrm; ارائه‌دهنده‌ای می‌خواهند که آن مدل‌ها را داشته باشد. هر مدل دیگری را در مرحلهٔ مدلِ &lrm;`/new` یا در Mini App همان‌طور تایپ کنید که ارائه‌دهنده‌تان می‌نویسد: تا ۱۲۸ کاراکتر از حروف، عدد و `. _ - : / @ ~ ,`، و پسوند &lrm;`[1m]`&lrm; در Claude Code هم مجاز است. `keyboard.json` دکمه‌ها را عوض می‌کند ([کیبورد ثابت](commands.md#persistent-keyboard) را ببینید).
+- &rlm;**`ANTHROPIC_BASE_URL` بدون کلید.** آن وقت Claude Code ورود claude.ai شما را به همان آدرس می‌فرستد. کلید ارائه‌دهنده را هم بگذارید، مگر اینکه آن آدرس گیت‌وی‌ای باشد که قرار است ورودتان را به Anthropic برساند.
+- **پشتیبانی نمی‌شود:** ابزارهایی که Claude Code را با اشتراک چت شرکتی دیگر (مثلاً اشتراک ChatGPT) از راه یک پراکسی محلی اجرا می‌کنند. آن شرکت Claude Code را برای اشتراک‌هایش تأیید نکرده و این کار ممکن است آن حساب را به خطر بیندازد.
 
 ## <a id="the-daemons-control-socket-moved"></a>جای سوکت کنترل aipager عوض شد
 

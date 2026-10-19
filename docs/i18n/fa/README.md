@@ -6,7 +6,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>حالا Claude هم یکی از چت‌های شماست.</h3>
 
@@ -387,6 +387,15 @@ aipager doctor                            # نصب را چک کنید
 <br>
 
 منوی **مدل** در کیبورد و Mini App اسم‌های کوتاه خانواده‌های مدل در Claude Code (`sonnet`،&rlm; `opus`،&rlm; `haiku`،&rlm; `fable`،&rlm; `opusplan`) و مدل‌های ثابتی مثل `claude-opus-5-5` و `claude-sonnet-5-5` را پیشنهاد می‌کنند. روی API خود Anthropic، اسم کوتاه به جدیدترین مدل آن خانواده می‌رسد. روی Bedrock و Vertex همین اسم ممکن است بسته به آنچه ارائه‌دهنده‌تان دارد به نسخهٔ قدیمی‌تری برسد؛ برای انتخاب یک مدل مشخص، &lrm;`/model <full-id>`&lrm; را بفرستید.
+
+</details>
+
+<details>
+<summary><b>از کلید API، یک گیت‌وی یا ارائه‌دهندهٔ دیگری استفاده می‌کنم. aipager کار می‌کند؟</b></summary>
+
+<br>
+
+بله. aipager همان Claude Code را که خودتان تنظیم کرده‌اید اجرا می‌کند و به سؤال‌هایی که Claude Code اول کار می‌پرسد (پوشه، کلید API، صفحه‌های اجرای اول) جواب می‌دهد، تا سشنی که از تلگرام شروع می‌شود رویشان گیر نکند. تنظیمات را در بخش `env` فایل &lrm;`~/.claude/settings.json` بگذارید، یا در &lrm;`~/.config/aipager/daemon.env` (هر خط یک `KEY=value`، بدون کوتیشن). دکمه‌های Opus،&rlm; Sonnet و Haiku از `ANTHROPIC_DEFAULT_OPUS_MODEL`،&rlm; `ANTHROPIC_DEFAULT_SONNET_MODEL` و `ANTHROPIC_DEFAULT_HAIKU_MODEL` پیروی می‌کنند و اسم هر مدل دیگری را هم می‌شود تایپ کرد. Anthropic فقط Claude Code با مدل‌های Claude را پشتیبانی می‌کند. [رفع مشکل](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider) را ببینید.
 
 </details>
 

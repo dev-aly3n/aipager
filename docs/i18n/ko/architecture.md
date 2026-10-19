@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
+<!-- i18n-source: docs/architecture.md @ 2d10247 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -114,7 +114,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `~/aipager-users/<label>/` | 멤버의 기본 [루트 폴더](groups.md#root-folders)(권한 0700), `user`와 `read_only` 멤버가 여기서 세션을 시작해요. `aipager uninstall`은 이것을 남겨 둬요 | aipager (멤버가 처음 `/new`를 쓰거나 Mini App에서 처음 “새 세션”을 누를 때 만들어요) |
 | `~/.claude/settings.json` | Claude Code의 hook 설정 | `aipager config` / `aipager setup`. 시작할 때마다 aipager가 빠진 aipager hook이나 상태 줄을 채우고 `skipDangerousModePermissionPrompt`를 설정해요([보안](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | 다시 쓰기 전마다 만드는 백업 | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | Claude Code 자체 파일: aipager가 세션이 시작될 폴더를 시작 직전에 신뢰하는 폴더로 표시해서(홈 폴더도 포함, `/`나 홈 폴더 위의 폴더는 절대 아님), Claude Code의 신뢰 질문이 Telegram에서 시작한 세션을 막지 않게 해요. aipager가 시작할 때는 아무것도 표시하지 않아요. 전체를 읽을 수 없거나 실행 중인 Claude가 그사이 바꿨다면 절대 다시 쓰지 않아요 | aipager |
+| `~/.claude.json` | Claude Code 자체 파일: aipager가 세션이 시작될 폴더를 시작 직전에 신뢰하는 폴더로 표시해서(홈 폴더도 포함, `/`나 홈 폴더 위의 폴더는 절대 아님), Claude Code의 신뢰 질문이 Telegram에서 시작한 세션을 막지 않게 해요. aipager가 시작할 때는 아무것도 표시하지 않아요. 전체를 읽을 수 없거나 실행 중인 Claude가 그사이 바꿨다면 절대 다시 쓰지 않아요. 같은 방식으로 세션의 `ANTHROPIC_API_KEY`에 대한 “use this API key?” 질문에 답하고(`customApiKeyResponses`, 키의 마지막 20자), 세션에 로그인 정보가 있으면 Claude Code의 첫 실행을 끝난 것으로 표시해서(`hasCompletedOnboarding`) 이 질문들도 Telegram에서 시작한 세션을 막지 않게 해요([제공자](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | Claude Code의 로그인 파일, `CLAUDE_CODE_OAUTH_TOKEN`을 설정한 채 세션을 시작하는데 이 파일에 만료됐거나 빈 로그인만 있을 때 옆으로 치워 둬요(그렇지 않으면 token보다 우선해요). 되돌리려면 다시 옮겨 놓으세요 | aipager |
 | `~/.config/aipager/aipager.yaml` | 봇 token, 채팅, 멤버 + 역할, Mini App 설정 | `aipager config` (권한 600). Telegram이 그룹을 supergroup으로 업그레이드하면 aipager가 그 그룹 항목을 옮기고, 예전 Mini App 설정을 안으로 옮길 때 `aipager.yaml.bak.<time>`을 남겨요 |
 | `~/.config/aipager/policy.yaml` | 역할별 규칙 + 안전 기준선 추가분 | 나 (`aipager policy validate`로 확인). 예전 설치를 옮길 때 주석이 달린 템플릿을 한 번 써요 |

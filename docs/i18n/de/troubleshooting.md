@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ Die Reihenfolge zählt: Jede spätere Prüfung setzt voraus, dass die früheren 
 | `role_shell_access` | Warnt einmal für jede Rolle, die ein Mitglied hat und mit der Bash laufen kann (ihre Sicherheitsregeln sind nur nach bestem Bemühen, keine Grenze; siehe [Gruppen](groups.md#roles)) | dieser Rolle in `policy.yaml` kein Bash geben, oder es hinnehmen |
 | `peer_messages` | Nachrichten zwischen Claude-Sitzungen: wo ihre Belege liegen und ob dieser Ordner privat ist, ob dieses System die Startzeit des Absenders prüfen kann, und eine Warnung für jede Rolle, der eine Regel SendMessage erlaubt (siehe [Sicherheit](security.md#messages-between-claude-sessions)) | einen gemeinsam genutzten Ordner für Belege entfernen (aipager legt ihn neu an), oder dieser Rolle kein SendMessage geben |
 | `claude` | Findet das Programm `claude` genau so wie jeder Start (`claude_path` in `aipager.yaml` oder `$AIPAGER_CLAUDE_BIN` gewinnen direkt; sonst das neueste aus `~/.local/bin`, PATH und Homebrew) und listet jede ANDERE gefundene Installation auf | Claude Code installieren, oder `claude_path` / `AIPAGER_CLAUDE_BIN` setzen |
-| `claude_auth` | Probiert `claude auth status` in derselben Umgebung, die eine echte Sitzung bekommt. **Schlägt nie fehl**: „nicht angemeldet“ und „der Versuch selbst ist fehlgeschlagen“ werden getrennt gemeldet, und keins von beiden hindert eine Sitzung am Start | `claude auth login`, oder einen API-Schlüssel / `CLAUDE_CODE_OAUTH_TOKEN` setzen |
+| `claude_auth` | Probiert `claude auth status` in derselben Umgebung, die eine echte Sitzung bekommt. **Schlägt nie fehl**: „nicht angemeldet“ und „der Versuch selbst ist fehlgeschlagen“ werden getrennt gemeldet, und keins von beiden hindert eine Sitzung am Start. Er warnt auch, wenn Claude Code gesagt wurde, den `ANTHROPIC_API_KEY` der Sitzungen nicht zu nutzen, und sie sonst nichts anmeldet. | `claude auth login`, oder einen API-Schlüssel / `CLAUDE_CODE_OAUTH_TOKEN` setzen; mit gesetztem `ANTHROPIC_BASE_URL` der Schlüssel für diese Adresse ([Anbieter](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | Das Programm `dtach` wurde gefunden (das eigene `dtach-bin` von aipager oder eins im PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` und `aipager-statusline` sind im PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | In `~/.claude/settings.json` sind die Hooks von aipager eingetragen | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 Siehe [Sicherheitsmodell: die Claude-Anmeldedaten](security.md#the-claude-credential-what-actually-protects-it) dafür, wovor diese Datei schützt und wovor nicht.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>Mit einem API-Schlüssel, einem Gateway oder einem anderen Anbieter
+
+aipager startet Claude Code so, wie du es eingerichtet hast, also meldet sich eine aus Telegram gestartete Sitzung so an wie `claude` in deinem Terminal: mit einem claude.ai-Login, einem API-Schlüssel von Anthropic, über ein Gateway (LiteLLM, Vercel, Cloudflare und ähnliche) oder über die Adresse eines anderen Unternehmens im Anthropic-Format, die in `ANTHROPIC_BASE_URL` steht. Anthropic unterstützt Claude Code nur mit Claude-Modellen; andere Modelle können sich anders verhalten.
+
+- **Wohin die Einstellungen gehören.** In den `env`-Block von `~/.claude/settings.json`, den jede Sitzung von Claude Code liest, oder in `~/.config/aipager/daemon.env`, das nur die Sitzungen bekommen, die aipager startet: eine Zeile `KEY=value` pro Einstellung, ohne Anführungszeichen (sie würden Teil des Werts). Ein Dienst (`aipager service install`) liest nie das Profil deiner Shell, ein `export` dort erreicht ihn also nicht. Starte aipager neu, nachdem du `daemon.env` geändert hast.
+- **Welche Schlüssel-Einstellung.** Für ein Gateway oder einen anderen Anbieter empfiehlt die Doku von Claude Code `ANTHROPIC_AUTH_TOKEN`, wonach Claude Code nie fragt. Bei `ANTHROPIC_API_KEY` fragt es einmal „Do you want to use this API key?“, und eine aus Telegram gestartete Sitzung kann nicht antworten, also antwortet aipager direkt vor dem Start der Sitzung in `~/.claude.json`:
+  - Ja, wenn der Schlüssel in `settings.json` oder `daemon.env` steht oder sonst nichts die Sitzung anmelden kann.
+  - Nein, wenn der Schlüssel nur aus der Umgebung kommt, in der aipager gestartet wurde, und du anders bei Claude angemeldet bist: Deine Sitzungen bleiben bei diesem Login und seinem Plan. Um den Schlüssel zu nutzen, schalte ihn in einer Terminal-Sitzung, die ihn hat, mit `/config` und „Use custom API key“ ein.
+  - Eine Antwort, die du selbst gegeben hast, bleibt, außer einem Nein für einen Schlüssel in `settings.json` oder `daemon.env`, wenn sonst nichts eine Sitzung anmelden kann. `aipager doctor` sagt dir, wenn ein Nein die Sitzungen ohne Login lässt; schalte den Schlüssel in einem Terminal mit `/config` und „Use custom API key“ wieder ein.
+- **Bildschirme beim ersten Start.** Wo Claude Code seinen ersten Start nie abgeschlossen hat (ein neuer Rechner oder Container), markiert aipager ihn als erledigt, wenn die Sitzung eine Anmeldung hat, damit sie nicht bei der Auswahl des Designs stehen bleibt. Ohne jede Anmeldung starte `claude` einmal in einem Terminal und melde dich an.
+- **Modelle.** Die Buttons Opus, Sonnet und Haiku senden `opus`, `sonnet` und `haiku` von Claude Code, die es auf die Modelle deines Anbieters abbildet, wenn du `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` und `ANTHROPIC_DEFAULT_HAIKU_MODEL` setzt. Die Buttons `claude-...` brauchen einen Anbieter, der diese Modelle hat. Jedes andere Modell tippst du im Modell-Schritt von `/new` oder in der Mini App so ein, wie dein Anbieter es schreibt: bis zu 128 Zeichen aus Buchstaben, Ziffern und `. _ - : / @ ~ ,`, auch mit der Endung `[1m]` von Claude Code. `keyboard.json` ändert die Buttons (siehe [Feste Tastatur](commands.md#persistent-keyboard)).
+- **`ANTHROPIC_BASE_URL` ohne Schlüssel.** Dann schickt Claude Code deinen claude.ai-Login an diese Adresse. Setz auch den Schlüssel des Anbieters, außer die Adresse ist ein Gateway, das deinen Login an Anthropic weitergeben soll.
+- **Nicht unterstützt:** Tools, die Claude Code über einen lokalen Proxy mit dem Chat-Abo eines anderen Unternehmens betreiben (zum Beispiel einem ChatGPT-Plan). Dieses Unternehmen hat Claude Code für seine Pläne nicht freigegeben, und so eine Nutzung kann dieses Konto gefährden.
 
 ## <a id="the-daemons-control-socket-moved"></a>Der Steuer-Socket von aipager ist umgezogen
 

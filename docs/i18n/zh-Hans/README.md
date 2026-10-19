@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>Claude 只是又多了一个聊天。</h3>
 
@@ -353,6 +353,15 @@ aipager 只把你在聊天里看到的内容，用你自己的机器人 token �
 <br>
 
 键盘上的**模型**菜单和 Mini App 提供 Claude Code 的系列别名（`sonnet`、`opus`、`haiku`、`fable`、`opusplan`）以及 `claude-opus-5-5`、`claude-sonnet-5-5` 这样的固定模型。在 Anthropic API 上，别名指向该系列的最新模型。在 Bedrock 和 Vertex 上，同一个别名可能指向较旧的版本，取决于你的服务商提供什么；要选定确切的模型，请发送 `/model <full-id>`。
+
+</details>
+
+<details>
+<summary><b>我用的是 API 密钥、网关或其他服务商。aipager 能用吗？</b></summary>
+
+<br>
+
+能。aipager 按你的设置运行 Claude Code，并替你回答 Claude Code 启动时问的问题（文件夹、API 密钥、首次运行的界面），这样从 Telegram 启动的会话不会卡在那里。把设置写进 `~/.claude/settings.json` 的 `env` 块，或写进 `~/.config/aipager/daemon.env`（每行一个 `KEY=value`，不加引号）。Opus、Sonnet 和 Haiku 按钮跟随 `ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 和 `ANTHROPIC_DEFAULT_HAIKU_MODEL`，其他模型直接输入名称即可。Anthropic 只支持 Claude Code 搭配 Claude 模型使用。详见[故障排除](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)。
 
 </details>
 

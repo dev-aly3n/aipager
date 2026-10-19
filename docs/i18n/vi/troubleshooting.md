@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de34258 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -225,7 +225,7 @@ Thứ tự là quan trọng: mỗi bước kiểm tra sau giả định các bư
 | `role_shell_access` | Cảnh báo một lần cho mỗi vai trò của thành viên có thể chạy Bash (quy tắc an toàn của nó chỉ làm hết sức có thể, không phải ranh giới; xem [nhóm](groups.md#roles)) | không cho vai trò đó Bash trong `policy.yaml`, hoặc chấp nhận điều đó |
 | `peer_messages` | Tin nhắn giữa các phiên Claude: biên nhận của chúng được giữ ở đâu và thư mục đó có riêng tư không, hệ thống này có kiểm tra được thời điểm khởi động của người gửi không, và một cảnh báo cho mỗi vai trò mà một quy tắc cho dùng SendMessage (xem [bảo mật](security.md#messages-between-claude-sessions)) | xóa thư mục biên nhận dùng chung (aipager sẽ tạo lại), hoặc không cho vai trò đó SendMessage |
 | `claude` | Tìm chương trình `claude` theo đúng cách mà mọi lần khởi động dùng (`claude_path` trong `aipager.yaml` hoặc `$AIPAGER_CLAUDE_BIN` thắng ngay; nếu không thì bản mới nhất trong `~/.local/bin`, PATH và Homebrew), và liệt kê mọi bản cài KHÁC tìm thấy | cài Claude Code, hoặc đặt `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | Thử `claude auth status` trong đúng môi trường mà một phiên thật nhận được. **Không bao giờ FAIL**: “chưa đăng nhập” và “chính lần thử bị lỗi” được báo riêng, và không cái nào ngăn một phiên khởi động | `claude auth login`, hoặc đặt khóa API / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | Thử `claude auth status` trong đúng môi trường mà một phiên thật nhận được. **Không bao giờ FAIL**: “chưa đăng nhập” và “chính lần thử bị lỗi” được báo riêng, và không cái nào ngăn một phiên khởi động. Nó cũng cảnh báo khi Claude Code đã được bảo không dùng `ANTHROPIC_API_KEY` của các phiên và không có gì khác đăng nhập cho chúng. | `claude auth login`, hoặc đặt khóa API / `CLAUDE_CODE_OAUTH_TOKEN`; khi đặt `ANTHROPIC_BASE_URL`, khóa của địa chỉ đó ([nhà cung cấp](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | Tìm thấy chương trình `dtach` (`dtach-bin` của chính aipager, hoặc một bản trên PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` và `aipager-statusline` có trên PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | `~/.claude/settings.json` đã nối các hook của aipager | `aipager config` |
@@ -260,6 +260,20 @@ aipager service stop && aipager service start
 ```
 
 Xem [Mô hình bảo mật: thông tin đăng nhập Claude](security.md#the-claude-credential-what-actually-protects-it) để biết file này bảo vệ được gì và không bảo vệ được gì.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>Dùng khóa API, gateway hoặc nhà cung cấp khác
+
+aipager chạy Claude Code đúng như bạn đã thiết lập, nên phiên bắt đầu từ Telegram đăng nhập giống như `claude` trong terminal của bạn: bằng đăng nhập claude.ai, khóa API của Anthropic, một gateway (LiteLLM, Vercel, Cloudflare và tương tự) hoặc địa chỉ theo định dạng Anthropic của một công ty khác đặt trong `ANTHROPIC_BASE_URL`. Anthropic chỉ hỗ trợ Claude Code với các mô hình Claude; mô hình khác có thể hoạt động khác đi.
+
+- **Đặt thiết lập ở đâu.** Trong khối `env` của `~/.claude/settings.json`, nơi mọi phiên Claude Code đều đọc, hoặc trong `~/.config/aipager/daemon.env`, chỉ các phiên do aipager khởi động mới nhận: mỗi dòng một `KEY=value`, không có dấu ngoặc kép (dấu ngoặc sẽ thành một phần của giá trị). Một dịch vụ (`aipager service install`) không bao giờ đọc profile của shell, nên `export` ở đó không tới được nó. Khởi động lại aipager sau khi đổi `daemon.env`.
+- **Dùng thiết lập khóa nào.** Với gateway hoặc nhà cung cấp khác, tài liệu của Claude Code khuyên dùng `ANTHROPIC_AUTH_TOKEN`, thứ mà Claude Code không bao giờ hỏi. Với `ANTHROPIC_API_KEY`, nó hỏi một lần “Do you want to use this API key?”, và phiên bắt đầu từ Telegram không trả lời được, nên aipager trả lời trong `~/.claude.json` ngay trước khi phiên bắt đầu:
+  - Có, khi khóa được đặt trong `settings.json` hoặc `daemon.env`, hoặc khi không có gì khác đăng nhập được cho phiên.
+  - Không, khi khóa chỉ đến từ môi trường mà aipager được khởi động và bạn đã đăng nhập Claude theo cách khác: các phiên của bạn vẫn dùng đăng nhập đó và gói của nó. Muốn dùng khóa thì bật nó trong một phiên terminal có khóa đó, bằng `/config` và “Use custom API key”.
+  - Câu trả lời do chính bạn đưa ra được giữ nguyên, trừ câu Không cho một khóa trong `settings.json` hoặc `daemon.env` khi không có gì khác đăng nhập được cho phiên. `aipager doctor` sẽ báo khi một câu Không khiến các phiên không đăng nhập được; bật lại khóa trong terminal bằng `/config` và “Use custom API key”.
+- **Màn hình chạy lần đầu.** Ở nơi Claude Code chưa từng chạy xong lần đầu (máy hoặc container mới), aipager đánh dấu đã xong khi phiên có thông tin đăng nhập, để phiên không dừng ở bước chọn giao diện. Nếu không có thông tin đăng nhập nào, hãy chạy `claude` một lần trong terminal và đăng nhập.
+- **Mô hình.** Các nút Opus, Sonnet và Haiku gửi `opus`, `sonnet` và `haiku` của Claude Code, và Claude Code ánh xạ chúng sang mô hình của nhà cung cấp khi bạn đặt `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` và `ANTHROPIC_DEFAULT_HAIKU_MODEL`. Các nút `claude-...` cần nhà cung cấp có các mô hình đó. Mô hình khác thì gõ ở bước chọn mô hình của `/new` hoặc trong Mini App, đúng như nhà cung cấp viết: tối đa 128 ký tự gồm chữ cái, chữ số và `. _ - : / @ ~ ,`, có thể kèm đuôi `[1m]` của Claude Code. `keyboard.json` thay đổi các nút (xem [Bàn phím cố định](commands.md#persistent-keyboard)).
+- **`ANTHROPIC_BASE_URL` mà không có khóa.** Khi đó Claude Code gửi đăng nhập claude.ai của bạn tới địa chỉ đó. Hãy đặt cả khóa của nhà cung cấp, trừ khi địa chỉ đó là gateway được dựng để chuyển đăng nhập của bạn tới Anthropic.
+- **Không hỗ trợ:** các công cụ chạy Claude Code bằng gói chat của công ty khác (ví dụ một gói ChatGPT) qua proxy cục bộ. Công ty đó chưa chấp thuận Claude Code cho các gói của họ, và dùng như vậy có thể khiến tài khoản đó gặp rủi ro.
 
 ## <a id="the-daemons-control-socket-moved"></a>Socket điều khiển của aipager đã đổi chỗ
 

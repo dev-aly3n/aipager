@@ -1,6 +1,6 @@
 # Arsitektur
 
-<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
+<!-- i18n-source: docs/architecture.md @ 2d10247 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../architecture.md))
 
@@ -114,7 +114,7 @@ Mulai ulang dari Telegram mengandalkan seluruh jalur ini selesai sebelum penggan
 | `~/aipager-users/<label>/` | [Folder utama](groups.md#root-folders) bawaan para anggota (izin 0700), tempat anggota `user` dan `read_only` memulai sesinya; `aipager uninstall` menyimpannya | aipager (dibuat saat anggota pertama kali memakai `/new` atau “Sesi baru” di Mini App) |
 | `~/.claude/settings.json` | Konfigurasi hook Claude Code | `aipager config` / `aipager setup`; setiap kali mulai, aipager menambahkan hook atau baris status aipager yang belum ada dan mengatur `skipDangerousModePermissionPrompt` ([keamanan](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Cadangan sebelum setiap penulisan ulang | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | File milik Claude Code sendiri: aipager menandai folder tempat sesi dimulai sebagai tepercaya tepat sebelum sesi dimulai (termasuk folder home, tidak pernah `/` atau folder di atas folder home), supaya pertanyaan kepercayaan Claude Code tidak menghentikan sesi yang dimulai dari Telegram. Saat aipager mulai, tidak ada yang ditandai. Tidak pernah ditulis ulang kalau tidak bisa dibaca utuh atau Claude yang sedang berjalan mengubahnya di sela-sela itu | aipager |
+| `~/.claude.json` | File milik Claude Code sendiri: aipager menandai folder tempat sesi dimulai sebagai tepercaya tepat sebelum sesi dimulai (termasuk folder home, tidak pernah `/` atau folder di atas folder home), supaya pertanyaan kepercayaan Claude Code tidak menghentikan sesi yang dimulai dari Telegram. Saat aipager mulai, tidak ada yang ditandai. Tidak pernah ditulis ulang kalau tidak bisa dibaca utuh atau Claude yang sedang berjalan mengubahnya di sela-sela itu. Dengan cara yang sama, ia menjawab pertanyaan “use this API key?” untuk `ANTHROPIC_API_KEY` sesi (`customApiKeyResponses`, 20 karakter terakhir kunci) dan menandai proses pertama Claude Code selesai kalau sesi punya kredensial (`hasCompletedOnboarding`), supaya pertanyaan-pertanyaan ini juga tidak menghentikan sesi yang dimulai dari Telegram ([penyedia](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | File login Claude Code, disisihkan saat sesi dimulai dengan `CLAUDE_CODE_OAUTH_TOKEN` diatur dan file itu hanya berisi login yang kedaluwarsa atau kosong (kalau tidak, file itu akan mengalahkan token); untuk membatalkan, kembalikan ke tempatnya | aipager |
 | `~/.config/aipager/aipager.yaml` | Token bot, chat, anggota + peran, pengaturan Mini App | `aipager config` (izin 600); aipager memindahkan entri grup saat Telegram mengubahnya menjadi supergroup, dan menyimpan salinan `aipager.yaml.bak.<time>` saat memindahkan pengaturan Mini App lama ke sana |
 | `~/.config/aipager/policy.yaml` | Aturan per peran + tambahan untuk batas bawah keamanan | kamu (diperiksa dengan `aipager policy validate`); templat berkomentar ditulis sekali saat memindahkan instalasi lama |

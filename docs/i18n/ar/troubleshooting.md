@@ -2,7 +2,7 @@
 
 # حل المشكلات
 
-<!-- i18n-source: docs/troubleshooting.md @ 1de3425 -->
+<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../troubleshooting.md))
 
@@ -253,7 +253,7 @@ uv tool install --reinstall aipager
 | `role_shell_access` | يحذّر مرة لكل دور لدى عضو يستطيع تشغيل Bash (قواعد الأمان فيه بذل للجهد، لا حدود؛ يُنظر [المجموعات](groups.md#roles)) | عدم إعطاء ذلك الدور Bash في `policy.yaml`، أو قبول ذلك |
 | `peer_messages` | الرسائل بين جلسات Claude: أين تُحفظ إيصالاتها وهل ذلك المجلد خاص، وهل يستطيع هذا النظام فحص وقت بدء المرسِل، وتحذير لكل دور تسمح له سياسةٌ باستخدام SendMessage (يُنظر [الأمان](security.md#messages-between-claude-sessions)) | حذف مجلد إيصالات مشترك (يعيد aipager إنشاءه)، أو عدم إعطاء ذلك الدور SendMessage |
 | `claude` | يجد برنامج `claude` بالطريقة التي يستخدمها كل تشغيل (`claude_path` في `aipager.yaml` أو &lrm;`$AIPAGER_CLAUDE_BIN` يغلبان مباشرة؛ وإلا فالأحدث من &lrm;`~/.local/bin` وPATH وHomebrew)، ويسرد كل تثبيت آخر مختلف عُثر عليه | تثبيت Claude Code، أو ضبط `claude_path` /&rlm; `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | يجرّب `claude auth status` في البيئة نفسها التي تحصل عليها الجلسة الحقيقية. **لا يفشل أبدًا**: «غير مسجّل الدخول» و«فشلت التجربة نفسها» يُذكران بشكل مختلف، ولا يمنع أي منهما بدء جلسة | `claude auth login`، أو ضبط مفتاح API /&rlm; `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | يجرّب `claude auth status` في البيئة نفسها التي تحصل عليها الجلسة الحقيقية. **لا يفشل أبدًا**: «غير مسجّل الدخول» و«فشلت التجربة نفسها» يُذكران بشكل مختلف، ولا يمنع أي منهما بدء جلسة. ويحذّر أيضًا حين يكون Claude Code قد طُلب منه ألا يستخدم `ANTHROPIC_API_KEY` الخاص بالجلسات ولا يوجد ما يسجّل دخولها غيره. | `claude auth login`، أو ضبط مفتاح API /&rlm; `CLAUDE_CODE_OAUTH_TOKEN`؛ ومع ضبط `ANTHROPIC_BASE_URL`، مفتاح ذلك العنوان ([المزوّدون](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | عُثر على برنامج `dtach` (`dtach-bin` الخاص بـ aipager، أو واحد في PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` و`aipager-statusline` موجودان في PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | في &lrm;`~/.claude/settings.json` هوكات aipager مربوطة | `aipager config` |
@@ -296,6 +296,20 @@ aipager service stop && aipager service start
 </div>
 
 يُنظر [نموذج الأمان: بيانات اعتماد Claude](security.md#the-claude-credential-what-actually-protects-it) لما يحميه هذا الملف وما لا يحميه.
+
+## <a id="using-an-api-key-a-gateway-or-another-provider"></a>استخدام مفتاح API أو بوابة أو مزوّد آخر
+
+يشغّل aipager برنامج Claude Code كما هو مُعَدّ لديك، لذا تسجّل الجلسة التي تبدأ من Telegram الدخول كما يفعل `claude` في طرفيتك: بتسجيل دخول claude.ai، أو بمفتاح API من Anthropic، أو عبر بوابة (LiteLLM وVercel وCloudflare وأمثالها)، أو عبر عنوان بصيغة Anthropic لشركة أخرى مضبوط في `ANTHROPIC_BASE_URL`. لا تدعم Anthropic برنامج Claude Code إلا مع نماذج Claude، وقد تتصرف النماذج الأخرى بشكل مختلف.
+
+- **أين توضع الإعدادات.** في قسم `env` من &lrm;`~/.claude/settings.json`، الذي تقرؤه كل جلسات Claude Code، أو في &lrm;`~/.config/aipager/daemon.env`، الذي لا يصل إلا إلى الجلسات التي يبدؤها aipager: سطر `KEY=value` واحد لكل إعداد، من دون علامات اقتباس (وإلا صارت جزءًا من القيمة). لا تقرأ الخدمة (`aipager service install`) ملف profile الخاص بـ shell لديك أبدًا، لذا لا يصلها أي `export` موضوع هناك. بعد تغيير `daemon.env` تلزم إعادة تشغيل aipager.
+- **أي إعداد للمفتاح.** للبوابة أو المزوّد الآخر، توصي وثائق Claude Code بـ `ANTHROPIC_AUTH_TOKEN`، ولا يسأل Claude Code عنه أبدًا. أما مع `ANTHROPIC_API_KEY` فيسأل مرة واحدة «Do you want to use this API key?»، ولا تستطيع جلسة بدأت من Telegram أن تجيب، لذا يجيب aipager في &lrm;`~/.claude.json` قبل بدء الجلسة مباشرة:
+  - نعم، إذا كان المفتاح مضبوطًا في `settings.json` أو `daemon.env`، أو إذا لم يكن هناك ما يسجّل دخول الجلسة غيره.
+  - لا، إذا كان المفتاح يأتي فقط من البيئة التي بدأ فيها aipager وكان لديك دخول آخر إلى Claude: تبقى جلساتك على ذلك الدخول وخطته. لاستخدام المفتاح: تفعيله عبر &lrm;`/config` و«Use custom API key» في جلسة طرفية يصلها هذا المفتاح.
+  - تبقى الإجابة التي قدّمتها بنفسك، إلا «لا» لمفتاح مضبوط في `settings.json` أو `daemon.env` حين لا يوجد ما يسجّل دخول الجلسة غيره. ينبّهك `aipager doctor` حين تترك «لا» الجلسات بلا دخول؛ ولإعادة تفعيل المفتاح: &lrm;`/config` و«Use custom API key» في طرفية.
+- **شاشات التشغيل الأول.** حيث لم يُكمل Claude Code تشغيله الأول قط (جهاز أو حاوية جديدة)، يعلّمه aipager مكتملًا إذا كان لدى الجلسة ما تسجّل به الدخول، حتى لا تتوقف عند اختيار المظهر. وإذا لم تكن هناك أي بيانات دخول، يمكنك تشغيل `claude` مرة واحدة في طرفية وتسجيل الدخول.
+- **النماذج.** ترسل أزرار Opus وSonnet وHaiku القيم `opus` و`sonnet` و`haiku` الخاصة بـ Claude Code، فيربطها بنماذج مزوّدك إذا ضبطت `ANTHROPIC_DEFAULT_OPUS_MODEL` و`ANTHROPIC_DEFAULT_SONNET_MODEL` و`ANTHROPIC_DEFAULT_HAIKU_MODEL`. أما أزرار `claude-...`&lrm; فتحتاج إلى مزوّد يملك تلك النماذج. ويمكنك كتابة أي نموذج آخر في خطوة النموذج من &lrm;`/new` أو في Mini App كما يكتبه مزوّدك: حتى ١٢٨ حرفًا من الحروف والأرقام و`. _ - : / @ ~ ,`، مع السماح بالنهاية &lrm;`[1m]`&lrm; الخاصة بـ Claude Code. يغيّر `keyboard.json` الأزرار (التفاصيل في [لوحة المفاتيح الدائمة](commands.md#persistent-keyboard)).
+- &rlm;**`ANTHROPIC_BASE_URL` من دون مفتاح.** عندها يرسل Claude Code تسجيل دخولك إلى claude.ai إلى ذلك العنوان. يلزم ضبط مفتاح المزوّد أيضًا، إلا إذا كان العنوان بوابة مُعدّة لتمرير تسجيل دخولك إلى Anthropic.
+- **غير مدعوم:** الأدوات التي تشغّل Claude Code باشتراك دردشة لشركة أخرى (خطة ChatGPT مثلًا) عبر وكيل محلي. لم توافق تلك الشركة على Claude Code لخططها، وقد يعرّض هذا الاستخدام ذلك الحساب للخطر.
 
 ## <a id="the-daemons-control-socket-moved"></a>مقبس التحكم في aipager تغيّر مكانه
 

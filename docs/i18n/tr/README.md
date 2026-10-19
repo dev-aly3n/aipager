@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>Claude artık sohbetlerinden biri.</h3>
 
@@ -353,6 +353,15 @@ Bir terminali ayıran minik bir program. Terminal kapandığında ya da SSH kopt
 <br>
 
 Klavyedeki **Model** menüsü ve Mini App, Claude Code'un aile takma adlarını (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) ve `claude-opus-5-5`, `claude-sonnet-5-5` gibi sabit modelleri sunar. Anthropic API'sinde bir takma ad, ailesinin en yeni modelini gösterir. Bedrock ve Vertex'te aynı takma ad, sağlayıcının sunduğuna göre daha eski bir sürümü gösterebilir; belirli bir modeli seçmek için `/model <full-id>` gönder.
+
+</details>
+
+<details>
+<summary><b>API anahtarı, bir gateway ya da başka bir sağlayıcı kullanıyorum. aipager çalışır mı?</b></summary>
+
+<br>
+
+Evet. aipager, Claude Code'u senin kurduğun gibi çalıştırır ve Claude Code'un başlarken sorduğu soruları (klasör, API anahtarı, ilk açılış ekranları) yanıtlar; böylece Telegram'dan başlatılan bir oturum bunlarda takılmaz. Ayarları `~/.claude/settings.json` içindeki `env` bloğuna ya da `~/.config/aipager/daemon.env` dosyasına koy (her ayar için bir `KEY=value` satırı, tırnaksız). Opus, Sonnet ve Haiku düğmeleri `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` ve `ANTHROPIC_DEFAULT_HAIKU_MODEL` değerlerini izler, başka herhangi bir model de adıyla yazılabilir. Anthropic, Claude Code'u yalnızca Claude modelleriyle destekler. [Sorun giderme](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider) sayfasına bak.
 
 </details>
 

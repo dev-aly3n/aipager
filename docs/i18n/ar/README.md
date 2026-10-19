@@ -6,7 +6,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ eac6764 -->
+<!-- i18n-source: README.md @ 2d10247 -->
 
 <h3>أصبح Claude مجرد دردشة أخرى.</h3>
 
@@ -387,6 +387,15 @@ aipager doctor                            # التحقق من التثبيت
 <br>
 
 قائمة **النموذج** في لوحة المفاتيح وMini App يعرضان الأسماء المستعارة لعائلات Claude Code (`sonnet` و`opus` و`haiku` و`fable` و`opusplan`) ونماذج ثابتة مثل `claude-opus-5-5` و`claude-sonnet-5-5`. في Anthropic API يشير الاسم المستعار إلى أحدث نموذج في عائلته. وفي Bedrock وVertex قد يشير الاسم نفسه إلى إصدار أقدم، بحسب ما يقدمه مزوّدك؛ ولاختيار نموذج بعينه: إرسال &lrm;`/model <full-id>`&lrm;.
+
+</details>
+
+<details>
+<summary><b>أستخدم مفتاح API أو بوابة (gateway) أو مزوّدًا آخر. هل يعمل aipager؟</b></summary>
+
+<br>
+
+نعم. يشغّل aipager برنامج Claude Code كما هو مُعَدّ لديك، ويجيب عن الأسئلة التي يطرحها Claude Code عند البدء (المجلد، ومفتاح API، وشاشات التشغيل الأول) حتى لا تتوقف عندها جلسة بدأت من Telegram. مكان الإعدادات: قسم `env` من &lrm;`~/.claude/settings.json`، أو &lrm;`~/.config/aipager/daemon.env` (سطر `KEY=value` واحد لكل إعداد، من دون علامات اقتباس). تتبع أزرار Opus وSonnet وHaiku القيم `ANTHROPIC_DEFAULT_OPUS_MODEL` و`ANTHROPIC_DEFAULT_SONNET_MODEL` و`ANTHROPIC_DEFAULT_HAIKU_MODEL`، ويمكن كتابة اسم أي نموذج آخر. لا تدعم Anthropic برنامج Claude Code إلا مع نماذج Claude. التفاصيل في [حل المشكلات](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider).
 
 </details>
 

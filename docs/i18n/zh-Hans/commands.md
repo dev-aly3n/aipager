@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ f839d7a6 -->
+<!-- i18n-source: docs/commands.md @ 2d10247 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
@@ -152,7 +152,7 @@ aipager 对话的每个聊天（你的私聊，以及每个群组 scope）都有
 
 - **模板**：你发现自己一遍又一遍输入的消息，例如“编写测试”、“解释计划”、“更新记忆”。
 - **命令**：Claude Code 自己处理的斜杠命令（`/compact`、`/clear` 等），会立即输入。命令或模板会写明它发到了哪个会话（`🧹 已把 /clear 发送到 x1`）。会话正在工作时，清空对话会被拒绝（`⚠️ 会话正在工作，无法清空对话`）。
-- **模型**：为当前会话快速更换模型。有按系列的别名（`sonnet`、`opus`、`haiku`、`fable`、`opusplan`），总是指向这个系列最新的模型，还有固定的模型（`claude-opus-5-5`、带 1M 上下文的 `claude-opus-5-5[1m]`、`claude-sonnet-5-5`、`claude-fable-5-1`、`claude-haiku-5-5`）。启动时的选择器和 Mini App 的会话页面使用同样的列表。会话正在工作或有打开的请求时，更换会被拒绝。之后，`🔄` 回复会变成会话报告的模型，或者说明更换没有得到确认（见[更换正在运行的会话的模型](#switching-a-running-sessions-model)）。
+- **模型**：为当前会话快速更换模型。有按系列的别名（`sonnet`、`opus`、`haiku`、`fable`、`opusplan`），总是指向这个系列最新的模型，还有固定的模型（`claude-opus-5-5`、带 1M 上下文的 `claude-opus-5-5[1m]`、`claude-sonnet-5-5`、`claude-fable-5-1`、`claude-haiku-5-5`）。启动时的选择器和 Mini App 的会话页面使用同样的列表。会话正在工作或有打开的请求时，更换会被拒绝。之后，`🔄` 回复会变成会话报告的模型，或者说明更换没有得到确认（见[更换正在运行的会话的模型](#switching-a-running-sessions-model)）。其他模型可以在 `/new` 的模型步骤或 Mini App 里按名称输入，写法和 Claude Code 或你的服务商一致：最多 128 个字符，由字母、数字和 `. _ - : / @ ~ ,` 组成，末尾可以带 `[1m]`（[服务商](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)）。
 
 要替换默认布局，写入 `~/.config/aipager/keyboard.json`：
 

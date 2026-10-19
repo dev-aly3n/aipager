@@ -1,6 +1,6 @@
 # Архитектура
 
-<!-- i18n-source: docs/architecture.md @ 05cb4380 -->
+<!-- i18n-source: docs/architecture.md @ 2d10247 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../architecture.md))
 
@@ -114,7 +114,7 @@ flowchart LR
 | `~/aipager-users/<label>/` | [Корневые папки](groups.md#root-folders) участников по умолчанию (права 0700), где участники с `user` и `read_only` запускают свои сессии; `aipager uninstall` их сохраняет | aipager (создаёт при первом `/new` или первой «Новой сессии» в Mini App у участника) |
 | `~/.claude/settings.json` | Конфигурация hooks Claude Code | `aipager config` / `aipager setup`; при каждом запуске aipager добавляет недостающие hooks или строку состояния aipager и ставит `skipDangerousModePermissionPrompt` ([безопасность](security.md#who-decides-whether-a-tool-call-runs)) |
 | `~/.claude/settings.json.bak.*` | Резервные копии перед каждой перезаписью | `aipager config`, `aipager setup`, `aipager uninstall` |
-| `~/.claude.json` | Собственный файл Claude Code: aipager отмечает папку, в которой запускается сессия, как доверенную прямо перед запуском (домашнюю папку тоже, но никогда `/` или папку выше домашней), чтобы вопрос о доверии Claude Code не останавливал сессию, запущенную из Telegram. При запуске aipager ничего не отмечается. Никогда не перезаписывается, если его нельзя прочитать целиком или работающий Claude успел его изменить | aipager |
+| `~/.claude.json` | Собственный файл Claude Code: aipager отмечает папку, в которой запускается сессия, как доверенную прямо перед запуском (домашнюю папку тоже, но никогда `/` или папку выше домашней), чтобы вопрос о доверии Claude Code не останавливал сессию, запущенную из Telegram. При запуске aipager ничего не отмечается. Никогда не перезаписывается, если его нельзя прочитать целиком или работающий Claude успел его изменить. Так же он отвечает на вопрос «use this API key?» для `ANTHROPIC_API_KEY` сессии (`customApiKeyResponses`, последние 20 символов ключа) и отмечает первый запуск Claude Code завершённым, когда у сессии есть чем войти (`hasCompletedOnboarding`), чтобы и эти вопросы не останавливали сессию, запущенную из Telegram ([провайдеры](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | `~/.claude/.credentials.json` → `.credentials.json.stale` | Файл входа Claude Code, отодвигается в сторону, когда сессия запускается с заданным `CLAUDE_CODE_OAUTH_TOKEN`, а в файле только истёкший или пустой вход (иначе он взял бы верх над токеном); чтобы отменить, верни его на место | aipager |
 | `~/.config/aipager/aipager.yaml` | Токен бота, чаты, участники + роли, настройки Mini App | `aipager config` (права 600); aipager переносит запись группы, когда Telegram делает её супергруппой, и сохраняет копию `aipager.yaml.bak.<time>`, когда переносит туда старые настройки Mini App |
 | `~/.config/aipager/policy.yaml` | Правила для каждой роли + дополнения к порогу безопасности | ты (проверяется через `aipager policy validate`); шаблон с комментариями пишется один раз при переносе старой установки |
