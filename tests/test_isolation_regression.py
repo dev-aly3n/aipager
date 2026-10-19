@@ -77,6 +77,10 @@ def test_dumping_scope_writes_to_tmp_not_home():
 _REDIRECTED = [
     ("aipager.claude_bootstrap._SETTINGS", _CLAUDE / "settings.json"),
     ("aipager.claude_bootstrap._CLAUDE_JSON", Path.home() / ".claude.json"),
+    ("aipager.claude_paths.DEFAULT_CONFIG_HOME", _CLAUDE),
+    ("aipager.claude_paths.DEFAULT_GLOBAL_DIR", Path.home()),
+    # Managed settings: a machine that has some must not change outcomes.
+    ("aipager.claude_paths.MANAGED_SETTINGS_DIR", Path("/etc/claude-code")),
     ("aipager.team.PENDING_USERS_PATH",
      _CLAUDE / "aipager-pending-users.json"),
     ("aipager.team.TEAM_CONFIG_PATH", _CFG / "team.yaml"),
@@ -117,6 +121,16 @@ def test_home_write_targets_are_isolated(dotted, real):
     assert "pytest-" in str(value), (
         f"{dotted} should be under a pytest tmp_path, got: {value}"
     )
+
+
+@pytest.mark.parametrize("name", ["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_CUSTOM_OAUTH_URL"])
+def test_claude_config_env_is_scrubbed(name):
+    """Either one moves Claude Code's files (aipager.claude_paths) away from
+    the redirected defaults above, to wherever the operator's shell points
+    them, so a test never sees one it did not set itself."""
+    import os
+
+    assert name not in os.environ
 
 
 def test_uninstall_removal_lists_are_isolated():

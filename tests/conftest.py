@@ -251,6 +251,12 @@ def _isolate_home_paths(tmp_path, monkeypatch):
     targets = {
         "aipager.claude_bootstrap._SETTINGS": settings,
         "aipager.claude_bootstrap._CLAUDE_JSON": home / ".claude.json",
+        # Where Claude Code keeps its config when CLAUDE_CONFIG_DIR is not
+        # set (aipager.claude_paths), and its managed settings folder:
+        # absent, so a machine with managed settings changes no outcome.
+        "aipager.claude_paths.DEFAULT_CONFIG_HOME": claude,
+        "aipager.claude_paths.DEFAULT_GLOBAL_DIR": home,
+        "aipager.claude_paths.MANAGED_SETTINGS_DIR": tmp_path / "managed-settings",
         "aipager.team.PENDING_USERS_PATH":
             claude / "aipager-pending-users.json",
         "aipager.team.TEAM_CONFIG_PATH": team_yaml,
@@ -351,6 +357,10 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         module_name, _, attr = dotted.rpartition(".")
         originals[dotted] = getattr(import_module(module_name), attr)
         monkeypatch.setattr(dotted, value)
+    # Either one moves Claude Code's files away from the tmp home above
+    # (aipager.claude_paths): a test that wants one sets it itself.
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_CUSTOM_OAUTH_URL", raising=False)
     return originals
 
 
