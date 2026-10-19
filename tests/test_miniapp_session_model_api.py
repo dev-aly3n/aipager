@@ -440,11 +440,12 @@ def test_the_page_is_told_when_claude_code_made_it_the_default(
 ):
     """Claude Code saves a typed /model as the default for new sessions:
     the answer says so when Claude's user settings show a new default."""
-    from aipager import claude_bootstrap
+    from aipager import claude_paths
 
-    settings = tmp_path / "settings.json"
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    settings = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({"model": "sonnet"}))
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
 
     async def _run():
         sess = _mk_session(server, "dev", model_name="Sonnet 5")

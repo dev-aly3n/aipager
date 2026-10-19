@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aipager import claude_bootstrap
+from aipager import claude_paths
 from aipager.bot import session_ops
 from aipager.state import Status, TrackedSession
 
@@ -29,9 +29,11 @@ NAME = "claude-jim"
 
 @pytest.fixture
 def settings(tmp_path, monkeypatch):
-    """Claude Code's user settings, in a throwaway file."""
-    path = tmp_path / "settings.json"
-    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", path)
+    """Claude Code's user settings: the config home's ``settings.json``
+    (conftest points the home at a throwaway folder)."""
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    path = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     def write(model=None, **extra):
         data = dict(extra)
@@ -275,8 +277,8 @@ def test_claude_default_model_reads_its_user_settings(settings):
     assert session_ops.claude_default_model() is None
 
 
-def test_an_unreadable_settings_file_means_no_default(settings, tmp_path):
-    (tmp_path / "settings.json").write_text("{not json")
+def test_an_unreadable_settings_file_means_no_default(settings):
+    (claude_paths.DEFAULT_CONFIG_HOME / "settings.json").write_text("{not json")
     assert session_ops.claude_default_model() is None
 
 
@@ -633,3 +635,15 @@ def test_the_tap_counts_keep_only_the_newest_cards(mk_bot):
     assert len(bot._ready_card_taps) == new_flow._READY_TAPS_KEPT
     assert new_flow._ready_taps(bot, -1001, 0) == 0
     assert new_flow._ready_taps(bot, -1001, new_flow._READY_TAPS_KEPT + 9) == 1
+
+
+def test_the_default_is_read_from_the_config_home_the_sessions_use(
+        settings, tmp_path, monkeypatch):
+    """With CLAUDE_CONFIG_DIR set for the sessions, Claude Code saves the
+    default in that folder's settings.json, so that is where it is read."""
+    settings(model="sonnet")                      # the default home: not used
+    home = tmp_path / "other-claude"
+    home.mkdir()
+    (home / "settings.json").write_text(json.dumps({"model": "haiku"}))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    assert session_ops.claude_default_model() == "haiku"

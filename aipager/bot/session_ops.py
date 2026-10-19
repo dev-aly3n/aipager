@@ -449,12 +449,16 @@ def mark_model_switch_sent(sess, model: str) -> str:
     return previous
 
 
-def claude_default_model() -> str | None:
+def claude_default_model(path=None) -> str | None:
     """The model Claude Code starts a new session on: ``model`` in its user
-    settings, or ``None`` when that is unset or cannot be read."""
-    from aipager import claude_bootstrap  # local: keeps this module light
+    settings (*path*, by default the ``settings.json`` of the config home
+    aipager's sessions use), or ``None`` when that is unset or cannot be
+    read."""
+    from aipager import claude_paths  # local: keeps this module light
 
-    model = claude_bootstrap._claude_settings().get("model")
+    if path is None:
+        path = claude_paths.for_sessions().user_settings
+    model = claude_paths.read_settings(path).get("model")
     return model.strip() if isinstance(model, str) and model.strip() else None
 
 
@@ -476,11 +480,14 @@ async def await_default_saved(
     says nothing, and so does a default some other switch saved meanwhile."""
     if timeout is None:
         timeout = MODEL_DEFAULT_SAVE_SECONDS
+    from aipager import claude_paths  # local: keeps this module light
+
     before = sess.model_default_from
     target = (sess.model_switch_to or "").strip().casefold()
+    path = claude_paths.for_sessions().user_settings   # once, not every poll
     deadline = time.monotonic() + timeout
     while True:
-        now_default = claude_default_model()
+        now_default = claude_default_model(path)
         if (now_default is not None and now_default != before
                 and now_default.casefold() == target):
             return now_default
