@@ -2,7 +2,7 @@
 
 # فرمان‌ها و رابط ربات
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../commands.md))
 
@@ -519,10 +519,10 @@ aipager doctor --json
 
 </div>
 
-چه کار می‌کند، به این ترتیب: توکن ربات را می‌خواند، آن را با تلگرام چک می‌کند (getMe)، همه‌چیز را روی این کامپیوتر بدون نوشتن چک می‌کند (تنظیمات موجود، وابستگی‌ها، &lrm;`~/.claude/settings.json`، اینکه aipagerی اجرا می‌شود یا نه)، یک پیام آزمایشی برای آن شخص می‌فرستد ("aipager is set up for you. ...")، و فقط بعد می‌نویسد. فایل‌هایی که می‌نویسد، همان‌طور که ویزارد می‌نویسد:
+چه کار می‌کند، به این ترتیب: توکن ربات را می‌خواند، آن را با تلگرام چک می‌کند (getMe)، همه‌چیز را روی این کامپیوتر بدون نوشتن چک می‌کند (تنظیمات موجود، وابستگی‌ها، &lrm;`~/.claude/settings.json` (یا &lrm;`$CLAUDE_CONFIG_DIR/settings.json`)، اینکه aipagerی اجرا می‌شود یا نه)، یک پیام آزمایشی برای آن شخص می‌فرستد ("aipager is set up for you. ...")، و فقط بعد می‌نویسد. فایل‌هایی که می‌نویسد، همان‌طور که ویزارد می‌نویسد:
 
 - &rlm;&lrm;`~/.config/aipager/aipager.yaml` (حالت دسترسی 0600): `bot_token` و یک چت خصوصی که تنها عضوش همان شخص است (`label: owner`، نقش owner یا admin).
-- &rlm;&lrm;`~/.claude/settings.json`: هوک‌های aipager و statusLine (وقتی فایل موجود عوض شود، یک نسخهٔ پشتیبان `settings.json.bak.<time>`&lrm; از آن گرفته می‌شود).
+- &rlm;&lrm;`~/.claude/settings.json` (یا &lrm;`$CLAUDE_CONFIG_DIR/settings.json`، فایلی که سشن‌های aipager می‌خوانند: محیط همین شل به‌علاوهٔ `daemon.env`): هوک‌های aipager و statusLine (وقتی فایل موجود عوض شود، یک نسخهٔ پشتیبان `settings.json.bak.<time>`&lrm; از آن گرفته می‌شود). خروجی JSON مسیر آن را در `settings_json.path` می‌دهد.
 - وقتی کسی مالک می‌شود، لاگ ممیزی یک رکورد `grant-owner` می‌گیرد.
 - با &lrm;`--service`، سرویس پس‌زمینه (همان `aipager service install --yes`).
 - فقط روی یک نصب قدیمی `config.env` (هنوز بدون `aipager.yaml`)، همان انتقالی که ویزارد انجام می‌دهد: یک کپی `config.env.bak.<time>`&lrm; (و `team.yaml.bak.<time>`&lrm; وقتی `team.yaml` هست)، و یک &lrm;`~/.config/aipager/policy.yaml` شروع وقتی هیچ‌کدام نیست. خود `config.env` همان‌طور که هست می‌ماند.
@@ -676,7 +676,7 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 داده‌های aipager را نگه می‌دارد تا نصب دوباره از همان‌جا ادامه دهد: &lrm;`~/.local/share/aipager` (پوشه‌های سشن‌ها، ابزارهای دانلودشده، فایل‌های قفل و علامت)، &lrm;`~/.local/state/aipager` (رکوردهای گزارش مشکل و وضعیت زبان)، &lrm;`~/.claude/aipager-audit.jsonl` (لاگ جواب‌های اجازه)، &lrm;`~/.claude/aipager-flood-state.json` (تاریخچهٔ محدودیت سرعت تلگرام)، &lrm;`~/.claude/aipager-pending-users.json` (کسانی که بدون دسترسی ربات را امتحان کرده‌اند) و &lrm;`~/aipager-users` ([پوشه‌های root](groups.md#root-folders) اعضا، با کارشان). قبل از پرسیدن، آن‌هایی را که روی کامپیوترتان هستند فهرست می‌کند، و در آخر دستور `rm -rf` را که آن‌ها را هم پاک می‌کند چاپ می‌کند.
 
-ورودی‌های خود aipager را هم از &lrm;`~/.claude/settings.json` در Claude Code برمی‌دارد: هوک‌هایی که `aipager-hook` را اجرا می‌کنند و خط وضعیتی که `aipager-statusline` را اجرا می‌کند (خط وضعیت خودتان می‌ماند). بقیهٔ آن فایل همان‌طور که بود می‌ماند، و فایل همان‌طور که بود کنارش به‌شکل `settings.json.bak.<time>`&lrm; نگه داشته می‌شود. اگر فایل یک لینک به فایل دیگر باشد، خوانده نشود، JSON معتبر نباشد، یا شکلی نباشد که Claude Code می‌خواند، دقیقاً همان‌طور که هست می‌ماند و uninstall می‌گوید کدام ورودی‌ها را دستی بردارید. هوکی از خودتان که هنوز `aipager-hook` یا `aipager-statusline` را نام می‌برد (مثلاً یک wrapper به اسم `aipager-hook-capped.sh`) هم می‌ماند، و uninstall اسمش را می‌آورد. سشن‌های Claude Code که از قبل باز هستند تا وقتی ری‌استارتشان کنید همان هوک‌هایی را که لود کرده‌اند اجرا می‌کنند. `aipager config` بعد از نصب دوباره این ورودی‌ها را دوباره اضافه می‌کند. ربات تلگرام شما و نسخه‌های پشتیبان قدیمی‌تر `settings.json.bak.*`&lrm; دست نمی‌خورند، و `skipDangerousModePermissionPrompt` هم نه (تنظیمی که هشدار Claude Code را قبل از اجرا با بررسی‌های اجازهٔ خاموش رد می‌کند)، که aipager تنظیمش می‌کند ولی ممکن است خودتان هم تنظیمش کرده باشید.
+ورودی‌های خود aipager را هم از &lrm;`~/.claude/settings.json` (و از فایلی که سشن‌های aipager می‌خوانند، وقتی `CLAUDE_CONFIG_DIR` به پوشهٔ دیگری اشاره می‌کند) در Claude Code برمی‌دارد: هوک‌هایی که `aipager-hook` را اجرا می‌کنند و خط وضعیتی که `aipager-statusline` را اجرا می‌کند (خط وضعیت خودتان می‌ماند). بقیهٔ آن فایل همان‌طور که بود می‌ماند، و فایل همان‌طور که بود کنارش به‌شکل `settings.json.bak.<time>`&lrm; نگه داشته می‌شود. اگر فایل یک لینک به فایل دیگر باشد، خوانده نشود، JSON معتبر نباشد، یا شکلی نباشد که Claude Code می‌خواند، دقیقاً همان‌طور که هست می‌ماند و uninstall می‌گوید کدام ورودی‌ها را دستی بردارید. هوکی از خودتان که هنوز `aipager-hook` یا `aipager-statusline` را نام می‌برد (مثلاً یک wrapper به اسم `aipager-hook-capped.sh`) هم می‌ماند، و uninstall اسمش را می‌آورد. سشن‌های Claude Code که از قبل باز هستند تا وقتی ری‌استارتشان کنید همان هوک‌هایی را که لود کرده‌اند اجرا می‌کنند. `aipager config` بعد از نصب دوباره این ورودی‌ها را دوباره اضافه می‌کند. ربات تلگرام شما و نسخه‌های پشتیبان قدیمی‌تر `settings.json.bak.*`&lrm; دست نمی‌خورند، و `skipDangerousModePermissionPrompt` هم نه (تنظیمی که هشدار Claude Code را قبل از اجرا با بررسی‌های اجازهٔ خاموش رد می‌کند)، که aipager تنظیمش می‌کند ولی ممکن است خودتان هم تنظیمش کرده باشید.
 
 ## <a id="command-line-aipager-report"></a>خط فرمان: `aipager report`
 

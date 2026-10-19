@@ -1,6 +1,6 @@
 # Ajanla kurulum
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../install-with-an-agent.md))
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 Kişinin gerçek kimliğini ve token dosyasının yolunu kullan. `--token-file` yerine token'ı `--token-stdin` ile bir pipe üzerinden verebilirsin (örneğin `--token-stdin < path`); pipe kapanmalı, setup bunu en fazla 30 saniye bekler.
 
-setup token'ı Telegram'da doğrular, bu bilgisayarı kontrol eder, kişiye bir test mesajı gönderir ("aipager is set up for you. ...") ve ancak bundan sonra kendi yapılandırmasını yazar, Claude Code hook'larını `~/.claude/settings.json` dosyasına ekler ve `--service` ile arka plan hizmetini kurup başlatır. Bir kontrol başarısız olursa hiçbir şey yazılmaz.
+setup token'ı Telegram'da doğrular, bu bilgisayarı kontrol eder, kişiye bir test mesajı gönderir ("aipager is set up for you. ...") ve ancak bundan sonra kendi yapılandırmasını yazar, Claude Code hook'larını `~/.claude/settings.json` (ya da `$CLAUDE_CONFIG_DIR/settings.json`) dosyasına ekler ve `--service` ile arka plan hizmetini kurup başlatır. Bir kontrol başarısız olursa hiçbir şey yazılmaz.
 
 Önce neyin değişeceğini görmek için `--dry-run` ekle. `--role admin` kişiye owner rolü yerine admin rolü verir (varsayılan olan owner, kendi bilgisayarını kuran biri için doğru olanıdır).
 
@@ -93,7 +93,7 @@ Komut beklerken (5 dakikaya kadar; `--timeout SECONDS` bu süreyi değiştirir) 
 | Çıkış | `error` | Ne yaparsın |
 |---|---|---|
 | 0 | | `installed`, `updated` ya da `unchanged`: tamam, 3.5'e geç. `dry_run`: hiçbir şey yazılmadı; aynı komutu `--dry-run` olmadan çalıştır. detect-chat `found`: kişiden 3.3'teki gibi onaylamasını iste, sonra 3.2'yi çalıştır. |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Kişiye `message` ve `fix` değerlerini göster. `ambiguous_install`: kişi bunu `aipager config` ile düzeltir. Dosyaları elle düzenleme. |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Kişiye `message` ve `fix` değerlerini göster. `ambiguous_install`: kişi bunu `aipager config` ile düzeltir. Dosyaları elle düzenleme. Mutlak bir `CLAUDE_CONFIG_DIR` isteyen `settings_invalid`: `fix` değiştirilecek dosyayı söyler (`daemon.env` ya da bir Claude Code ayar dosyası); kişiye klasörü sor, yalnızca o söylerse yalnızca o tek değeri değiştir, sonra setup'ı yeniden çalıştır. |
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Girdin hatalıydı; `fix` bayrağı söyler. `token_malformed`: dosyada bot token'ı yok, kişiden kontrol etmesini iste. |
 | 3 | `deps_missing` | `fix` adımlarını izle (eksik her öğenin `deps.items` içinde kendi `fix` değeri var), sonra setup'ı yeniden çalıştır. |
 | 4 | `token_rejected` | Telegram token'ı reddetti. Kişiden token'ı yeniden (ya da @BotFather'dan yenisini) iste. |

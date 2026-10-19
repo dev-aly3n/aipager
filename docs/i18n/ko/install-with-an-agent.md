@@ -1,6 +1,6 @@
 # 에이전트로 설치하기
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../install-with-an-agent.md))
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 사용자의 실제 ID와 token 파일 경로를 쓰세요. `--token-file` 대신 `--token-stdin`으로 token을 파이프로 넘길 수도 있어요(예: `--token-stdin < path`). 파이프는 닫혀야 하고, setup은 최대 30초 기다려요.
 
-setup은 Telegram에서 token을 확인하고, 이 컴퓨터를 점검하고, 사용자에게 테스트 메시지("aipager is set up for you. ...")를 보낸 다음에야 설정을 쓰고, `~/.claude/settings.json` 파일에 Claude Code hook을 추가하고, `--service`가 있으면 백그라운드 서비스를 설치하고 시작해요. 확인 하나라도 실패하면 아무것도 쓰지 않아요.
+setup은 Telegram에서 token을 확인하고, 이 컴퓨터를 점검하고, 사용자에게 테스트 메시지("aipager is set up for you. ...")를 보낸 다음에야 설정을 쓰고, `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`) 파일에 Claude Code hook을 추가하고, `--service`가 있으면 백그라운드 서비스를 설치하고 시작해요. 확인 하나라도 실패하면 아무것도 쓰지 않아요.
 
 `--dry-run`을 붙이면 무엇이 바뀔지 먼저 볼 수 있어요. `--role admin`은 사용자를 소유자 대신 관리자로 만들어요(기본값인 소유자가 자기 컴퓨터를 설정하는 사람에게 맞아요).
 
@@ -93,7 +93,7 @@ aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 | 종료 코드 | `error` | 할 일 |
 |---|---|---|
 | 0 | | `installed`, `updated`, `unchanged`: 끝났어요. 3.5단계로 가세요. `dry_run`: 아무것도 쓰지 않았어요. `--dry-run` 없이 같은 명령을 다시 실행하세요. detect-chat `found`: 3.3단계처럼 사용자에게 확인받고 3.2단계를 실행하세요. |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | `message`와 `fix`를 사용자에게 보여 주세요. `ambiguous_install`: 사용자가 `aipager config`에서 고쳐요. 파일을 직접 편집하지 마세요. |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | `message`와 `fix`를 사용자에게 보여 주세요. `ambiguous_install`: 사용자가 `aipager config`에서 고쳐요. 파일을 직접 편집하지 마세요. 절대 경로 `CLAUDE_CONFIG_DIR`를 요구하는 `settings_invalid`: `fix`가 바꿀 파일을 알려 줘요(`daemon.env` 또는 Claude Code 설정 파일). 그 사람에게 폴더를 묻고, 그 사람이 원할 때만 그 값 하나만 바꾼 다음 setup을 다시 실행하세요. |
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | 입력이 잘못됐어요. `fix`가 어떤 옵션인지 알려 줘요. `token_malformed`: 파일에 든 것이 봇 token이 아니에요. 사용자에게 확인해 달라고 하세요. |
 | 3 | `deps_missing` | `fix`를 따르고(빠진 항목마다 `deps.items`에 각자의 `fix`가 있어요) setup을 다시 실행하세요. |
 | 4 | `token_rejected` | Telegram이 token을 거부했어요. 사용자에게 token을 다시 받으세요(또는 @BotFather에서 새 token을 받으세요). |

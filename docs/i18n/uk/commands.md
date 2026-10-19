@@ -1,6 +1,6 @@
 # Команди та інтерфейс бота
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../commands.md))
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-Що вона робить, по черзі: читає токен бота, перевіряє його в Telegram (getMe), перевіряє все на цьому комп'ютері, нічого не записуючи (наявні налаштування, залежності, `~/.claude/settings.json`, чи працює aipager), надсилає людині тестове повідомлення ("aipager is set up for you. ...") і лише потім записує. Записані файли, саме такі, які пише майстер:
+Що вона робить, по черзі: читає токен бота, перевіряє його в Telegram (getMe), перевіряє все на цьому комп'ютері, нічого не записуючи (наявні налаштування, залежності, `~/.claude/settings.json` (або `$CLAUDE_CONFIG_DIR/settings.json`), чи працює aipager), надсилає людині тестове повідомлення ("aipager is set up for you. ...") і лише потім записує. Записані файли, саме такі, які пише майстер:
 
 - `~/.config/aipager/aipager.yaml` (права 0600): `bot_token` і особистий чат, де єдиний учасник - ця людина (`label: owner`, роль owner або admin).
-- `~/.claude/settings.json`: hooks aipager і statusLine (наявний файл зберігається як `settings.json.bak.<time>`, коли він змінюється).
+- `~/.claude/settings.json` (або `$CLAUDE_CONFIG_DIR/settings.json`, файл, який читають сесії демона: оточення цієї оболонки плюс `daemon.env`): hooks aipager і statusLine (наявний файл зберігається як `settings.json.bak.<time>`, коли він змінюється). Його називає `settings_json.path` у виводі JSON.
 - Журнал аудиту отримує запис `grant-owner`, коли хтось стає власником.
 - З `--service` - фонова служба (те саме, що `aipager service install --yes`).
 - Лише на старому встановленні з `config.env` (ще без `aipager.yaml`) - перенесення, яке робить майстер: копія `config.env.bak.<time>` (і `team.yaml.bak.<time>`, якщо є `team.yaml`) і шаблон `~/.config/aipager/policy.yaml`, якщо його немає. Сам `config.env` лишається як є.
@@ -626,7 +626,7 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 Він зберігає дані aipager, щоб нове встановлення продовжило з того самого місця: `~/.local/share/aipager` (папки сесій, завантажені допоміжні програми, файли блокувань і позначок), `~/.local/state/aipager` (записи для звітів про проблеми та стан мов), `~/.claude/aipager-audit.jsonl` (журнал відповідей на дозволи), `~/.claude/aipager-flood-state.json` (історія лімітів Telegram), `~/.claude/aipager-pending-users.json` (люди, які пробували бота без доступу) і `~/aipager-users` ([кореневі папки](groups.md#root-folders) учасників, з їхньою роботою). Перед питанням він перелічує, які з них є на твоєму комп'ютері, а наприкінці виводить команду `rm -rf`, яка видаляє і їх.
 
-Ще він прибирає власні записи aipager з `~/.claude/settings.json` Claude Code: hooks, які запускають `aipager-hook`, і рядок стану, який запускає `aipager-statusline` (твій власний рядок стану лишається). Усе інше в цьому файлі лишається як було, а файл у попередньому вигляді зберігається поруч як `settings.json.bak.<time>`. Якщо файл - це посилання на інший файл, не читається, не є коректним JSON або не тієї форми, яку читає Claude Code, він лишається саме як є, а uninstall каже, які записи прибрати вручну. Твій власний hook, який ще згадує `aipager-hook` або `aipager-statusline` (наприклад, обгортка `aipager-hook-capped.sh`), теж лишається, і uninstall його називає. Уже відкриті сесії Claude Code і далі запускають завантажені ними hooks, доки їх не перезапустити. `aipager config` додає записи знову після нового встановлення. Твій бот Telegram і старіші копії `settings.json.bak.*` не зачіпаються, як і `skipDangerousModePermissionPrompt` (налаштування, яке пропускає попередження Claude Code перед роботою без перевірок дозволів): його ставить aipager, але воно могло бути задане й тобою.
+Ще він прибирає власні записи aipager з `~/.claude/settings.json` (і з того, який читають сесії демона, коли `CLAUDE_CONFIG_DIR` вказує на інший) Claude Code: hooks, які запускають `aipager-hook`, і рядок стану, який запускає `aipager-statusline` (твій власний рядок стану лишається). Усе інше в цьому файлі лишається як було, а файл у попередньому вигляді зберігається поруч як `settings.json.bak.<time>`. Якщо файл - це посилання на інший файл, не читається, не є коректним JSON або не тієї форми, яку читає Claude Code, він лишається саме як є, а uninstall каже, які записи прибрати вручну. Твій власний hook, який ще згадує `aipager-hook` або `aipager-statusline` (наприклад, обгортка `aipager-hook-capped.sh`), теж лишається, і uninstall його називає. Уже відкриті сесії Claude Code і далі запускають завантажені ними hooks, доки їх не перезапустити. `aipager config` додає записи знову після нового встановлення. Твій бот Telegram і старіші копії `settings.json.bak.*` не зачіпаються, як і `skipDangerousModePermissionPrompt` (налаштування, яке пропускає попередження Claude Code перед роботою без перевірок дозволів): його ставить aipager, але воно могло бути задане й тобою.
 
 ## <a id="command-line-aipager-report"></a>Командний рядок: `aipager report`
 

@@ -1,6 +1,6 @@
 # 문제 해결
 
-<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
+<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../troubleshooting.md))
 
@@ -228,7 +228,7 @@ dtach가 거부한 시작은 채팅에 이유를 한 줄로 보여 줘요(소켓
 | `claude_auth` | 실제 세션이 받는 것과 같은 환경에서 `claude auth status`를 시험해요. **절대 FAIL이 아니에요**: “로그인 안 됨”과 “시험 자체가 실패함”을 따로 알려 주고, 둘 다 세션 시작을 막지 않아요. 세션의 `ANTHROPIC_API_KEY`를 쓰지 말라는 답이 Claude Code에 기록되어 있고 다른 로그인 방법이 없을 때도 경고해요. | `claude auth login`, 또는 API 키 / `CLAUDE_CODE_OAUTH_TOKEN` 설정; `ANTHROPIC_BASE_URL`이 설정되어 있으면 그 주소의 키([제공자](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | `dtach` 프로그램을 찾았어요(aipager 자체의 `dtach-bin`, 또는 PATH에 있는 것) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook`과 `aipager-statusline`이 PATH에 있어요 | `uv tool install --reinstall aipager` |
-| `settings_json` | `~/.claude/settings.json`에 aipager hook이 연결되어 있어요 | `aipager config` |
+| `settings_json` | `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`)에 aipager hook이 연결되어 있어요; `CLAUDE_CONFIG_DIR`가 설정되어 있으면 그 파일과 값이 어디서 왔는지 알려 줘요 | `aipager config` |
 | `daemon` | aipager가 실행 중이고 소켓이 응답해요. Telegram 속도 제한 상태도 보여 줘요([위](#the-bot-slowed-down-a-rate-limit-429) 참고) | `aipager start` |
 | `service_installed` | 선택: 서비스 파일이 있어요 | `aipager service install` |
 | `service_unit_path` | Linux만: *설치된* 서비스의 `Environment=PATH=`에 찾은 claude 프로그램의 폴더가 정말 들어 있어요. doctor는 봇 소유자의 대화형 shell에서 systemd 자체의 PATH를 볼 수 없으니 글로 읽어서 확인해요 | `aipager service install --yes` |
@@ -265,8 +265,8 @@ aipager service stop && aipager service start
 
 aipager는 설정해 둔 그대로 Claude Code를 실행해요. 그래서 Telegram에서 시작한 세션도 터미널의 `claude`와 같은 방법으로 로그인해요. claude.ai 로그인, Anthropic API 키, 게이트웨이(LiteLLM, Vercel, Cloudflare 등), 또는 `ANTHROPIC_BASE_URL`에 넣은 다른 회사의 Anthropic 형식 주소 중 하나로요. Anthropic은 Claude 모델에서만 Claude Code를 지원하고, 다른 모델은 다르게 동작할 수 있어요.
 
-- **설정을 넣는 곳.** 모든 Claude Code 세션이 읽는 `~/.claude/settings.json`의 `env` 블록, 또는 aipager가 시작하는 세션만 받는 `~/.config/aipager/daemon.env`에 넣으세요. 한 줄에 `KEY=value` 하나씩, 따옴표 없이 써요(따옴표는 값의 일부가 돼요). 서비스(`aipager service install`)는 셸 프로필을 읽지 않으니 거기 있는 `export`는 닿지 않아요. `daemon.env`를 바꾼 뒤에는 aipager를 다시 시작하세요.
-- **어떤 키 설정을 쓸지.** 게이트웨이나 다른 제공자에는 Claude Code 문서가 `ANTHROPIC_AUTH_TOKEN`을 권하고, 이 값은 Claude Code가 묻지 않아요. `ANTHROPIC_API_KEY`는 한 번 “Do you want to use this API key?”라고 묻는데, Telegram에서 시작한 세션은 답할 수 없어서 세션이 시작되기 바로 전에 aipager가 `~/.claude.json`에 답해요.
+- **설정을 넣는 곳.** 모든 Claude Code 세션이 읽는 `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`)의 `env` 블록, 또는 aipager가 시작하는 세션만 받는 `~/.config/aipager/daemon.env`에 넣으세요. 한 줄에 `KEY=value` 하나씩, 따옴표 없이 써요(따옴표는 값의 일부가 돼요). 서비스(`aipager service install`)는 셸 프로필을 읽지 않으니 거기 있는 `export`는 닿지 않아요. `daemon.env`를 바꾼 뒤에는 aipager를 다시 시작하세요. 신뢰하는 시작 폴더의 `.claude/settings.json`과 `.claude/settings.local.json`, 그리고 관리형 설정(Linux는 `/etc/claude-code`, macOS는 `/Library/Application Support/ClaudeCode`의 `managed-settings.json`과 `managed-settings.d/`)의 `env` 블록도 Claude Code에서처럼 함께 계산돼요.
+- **어떤 키 설정을 쓸지.** 게이트웨이나 다른 제공자에는 Claude Code 문서가 `ANTHROPIC_AUTH_TOKEN`을 권하고, 이 값은 Claude Code가 묻지 않아요. `ANTHROPIC_API_KEY`는 한 번 “Do you want to use this API key?”라고 묻는데, Telegram에서 시작한 세션은 답할 수 없어서 세션이 시작되기 바로 전에 aipager가 `~/.claude.json` (또는 `CLAUDE_CONFIG_DIR`가 그것을 두는 파일)에 답해요.
   - 예: 키가 `settings.json`이나 `daemon.env`에 있거나, 세션에 로그인시킬 다른 방법이 없을 때.
   - 아니요: 키가 aipager를 시작한 환경에서만 오고 다른 방법으로 Claude에 이미 로그인되어 있을 때. 세션은 그 로그인과 요금제를 그대로 써요. 키를 쓰려면 그 키가 있는 터미널 세션에서 `/config`의 “Use custom API key”로 켜세요.
   - 직접 한 답은 그대로 둬요. 다만 세션에 로그인시킬 다른 방법이 없을 때 `settings.json`이나 `daemon.env`에 있는 키에 대한 아니요는 바꿔요. 아니요 때문에 세션이 로그인할 수 없으면 `aipager doctor`가 알려 줘요. 터미널에서 `/config`의 “Use custom API key”로 키를 다시 켜세요.
@@ -274,6 +274,16 @@ aipager는 설정해 둔 그대로 Claude Code를 실행해요. 그래서 Telegr
 - **모델.** Opus, Sonnet, Haiku 버튼은 Claude Code의 `opus`, `sonnet`, `haiku`를 보내고, `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`을 설정하면 Claude Code가 이를 제공자의 모델로 연결해요. `claude-...` 버튼은 그 모델이 있는 제공자에서만 돼요. 다른 모델은 `/new`의 모델 단계나 Mini App에서 제공자가 쓰는 이름 그대로 입력하세요. 글자, 숫자, `. _ - : / @ ~ ,`로 최대 128자이고, Claude Code의 `[1m]` 접미사도 붙일 수 있어요. 버튼은 `keyboard.json`으로 바꿔요([고정 키보드](commands.md#persistent-keyboard) 참고).
 - **키 없는 `ANTHROPIC_BASE_URL`.** 이때 Claude Code는 claude.ai 로그인을 그 주소로 보내요. 그 주소가 로그인을 Anthropic에 넘겨 주도록 만든 게이트웨이가 아니라면 제공자의 키도 설정하세요.
 - **지원하지 않음:** 로컬 프록시를 거쳐 다른 회사의 채팅 구독(예를 들어 ChatGPT 요금제)으로 Claude Code를 돌리는 도구. 그 회사는 자사 요금제에 Claude Code를 승인하지 않았고, 이렇게 쓰면 그 계정이 위험해질 수 있어요.
+
+**다른 폴더에 있는 Claude Code 설정(`CLAUDE_CONFIG_DIR`).** Claude Code는 설정, 로그인, 기록, 전역 설정을 `~/.claude`와 `~/.claude.json`에, 또는 `CLAUDE_CONFIG_DIR`가 가리키는 폴더에 둬요. aipager도 같은 변수를 따르기 때문에, aipager의 hook과 상태 줄은 세션이 읽는 `settings.json`에, 답변은 Claude Code가 읽는 파일에 들어가요(Claude Code 2.1.303으로 확인):
+
+- **`~/.config/aipager/daemon.env`에 설정하고** aipager를 다시 시작하세요. 서비스는 셸 프로필을 절대 읽지 않으니, `export`는 그 셸의 `aipager start`에만 닿아요. 시작할 때 데몬은 `$CLAUDE_CONFIG_DIR/settings.json`에 hook을 연결하고 로그에 `sessions read Claude Code's config from ...`를 남겨요. 데몬이 도는 중에 값을 바꾸면 다음에 시작하는 세션이 hook을 받고, 그 사이에 hook을 잃은 설정 파일도 마찬가지예요. hook을 연결할 수 없으면 로그에 `sessions will start without aipager's hooks`가 남고 `aipager doctor`가 경고해요.
+- **전체 경로를 쓰세요.** Claude Code는 값을 그대로 받아요. `~`는 풀리지 않고, 상대 경로(빈 값도)는 각 세션 폴더 안의 폴더를 뜻해요. aipager는 거기에 아무것도 쓰지 않아요. 로그와 `aipager doctor`가 경고하고, `aipager setup`은 해결 방법과 함께 멈추며, `aipager config`는 해결 방법을 보여 주는 경고와 함께 Claude Code 단계를 건너뛰고 계속해요. 해결 방법에는 값이 들어 있는 파일이 나와요: `daemon.env`, 또는 `env` 블록에서 그 값을 설정하는 설정 파일이에요.
+- **Claude Code 자체 설정에서 설정한 경우.** `~/.claude/settings.json`(또는 관리형 설정)의 `env` 블록에 있는 `CLAUDE_CONFIG_DIR`는 설정 파일, 로그인, 기록을 옮기지만 `~/.claude.json`은 옮기지 않아요. aipager도 이를 따르고, `aipager doctor`가 위치를 알려 줘요.
+- **`aipager config`와 `aipager setup`은** 데몬의 세션이 읽는 파일을 고쳐요: 셸의 환경과 `daemon.env`예요. 다른 값이 있는 셸에서 시작한 `claude`는 다른 파일을 읽어서 aipager hook이 없어요. `aipager doctor`가 그 파일을 알려 줘요.
+- **예전 `.config.json`.** `<config folder>/.config.json`이 쓰이는 중이면(예를 들어 있고 비어 있지 않으면) Claude Code는 `.claude.json` 대신 그 파일을 읽고, aipager도 그래요. `CLAUDE_CONFIG_DIR`가 비어 있으면 그 파일은 세션 자신의 폴더에 있게 되고, aipager는 거기에 아무것도 쓰지 않아요.
+- **aipager가 읽을 수 없는 것.** MDM 프로필(macOS), Windows 레지스트리, Claude 서버로 전달되는 관리형 설정과 `--settings` 옵션이에요. 거기에만 설정된 키나 제공업체 스위치는 aipager가 시작 질문에 답할 때 보이지 않아요. 그러면 aipager가 없을 때처럼 Claude Code가 물어봐요.
+- **거부 목록.** 제한된 역할과 보내는 파일을 Claude의 로그인 정보에서 떼어 놓는 기본 규칙은 `~/.claude/**`와 `~/.claude.json*`을 가리켜요. 다른 곳에 있는 `CLAUDE_CONFIG_DIR`는 이 규칙에 포함되지 않으니, 관리자가 아닌 사람이 세션을 쓴다면 `~/.claude` 안에 두세요(Docker 이미지는 그렇게 되어 있어요) ([보안](security.md#who-decides-whether-a-tool-call-runs)).
 
 ## <a id="the-daemons-control-socket-moved"></a>aipager의 제어 소켓 위치가 바뀌었어요
 
@@ -327,6 +337,8 @@ git 주소로 만든 pipx 설치는 PyPI가 아니라 그 git 소스에서 업�
 제자리 시작이 실패하면 예전 프로세스가 끝난 뒤 따로 떨어진 복사본이 aipager를 시작해요. 그때 출력은 터미널이 아니라 자체 재시작 로그(인스턴스 폴더의 `aipager.log`, 또는 `/tmp/aipager.log`)로 가고, 그 복사본이 돌아오지 않으면 실행할 명령을 aipager 로그가 알려 줘요. 인터프리터 자체가 사라졌거나(환경이 지워짐) 아무것도 시작할 수 없으면 aipager는 코드 1로 종료하고, aipager 로그는 `restart.failed:`와 실행할 명령으로 끝나요. 다음에 시작할 때 업데이트를 알려 줘요.
 
 **지금 재시작** 버튼이 없을 때는 메시지가 내 환경에 맞는 단계를 알려 줘요. 터미널이나 tmux에서는 Ctrl+C를 누르고 `aipager start`를 실행하고, macOS에서는 `launchctl kickstart -k gui/<uid>/com.aipager.daemon`, Docker에서는 호스트에서 `docker restart <container>`를 실행해요. Docker 컨테이너를 다시 만들면(`down` 뒤의 `docker compose up`, 또는 `docker run`을 다시 실행) 이미지에서 시작하기 때문에 그 이미지에 든 aipager 버전으로 돌아가요. 더 새 aipager를 유지하려면 더 새 이미지를 쓰세요.
+
+이미지는 `CLAUDE_CONFIG_DIR=/home/aipager/.claude`를 설정하기 때문에, Claude Code의 전역 설정(`.claude.json`: 폴더 신뢰, 첫 실행 상태, API 키 답변, 계정, 사용자 MCP 서버)이 나머지와 함께 `.claude` 볼륨에 저장되고 컨테이너를 다시 만들어도 남아요. 이전 이미지는 이 파일을 컨테이너 안의 `/home/aipager/.claude.json`에 뒀어요. 새 이미지를 처음 시작하면 예전 파일은 읽지 않아요. 볼륨의 `.credentials.json`에 있는 로그인은 그대로 작동하고, 세션이 시작될 때 aipager가 폴더 신뢰와 첫 실행 질문에 다시 답하지만, `claude mcp add --scope user`로 추가한 사용자 MCP 서버는 다시 추가해야 해요. 호스트의 `~/.claude`를 bind-mount하면(README의 명령처럼) 파일이 거기에 `~/.claude/.claude.json`으로 나타나요. 호스트의 Claude Code는 이 파일을 읽지 않아요(`~/.claude.json`을 써요). 이름 있는 볼륨을 쓰면 둘이 섞이지 않아요.
 
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>업데이트 뒤에 aipager가 다시 실행되지 않아요
 

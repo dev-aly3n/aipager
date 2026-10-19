@@ -1,6 +1,6 @@
 # Cài đặt bằng agent
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../install-with-an-agent.md))
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 Dùng ID thật của người dùng và đường dẫn của file token. Thay cho `--token-file`, bạn có thể đưa token qua pipe với `--token-stdin` (ví dụ `--token-stdin < path`); pipe phải được đóng, và setup chờ nó tối đa 30 giây.
 
-Setup kiểm tra token với Telegram, kiểm tra máy tính này, gửi cho người dùng một tin nhắn thử (“aipager is set up for you. ...”), và chỉ sau đó mới ghi cấu hình, thêm các hook của Claude Code vào `~/.claude/settings.json`, và, với `--service`, cài và khởi động dịch vụ chạy nền. Nếu có bước kiểm tra nào thất bại, không có gì được ghi.
+Setup kiểm tra token với Telegram, kiểm tra máy tính này, gửi cho người dùng một tin nhắn thử (“aipager is set up for you. ...”), và chỉ sau đó mới ghi cấu hình, thêm các hook của Claude Code vào `~/.claude/settings.json` (hoặc `$CLAUDE_CONFIG_DIR/settings.json`), và, với `--service`, cài và khởi động dịch vụ chạy nền. Nếu có bước kiểm tra nào thất bại, không có gì được ghi.
 
 Thêm `--dry-run` để xem trước những gì sẽ thay đổi. `--role admin` cho người dùng vai trò quản trị viên thay vì chủ sở hữu (mặc định là chủ sở hữu, đúng cho người tự thiết lập máy tính của mình).
 
@@ -93,7 +93,7 @@ Với `--json`, setup in đúng một đối tượng JSON ra stdout. Đọc `ex
 | Mã thoát | `error` | Bạn làm gì |
 |---|---|---|
 | 0 | | `installed`, `updated` hoặc `unchanged`: xong, chuyển sang 3.5. `dry_run`: chưa có gì được ghi; chạy lại đúng lệnh đó mà không có `--dry-run`. detect-chat `found`: xác nhận người dùng như ở 3.3, rồi chạy 3.2. |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Cho người dùng xem `message` và `fix`. `ambiguous_install`: người dùng tự sửa trong `aipager config`. Đừng sửa file bằng tay. |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Cho người dùng xem `message` và `fix`. `ambiguous_install`: người dùng tự sửa trong `aipager config`. Đừng sửa file bằng tay. `settings_invalid` yêu cầu một `CLAUDE_CONFIG_DIR` tuyệt đối: `fix` cho biết tệp cần đổi (`daemon.env` hoặc một tệp cài đặt của Claude Code); hãy hỏi người đó thư mục, chỉ đổi đúng giá trị đó và chỉ khi họ đồng ý, rồi chạy lại setup. |
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Dữ liệu bạn đưa vào bị sai; `fix` nêu tên cờ cần sửa. `token_malformed`: file không chứa token bot, hãy nhờ người dùng kiểm tra. |
 | 3 | `deps_missing` | Làm theo `fix` (mỗi mục còn thiếu cũng có `fix` riêng trong `deps.items`), rồi chạy lại setup. |
 | 4 | `token_rejected` | Telegram từ chối token. Xin người dùng token lại (hoặc một token mới từ @BotFather). |

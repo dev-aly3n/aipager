@@ -1,6 +1,6 @@
 # Installer avec un agent
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../install-with-an-agent.md))
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 Utilisez le vrai identifiant de la personne et le chemin du fichier du token. Au lieu de `--token-file`, vous pouvez envoyer le token par un pipe avec `--token-stdin` (par exemple `--token-stdin < path`) ; le pipe doit se fermer, et setup l'attend au plus 30 secondes.
 
-setup vérifie le token auprès de Telegram, vérifie cet ordinateur, envoie un message de test à la personne ("aipager is set up for you. ..."), et seulement ensuite écrit sa configuration, ajoute les hooks de Claude Code dans `~/.claude/settings.json` et, avec `--service`, installe et démarre le service en arrière-plan. Si une vérification échoue, rien n'est écrit.
+setup vérifie le token auprès de Telegram, vérifie cet ordinateur, envoie un message de test à la personne ("aipager is set up for you. ..."), et seulement ensuite écrit sa configuration, ajoute les hooks de Claude Code dans `~/.claude/settings.json` (ou `$CLAUDE_CONFIG_DIR/settings.json`) et, avec `--service`, installe et démarre le service en arrière-plan. Si une vérification échoue, rien n'est écrit.
 
 Ajoutez `--dry-run` pour voir d'abord ce qui changerait. `--role admin` donne à la personne le rôle admin au lieu du rôle propriétaire (le choix par défaut, propriétaire, est le bon pour une personne qui configure son propre ordinateur).
 
@@ -93,7 +93,7 @@ Avec `--json`, setup affiche exactement un objet JSON sur stdout. Lisez `exit_co
 | Sortie | `error` | Ce que vous faites |
 |---|---|---|
 | 0 | | `installed`, `updated` ou `unchanged` : c'est fait, passez à 3.5. `dry_run` : rien n'a été écrit ; relancez la même commande sans `--dry-run`. detect-chat `found` : faites confirmer la personne comme en 3.3, puis lancez 3.2. |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Montrez `message` et `fix` à la personne. `ambiguous_install` : la personne le corrige dans `aipager config`. Ne modifiez pas de fichiers à la main. |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Montrez `message` et `fix` à la personne. `ambiguous_install` : la personne le corrige dans `aipager config`. Ne modifiez pas de fichiers à la main. Un `settings_invalid` qui demande un `CLAUDE_CONFIG_DIR` absolu : le `fix` nomme le fichier à changer (`daemon.env` ou un fichier de réglages de Claude Code) ; demandez le dossier à la personne, changez cette seule valeur uniquement si elle le dit, puis relancez setup. |
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Votre entrée était fausse ; `fix` nomme l'option. `token_malformed` : le fichier ne contient pas de token de bot, demandez à la personne de le vérifier. |
 | 3 | `deps_missing` | Suivez `fix` (chaque élément manquant a aussi son propre `fix` dans `deps.items`), puis relancez setup. |
 | 4 | `token_rejected` | Telegram a refusé le token. Redemandez le token à la personne (ou un nouveau à @BotFather). |

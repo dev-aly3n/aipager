@@ -1,6 +1,6 @@
 # События hooks
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../hooks.md))
 
@@ -8,7 +8,7 @@ Claude Code запускает команды hooks в определённые 
 
 ## <a id="how-it-is-wired"></a>Как это подключено
 
-`aipager config` (или `aipager setup`) добавляет записи aipager в `~/.claude/settings.json`, а aipager проверяет их при каждом запуске:
+`aipager config` (или `aipager setup`) добавляет записи aipager в `~/.claude/settings.json` (или `$CLAUDE_CONFIG_DIR/settings.json`, файл, который читают сессии демона), а aipager проверяет их при каждом запуске:
 
 - одна команда `aipager-hook` на каждое из 16 событий ниже, с фильтром `*` на событиях инструментов (`PreToolUse`, `PostToolUse`, `PermissionRequest`);
 - тайм-аут 5 секунд на `PreModelSwitch` и, из `aipager config` и `aipager setup`, 30 секунд на `PermissionRequest` (сам hook ждёт не больше 20 секунд, см. ниже); остальные записи используют значение Claude Code по умолчанию;

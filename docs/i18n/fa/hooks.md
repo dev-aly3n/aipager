@@ -2,7 +2,7 @@
 
 # رویدادهای هوک
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../hooks.md))
 
@@ -10,7 +10,7 @@
 
 ## <a id="how-it-is-wired"></a>چطور وصل می‌شود
 
-&rlm;`aipager config` (یا `aipager setup`) ورودی‌های aipager را به &lrm;`~/.claude/settings.json` اضافه می‌کند، و aipager در هر شروع آن‌ها را چک می‌کند:
+&rlm;`aipager config` (یا `aipager setup`) ورودی‌های aipager را به &lrm;`~/.claude/settings.json` (یا &lrm;`$CLAUDE_CONFIG_DIR/settings.json`، فایلی که سشن‌های aipager می‌خوانند) اضافه می‌کند، و aipager در هر شروع آن‌ها را چک می‌کند:
 
 - یک دستور `aipager-hook` برای هر کدام از ۱۶ رویداد پایین، با matcher برابر `*` روی رویدادهای ابزار (`PreToolUse`،&rlm; `PostToolUse`،&rlm; `PermissionRequest`)؛
 - مهلت ۵ ثانیه روی `PreModelSwitch`، و از `aipager config` و `aipager setup` مهلت ۳۰ ثانیه روی `PermissionRequest` (خود هوک حداکثر ۲۰ ثانیه منتظر می‌ماند، پایین‌تر را ببینید)؛ بقیه از پیش‌فرض Claude Code استفاده می‌کنند؛

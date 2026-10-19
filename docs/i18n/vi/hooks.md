@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -8,7 +8,7 @@ Claude Code chạy các lệnh hook ở những thời điểm cố định tron
 
 ## <a id="how-it-is-wired"></a>Cách hook được gắn vào
 
-`aipager config` (hoặc `aipager setup`) thêm các mục của aipager vào `~/.claude/settings.json`, và aipager kiểm tra chúng mỗi lần khởi động:
+`aipager config` (hoặc `aipager setup`) thêm các mục của aipager vào `~/.claude/settings.json` (hoặc `$CLAUDE_CONFIG_DIR/settings.json`, tệp mà các phiên của daemon đọc), và aipager kiểm tra chúng mỗi lần khởi động:
 
 - một lệnh `aipager-hook` cho mỗi sự kiện trong 16 sự kiện bên dưới, với bộ lọc `*` trên các sự kiện công cụ (`PreToolUse`, `PostToolUse`, `PermissionRequest`);
 - thời gian chờ 5 giây cho `PreModelSwitch` và, từ `aipager config` và `aipager setup`, 30 giây cho `PermissionRequest` (bản thân hook chờ tối đa 20 giây, xem bên dưới); các mục khác dùng mặc định của Claude Code;

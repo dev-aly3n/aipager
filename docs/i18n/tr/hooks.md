@@ -1,6 +1,6 @@
 # Hook olayları
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../hooks.md))
 
@@ -8,7 +8,7 @@ Claude Code, bir görevin belirli anlarında hook komutları çalıştırır: bi
 
 ## <a id="how-it-is-wired"></a>Nasıl bağlanıyor
 
-`aipager config` (ya da `aipager setup`) aipager'ın girdilerini `~/.claude/settings.json` dosyasına ekler; aipager da her başlangıçta onları kontrol eder:
+`aipager config` (ya da `aipager setup`) aipager'ın girdilerini `~/.claude/settings.json` (ya da `$CLAUDE_CONFIG_DIR/settings.json`, daemon'un oturumlarının okuduğu dosya) dosyasına ekler; aipager da her başlangıçta onları kontrol eder:
 
 - aşağıdaki 16 olayın her biri için bir `aipager-hook` komutu; araç olaylarında (`PreToolUse`, `PostToolUse`, `PermissionRequest`) `*` filtresiyle;
 - `PreModelSwitch` için 5 saniyelik ve `aipager config` ile `aipager setup` tarafından `PermissionRequest` için 30 saniyelik zaman aşımı (hook'un kendisi en fazla 20 saniye bekler, aşağıya bak); diğer girdiler Claude Code'un varsayılanını kullanır;

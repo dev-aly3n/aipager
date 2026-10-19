@@ -1,6 +1,6 @@
 # Pemasangan dengan agen
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../install-with-an-agent.md))
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 Pakai ID asli orang itu dan path file token-nya. Sebagai ganti `--token-file`, kamu bisa mengalirkan token lewat pipe dengan `--token-stdin` (misalnya `--token-stdin < path`); pipe-nya harus tertutup, setup menunggunya paling lama 30 detik.
 
-setup memeriksa token di Telegram, memeriksa komputer ini, mengirim satu pesan tes ke orang itu (“aipager is set up for you. ...”), dan baru setelah itu menulis konfigurasinya, menambahkan hook Claude Code ke `~/.claude/settings.json`, dan, dengan `--service`, memasang serta menjalankan layanan latar belakang. Kalau ada pemeriksaan yang gagal, tidak ada yang ditulis.
+setup memeriksa token di Telegram, memeriksa komputer ini, mengirim satu pesan tes ke orang itu (“aipager is set up for you. ...”), dan baru setelah itu menulis konfigurasinya, menambahkan hook Claude Code ke `~/.claude/settings.json` (atau `$CLAUDE_CONFIG_DIR/settings.json`), dan, dengan `--service`, memasang serta menjalankan layanan latar belakang. Kalau ada pemeriksaan yang gagal, tidak ada yang ditulis.
 
 Tambahkan `--dry-run` untuk melihat dulu apa yang akan berubah. `--role admin` memberi orang itu peran admin sebagai ganti peran owner (bawaannya, owner, tepat untuk orang yang mengatur komputernya sendiri).
 
@@ -93,7 +93,7 @@ Dengan `--json`, setup mencetak tepat satu objek JSON ke stdout. Baca `exit_code
 | Keluar | `error` | Yang kamu lakukan |
 |---|---|---|
 | 0 | | `installed`, `updated`, atau `unchanged`: selesai, lanjut ke 3.5. `dry_run`: tidak ada yang ditulis; jalankan perintah yang sama tanpa `--dry-run`. detect-chat `found`: minta orangnya mengonfirmasi seperti di 3.3, lalu jalankan 3.2. |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Tunjukkan `message` dan `fix` ke orangnya. `ambiguous_install`: orangnya memperbaikinya di `aipager config`. Jangan mengedit file dengan tangan. |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Tunjukkan `message` dan `fix` ke orangnya. `ambiguous_install`: orangnya memperbaikinya di `aipager config`. Jangan mengedit file dengan tangan. `settings_invalid` yang meminta `CLAUDE_CONFIG_DIR` absolut: `fix` menyebut file yang harus diubah (`daemon.env` atau file pengaturan Claude Code); tanyakan foldernya ke orang itu, ubah satu nilai itu saja dan hanya kalau dia bilang, lalu jalankan setup lagi. |
 | 2 | `usage`, `token_malformed`, `token_stdin_timeout`, `bad_chat_id`, ... | Input-mu salah; `fix` menyebutkan flag-nya. `token_malformed`: file itu tidak berisi token bot, minta orangnya memeriksanya. |
 | 3 | `deps_missing` | Ikuti `fix` (setiap item yang hilang punya `fix` sendiri di `deps.items`), lalu jalankan setup lagi. |
 | 4 | `token_rejected` | Telegram menolak token itu. Minta token lagi ke orangnya (atau yang baru dari @BotFather). |

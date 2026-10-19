@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -8,7 +8,7 @@ Claude Code 会在一个任务的固定时刻运行 hook 命令：提交了一�
 
 ## <a id="how-it-is-wired"></a>如何接入
 
-`aipager config`（或 `aipager setup`）把 aipager 的条目加到 `~/.claude/settings.json`，aipager 每次启动时都会检查它们：
+`aipager config`（或 `aipager setup`）把 aipager 的条目加到 `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`，即守护进程的会话读取的文件），aipager 每次启动时都会检查它们：
 
 - 下面 16 个事件各有一条 `aipager-hook` 命令，工具事件（`PreToolUse`、`PostToolUse`、`PermissionRequest`）上的匹配器是 `*`；
 - `PreModelSwitch` 有 5 秒超时；通过 `aipager config` 和 `aipager setup` 设置时，`PermissionRequest` 有 30 秒超时（hook 本身最多等 20 秒，见下文）；其他条目使用 Claude Code 的默认值；

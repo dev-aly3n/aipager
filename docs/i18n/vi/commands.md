@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-Nó làm gì, theo thứ tự này: đọc token của bot, kiểm tra token với Telegram (getMe), kiểm tra mọi thứ trên máy tính này mà không ghi gì (cấu hình hiện có, các phụ thuộc, `~/.claude/settings.json`, có aipager nào đang chạy không), gửi một tin nhắn thử cho người dùng (“aipager is set up for you. ...”), và chỉ sau đó mới ghi. Các file được ghi, giống như trình thiết lập ghi:
+Nó làm gì, theo thứ tự này: đọc token của bot, kiểm tra token với Telegram (getMe), kiểm tra mọi thứ trên máy tính này mà không ghi gì (cấu hình hiện có, các phụ thuộc, `~/.claude/settings.json` (hoặc `$CLAUDE_CONFIG_DIR/settings.json`), có aipager nào đang chạy không), gửi một tin nhắn thử cho người dùng (“aipager is set up for you. ...”), và chỉ sau đó mới ghi. Các file được ghi, giống như trình thiết lập ghi:
 
 - `~/.config/aipager/aipager.yaml` (quyền 0600): `bot_token` và một scope chat riêng có thành viên duy nhất là người dùng (`label: owner`, vai trò owner hoặc admin).
-- `~/.claude/settings.json`: các hook của aipager và statusLine (file hiện có được sao lưu thành `settings.json.bak.<time>` khi nó thay đổi).
+- `~/.claude/settings.json` (hoặc `$CLAUDE_CONFIG_DIR/settings.json`, tệp mà các phiên của daemon đọc: môi trường của shell này cộng `daemon.env`): các hook của aipager và statusLine (file hiện có được sao lưu thành `settings.json.bak.<time>` khi nó thay đổi). `settings_json.path` trong đầu ra JSON cho biết tên tệp.
 - Log kiểm tra nhận một bản ghi `grant-owner` khi ai đó trở thành chủ sở hữu.
 - Với `--service`, dịch vụ nền (giống như `aipager service install --yes`).
 - Chỉ trên một bản cài `config.env` cũ (chưa có `aipager.yaml`), việc chuyển đổi mà trình thiết lập làm: một bản sao `config.env.bak.<time>` (và `team.yaml.bak.<time>` khi có `team.yaml`), và một `~/.config/aipager/policy.yaml` mẫu khi chưa có. Bản thân `config.env` được để nguyên.
@@ -626,7 +626,7 @@ Các bước kiểm tra của `aipager doctor` dưới dạng một đối tư�
 
 Nó giữ lại dữ liệu của aipager, để lần cài lại tiếp tục từ chỗ cũ: `~/.local/share/aipager` (thư mục phiên, các chương trình phụ trợ đã tải, file khóa và file đánh dấu), `~/.local/state/aipager` (bản ghi báo cáo sự cố và trạng thái ngôn ngữ), `~/.claude/aipager-audit.jsonl` (log các câu trả lời cho yêu cầu cấp quyền), `~/.claude/aipager-flood-state.json` (lịch sử giới hạn tốc độ của Telegram), `~/.claude/aipager-pending-users.json` (những người đã thử dùng bot mà không có quyền) và `~/aipager-users` ([thư mục gốc](groups.md#root-folders) của các thành viên, cùng công việc của họ). Trước khi hỏi, nó liệt kê những thứ có trên máy tính của bạn, và cuối cùng nó in ra lệnh `rm -rf` để xóa luôn cả chúng.
 
-Nó cũng gỡ các mục riêng của aipager khỏi `~/.claude/settings.json` của Claude Code: các hook chạy `aipager-hook` và dòng trạng thái chạy `aipager-statusline` (một dòng trạng thái của riêng bạn thì được giữ). Mọi thứ khác trong file đó giữ nguyên, và file ở trạng thái trước đó được giữ bên cạnh thành `settings.json.bak.<time>`. Nếu file là một symlink tới file khác, không đọc được, không phải JSON hợp lệ, hoặc không có dạng mà Claude Code đọc, nó được để y nguyên và uninstall nói rõ những mục nào cần gỡ bằng tay. Một hook của riêng bạn có nhắc tới `aipager-hook` hay `aipager-statusline` (ví dụ một lớp bọc `aipager-hook-capped.sh`) cũng được giữ, và uninstall nêu tên nó. Các phiên Claude Code đang mở vẫn chạy các hook mà chúng đã nạp cho tới khi bạn khởi động lại chúng. `aipager config` thêm lại các mục sau khi cài lại. Bot Telegram của bạn và các bản sao lưu `settings.json.bak.*` cũ hơn không bị đụng tới, `skipDangerousModePermissionPrompt` (cài đặt bỏ qua lời cảnh báo của Claude Code trước khi nó chạy với việc kiểm tra quyền bị tắt) cũng vậy, vì aipager có đặt nó nhưng có thể chính bạn cũng đã đặt.
+Nó cũng gỡ các mục riêng của aipager khỏi `~/.claude/settings.json` (và khỏi tệp mà các phiên của daemon đọc, khi `CLAUDE_CONFIG_DIR` chỉ tới tệp khác) của Claude Code: các hook chạy `aipager-hook` và dòng trạng thái chạy `aipager-statusline` (một dòng trạng thái của riêng bạn thì được giữ). Mọi thứ khác trong file đó giữ nguyên, và file ở trạng thái trước đó được giữ bên cạnh thành `settings.json.bak.<time>`. Nếu file là một symlink tới file khác, không đọc được, không phải JSON hợp lệ, hoặc không có dạng mà Claude Code đọc, nó được để y nguyên và uninstall nói rõ những mục nào cần gỡ bằng tay. Một hook của riêng bạn có nhắc tới `aipager-hook` hay `aipager-statusline` (ví dụ một lớp bọc `aipager-hook-capped.sh`) cũng được giữ, và uninstall nêu tên nó. Các phiên Claude Code đang mở vẫn chạy các hook mà chúng đã nạp cho tới khi bạn khởi động lại chúng. `aipager config` thêm lại các mục sau khi cài lại. Bot Telegram của bạn và các bản sao lưu `settings.json.bak.*` cũ hơn không bị đụng tới, `skipDangerousModePermissionPrompt` (cài đặt bỏ qua lời cảnh báo của Claude Code trước khi nó chạy với việc kiểm tra quyền bị tắt) cũng vậy, vì aipager có đặt nó nhưng có thể chính bạn cũng đã đặt.
 
 ## <a id="command-line-aipager-report"></a>Dòng lệnh: `aipager report`
 

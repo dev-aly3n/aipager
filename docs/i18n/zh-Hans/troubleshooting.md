@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
+<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -228,7 +228,7 @@ aipager 把它的会话保存在 `~/.claude/aipager-sessions.json` 里，以原�
 | `claude_auth` | 在真实会话得到的同样环境里试运行 `claude auth status`。**从不 FAIL**：“未登录”和“试运行本身失败”会分别报告，两者都不会阻止会话启动。当 Claude Code 被告知不要使用会话的 `ANTHROPIC_API_KEY`、而又没有别的方式让会话登录时，它也会警告。 | `claude auth login`，或者设置 API 密钥 / `CLAUDE_CODE_OAUTH_TOKEN`；设置了 `ANTHROPIC_BASE_URL` 时，是那个地址的密钥（[服务商](#using-an-api-key-a-gateway-or-another-provider)） |
 | `dtach` | 找到了 `dtach` 程序（aipager 自带的 `dtach-bin`，或 PATH 上的） | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` 和 `aipager-statusline` 在 PATH 上 | `uv tool install --reinstall aipager` |
-| `settings_json` | `~/.claude/settings.json` 已接入 aipager 的 hook | `aipager config` |
+| `settings_json` | `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`） 已接入 aipager 的 hook；设置了 `CLAUDE_CONFIG_DIR` 时会指出该文件以及这个值的来源 | `aipager config` |
 | `daemon` | aipager 正在运行，它的套接字有应答；同时显示 Telegram 的限流状态（见[上文](#the-bot-slowed-down-a-rate-limit-429)） | `aipager start` |
 | `service_installed` | 可选：服务文件存在 | `aipager service install` |
 | `service_unit_path` | 仅 Linux：*已安装的*服务的 `Environment=PATH=` 确实包含找到的 claude 程序所在的文件夹，按文本解析，因为 doctor 从机器人主人的交互式 shell 里看不到 systemd 自己的 PATH | `aipager service install --yes` |
@@ -265,8 +265,8 @@ aipager service stop && aipager service start
 
 aipager 按你的设置运行 Claude Code，所以从 Telegram 启动的会话和你终端里的 `claude` 用同样的方式登录：claude.ai 登录、Anthropic 的 API 密钥、网关（LiteLLM、Vercel、Cloudflare 等），或写在 `ANTHROPIC_BASE_URL` 里的其他公司的 Anthropic 格式地址。Anthropic 只支持 Claude Code 搭配 Claude 模型使用；其他模型的表现可能不同。
 
-- **设置放在哪里。**放进 `~/.claude/settings.json` 的 `env` 块（每个 Claude Code 会话都会读取），或放进 `~/.config/aipager/daemon.env`（只有 aipager 启动的会话会拿到）：每行一个 `KEY=value`，不加引号（引号会变成值的一部分）。服务（`aipager service install`）从不读取你 shell 的配置文件，所以写在那里的 `export` 到不了服务。改完 `daemon.env` 后重启 aipager。
-- **用哪个密钥设置。**对网关或其他服务商，Claude Code 的文档建议用 `ANTHROPIC_AUTH_TOKEN`，Claude Code 从不为它提问。对 `ANTHROPIC_API_KEY`，它会问一次“Do you want to use this API key?”，而从 Telegram 启动的会话无法回答，所以 aipager 会在会话启动前一刻在 `~/.claude.json` 里替你回答：
+- **设置放在哪里。**放进 `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`） 的 `env` 块（每个 Claude Code 会话都会读取），或放进 `~/.config/aipager/daemon.env`（只有 aipager 启动的会话会拿到）：每行一个 `KEY=value`，不加引号（引号会变成值的一部分）。服务（`aipager service install`）从不读取你 shell 的配置文件，所以写在那里的 `export` 到不了服务。改完 `daemon.env` 后重启 aipager。受信任的启动文件夹中 `.claude/settings.json` 和 `.claude/settings.local.json` 的 `env` 块，以及托管设置（Linux 上 `/etc/claude-code`、macOS 上 `/Library/Application Support/ClaudeCode` 中的 `managed-settings.json` 和 `managed-settings.d/`）的 `env` 块也同样算数，和 Claude Code 一样。
+- **用哪个密钥设置。**对网关或其他服务商，Claude Code 的文档建议用 `ANTHROPIC_AUTH_TOKEN`，Claude Code 从不为它提问。对 `ANTHROPIC_API_KEY`，它会问一次“Do you want to use this API key?”，而从 Telegram 启动的会话无法回答，所以 aipager 会在会话启动前一刻在 `~/.claude.json`（或 `CLAUDE_CONFIG_DIR` 把它放进的文件） 里替你回答：
   - 是：密钥写在 `settings.json` 或 `daemon.env` 里，或者没有别的方式能让会话登录。
   - 否：密钥只来自启动 aipager 的环境，而你已经用别的方式登录了 Claude；你的会话继续用那个登录和它的套餐。要用这个密钥，在带有这个密钥的终端会话里用 `/config` 的“Use custom API key”打开它。
   - 你自己给过的回答会保留，只有一种例外：没有别的方式能让会话登录时，对写在 `settings.json` 或 `daemon.env` 里的密钥的“否”。当“否”让会话无法登录时，`aipager doctor` 会提示；在终端里用 `/config` 的“Use custom API key”重新打开这个密钥。
@@ -274,6 +274,16 @@ aipager 按你的设置运行 Claude Code，所以从 Telegram 启动的会话�
 - **模型。**Opus、Sonnet 和 Haiku 按钮发送 Claude Code 的 `opus`、`sonnet` 和 `haiku`；设置了 `ANTHROPIC_DEFAULT_OPUS_MODEL`、`ANTHROPIC_DEFAULT_SONNET_MODEL` 和 `ANTHROPIC_DEFAULT_HAIKU_MODEL` 后，Claude Code 会把它们对应到你服务商的模型。`claude-...` 按钮需要服务商有这些模型。其他模型在 `/new` 的模型步骤或 Mini App 里按服务商的写法输入：最多 128 个字符，由字母、数字和 `. _ - : / @ ~ ,` 组成，可以带 Claude Code 的 `[1m]` 后缀。`keyboard.json` 可以改按钮（见[固定键盘](commands.md#persistent-keyboard)）。
 - **没有密钥的 `ANTHROPIC_BASE_URL`。**这时 Claude Code 会把你的 claude.ai 登录发到那个地址。除非那个地址是专门把你的登录转给 Anthropic 的网关，否则也要设置服务商的密钥。
 - **不支持：**通过本地代理、用另一家公司的聊天订阅（比如 ChatGPT 套餐）运行 Claude Code 的工具。那家公司没有批准 Claude Code 用于它的套餐，这样用可能让那个账号面临风险。
+
+**Claude Code 的配置在另一个文件夹（`CLAUDE_CONFIG_DIR`）。** Claude Code 把设置、登录、对话记录和全局配置放在 `~/.claude` 和 `~/.claude.json` 中，或放在 `CLAUDE_CONFIG_DIR` 指定的文件夹中。aipager 遵循同一个变量，所以它的钩子和状态行会写进你的会话读取的 `settings.json`，它的应答会写进 Claude Code 读取的文件（已用 Claude Code 2.1.303 验证）：
+
+- **在 `~/.config/aipager/daemon.env` 中设置它**，然后重启 aipager。服务从不读取你的 shell 配置文件，所以 `export` 只能影响那个 shell 中的 `aipager start`。启动时，守护进程会把钩子写入 `$CLAUDE_CONFIG_DIR/settings.json`，并在日志中记录 `sessions read Claude Code's config from ...`；如果在它运行时修改这个值，它启动的下一个会话会得到钩子，此后丢失了钩子的设置文件也一样。钩子无法写入时，日志会显示 `sessions will start without aipager's hooks`，`aipager doctor` 也会发出警告。
+- **使用完整路径。** Claude Code 会原样使用这个值：不会展开 `~`，相对路径（空值也一样）表示每个会话自己文件夹里的一个文件夹。aipager 不会往那里写任何东西：日志和 `aipager doctor` 会警告，`aipager setup` 会停下并给出修复方法，`aipager config` 会跳过它的 Claude Code 步骤，显示带修复方法的警告后继续。修复方法会指出存放这个值的文件：`daemon.env`，或在 `env` 块中设置它的设置文件。
+- **在 Claude Code 自己的设置中设置。** `~/.claude/settings.json`（或托管设置）的 `env` 块中的 `CLAUDE_CONFIG_DIR` 会移动设置文件、登录和对话记录，但不会移动 `~/.claude.json`。aipager 也会跟着这样做；`aipager doctor` 会告诉你位置。
+- **`aipager config` 和 `aipager setup`** 修改的是守护进程的会话读取的文件：你的 shell 环境加上 `daemon.env`。在另一个值的 shell 中启动的 `claude` 会读取另一个文件，没有 aipager 的钩子；`aipager doctor` 会指出它。
+- **旧版 `.config.json`。** 当 `<config folder>/.config.json` 正在使用时（例如它存在且不为空），Claude Code 会读取它而不是 `.claude.json`，aipager 也一样。`CLAUDE_CONFIG_DIR` 为空时，这个文件会在会话自己的文件夹中，aipager 不会往那里写任何东西。
+- **aipager 读不到的内容。** 通过 MDM 配置描述文件（macOS）、Windows 注册表或 Claude 服务器下发的托管设置，以及 `--settings` 参数。只在那里设置的密钥或服务商开关，aipager 回答启动问题时看不到；这时 Claude Code 会询问，就像没有 aipager 时一样。
+- **拒绝列表。** 让受限角色和发送的文件远离 Claude 凭据的默认规则写的是 `~/.claude/**` 和 `~/.claude.json*`。放在别处的 `CLAUDE_CONFIG_DIR` 不在它们的范围内，所以当非管理员使用你的会话时，请把它放在 `~/.claude` 里面（Docker 镜像就是这样）（[安全](security.md#who-decides-whether-a-tool-call-runs)）。
 
 ## <a id="the-daemons-control-socket-moved"></a>aipager 的控制套接字换了位置
 
@@ -327,6 +337,8 @@ systemctl --user restart aipager.service
 如果原地启动失败，旧进程退出后会由一个分离的副本启动 aipager。这时它的输出会写入自重启日志（实例文件夹里的 `aipager.log`，或 `/tmp/aipager.log`），而不是你的终端；如果这个副本没有回来，aipager 的日志会写出要运行的命令。如果解释器本身已经没了（它的环境被删除了），或者什么都启动不了，aipager 会以代码 1 退出，aipager 的日志以 `restart.failed:` 和要运行的命令结尾，下一次启动会宣布这次更新。
 
 没有 **立即重启** 按钮时，消息会给出适合你的环境的步骤：在终端或 tmux 里，按 Ctrl+C 再运行 `aipager start`；在 macOS 上，运行 `launchctl kickstart -k gui/<uid>/com.aipager.daemon`；在 Docker 里，在主机上运行 `docker restart <container>`。重新创建 Docker 容器（在 `down` 之后运行 `docker compose up`，或再次运行 `docker run`）会从它的镜像启动，这会带回该镜像里的 aipager 版本：要保留更新的 aipager，请使用更新的镜像。
+
+镜像设置了 `CLAUDE_CONFIG_DIR=/home/aipager/.claude`，因此 Claude Code 的全局配置（`.claude.json`：文件夹信任、首次运行状态、API 密钥的应答、你的账号和用户级 MCP 服务器）会和其他内容一起保存在 `.claude` 卷中，重建容器后依然保留。之前的镜像把它放在容器内部的 `/home/aipager/.claude.json`。新镜像第一次启动时不会读取旧文件：卷中 `.credentials.json` 里的登录仍然有效，会话启动时 aipager 会重新回答文件夹信任和首次运行的问题，但用 `claude mcp add --scope user` 添加的用户级 MCP 服务器需要重新添加。如果你绑定挂载主机的 `~/.claude`（就像 README 中的命令那样），这个文件会以 `~/.claude/.claude.json` 出现在那里；主机上的 Claude Code 不会读取它（它使用 `~/.claude.json`）。使用命名卷可以把两者分开。
 
 ## <a id="the-daemon-didnt-come-back-after-an-update"></a>更新后 aipager 没有重新运行
 

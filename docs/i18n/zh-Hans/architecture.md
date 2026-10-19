@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ 2d10247 -->
+<!-- i18n-source: docs/architecture.md @ 6295e500 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -69,7 +69,7 @@ flowchart LR
 1. 把旧的配置（`config.env`、`team.yaml`）迁移到 `aipager.yaml`，只做一次，并把旧文件收起来。
 2. 如果另一个 aipager 在套接字上应答，就拒绝启动；然后获取 aipager 的锁（`~/.local/share/aipager/daemon.lock`）。
 3. 向 Telegram 验证机器人 token（`getMe`）。
-4. 修整 Claude Code 自己的文件：把缺少的 aipager hook 和状态行加到 `~/.claude/settings.json`，并回答 Telegram 用户无法回答的首次启动问题（见[安全](security.md#who-decides-whether-a-tool-call-runs)）。
+4. 修整 Claude Code 自己的文件：把缺少的 aipager hook 和状态行加到 `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`，即守护进程的会话读取的文件），并回答 Telegram 用户无法回答的首次启动问题（见[安全](security.md#who-decides-whether-a-tool-call-runs)）。
 5. `SessionRegistry.load()`：读取 `~/.claude/aipager-sessions.json`。文件不存在或无法读取时，列表从空开始。
 6. 确定 Mini App 的地址（你自己的 URL，或 Tailscale），然后 `bot.start()`：开始从 Telegram 接收更新。
 7. `HookReceiver.start()`：删除残留的套接字文件，bind，开始监听。
@@ -112,10 +112,10 @@ flowchart LR
 | `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告 | aipager；保留下来的隧道的看守进程和 `aipager uninstall` 也会删除这条记录 |
 | `~/.claude/aipager-pending-users.json` | 在机器人不服务的群组里找过它的人，或在它服务的群组里但不是成员的人，供 `aipager config` 添加（权限 0600，每次写入都整个替换，保留最近 30 天里出现过的最新 200 人） | aipager（写入）、`aipager config`（读取） |
 | `~/aipager-users/<label>/` | 成员的默认[根文件夹](groups.md#root-folders)（权限 0700），`user` 和 `read_only` 成员在这里启动会话；`aipager uninstall` 会保留它们 | aipager（在成员第一次 `/new` 或第一次在 Mini App 里“启动会话”时创建） |
-| `~/.claude/settings.json` | Claude Code 的 hook 配置 | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)） |
-| `~/.claude/settings.json.bak.*` | 每次改写前的备份 | `aipager config`、`aipager setup`、`aipager uninstall` |
-| `~/.claude.json` | Claude Code 自己的文件：aipager 在会话启动前一刻，把会话所在的文件夹标记为受信任（包括主文件夹，但绝不会是 `/` 或主文件夹的上级文件夹），这样 Claude Code 的信任问题不会挡住从 Telegram 启动的会话。aipager 启动时不标记任何文件夹。无法完整读取，或运行中的 Claude 在此期间改动过时，绝不重写。同样，它会为会话的 `ANTHROPIC_API_KEY` 回答“use this API key?”（`customApiKeyResponses`，密钥的最后 20 个字符），并在会话有登录凭据时把 Claude Code 的首次运行标记为已完成（`hasCompletedOnboarding`），让这些问题也不会挡住从 Telegram 启动的会话（[服务商](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)）。 | aipager |
-| `~/.claude/.credentials.json` → `.credentials.json.stale` | Claude Code 的登录文件，在会话以设置了 `CLAUDE_CODE_OAUTH_TOKEN` 的方式启动、而该文件只有过期或空的登录时被移到一边（否则它会优先于 token）；要撤销，把它移回来 | aipager |
+| `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`） | Claude Code 的 hook 配置：守护进程的会话读取的那个文件，位于会话所得环境对应的 Claude Code 配置文件夹中（[故障排查](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)） | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)），当该文件是新文件时，在会话启动前还会再做一次 |
+| `settings.json.bak.*`（在它旁边） | 每次改写前的备份 | `aipager config`、`aipager setup`、`aipager uninstall` |
+| `~/.claude.json`（或 `$CLAUDE_CONFIG_DIR/.claude.json`、设置了 `CLAUDE_CODE_CUSTOM_OAUTH_URL` 时的 `.claude-custom-oauth.json`，或 Claude Code 使用的配置文件夹中的旧版 `.config.json`） | Claude Code 自己的文件：aipager 在会话启动前一刻，把会话所在的文件夹标记为受信任（包括主文件夹，但绝不会是 `/` 或主文件夹的上级文件夹），这样 Claude Code 的信任问题不会挡住从 Telegram 启动的会话。aipager 启动时不标记任何文件夹。无法完整读取，或运行中的 Claude 在此期间改动过时，绝不重写。同样，它会为会话的 `ANTHROPIC_API_KEY` 回答“use this API key?”（`customApiKeyResponses`，密钥的最后 20 个字符），并在会话有登录凭据时把 Claude Code 的首次运行标记为已完成（`hasCompletedOnboarding`），让这些问题也不会挡住从 Telegram 启动的会话（[服务商](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)）。 | aipager |
+| `~/.claude/.credentials.json`（或配置文件夹中的那个） → `.credentials.json.stale` | Claude Code 的登录文件，在会话以设置了 `CLAUDE_CODE_OAUTH_TOKEN` 的方式启动、而该文件只有过期或空的登录时被移到一边（否则它会优先于 token）；要撤销，把它移回来 | aipager |
 | `~/.config/aipager/aipager.yaml` | 机器人 token、聊天、成员 + 角色、Mini App 设置 | `aipager config`（权限 600）；当 Telegram 把群组升级为 supergroup 时，aipager 会迁移该群组的条目，并在把旧的 Mini App 设置移进来时保留一份 `aipager.yaml.bak.<time>` |
 | `~/.config/aipager/policy.yaml` | 按角色的规则 + 安全底线的补充 | 你（用 `aipager policy validate` 检查）；迁移旧安装时会写入一次带注释的模板 |
 | `~/.config/aipager/preferences.json` | 每个聊天和每个会话的 `/settings` 选择 | aipager |

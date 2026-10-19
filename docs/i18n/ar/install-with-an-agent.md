@@ -2,7 +2,7 @@
 
 # التثبيت بواسطة وكيل
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../install-with-an-agent.md))
 
@@ -96,7 +96,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 يُستخدم المعرّف الحقيقي للشخص ومسار ملف التوكن. بدل &lrm;`--token-file`، يمكنك تمرير التوكن عبر أنبوب مع &lrm;`--token-stdin` (مثلًا &lrm;`--token-stdin < path`)؛ ويجب أن يُغلق الأنبوب، إذ ينتظره setup ٣٠ ثانية على الأكثر.
 
-يتحقق setup من التوكن لدى Telegram، ويفحص هذا الكمبيوتر، ويرسل إلى الشخص رسالة اختبار واحدة («aipager is set up for you. ...»)، ولا يكتب إعداداته إلا بعد ذلك، ويضيف هوكات Claude Code إلى &lrm;`~/.claude/settings.json`، ومع &lrm;`--service` يثبّت خدمة الخلفية ويشغّلها. إذا فشل أي فحص، لا يُكتب شيء.
+يتحقق setup من التوكن لدى Telegram، ويفحص هذا الكمبيوتر، ويرسل إلى الشخص رسالة اختبار واحدة («aipager is set up for you. ...»)، ولا يكتب إعداداته إلا بعد ذلك، ويضيف هوكات Claude Code إلى &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`)، ومع &lrm;`--service` يثبّت خدمة الخلفية ويشغّلها. إذا فشل أي فحص، لا يُكتب شيء.
 
 إضافة &lrm;`--dry-run` تعرض ما سيتغير أولًا. يجعل &lrm;`--role admin` الشخص مشرفًا بدل المالك (الافتراضي، المالك، هو الصحيح لشخص يُعدّ كمبيوتره بنفسه).
 
@@ -119,7 +119,7 @@ aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 | الخروج | `error` | الإجراء |
 |---|---|---|
 | 0 | | `installed` أو `updated` أو `unchanged`: انتهى، والانتقال إلى ٣.٥. `dry_run`: لم يُكتب شيء؛ تشغيل الأمر نفسه دون &lrm;`--dry-run`.&rlm; detect-chat `found`: تأكيد الشخص كما في ٣.٣، ثم تشغيل ٣.٢. |
-| 1 | `config_malformed`،&rlm; `ambiguous_install`،&rlm; `settings_invalid`،&rlm; `test_send_failed`،&rlm; `write_failed`،&rlm; `service_failed`،&rlm; `internal_error` | عرض `message` و`fix` على الشخص. `ambiguous_install`: يصلحه الشخص في `aipager config`. دون تعديل الملفات يدويًا. |
+| 1 | `config_malformed`،&rlm; `ambiguous_install`،&rlm; `settings_invalid`،&rlm; `test_send_failed`،&rlm; `write_failed`،&rlm; `service_failed`،&rlm; `internal_error` | عرض `message` و`fix` على الشخص. `ambiguous_install`: يصلحه الشخص في `aipager config`. دون تعديل الملفات يدويًا. خطأ `settings_invalid` الذي يطلب `CLAUDE_CONFIG_DIR` بمسار كامل: يذكر `fix` الملف الذي يجب تغييره (`daemon.env` أو ملف إعدادات لـ Claude Code)؛ يمكنك سؤال الشخص عن المجلد، وتغيير تلك القيمة وحدها فقط إذا طلب ذلك، ثم تشغيل setup مرة أخرى. |
 | 2 | `usage`،&rlm; `token_malformed`،&rlm; `token_stdin_timeout`،&rlm; `bad_chat_id`، ... | كانت مدخلاتك خاطئة؛ و`fix` يسمّي الخيار. `token_malformed`: الملف لا يحتوي على توكن بوت، يُطلب من الشخص التحقق منه. |
 | 3 | `deps_missing` | اتباع `fix` (لكل عنصر ناقص أيضًا `fix` خاص به في `deps.items`)، ثم تشغيل setup مرة أخرى. |
 | 4 | `token_rejected` | رفض Telegram التوكن. طلب التوكن من الشخص مرة أخرى (أو توكن جديد من &lrm;@BotFather). |

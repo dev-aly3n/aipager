@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-Yang dilakukannya, berurutan: membaca token bot, memeriksanya di Telegram (getMe), memeriksa semua yang ada di komputer ini tanpa menulis apa pun (konfigurasi yang ada, dependensi, `~/.claude/settings.json`, apakah aipager sedang berjalan), mengirim pesan tes ke orangnya (“aipager is set up for you. ...”), lalu baru menulis. File yang ditulis, persis seperti yang ditulis wizard:
+Yang dilakukannya, berurutan: membaca token bot, memeriksanya di Telegram (getMe), memeriksa semua yang ada di komputer ini tanpa menulis apa pun (konfigurasi yang ada, dependensi, `~/.claude/settings.json` (atau `$CLAUDE_CONFIG_DIR/settings.json`), apakah aipager sedang berjalan), mengirim pesan tes ke orangnya (“aipager is set up for you. ...”), lalu baru menulis. File yang ditulis, persis seperti yang ditulis wizard:
 
 - `~/.config/aipager/aipager.yaml` (izin 0600): `bot_token` dan chat pribadi dengan orang itu sebagai satu-satunya anggota (`label: owner`, peran owner atau admin).
-- `~/.claude/settings.json`: hook aipager dan statusLine (file yang ada disimpan sebagai `settings.json.bak.<time>` kalau berubah).
+- `~/.claude/settings.json` (atau `$CLAUDE_CONFIG_DIR/settings.json`, file yang dibaca sesi-sesi daemon: lingkungan shell ini ditambah `daemon.env`): hook aipager dan statusLine (file yang ada disimpan sebagai `settings.json.bak.<time>` kalau berubah). `settings_json.path` di keluaran JSON menyebutkannya.
 - Log audit mendapat entri `grant-owner` saat seseorang menjadi pemilik.
 - Dengan `--service`, layanan latar belakang (sama dengan `aipager service install --yes`).
 - Hanya pada pemasangan lama dengan `config.env` (belum ada `aipager.yaml`), pemindahan yang dilakukan wizard: salinan `config.env.bak.<time>` (dan `team.yaml.bak.<time>` kalau ada `team.yaml`), serta templat `~/.config/aipager/policy.yaml` kalau belum ada. `config.env` sendiri dibiarkan apa adanya.
@@ -626,7 +626,7 @@ Pemeriksaan `aipager doctor` sebagai satu objek JSON di stdout. Seperti `aipager
 
 Perintah ini menyimpan data aipager supaya pemasangan ulang bisa melanjutkan dari tempat terakhir: `~/.local/share/aipager` (folder sesi, program pembantu yang diunduh, file kunci dan penanda), `~/.local/state/aipager` (catatan laporan masalah dan keadaan bahasa), `~/.claude/aipager-audit.jsonl` (log jawaban izin), `~/.claude/aipager-flood-state.json` (riwayat batas Telegram), `~/.claude/aipager-pending-users.json` (orang yang mencoba bot tanpa akses), dan `~/aipager-users` ([folder utama](groups.md#root-folders) para anggota, dengan pekerjaan mereka). Sebelum bertanya, perintah ini mencantumkan mana yang ada di komputermu, dan di akhir mencetak perintah `rm -rf` yang juga menghapusnya.
 
-Perintah ini juga mengeluarkan entri milik aipager sendiri dari `~/.claude/settings.json` milik Claude Code: hook yang menjalankan `aipager-hook` dan baris status yang menjalankan `aipager-statusline` (baris status milikmu sendiri tetap ada). Semua yang lain di file itu tetap seperti semula, dan file dalam bentuk sebelumnya disimpan di sebelahnya sebagai `settings.json.bak.<time>`. Kalau file itu berupa tautan ke file lain, tidak bisa dibaca, bukan JSON yang valid, atau bentuknya tidak seperti yang dibaca Claude Code, file itu dibiarkan persis apa adanya dan uninstall memberi tahu entri mana yang perlu dihapus dengan tangan. Hook milikmu sendiri yang masih menyebut `aipager-hook` atau `aipager-statusline` (misalnya pembungkus `aipager-hook-capped.sh`) juga dibiarkan, dan uninstall menyebutnya. Sesi Claude Code yang sudah terbuka tetap menjalankan hook yang sudah dimuatnya sampai kamu memulai ulangnya. `aipager config` menambahkan entri-entri itu lagi setelah pemasangan ulang. Bot Telegram-mu dan cadangan `settings.json.bak.*` yang lebih lama tidak disentuh, begitu juga `skipDangerousModePermissionPrompt` (pengaturan yang melewati peringatan Claude Code sebelum berjalan tanpa pemeriksaan izin), yang diatur aipager tapi mungkin juga kamu atur sendiri.
+Perintah ini juga mengeluarkan entri milik aipager sendiri dari `~/.claude/settings.json` (dan dari file yang dibaca sesi-sesi daemon, kalau `CLAUDE_CONFIG_DIR` menunjuk file lain) milik Claude Code: hook yang menjalankan `aipager-hook` dan baris status yang menjalankan `aipager-statusline` (baris status milikmu sendiri tetap ada). Semua yang lain di file itu tetap seperti semula, dan file dalam bentuk sebelumnya disimpan di sebelahnya sebagai `settings.json.bak.<time>`. Kalau file itu berupa tautan ke file lain, tidak bisa dibaca, bukan JSON yang valid, atau bentuknya tidak seperti yang dibaca Claude Code, file itu dibiarkan persis apa adanya dan uninstall memberi tahu entri mana yang perlu dihapus dengan tangan. Hook milikmu sendiri yang masih menyebut `aipager-hook` atau `aipager-statusline` (misalnya pembungkus `aipager-hook-capped.sh`) juga dibiarkan, dan uninstall menyebutnya. Sesi Claude Code yang sudah terbuka tetap menjalankan hook yang sudah dimuatnya sampai kamu memulai ulangnya. `aipager config` menambahkan entri-entri itu lagi setelah pemasangan ulang. Bot Telegram-mu dan cadangan `settings.json.bak.*` yang lebih lama tidak disentuh, begitu juga `skipDangerousModePermissionPrompt` (pengaturan yang melewati peringatan Claude Code sebelum berjalan tanpa pemeriksaan izin), yang diatur aipager tapi mungkin juga kamu atur sendiri.
 
 ## <a id="command-line-aipager-report"></a>Baris perintah: `aipager report`
 

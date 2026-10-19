@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-이 순서로 해요: 봇 token을 읽고, Telegram에서 token을 확인하고(getMe), 아무것도 쓰지 않은 채 이 컴퓨터의 모든 것을 확인하고(기존 설정, 의존성, `~/.claude/settings.json`, 실행 중인 aipager가 있는지), 사용자에게 테스트 메시지("aipager is set up for you. ...")를 보내고, 그다음에야 써요. 쓰는 파일은 설정 마법사가 쓰는 것과 같아요:
+이 순서로 해요: 봇 token을 읽고, Telegram에서 token을 확인하고(getMe), 아무것도 쓰지 않은 채 이 컴퓨터의 모든 것을 확인하고(기존 설정, 의존성, `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`), 실행 중인 aipager가 있는지), 사용자에게 테스트 메시지("aipager is set up for you. ...")를 보내고, 그다음에야 써요. 쓰는 파일은 설정 마법사가 쓰는 것과 같아요:
 
 - `~/.config/aipager/aipager.yaml`(권한 0600): `bot_token`, 그리고 유일한 멤버가 사용자인 개인 채팅 scope(`label: owner`, owner 또는 admin 역할).
-- `~/.claude/settings.json`: aipager의 hook과 statusLine(기존 파일은 바뀔 때 `settings.json.bak.<time>`으로 백업해요).
+- `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`, 데몬의 세션이 읽는 파일: 이 셸의 환경과 `daemon.env`): aipager의 hook과 statusLine(기존 파일은 바뀔 때 `settings.json.bak.<time>`으로 백업해요). JSON 출력의 `settings_json.path`가 그 파일을 알려 줘요.
 - 누군가 소유자가 되면 감사 로그에 `grant-owner` 기록이 남아요.
 - `--service`가 있으면 백그라운드 서비스(`aipager service install --yes`와 같아요).
 - 예전 `config.env` 설치에서만(아직 `aipager.yaml`이 없을 때), 설정 마법사가 하는 변환: `config.env.bak.<time>` 사본(`team.yaml`이 있으면 `team.yaml.bak.<time>`도), 그리고 아직 없으면 예시 `~/.config/aipager/policy.yaml`. `config.env` 자체는 그대로 둬요.
@@ -626,7 +626,7 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 다시 설치하면 이어서 쓸 수 있도록 aipager의 데이터는 남겨요. `~/.local/share/aipager`(세션 폴더, 내려받은 보조 프로그램, 잠금 파일과 표시 파일), `~/.local/state/aipager`(문제 신고 기록과 언어 상태), `~/.claude/aipager-audit.jsonl`(권한 요청에 대한 답의 로그), `~/.claude/aipager-flood-state.json`(Telegram 속도 제한 기록), `~/.claude/aipager-pending-users.json`(권한 없이 봇을 써 보려 한 사람), `~/aipager-users`(멤버의 [루트 폴더](groups.md#root-folders)와 그 작업)예요. 묻기 전에 내 컴퓨터에 이런 것이 무엇이 있는지 나열하고, 마지막에 이것들까지 지우는 `rm -rf` 명령을 출력해요.
 
-Claude Code의 `~/.claude/settings.json`에서 aipager 자체 항목도 지워요. `aipager-hook`을 실행하는 hook과 `aipager-statusline`을 실행하는 상태 줄이에요(내 상태 줄은 유지해요). 그 파일의 다른 것은 모두 그대로이고, 이전 상태의 파일은 옆에 `settings.json.bak.<time>`으로 남겨요. 파일이 다른 파일로 가는 링크이거나, 읽을 수 없거나, 올바른 JSON이 아니거나, Claude Code가 읽는 형식이 아니면 손대지 않고, uninstall이 어떤 항목을 직접 지워야 하는지 알려 줘요. `aipager-hook`이나 `aipager-statusline`을 언급하는 내 hook(예: 감싸는 스크립트 `aipager-hook-capped.sh`)도 유지하고, uninstall이 그 이름을 알려 줘요. 열려 있는 Claude Code 세션은 재시작할 때까지 이미 불러온 hook을 계속 실행해요. 다시 설치하면 `aipager config`가 이 항목을 다시 더해요. 내 Telegram 봇과 예전 `settings.json.bak.*` 백업은 건드리지 않고, `skipDangerousModePermissionPrompt`(권한 확인을 끈 채 실행하기 전 Claude Code의 경고를 건너뛰는 설정)도 마찬가지예요. aipager가 설정하지만 나도 직접 설정했을 수 있으니까요.
+Claude Code의 `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`가 다른 파일을 가리키면 데몬의 세션이 읽는 파일에서도)에서 aipager 자체 항목도 지워요. `aipager-hook`을 실행하는 hook과 `aipager-statusline`을 실행하는 상태 줄이에요(내 상태 줄은 유지해요). 그 파일의 다른 것은 모두 그대로이고, 이전 상태의 파일은 옆에 `settings.json.bak.<time>`으로 남겨요. 파일이 다른 파일로 가는 링크이거나, 읽을 수 없거나, 올바른 JSON이 아니거나, Claude Code가 읽는 형식이 아니면 손대지 않고, uninstall이 어떤 항목을 직접 지워야 하는지 알려 줘요. `aipager-hook`이나 `aipager-statusline`을 언급하는 내 hook(예: 감싸는 스크립트 `aipager-hook-capped.sh`)도 유지하고, uninstall이 그 이름을 알려 줘요. 열려 있는 Claude Code 세션은 재시작할 때까지 이미 불러온 hook을 계속 실행해요. 다시 설치하면 `aipager config`가 이 항목을 다시 더해요. 내 Telegram 봇과 예전 `settings.json.bak.*` 백업은 건드리지 않고, `skipDangerousModePermissionPrompt`(권한 확인을 끈 채 실행하기 전 Claude Code의 경고를 건너뛰는 설정)도 마찬가지예요. aipager가 설정하지만 나도 직접 설정했을 수 있으니까요.
 
 ## <a id="command-line-aipager-report"></a>명령줄: `aipager report`
 

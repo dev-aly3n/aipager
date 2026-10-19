@@ -1,6 +1,6 @@
 # Event hook
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../hooks.md))
 
@@ -8,7 +8,7 @@ Claude Code menjalankan perintah hook pada momen tertentu dalam tugas: pesan dik
 
 ## <a id="how-it-is-wired"></a>Cara pemasangannya
 
-`aipager config` (atau `aipager setup`) menambahkan entri aipager ke `~/.claude/settings.json`, dan aipager memeriksanya setiap kali mulai:
+`aipager config` (atau `aipager setup`) menambahkan entri aipager ke `~/.claude/settings.json` (atau `$CLAUDE_CONFIG_DIR/settings.json`, file yang dibaca sesi-sesi daemon), dan aipager memeriksanya setiap kali mulai:
 
 - satu perintah `aipager-hook` untuk setiap 16 event di bawah, dengan filter `*` pada event alat (`PreToolUse`, `PostToolUse`, `PermissionRequest`);
 - batas waktu 5 detik untuk `PreModelSwitch` dan, dari `aipager config` dan `aipager setup`, 30 detik untuk `PermissionRequest` (hook-nya sendiri menunggu paling lama 20 detik, lihat di bawah); entri lain memakai nilai bawaan Claude Code;

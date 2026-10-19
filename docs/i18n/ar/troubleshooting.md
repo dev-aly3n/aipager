@@ -2,7 +2,7 @@
 
 # حل المشكلات
 
-<!-- i18n-source: docs/troubleshooting.md @ 2d10247 -->
+<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../troubleshooting.md))
 
@@ -256,7 +256,7 @@ uv tool install --reinstall aipager
 | `claude_auth` | يجرّب `claude auth status` في البيئة نفسها التي تحصل عليها الجلسة الحقيقية. **لا يفشل أبدًا**: «غير مسجّل الدخول» و«فشلت التجربة نفسها» يُذكران بشكل مختلف، ولا يمنع أي منهما بدء جلسة. ويحذّر أيضًا حين يكون Claude Code قد طُلب منه ألا يستخدم `ANTHROPIC_API_KEY` الخاص بالجلسات ولا يوجد ما يسجّل دخولها غيره. | `claude auth login`، أو ضبط مفتاح API /&rlm; `CLAUDE_CODE_OAUTH_TOKEN`؛ ومع ضبط `ANTHROPIC_BASE_URL`، مفتاح ذلك العنوان ([المزوّدون](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | عُثر على برنامج `dtach` (`dtach-bin` الخاص بـ aipager، أو واحد في PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` و`aipager-statusline` موجودان في PATH | `uv tool install --reinstall aipager` |
-| `settings_json` | في &lrm;`~/.claude/settings.json` هوكات aipager مربوطة | `aipager config` |
+| `settings_json` | في &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`) هوكات aipager مربوطة؛ ومع ضبط `CLAUDE_CONFIG_DIR` يذكر الملف ومن أين أتت القيمة | `aipager config` |
 | `daemon` | aipager يعمل ومقبسه يجيب؛ ويعرض أيضًا حالة حدود السرعة في Telegram (يُنظر [أعلاه](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | اختياري: ملف الخدمة موجود | `aipager service install` |
 | `service_unit_path` | Linux فقط: `Environment=PATH=`&lrm; في الخدمة *المثبّتة* يحتوي فعلًا على مجلد برنامج claude الذي عُثر عليه، مقروءًا كنص، لأن doctor لا يرى PATH الخاص بـ systemd من الطرفية التفاعلية لمالك البوت | `aipager service install --yes` |
@@ -301,8 +301,8 @@ aipager service stop && aipager service start
 
 يشغّل aipager برنامج Claude Code كما هو مُعَدّ لديك، لذا تسجّل الجلسة التي تبدأ من Telegram الدخول كما يفعل `claude` في طرفيتك: بتسجيل دخول claude.ai، أو بمفتاح API من Anthropic، أو عبر بوابة (LiteLLM وVercel وCloudflare وأمثالها)، أو عبر عنوان بصيغة Anthropic لشركة أخرى مضبوط في `ANTHROPIC_BASE_URL`. لا تدعم Anthropic برنامج Claude Code إلا مع نماذج Claude، وقد تتصرف النماذج الأخرى بشكل مختلف.
 
-- **أين توضع الإعدادات.** في قسم `env` من &lrm;`~/.claude/settings.json`، الذي تقرؤه كل جلسات Claude Code، أو في &lrm;`~/.config/aipager/daemon.env`، الذي لا يصل إلا إلى الجلسات التي يبدؤها aipager: سطر `KEY=value` واحد لكل إعداد، من دون علامات اقتباس (وإلا صارت جزءًا من القيمة). لا تقرأ الخدمة (`aipager service install`) ملف profile الخاص بـ shell لديك أبدًا، لذا لا يصلها أي `export` موضوع هناك. بعد تغيير `daemon.env` تلزم إعادة تشغيل aipager.
-- **أي إعداد للمفتاح.** للبوابة أو المزوّد الآخر، توصي وثائق Claude Code بـ `ANTHROPIC_AUTH_TOKEN`، ولا يسأل Claude Code عنه أبدًا. أما مع `ANTHROPIC_API_KEY` فيسأل مرة واحدة «Do you want to use this API key?»، ولا تستطيع جلسة بدأت من Telegram أن تجيب، لذا يجيب aipager في &lrm;`~/.claude.json` قبل بدء الجلسة مباشرة:
+- **أين توضع الإعدادات.** في قسم `env` من &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`)، الذي تقرؤه كل جلسات Claude Code، أو في &lrm;`~/.config/aipager/daemon.env`، الذي لا يصل إلا إلى الجلسات التي يبدؤها aipager: سطر `KEY=value` واحد لكل إعداد، من دون علامات اقتباس (وإلا صارت جزءًا من القيمة). لا تقرأ الخدمة (`aipager service install`) ملف profile الخاص بـ shell لديك أبدًا، لذا لا يصلها أي `export` موضوع هناك. بعد تغيير `daemon.env` تلزم إعادة تشغيل aipager. وتُحتسب أيضًا كتل `env` في &lrm;`.claude/settings.json` و&lrm;`.claude/settings.local.json` لمجلد بدء موثوق وفي الإعدادات المُدارة (`managed-settings.json` و`managed-settings.d/`&lrm; في &lrm;`/etc/claude-code` على Linux، و&lrm;`/Library/Application Support/ClaudeCode` على macOS)، كما تُحتسب لـ Claude Code.
+- **أي إعداد للمفتاح.** للبوابة أو المزوّد الآخر، توصي وثائق Claude Code بـ `ANTHROPIC_AUTH_TOKEN`، ولا يسأل Claude Code عنه أبدًا. أما مع `ANTHROPIC_API_KEY` فيسأل مرة واحدة «Do you want to use this API key?»، ولا تستطيع جلسة بدأت من Telegram أن تجيب، لذا يجيب aipager في &lrm;`~/.claude.json` (أو الملف الذي يضعه `CLAUDE_CONFIG_DIR` فيه) قبل بدء الجلسة مباشرة:
   - نعم، إذا كان المفتاح مضبوطًا في `settings.json` أو `daemon.env`، أو إذا لم يكن هناك ما يسجّل دخول الجلسة غيره.
   - لا، إذا كان المفتاح يأتي فقط من البيئة التي بدأ فيها aipager وكان لديك دخول آخر إلى Claude: تبقى جلساتك على ذلك الدخول وخطته. لاستخدام المفتاح: تفعيله عبر &lrm;`/config` و«Use custom API key» في جلسة طرفية يصلها هذا المفتاح.
   - تبقى الإجابة التي قدّمتها بنفسك، إلا «لا» لمفتاح مضبوط في `settings.json` أو `daemon.env` حين لا يوجد ما يسجّل دخول الجلسة غيره. ينبّهك `aipager doctor` حين تترك «لا» الجلسات بلا دخول؛ ولإعادة تفعيل المفتاح: &lrm;`/config` و«Use custom API key» في طرفية.
@@ -310,6 +310,16 @@ aipager service stop && aipager service start
 - **النماذج.** ترسل أزرار Opus وSonnet وHaiku القيم `opus` و`sonnet` و`haiku` الخاصة بـ Claude Code، فيربطها بنماذج مزوّدك إذا ضبطت `ANTHROPIC_DEFAULT_OPUS_MODEL` و`ANTHROPIC_DEFAULT_SONNET_MODEL` و`ANTHROPIC_DEFAULT_HAIKU_MODEL`. أما أزرار `claude-...`&lrm; فتحتاج إلى مزوّد يملك تلك النماذج. ويمكنك كتابة أي نموذج آخر في خطوة النموذج من &lrm;`/new` أو في Mini App كما يكتبه مزوّدك: حتى ١٢٨ حرفًا من الحروف والأرقام و`. _ - : / @ ~ ,`، مع السماح بالنهاية &lrm;`[1m]`&lrm; الخاصة بـ Claude Code. يغيّر `keyboard.json` الأزرار (التفاصيل في [لوحة المفاتيح الدائمة](commands.md#persistent-keyboard)).
 - &rlm;**`ANTHROPIC_BASE_URL` من دون مفتاح.** عندها يرسل Claude Code تسجيل دخولك إلى claude.ai إلى ذلك العنوان. يلزم ضبط مفتاح المزوّد أيضًا، إلا إذا كان العنوان بوابة مُعدّة لتمرير تسجيل دخولك إلى Anthropic.
 - **غير مدعوم:** الأدوات التي تشغّل Claude Code باشتراك دردشة لشركة أخرى (خطة ChatGPT مثلًا) عبر وكيل محلي. لم توافق تلك الشركة على Claude Code لخططها، وقد يعرّض هذا الاستخدام ذلك الحساب للخطر.
+
+**إعدادات Claude Code في مجلد آخر (`CLAUDE_CONFIG_DIR`).** يحفظ Claude Code إعداداته وتسجيل دخوله وسجلاته وإعداداته العامة في &lrm;`~/.claude` و&lrm;`~/.claude.json`، أو في المجلد الذي يحدده `CLAUDE_CONFIG_DIR`. ويتبع aipager المتغير نفسه، فتذهب hooks الخاصة به وسطر الحالة إلى `settings.json` الذي تقرؤه جلساتك، وتذهب إجاباته إلى الملف الذي يقرؤه Claude Code (تم التحقق مع Claude Code 2.1.303):
+
+- **يمكنك ضبطه في &lrm;`~/.config/aipager/daemon.env`** ثم إعادة تشغيل aipager. لا تقرأ الخدمة أبدًا ملف تعريف الصدفة، لذلك لا يصل `export` إلا إلى `aipager start` في تلك الصدفة. عند البدء يربط الخادم hooks الخاصة به في &lrm;`$CLAUDE_CONFIG_DIR/settings.json` ويكتب في السجل `sessions read Claude Code's config from ...`&lrm;؛ وإذا تغيرت القيمة أثناء عمله، تحصل عليها الجلسة التالية التي يبدؤها، وكذلك ملف إعدادات فقدها منذ ذلك الحين. وعندما يتعذر ربط hooks، يقول السجل `sessions will start without aipager's hooks` ويحذر `aipager doctor`.
+- **استخدام مسار كامل.** يأخذ Claude Code القيمة كما هي: لا يُوسَّع `~`، والقيمة النسبية (والفارغة أيضًا) تعني مجلدًا داخل مجلد كل جلسة. لا يكتب aipager شيئًا هناك: يحذر السجل و`aipager doctor`، ويتوقف `aipager setup` مع الإصلاح، ويتخطى `aipager config` خطوة Claude Code بتحذير يعرض الإصلاح ثم يتابع. ويذكر الإصلاح الملف الذي يحمل القيمة: `daemon.env`، أو ملف الإعدادات الذي تضبطه كتلة `env` فيه.
+- **الضبط في إعدادات Claude Code نفسها.** ينقل `CLAUDE_CONFIG_DIR` في كتلة `env` في &lrm;`~/.claude/settings.json` (أو في الإعدادات المُدارة) ملف الإعدادات وتسجيل الدخول والسجلات، لكنه لا ينقل &lrm;`~/.claude.json`. ويتبع aipager ذلك أيضًا؛ ويذكر `aipager doctor` المكان.
+- &rlm;**`aipager config` و`aipager setup`** يعدّلان الملف الذي تقرؤه جلسات الخادم: بيئة صدفتك مع `daemon.env`. أما `claude` الذي يبدأ في صدفة بقيمة أخرى فيقرأ ملفًا آخر وليس فيه hooks الخاصة بـ aipager؛ ويذكره `aipager doctor`.
+- **ملف &lrm;`.config.json` القديم.** عندما يكون &lrm;`<config folder>/.config.json` مستخدمًا (مثلًا، موجودًا وغير فارغ)، يقرؤه Claude Code بدلًا من &lrm;`.claude.json`، وكذلك يفعل aipager. ومع `CLAUDE_CONFIG_DIR` فارغ يكون ذلك الملف في مجلد الجلسة نفسها، ولا يكتب aipager شيئًا هناك.
+- **ما لا يستطيع aipager قراءته.** الإعدادات المُدارة التي يرسلها ملف تعريف MDM (macOS) أو سجل Windows أو خوادم Claude، والخيار &lrm;`--settings`. المفتاح أو مفتاح التبديل الخاص بالمزوّد المضبوط هناك فقط لا يظهر عندما يجيب aipager عن أسئلة البدء؛ فيسأل Claude Code حينها، كما كان سيسأل بدون aipager.
+- **قائمة المنع.** القواعد الافتراضية التي تُبقي الأدوار المقيّدة والملفات المرسلة بعيدًا عن بيانات دخول Claude تذكر &lrm;`~/.claude/**`&lrm; و&lrm;`~/.claude.json*`&lrm;. ولا تشمل `CLAUDE_CONFIG_DIR` في مكان آخر، لذلك من الأفضل إبقاؤه داخل &lrm;`~/.claude` (كما في صورة Docker) عندما يستخدم جلساتك أشخاص ليسوا مشرفين ([الأمان](security.md#who-decides-whether-a-tool-call-runs)).
 
 ## <a id="the-daemons-control-socket-moved"></a>مقبس التحكم في aipager تغيّر مكانه
 
@@ -371,6 +381,8 @@ systemctl --user restart aipager.service
 إذا فشل التشغيل في المكان، تشغّل نسخة منفصلة aipager بعد أن تنتهي العملية القديمة. عندها يذهب خرجها إلى سجل إعادة التشغيل الذاتي (`aipager.log` في مجلد النسخة المثبتة، أو &lrm;`/tmp/aipager.log`) بدلًا من طرفيتك، ويذكر سجل aipager الأمر الذي عليك تشغيله إذا لم تعد تلك النسخة. إذا اختفى المفسّر نفسه (حُذفت بيئته)، أو لم يمكن تشغيل أي شيء، يخرج aipager بالرمز 1، وينتهي سجل aipager بـ`restart.failed:`&lrm; والأمر الذي عليك تشغيله، ويعلن التشغيل التالي عن التحديث.
 
 حين لا يوجد زر **إعادة التشغيل الآن**، تعطي الرسالة الخطوات المناسبة لإعدادك: في طرفية أو tmux، الضغط على Ctrl+C ثم تشغيل `aipager start`؛ وعلى macOS،&rlm; `launchctl kickstart -k gui/<uid>/com.aipager.daemon`؛ وفي Docker،&rlm; `docker restart <container>`&lrm; على الكمبيوتر الذي يعمل عليه Docker. إعادة إنشاء حاوية Docker (`docker compose up` بعد `down`، أو `docker run` مرة أخرى) تشغّلها من صورتها، وهذا يعيد إصدار aipager الموجود في تلك الصورة: وللاحتفاظ بإصدار أحدث من aipager، يلزم استخدام صورة أحدث.
+
+تضبط الصورة `CLAUDE_CONFIG_DIR=/home/aipager/.claude`، فتُحفظ إعدادات Claude Code العامة (&lrm;`.claude.json`: الثقة في المجلدات، وحالة التشغيل الأول، وإجابات مفتاح API، وحسابك، وخوادم MCP للمستخدم) في وحدة التخزين &lrm;`.claude` مع الباقي، وتبقى عند إعادة إنشاء الحاوية. كانت الصور السابقة تحفظها في &lrm;`/home/aipager/.claude.json` داخل الحاوية نفسها. عند أول تشغيل للصورة الجديدة لا يُقرأ الملف القديم: يبقى تسجيل دخولك في &lrm;`.credentials.json` في وحدة التخزين صالحًا، ويجيب aipager مرة أخرى عن أسئلة الثقة في المجلد والتشغيل الأول عند بدء جلسة، لكن خوادم MCP للمستخدم التي أُضيفت بـ `claude mcp add --scope user` تحتاج إلى إضافتها مرة أخرى. وإذا ربطت &lrm;`~/.claude` من المضيف (كما تفعل أوامر README)، يظهر الملف هناك باسم &lrm;`~/.claude/.claude.json`؛ ولا يقرؤه Claude Code على المضيف (فهو يستخدم &lrm;`~/.claude.json`). ووحدة تخزين مسمّاة تُبقي الاثنين منفصلين.
 
 ## &rlm;<a id="the-daemon-didnt-come-back-after-an-update"></a>aipager لم يعد بعد التحديث
 

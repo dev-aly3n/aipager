@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-Qué hace, en este orden: lee el token del bot, lo comprueba con Telegram (getMe), comprueba todo en esta computadora sin escribir nada (la configuración existente, las dependencias, `~/.claude/settings.json`, si hay un aipager en marcha), envía un mensaje de prueba a la persona ("aipager is set up for you. ..."), y solo entonces escribe. Los archivos que escribe, igual que el asistente:
+Qué hace, en este orden: lee el token del bot, lo comprueba con Telegram (getMe), comprueba todo en esta computadora sin escribir nada (la configuración existente, las dependencias, `~/.claude/settings.json` (o `$CLAUDE_CONFIG_DIR/settings.json`), si hay un aipager en marcha), envía un mensaje de prueba a la persona ("aipager is set up for you. ..."), y solo entonces escribe. Los archivos que escribe, igual que el asistente:
 
 - `~/.config/aipager/aipager.yaml` (permisos 0600): `bot_token` y un chat privado cuyo único miembro es la persona (`label: owner`, rol owner o admin).
-- `~/.claude/settings.json`: los hooks de aipager y la statusLine (cuando el archivo existente cambia, se guarda una copia `settings.json.bak.<time>`).
+- `~/.claude/settings.json` (o `$CLAUDE_CONFIG_DIR/settings.json`, el archivo que leen las sesiones del daemon: el entorno de esta shell más `daemon.env`): los hooks de aipager y la statusLine (cuando el archivo existente cambia, se guarda una copia `settings.json.bak.<time>`). `settings_json.path` en la salida JSON lo nombra.
 - El registro de auditoría recibe un registro `grant-owner` cuando alguien pasa a ser propietario.
 - Con `--service`, el servicio en segundo plano (lo mismo que `aipager service install --yes`).
 - Solo en una instalación antigua con `config.env` (todavía sin `aipager.yaml`), la migración que hace el asistente: una copia `config.env.bak.<time>` (y `team.yaml.bak.<time>` cuando hay un `team.yaml`), y un `~/.config/aipager/policy.yaml` de ejemplo cuando no hay ninguno. `config.env` en sí se deja como está.
@@ -626,7 +626,7 @@ Las comprobaciones de `aipager doctor` como un objeto JSON en stdout. Igual que 
 
 Conserva los datos de aipager, para que una reinstalación siga desde donde estaba: `~/.local/share/aipager` (las carpetas de las sesiones, las herramientas descargadas, los archivos de bloqueo y de marca), `~/.local/state/aipager` (los registros de los informes de problemas y el estado de idioma), `~/.claude/aipager-audit.jsonl` (el registro de las respuestas a permisos), `~/.claude/aipager-flood-state.json` (el historial de límites de velocidad de Telegram), `~/.claude/aipager-pending-users.json` (personas que probaron el bot sin acceso) y `~/aipager-users` (las [carpetas raíz](groups.md#root-folders) de los miembros, con su trabajo). Antes de preguntar, enumera los que existen en tu computadora, y al final imprime el comando `rm -rf` que también los borra.
 
-También quita las entradas propias de aipager del `~/.claude/settings.json` de Claude Code: los hooks que ejecutan `aipager-hook` y la línea de estado que ejecuta `aipager-statusline` (una línea de estado tuya se queda). Todo lo demás de ese archivo se queda como estaba, y el archivo tal como estaba se guarda a su lado como `settings.json.bak.<time>`. Si el archivo es un enlace a otro archivo, no se puede leer, no es JSON válido, o no tiene la forma que lee Claude Code, se deja exactamente como está y uninstall dice qué entradas quitar a mano. Un hook tuyo que todavía menciona `aipager-hook` o `aipager-statusline` (por ejemplo un envoltorio `aipager-hook-capped.sh`) también se queda, y uninstall lo nombra. Las sesiones de Claude Code que ya están abiertas siguen ejecutando los hooks que cargaron hasta que las reinicies. `aipager config` vuelve a añadir las entradas después de reinstalar. Tu bot de Telegram y las copias `settings.json.bak.*` más antiguas no se tocan, ni tampoco `skipDangerousModePermissionPrompt` (el ajuste que se salta el aviso de Claude Code antes de ejecutarse con las comprobaciones de permisos apagadas), que pone aipager pero que puede que hayas puesto tú.
+También quita las entradas propias de aipager del `~/.claude/settings.json` (y del que leen las sesiones del daemon, cuando `CLAUDE_CONFIG_DIR` nombra otro) de Claude Code: los hooks que ejecutan `aipager-hook` y la línea de estado que ejecuta `aipager-statusline` (una línea de estado tuya se queda). Todo lo demás de ese archivo se queda como estaba, y el archivo tal como estaba se guarda a su lado como `settings.json.bak.<time>`. Si el archivo es un enlace a otro archivo, no se puede leer, no es JSON válido, o no tiene la forma que lee Claude Code, se deja exactamente como está y uninstall dice qué entradas quitar a mano. Un hook tuyo que todavía menciona `aipager-hook` o `aipager-statusline` (por ejemplo un envoltorio `aipager-hook-capped.sh`) también se queda, y uninstall lo nombra. Las sesiones de Claude Code que ya están abiertas siguen ejecutando los hooks que cargaron hasta que las reinicies. `aipager config` vuelve a añadir las entradas después de reinstalar. Tu bot de Telegram y las copias `settings.json.bak.*` más antiguas no se tocan, ni tampoco `skipDangerousModePermissionPrompt` (el ajuste que se salta el aviso de Claude Code antes de ejecutarse con las comprobaciones de permisos apagadas), que pone aipager pero que puede que hayas puesto tú.
 
 ## <a id="command-line-aipager-report"></a>Línea de comandos: `aipager report`
 

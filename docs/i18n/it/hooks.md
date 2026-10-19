@@ -1,6 +1,6 @@
 # Eventi hook
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../hooks.md))
 
@@ -8,7 +8,7 @@ Claude Code esegue comandi hook in momenti precisi di un'attività: quando viene
 
 ## <a id="how-it-is-wired"></a>Come è collegato
 
-`aipager config` (o `aipager setup`) aggiunge le voci di aipager a `~/.claude/settings.json`, e aipager le controlla a ogni avvio:
+`aipager config` (o `aipager setup`) aggiunge le voci di aipager a `~/.claude/settings.json` (o `$CLAUDE_CONFIG_DIR/settings.json`, il file che leggono le sessioni del daemon), e aipager le controlla a ogni avvio:
 
 - un comando `aipager-hook` per ognuno dei 16 eventi qui sotto, con matcher `*` sugli eventi degli strumenti (`PreToolUse`, `PostToolUse`, `PermissionRequest`);
 - un timeout di 5 secondi su `PreModelSwitch` e, se configurato con `aipager config` e `aipager setup`, uno di 30 secondi su `PermissionRequest` (l'hook stesso aspetta al massimo 20 secondi, vedi sotto); le altre voci usano i valori predefiniti di Claude Code;

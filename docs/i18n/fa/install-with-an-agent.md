@@ -2,7 +2,7 @@
 
 # نصب با ایجنت
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../install-with-an-agent.md))
 
@@ -96,7 +96,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 آیدی واقعی آن شخص و مسیر فایل توکن را بگذارید. به جای &lrm;`--token-file` می‌توانید توکن را با &lrm;`--token-stdin` از طریق pipe بدهید (مثلاً &lrm;`--token-stdin < path`)؛ pipe باید بسته شود و setup حداکثر ۳۰ ثانیه منتظرش می‌ماند.
 
-&rlm;setup توکن را با تلگرام چک می‌کند، این کامپیوتر را چک می‌کند، یک پیام آزمایشی برای آن شخص می‌فرستد ("aipager is set up for you. ...") و فقط بعد از آن تنظیماتش را می‌نویسد، هوک‌های Claude Code را به &lrm;`~/.claude/settings.json` اضافه می‌کند و با &lrm;`--service` سرویس پس‌زمینه را نصب و اجرا می‌کند. اگر هر بررسی‌ای شکست بخورد، هیچ چیزی نوشته نمی‌شود.
+&rlm;setup توکن را با تلگرام چک می‌کند، این کامپیوتر را چک می‌کند، یک پیام آزمایشی برای آن شخص می‌فرستد ("aipager is set up for you. ...") و فقط بعد از آن تنظیماتش را می‌نویسد، هوک‌های Claude Code را به &lrm;`~/.claude/settings.json` (یا &lrm;`$CLAUDE_CONFIG_DIR/settings.json`) اضافه می‌کند و با &lrm;`--service` سرویس پس‌زمینه را نصب و اجرا می‌کند. اگر هر بررسی‌ای شکست بخورد، هیچ چیزی نوشته نمی‌شود.
 
 برای دیدن اینکه اول چه چیزی عوض می‌شود، &lrm;`--dry-run` را اضافه کنید. &lrm;`--role admin` آن شخص را به جای مالک، ادمین می‌کند (پیش‌فرض، یعنی مالک، برای کسی که کامپیوتر خودش را راه می‌اندازد درست است).
 
@@ -119,7 +119,7 @@ aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 | کد خروج | `error` | شما چه می‌کنید |
 |---|---|---|
 | 0 | | `installed`،&rlm; `updated` یا `unchanged`: کار تمام است، بروید سراغ ۳.۵. `dry_run`: چیزی نوشته نشد؛ همان دستور را بدون &lrm;`--dry-run` دوباره اجرا کنید. detect-chat با `found`: مثل ۳.۳ از آن شخص تأیید بگیرید و بعد ۳.۲ را اجرا کنید. |
-| 1 | `config_malformed`،&rlm; `ambiguous_install`،&rlm; `settings_invalid`،&rlm; `test_send_failed`،&rlm; `write_failed`،&rlm; `service_failed`،&rlm; `internal_error` | `message` و `fix` را به آن شخص نشان بدهید. `ambiguous_install`: خود آن شخص در `aipager config` درستش می‌کند. فایل‌ها را دستی ویرایش نکنید. |
+| 1 | `config_malformed`،&rlm; `ambiguous_install`،&rlm; `settings_invalid`،&rlm; `test_send_failed`،&rlm; `write_failed`،&rlm; `service_failed`،&rlm; `internal_error` | `message` و `fix` را به آن شخص نشان بدهید. `ambiguous_install`: خود آن شخص در `aipager config` درستش می‌کند. فایل‌ها را دستی ویرایش نکنید. خطای `settings_invalid` که یک `CLAUDE_CONFIG_DIR` با مسیر کامل می‌خواهد: مقدار `fix` فایلی را که باید عوض شود می‌گوید (`daemon.env` یا یک فایل تنظیمات Claude Code)؛ پوشه را از آن شخص بپرسید، فقط اگر خودش گفت همان یک مقدار را عوض کنید و بعد setup را دوباره اجرا کنید. |
 | 2 | `usage`،&rlm; `token_malformed`،&rlm; `token_stdin_timeout`،&rlm; `bad_chat_id`، ... | ورودی شما اشتباه بود؛ `fix` فلگ را نام می‌برد. `token_malformed`: فایل توکن ربات ندارد، از آن شخص بخواهید چکش کند. |
 | 3 | `deps_missing` | `fix` را دنبال کنید (هر مورد کم‌شده در `deps.items` هم `fix` خودش را دارد) و بعد setup را دوباره اجرا کنید. |
 | 4 | `token_rejected` | تلگرام توکن را رد کرد. دوباره توکن را از آن شخص بخواهید (یا یک توکن جدید از &lrm;@BotFather). |

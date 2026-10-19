@@ -2,7 +2,7 @@
 
 # أحداث الهوك
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../hooks.md))
 
@@ -10,7 +10,7 @@
 
 ## <a id="how-it-is-wired"></a>كيف تُربط الهوكات
 
-يضيف `aipager config` (أو `aipager setup`) مدخلات aipager إلى &lrm;`~/.claude/settings.json`، ويتحقق منها aipager عند كل بدء:
+يضيف `aipager config` (أو `aipager setup`) مدخلات aipager إلى &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`، وهو الملف الذي تقرؤه جلسات aipager)، ويتحقق منها aipager عند كل بدء:
 
 - أمر `aipager-hook` واحد لكل حدث من الأحداث الستة عشر أدناه، مع المطابِق `*` على أحداث الأدوات (`PreToolUse` و`PostToolUse` و`PermissionRequest`)؛
 - مهلة ٥ ثوانٍ لـ `PreModelSwitch`، ومن `aipager config` و`aipager setup` مهلة ٣٠ ثانية لـ `PermissionRequest` (الهوك نفسه ينتظر ٢٠ ثانية على الأكثر، يُنظر أدناه)؛ وتستخدم المدخلات الأخرى قيمة Claude Code الافتراضية؛

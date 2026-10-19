@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-它按这个顺序做的事：读取机器人的 token，向 Telegram 验证 token（getMe），在不写入任何东西的情况下检查这台电脑上的一切（现有的配置、依赖项、`~/.claude/settings.json`、是否有 aipager 在运行），给用户发一条测试消息（"aipager is set up for you. ..."），然后才写入。写入的文件，和设置向导写入的一样：
+它按这个顺序做的事：读取机器人的 token，向 Telegram 验证 token（getMe），在不写入任何东西的情况下检查这台电脑上的一切（现有的配置、依赖项、`~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`）、是否有 aipager 在运行），给用户发一条测试消息（"aipager is set up for you. ..."），然后才写入。写入的文件，和设置向导写入的一样：
 
 - `~/.config/aipager/aipager.yaml`（权限 0600）：`bot_token`，以及一个唯一成员是用户的私聊 scope（`label: owner`，owner 或 admin 角色）。
-- `~/.claude/settings.json`：aipager 的 hook 和 statusLine（现有的文件在改变时会备份为 `settings.json.bak.<time>`）。
+- `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`，即守护进程的会话读取的文件：这个 shell 的环境加上 `daemon.env`）：aipager 的 hook 和 statusLine（现有的文件在改变时会备份为 `settings.json.bak.<time>`）。JSON 输出中的 `settings_json.path` 会给出它。
 - 当有人成为所有者时，审计日志会得到一条 `grant-owner` 记录。
 - 带 `--service` 时，后台服务（和 `aipager service install --yes` 一样）。
 - 只在旧的 `config.env` 安装上（还没有 `aipager.yaml`），设置向导会做的转换：一份 `config.env.bak.<time>` 副本（有 `team.yaml` 时还有 `team.yaml.bak.<time>`），以及在还没有时的一个示例 `~/.config/aipager/policy.yaml`。`config.env` 本身保持不动。
@@ -626,7 +626,7 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 它会保留 aipager 的数据，这样重新安装后可以接着上次继续：`~/.local/share/aipager`（会话文件夹、下载的辅助程序、锁文件和标记文件）、`~/.local/state/aipager`（问题报告的记录和语言状态）、`~/.claude/aipager-audit.jsonl`（对权限请求的回答日志）、`~/.claude/aipager-flood-state.json`（Telegram 的限流历史）、`~/.claude/aipager-pending-users.json`（没有权限却尝试使用机器人的人）以及 `~/aipager-users`（成员的[根文件夹](groups.md#root-folders)和他们的工作）。在询问之前，它会列出你电脑上有哪些这样的内容，最后会打印出把它们也删除的 `rm -rf` 命令。
 
-它还会从 Claude Code 的 `~/.claude/settings.json` 里删除 aipager 自己的条目：运行 `aipager-hook` 的 hook，以及运行 `aipager-statusline` 的状态行（你自己的状态行会保留）。这个文件里的其他内容都保持不变，文件之前的版本会以 `settings.json.bak.<time>` 保存在旁边。如果这个文件是指向另一个文件的链接、无法读取、不是有效的 JSON，或者不是 Claude Code 能读取的格式，它会原封不动，uninstall 会说明哪些条目需要手动删除。你自己的提到 `aipager-hook` 或 `aipager-statusline` 的 hook（例如包装脚本 `aipager-hook-capped.sh`）也会保留，uninstall 会写明它。打开着的 Claude Code 会话会继续运行它们已经加载的 hook，直到你重启它们。重新安装之后，`aipager config` 会把这些条目加回来。你的 Telegram 机器人和较早的 `settings.json.bak.*` 备份不会被动，`skipDangerousModePermissionPrompt`（跳过 Claude Code 在关闭权限检查运行之前的警告的设置）也一样，因为 aipager 设置过它，但你自己也可能设置过。
+它还会从 Claude Code 的 `~/.claude/settings.json`（当 `CLAUDE_CONFIG_DIR` 指向另一个文件时，也会从守护进程的会话读取的那个文件中移除） 里删除 aipager 自己的条目：运行 `aipager-hook` 的 hook，以及运行 `aipager-statusline` 的状态行（你自己的状态行会保留）。这个文件里的其他内容都保持不变，文件之前的版本会以 `settings.json.bak.<time>` 保存在旁边。如果这个文件是指向另一个文件的链接、无法读取、不是有效的 JSON，或者不是 Claude Code 能读取的格式，它会原封不动，uninstall 会说明哪些条目需要手动删除。你自己的提到 `aipager-hook` 或 `aipager-statusline` 的 hook（例如包装脚本 `aipager-hook-capped.sh`）也会保留，uninstall 会写明它。打开着的 Claude Code 会话会继续运行它们已经加载的 hook，直到你重启它们。重新安装之后，`aipager config` 会把这些条目加回来。你的 Telegram 机器人和较早的 `settings.json.bak.*` 备份不会被动，`skipDangerousModePermissionPrompt`（跳过 Claude Code 在关闭权限检查运行之前的警告的设置）也一样，因为 aipager 设置过它，但你自己也可能设置过。
 
 ## <a id="command-line-aipager-report"></a>命令行：`aipager report`
 

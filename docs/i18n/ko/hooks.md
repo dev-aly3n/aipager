@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ fc3db1c6 -->
+<!-- i18n-source: docs/hooks.md @ 6295e500 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 
@@ -8,7 +8,7 @@ Claude Code는 작업의 정해진 순간에 hook 명령을 실행해요. 메시
 
 ## <a id="how-it-is-wired"></a>어떻게 연결되나요
 
-`aipager config`(또는 `aipager setup`)는 `~/.claude/settings.json` 파일에 aipager 항목을 추가하고, aipager는 시작할 때마다 그 항목을 확인해요:
+`aipager config`(또는 `aipager setup`)는 `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`, 데몬의 세션이 읽는 파일) 파일에 aipager 항목을 추가하고, aipager는 시작할 때마다 그 항목을 확인해요:
 
 - 아래 16개 이벤트마다 `aipager-hook` 명령이 하나씩 있고, 도구 이벤트(`PreToolUse`, `PostToolUse`, `PermissionRequest`)의 matcher는 `*`이에요.
 - `PreModelSwitch`는 5초 제한 시간이 있고, `aipager config`와 `aipager setup`으로 설정하면 `PermissionRequest`는 30초 제한 시간이 있어요(hook 자체는 최대 20초 기다려요, 아래 참고). 나머지 항목은 Claude Code의 기본값을 써요.

@@ -1,6 +1,6 @@
 # 用代理安装
 
-<!-- i18n-source: docs/install-with-an-agent.md @ 6fc084f -->
+<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../install-with-an-agent.md)）
 
@@ -74,7 +74,7 @@ aipager setup --token-file ~/.config/aipager/bot-token --chat-id 123456789 --ser
 
 使用用户真实的 ID 和 token 文件的路径。除了 `--token-file`，也可以用 `--token-stdin` 通过管道传入 token（例如 `--token-stdin < path`）；管道必须关闭，setup 最多等它 30 秒。
 
-setup 会向 Telegram 验证 token、检查这台电脑、给用户发一条测试消息（"aipager is set up for you. ..."），然后才写入配置、把 Claude Code 的 hook 加到 `~/.claude/settings.json`，并在带 `--service` 时安装并启动后台服务。任何一项检查失败，都不会写入任何东西。
+setup 会向 Telegram 验证 token、检查这台电脑、给用户发一条测试消息（"aipager is set up for you. ..."），然后才写入配置、把 Claude Code 的 hook 加到 `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`），并在带 `--service` 时安装并启动后台服务。任何一项检查失败，都不会写入任何东西。
 
 加上 `--dry-run` 可以先看看会改动什么。`--role admin` 会让用户成为管理员而不是所有者（默认的所有者，适合为自己的电脑做设置的人）。
 
@@ -93,7 +93,7 @@ aipager setup detect-chat --token-file ~/.config/aipager/bot-token --json
 | 退出码 | `error` | 你要做什么 |
 |---|---|---|
 | 0 | | `installed`、`updated` 或 `unchanged`：完成，进入第 3.5 步。`dry_run`：什么都没写；去掉 `--dry-run` 再运行一次同样的命令。detect-chat `found`：按第 3.3 步请用户确认，再运行第 3.2 步。 |
-| 1 | `config_malformed`、`ambiguous_install`、`settings_invalid`、`test_send_failed`、`write_failed`、`service_failed`、`internal_error` | 把 `message` 和 `fix` 给用户看。`ambiguous_install`：由用户在 `aipager config` 里修复。不要手动编辑文件。 |
+| 1 | `config_malformed`、`ambiguous_install`、`settings_invalid`、`test_send_failed`、`write_failed`、`service_failed`、`internal_error` | 把 `message` 和 `fix` 给用户看。`ambiguous_install`：由用户在 `aipager config` 里修复。不要手动编辑文件。要求绝对路径 `CLAUDE_CONFIG_DIR` 的 `settings_invalid`：`fix` 会指出要改的文件（`daemon.env` 或某个 Claude Code 设置文件）；先问对方文件夹，只有对方同意时才只改这一个值，然后重新运行 setup。 |
 | 2 | `usage`、`token_malformed`、`token_stdin_timeout`、`bad_chat_id`、... | 你的输入有误；`fix` 会指出是哪个参数。`token_malformed`：文件里不是机器人 token，请用户检查。 |
 | 3 | `deps_missing` | 按 `fix` 操作（每个缺失项在 `deps.items` 里也有自己的 `fix`），然后再运行 setup。 |
 | 4 | `token_rejected` | Telegram 拒绝了这个 token。再向用户要一次 token（或从 @BotFather 获取一个新的）。 |

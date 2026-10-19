@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 2d10247 -->
+<!-- i18n-source: docs/commands.md @ 4ce4791d -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -485,10 +485,10 @@ aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 aipager doctor --json
 ```
 
-Ne yaptığı, sırasıyla: bot token'ını okur, onu Telegram'da doğrular (getMe), hiçbir şey yazmadan bu bilgisayardaki her şeyi kontrol eder (mevcut yapılandırma, bağımlılıklar, `~/.claude/settings.json`, bir aipager'ın çalışıp çalışmadığı), kişiye bir test mesajı gönderir ("aipager is set up for you. ...") ve ancak ondan sonra yazar. Yazılan dosyalar, tam olarak sihirbazın yazdığı gibi:
+Ne yaptığı, sırasıyla: bot token'ını okur, onu Telegram'da doğrular (getMe), hiçbir şey yazmadan bu bilgisayardaki her şeyi kontrol eder (mevcut yapılandırma, bağımlılıklar, `~/.claude/settings.json` (ya da `$CLAUDE_CONFIG_DIR/settings.json`), bir aipager'ın çalışıp çalışmadığı), kişiye bir test mesajı gönderir ("aipager is set up for you. ...") ve ancak ondan sonra yazar. Yazılan dosyalar, tam olarak sihirbazın yazdığı gibi:
 
 - `~/.config/aipager/aipager.yaml` (izinler 0600): `bot_token` ve tek üyesi bu kişi olan bir özel sohbet (`label: owner`, owner ya da admin rolü).
-- `~/.claude/settings.json`: aipager'ın hook'ları ve statusLine (mevcut dosya değiştiğinde `settings.json.bak.<time>` olarak saklanır).
+- `~/.claude/settings.json` (ya da `$CLAUDE_CONFIG_DIR/settings.json`, daemon'un oturumlarının okuduğu dosya: bu kabuğun ortamı artı `daemon.env`): aipager'ın hook'ları ve statusLine (mevcut dosya değiştiğinde `settings.json.bak.<time>` olarak saklanır). JSON çıktısındaki `settings_json.path` onu söyler.
 - Biri sahip olduğunda denetim kaydı bir `grant-owner` girdisi alır.
 - `--service` ile arka plan hizmeti (`aipager service install --yes` ile aynı).
 - Yalnızca `config.env` olan eski bir kurulumda (henüz `aipager.yaml` yok), sihirbazın yaptığı taşıma: bir `config.env.bak.<time>` kopyası (ve bir `team.yaml` varsa `team.yaml.bak.<time>`) ve yoksa bir `~/.config/aipager/policy.yaml` şablonu. `config.env` dosyasının kendisi olduğu gibi kalır.
@@ -626,7 +626,7 @@ Her anahtar her zaman vardır; henüz bilinmeyen bir değer `null` olur.
 
 Yeniden kurulum kaldığı yerden devam etsin diye aipager'ın verilerini korur: `~/.local/share/aipager` (oturum klasörleri, indirilen yardımcı programlar, kilit ve işaret dosyaları), `~/.local/state/aipager` (sorun raporlarının kayıtları ve dillerin durumu), `~/.claude/aipager-audit.jsonl` (izin yanıtlarının kaydı), `~/.claude/aipager-flood-state.json` (Telegram sınırlarının geçmişi), `~/.claude/aipager-pending-users.json` (botu erişimi olmadan deneyen kişiler) ve `~/aipager-users` (üyelerin [kök klasörleri](groups.md#root-folders), çalışmalarıyla birlikte). Sormadan önce bunlardan hangilerinin bilgisayarında olduğunu listeler ve sonunda bunları da kaldıran `rm -rf` komutunu yazdırır.
 
-Ayrıca aipager'ın kendi girdilerini Claude Code'un `~/.claude/settings.json` dosyasından çıkarır: `aipager-hook` çalıştıran hook'lar ve `aipager-statusline` çalıştıran durum satırı (kendi durum satırın kalır). Bu dosyadaki diğer her şey olduğu gibi kalır ve dosyanın önceki hali yanında `settings.json.bak.<time>` olarak saklanır. Dosya başka bir dosyaya bağlantıysa, okunamıyorsa, geçerli JSON değilse ya da Claude Code'un okuduğu biçimde değilse tam olarak olduğu gibi kalır ve uninstall hangi girdilerin elle kaldırılacağını söyler. Hâlâ `aipager-hook` ya da `aipager-statusline` adını geçiren kendi hook'un da (örneğin bir `aipager-hook-capped.sh` sarmalayıcısı) kalır ve uninstall onun adını verir. Zaten açık olan Claude Code oturumları, sen onları yeniden başlatana kadar yükledikleri hook'ları çalıştırmaya devam eder. `aipager config`, yeniden kurulumdan sonra girdileri yeniden ekler. Telegram botuna ve daha eski `settings.json.bak.*` yedeklerine dokunulmaz; `skipDangerousModePermissionPrompt` ayarına da (Claude Code'un izin kontrolleri olmadan çalışmadan önceki uyarısını atlayan ayar): onu aipager ayarlar, ama sen de ayarlamış olabilirsin.
+Ayrıca aipager'ın kendi girdilerini Claude Code'un `~/.claude/settings.json` (ve `CLAUDE_CONFIG_DIR` başka bir dosyayı gösterdiğinde daemon'un oturumlarının okuduğu dosyadan) dosyasından çıkarır: `aipager-hook` çalıştıran hook'lar ve `aipager-statusline` çalıştıran durum satırı (kendi durum satırın kalır). Bu dosyadaki diğer her şey olduğu gibi kalır ve dosyanın önceki hali yanında `settings.json.bak.<time>` olarak saklanır. Dosya başka bir dosyaya bağlantıysa, okunamıyorsa, geçerli JSON değilse ya da Claude Code'un okuduğu biçimde değilse tam olarak olduğu gibi kalır ve uninstall hangi girdilerin elle kaldırılacağını söyler. Hâlâ `aipager-hook` ya da `aipager-statusline` adını geçiren kendi hook'un da (örneğin bir `aipager-hook-capped.sh` sarmalayıcısı) kalır ve uninstall onun adını verir. Zaten açık olan Claude Code oturumları, sen onları yeniden başlatana kadar yükledikleri hook'ları çalıştırmaya devam eder. `aipager config`, yeniden kurulumdan sonra girdileri yeniden ekler. Telegram botuna ve daha eski `settings.json.bak.*` yedeklerine dokunulmaz; `skipDangerousModePermissionPrompt` ayarına da (Claude Code'un izin kontrolleri olmadan çalışmadan önceki uyarısını atlayan ayar): onu aipager ayarlar, ama sen de ayarlamış olabilirsin.
 
 ## <a id="command-line-aipager-report"></a>Komut satırı: `aipager report`
 
