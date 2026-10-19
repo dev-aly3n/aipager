@@ -615,6 +615,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Keine Sitzungen zum Beenden."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Welche Sitzung beenden?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "Sende {command} allein, ohne den Bot zu erwähnen."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code hat es auch zum Standardmodell für neue Sitzungen gemacht."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 jetzt {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "ein anderes Mitglied hat eine Nachricht, die Claude noch nicht abgeholt hat; wechsle das Modell danach."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -878,6 +879,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Ungültiger Wert"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Dieser Button ist veraltet: Sende /kill noch einmal"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} wartet auf die Antwort zu einer Anfrage. Beantworte sie zuerst, dann wechsle den Modus."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code prüft das neue Modell noch: tipp gleich noch einmal."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} hat eine neue Aufgabe angefangen: Tippe noch einmal auf „⏹ Stoppen“, um sie zu stoppen"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} hat eine neue Aufgabe angefangen: Sende /stop noch einmal"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Du darfst diese Sitzung nicht ändern."}
@@ -1113,6 +1115,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Diese Sitzung hat sich geändert. Öffne das Menü neu."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Das Modell konnte nicht gewechselt werden."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "Das Modell ist jetzt {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "Das Modell ist jetzt {model}, und Claude Code hat es auch zum Standardmodell für neue Sitzungen gemacht."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "wird gewechselt…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Modell"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "nicht bestätigt (prüfe die Sitzung)"}

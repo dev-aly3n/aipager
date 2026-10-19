@@ -237,6 +237,12 @@ def _flat(text: str) -> str:
 
 
 def _uninstall(monkeypatch, capsys, *, force=True, events=None):
+    # Wide enough that rich wraps no line: a wrap at a space drops that
+    # space, so whether a sentence still matched depended on how long the
+    # temp path was (a parallel worker's folder made it wrap mid-sentence).
+    from aipager import ui
+    monkeypatch.setattr(ui.console, "_width", 10_000)
+    monkeypatch.setattr(ui.err_console, "_width", 10_000)
     monkeypatch.setattr(updater, "_detect_installer", lambda: None)
     monkeypatch.setattr(updater, "_stop_daemon",
                         lambda: events.append("daemon stopped") if events is not None else None)

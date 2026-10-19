@@ -338,6 +338,17 @@ MODEL_SWITCH_CONFIRM_SECONDS = 15.0
 # a marker must never outlive the refusal that stops a second /model.
 MODEL_SWITCH_PENDING_SECONDS = 60.0
 _MODEL_SWITCH_POLL_SECONDS = 0.25
+# How long a message sent right after a typed `/model` is held
+# (TrackedSession.model_check_until). Claude Code (2.1.303) checks the
+# model with a request before it switches and gives up after 15 s; text
+# typed during the check is lost (probed with a slow model: a message
+# 0.5 s after the `/model` never reached the model, one 6 s after did).
+# The hold ends earlier as soon as the statusline reports the switch:
+# typing right then was taken every time.
+MODEL_CHECK_HOLD_SECONDS = 17.0
+# How long the confirmation waits for Claude Code to save the switch as
+# the default for new sessions after the statusline reported it.
+MODEL_DEFAULT_SAVE_SECONDS = 1.0
 
 
 #: The words for each refusal code of :func:`model_switch_refusal`: the
@@ -425,13 +436,66 @@ def mark_model_switch_sent(sess, model: str) -> str:
     from aipager.dtach import model_switch_marker
 
     previous = sess.model_name or ""
-    sess.model_switch_pending_until = time.monotonic() + MODEL_SWITCH_PENDING_SECONDS
+    now = time.monotonic()
+    sess.model_switch_pending_until = now + MODEL_SWITCH_PENDING_SECONDS
     sess.model_switch_pending_from = previous
+    sess.model_check_until = now + MODEL_CHECK_HOLD_SECONDS
+    sess.model_default_from = claude_default_model()
+    sess.model_switch_to = model
     if not model_switch_marker.write_marker(
         _marker_dir(), sess.name, model, sess.claude_session_id or "",
     ):
         log.debug("[%s] model switch marker not written", sess.label)
     return previous
+
+
+def claude_default_model() -> str | None:
+    """The model Claude Code starts a new session on: ``model`` in its user
+    settings, or ``None`` when that is unset or cannot be read."""
+    from aipager import claude_bootstrap  # local: keeps this module light
+
+    model = claude_bootstrap._claude_settings().get("model")
+    return model.strip() if isinstance(model, str) and model.strip() else None
+
+
+async def await_default_saved(
+    sess, *, timeout: float | None = None,
+    interval: float = _MODEL_SWITCH_POLL_SECONDS / 2,
+) -> str | None:
+    """After a switch the statusline confirmed: the model Claude Code saved
+    as the default for new sessions, or ``None``.
+
+    Claude Code (2.1.303) saves a ``/model`` typed in an interactive session
+    in its user settings ("Set model to X and saved as your default for new
+    sessions"), right after it switches, as typed (an alias in lower case:
+    probed). This waits up to *timeout* (default
+    :data:`MODEL_DEFAULT_SAVE_SECONDS`) for that ``model`` to be the one this
+    switch typed (``model_switch_to``) and differ from the one read when it
+    was typed (``model_default_from``). An unchanged default (the session
+    switched to the model that already was the default, or the save failed)
+    says nothing, and so does a default some other switch saved meanwhile."""
+    if timeout is None:
+        timeout = MODEL_DEFAULT_SAVE_SECONDS
+    before = sess.model_default_from
+    target = (sess.model_switch_to or "").strip().casefold()
+    deadline = time.monotonic() + timeout
+    while True:
+        now_default = claude_default_model()
+        if (now_default is not None and now_default != before
+                and now_default.casefold() == target):
+            return now_default
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        await _sleep(min(interval, remaining))
+
+
+#: Under a confirmed switch (the chat's reply, the Ready card).
+MODEL_DEFAULT_SAVED = Msg(
+    "route.model_default_saved",
+    "📌 Claude Code made it the default model for new sessions too.",
+    note="under a /model switch: Claude Code itself saves a typed /model as the default "
+         "for every new session, as it says in the terminal")
 
 
 def clear_model_switch_pending(sess) -> None:
@@ -2583,10 +2647,15 @@ class SessionOpsMixin:
         label = sess.label
         if sess.status not in (Status.BUSY, Status.IDLE):
             return CompactOutcome(ok=False, reason="not_live", label=label)
-        if sess.status == Status.BUSY:
+        checking = sess.model_hold_active()
+        if sess.status == Status.BUSY or checking:
+            # Behind a running turn, or a typed /model still checking its
+            # model (text typed then is lost): sent on with the others.
             if not sess.queue_prompt("/compact", None,
                                      driver_user_id=driver_user_id):
                 return CompactOutcome(ok=False, reason="queue_full", label=label)
+            if checking:
+                sess.model_hold = True
             self.registry.mark_dirty()
             return CompactOutcome(ok=True, reason="queued", label=label)
         # The caller is the sender (C13), as for every other message.

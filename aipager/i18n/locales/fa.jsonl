@@ -615,6 +615,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "سشنی برای بستن نیست."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "کدام سشن بسته شود؟"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "{command} را جداگانه و بدون صدا زدن ربات بفرستید."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code این مدل را مدل پیش‌فرض سشن‌های جدید هم کرد."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 حالا {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "پیام یک عضو دیگر هنوز برداشته نشده - بعد از آن مدل را عوض کنید."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> ← {model}"}
@@ -878,6 +879,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "این مقدار مجاز نیست"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "این دکمه قدیمی است - دوباره /kill بفرستید"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} منتظر جواب یک درخواست است. اول جواب بدهید، بعد مود را عوض کنید."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code هنوز دارد مدل جدید را چک می‌کند؛ کمی بعد دوباره بزنید."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} سراغ کار جدیدی رفته - برای توقفش دوباره ⏹ توقف را بزنید"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} سراغ کار جدیدی رفته - دوباره /stop بفرستید"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "شما اجازهٔ تغییر این سشن را ندارید."}
@@ -1113,6 +1115,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "این سشن عوض شده. منو را دوباره باز کنید."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "مدل عوض نشد."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "مدل حالا {model} است."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "مدل حالا {model} است و Claude Code آن را مدل پیش‌فرض سشن‌های جدید هم کرد."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "در حال تغییر…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "مدل"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "تأیید نشد (سشن را چک کنید)"}

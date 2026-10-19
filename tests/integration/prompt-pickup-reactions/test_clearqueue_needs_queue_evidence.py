@@ -59,6 +59,10 @@ def _idle_model(bot, sess, run_async, mk_update, msg_id=7):
     bot._confirm_model_feedback = AsyncMock()   # 8.35's statusline wait
     update = mk_update("Sonnet", message_id=msg_id, chat_id=CHAT_ID)
     run_async(bot._send_command(update, "/model sonnet"))
+    # Claude Code has checked the model and switched: a message sent now
+    # is typed, not held for the check (the session reported no model
+    # before, so only the check's window can end it here).
+    sess.model_check_until = 0.0
 
 
 def _turn_from_idle(bot, sess, run_async, send_text, pickup, *, live):

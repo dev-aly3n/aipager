@@ -356,7 +356,8 @@ def test_typed_switch_to_ask_names_the_sender(gbot, run_async, mk_update, chat, 
 
 def _ready_tap(gbot, run_async, chat, name, user, verb):
     sess = _sess(gbot, name)
-    gbot._switch_model_core = AsyncMock(return_value=SimpleNamespace(ok=True, detail=""))
+    gbot._switch_model_core = AsyncMock(return_value=SimpleNamespace(
+        ok=True, detail="", previous_model=""))
 
     async def _switch(s, target):
         s.perm_mode = target

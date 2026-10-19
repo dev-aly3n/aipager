@@ -615,6 +615,7 @@
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Aucune session à terminer."}
 {"k": "route.kill_which", "src": "65bf98de", "v": "Quelle session terminer ?"}
 {"k": "route.mention_alone", "src": "c8588bc4", "v": "Envoyez {command} seul, sans mentionner le bot."}
+{"k": "route.model_default_saved", "src": "4bb8fd32", "v": "📌 Claude Code en a aussi fait le modèle par défaut des nouvelles sessions."}
 {"k": "route.model_now", "src": "721a5dbc", "v": "🧠 maintenant {model}"}
 {"k": "route.model_other_sender", "src": "8d3d1d9c", "v": "un autre membre a un message que Claude n'a pas encore pris ; changez de modèle après."}
 {"k": "route.model_switched", "src": "45b2c58e", "v": "🔄 <b>{session}</b> → {model}"}
@@ -878,6 +879,7 @@
 {"k": "toast.invalid_value", "src": "7e5ba817", "v": "Cette valeur n'est pas autorisée"}
 {"k": "toast.kill_stale", "src": "90e64cd6", "v": "Ce bouton est ancien : renvoyez /kill"}
 {"k": "toast.mode_dialog_open", "src": "c91bc24d", "v": "{session} attend la réponse à une demande. Répondez d'abord, puis changez de mode."}
+{"k": "toast.model_checking", "src": "022b96f4", "v": "Claude Code vérifie encore le nouveau modèle : touchez à nouveau dans un instant."}
 {"k": "toast.moved_on_status", "src": "be925157", "v": "{session} a commencé une autre tâche : touchez à nouveau ⏹ Arrêter pour l'arrêter"}
 {"k": "toast.moved_on_stop", "src": "219c63f0", "v": "{session} a commencé une autre tâche : renvoyez /stop"}
 {"k": "toast.new_cant_change", "src": "279d4392", "v": "Vous ne pouvez pas modifier cette session."}
@@ -1113,6 +1115,7 @@
 {"k": "ui.menu.changed", "src": "512ec84b", "v": "Cette session a changé. Rouvrez le menu."}
 {"k": "ui.model.failed", "src": "a8ef2ee3", "v": "Impossible de changer de modèle."}
 {"k": "ui.model.now", "src": "3dd35778", "v": "Le modèle est maintenant {model}."}
+{"k": "ui.model.now_default", "src": "adbd22e1", "v": "Le modèle est maintenant {model}, et Claude Code en a aussi fait le modèle par défaut des nouvelles sessions."}
 {"k": "ui.model.switching", "src": "4a9961a0", "v": "changement…"}
 {"k": "ui.model.title", "src": "68c2cc7f", "v": "Modèle"}
 {"k": "ui.model.unconfirmed", "src": "ea52fe20", "v": "non confirmé (vérifiez la session)"}

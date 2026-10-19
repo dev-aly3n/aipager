@@ -183,6 +183,10 @@ RETRY_NOTE_PROMPT = Msg("route.retry_note_prompt",
                         "⏸ Not retried - a prompt is open. Answer it, then tap Retry again.",
                         note="Added under the error card: Retry refused; Retry is the button "
                              "(perm.btn.retry)")
+TOAST_MODEL_CHECKING = Msg(
+    "toast.model_checking",
+    "Claude Code is still checking the new model: tap again in a moment.",
+    note="Pop-up: Retry or Compact tapped right after a model switch; typed now it would be lost")
 TOAST_COMPACT_SENDING = Msg("toast.compact_sending", "Compacting [{session}]",
                             note="Pop-up: /compact was sent", eg={"session": "x1"})
 TOAST_COMPACT_FAILED = Msg("toast.compact_failed", "Failed to send /compact",
@@ -1167,6 +1171,12 @@ class CallbackDispatchMixin:
                     log.debug("[%s] could not annotate the retry card",
                               sess.label, exc_info=True)
                 return
+            if sess.model_hold_active():
+                # A typed /model may still be checking its model (text typed
+                # now would be lost), or messages held for it still wait:
+                # nothing is typed, the button stays.
+                await self._safe_answer(query, person.text(TOAST_MODEL_CHECKING))
+                return
             if sess.dialog_is_open() or mixed_sender_note_outstanding(sess, update):
                 # Retry buttons outlive the error they were attached to, so
                 # this one can be tapped long after the session has moved on
@@ -1247,6 +1257,10 @@ class CallbackDispatchMixin:
                 return
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, person.text(SESSION_GONE, session=session_name))
+                return
+            if sess.model_hold_active():
+                # As for Retry: typed during a /model's check, it is lost.
+                await self._safe_answer(query, person.text(TOAST_MODEL_CHECKING))
                 return
             # The tapper is the sender: a sender-less note carried an
             # unknown sender's rights and, lingering (a local command no

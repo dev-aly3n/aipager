@@ -221,6 +221,12 @@ MODEL_SWITCHING = Msg("ui.model.switching", "switching…",
 MODEL_UNCONFIRMED = Msg("ui.model.unconfirmed", "not confirmed (check the session)",
                         note="Mini App: the switch was not confirmed (short, lower case)")
 MODEL_NOW = Msg("ui.model.now", "Model is now {model}.", eg={"model": "opus"})
+MODEL_NOW_DEFAULT = Msg(
+    "ui.model.now_default",
+    "Model is now {model}, and Claude Code made it the default for new sessions too.",
+    eg={"model": "opus"},
+    note="after a model switch: Claude Code itself saves a switched model as the default "
+         "for every new session")
 MODEL_FAILED = Msg("ui.model.failed", "Couldn't switch the model.")
 MODEL_UNREACHABLE = Msg("ui.model.unreachable",
                         "Couldn't reach the server. Check the session's model.")

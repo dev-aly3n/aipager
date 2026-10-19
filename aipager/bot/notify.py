@@ -2410,6 +2410,20 @@ class NotifyMixin:
                 sess.dialog_hold = None
             await self._delete_hold_notices(sess, notices)
 
+    async def _settle_model_hold(self, sess: TrackedSession) -> None:
+        """The messages held while a typed ``/model`` checked its model
+        (``model_hold``), once that is over: the first goes to Claude now as
+        its own turn, the rest at that turn's end, as any queued message
+        does (:meth:`_drain_next_queued`, which also keeps them while an
+        agent's prompt is still open). Nothing is sent while a dialog is
+        open or a turn runs (the session is not idle): the paths that handle
+        those drain the queue."""
+        if not sess.model_hold or sess.model_check_running():
+            return
+        sess.model_hold = False
+        if sess.status is Status.IDLE and sess.pending_queue:
+            await self._drain_next_queued(sess)
+
     async def _drop_dialog_hold(self, sess: TrackedSession) -> None:
         """The messages held for a dialog were dropped (/clearqueue): its
         notices no longer say anything true, and the next message held for
@@ -2476,6 +2490,16 @@ class NotifyMixin:
                 except Exception:
                     log.warning("[%s] releasing the messages held for a "
                                 "dialog failed", sess.label, exc_info=True)
+            # The statusline reported a typed /model's switch (or the
+            # session monitor's backstop, ``model_hold_settle``, saw its
+            # check's time run out): send on what was held for it. A no-op
+            # while the check may still run.
+            if sess.model_hold:
+                try:
+                    await self._settle_model_hold(sess)
+                except Exception:
+                    log.warning("[%s] releasing the messages held for a "
+                                "model switch failed", sess.label, exc_info=True)
         finally:
             sess.notify_in_flight -= 1
 
@@ -2485,7 +2509,7 @@ class NotifyMixin:
         """:meth:`notify`'s body."""
         # ── settle a dialog hold (the session monitor's backstop) ──
         # The work is done by `notify` itself, after every event.
-        if event == "dialog_hold_settle":
+        if event in ("dialog_hold_settle", "model_hold_settle"):
             return
 
         # ── the mode a hook reported, while a mode switch waits on it ──
