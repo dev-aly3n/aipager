@@ -443,6 +443,23 @@ def test_settings_json_says_when_the_value_comes_from_claude_codes_settings(
     assert "this shell" not in detail
 
 
+def test_settings_json_names_the_services_credentials_file_as_the_source(
+        no_config_dir, tmp_path, monkeypatch):
+    """Inside the service, the value comes from systemd's copy of daemon.env
+    in $CREDENTIALS_DIRECTORY: doctor names that file."""
+    cfg = tmp_path / "claude-config"
+    _ours(cfg / "settings.json")
+    creds = tmp_path / "creds"
+    creds.mkdir()
+    (creds / "claude_oauth").write_text(f"CLAUDE_CONFIG_DIR={cfg}\n")
+    monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(creds))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    detail = " ".join(r.detail)
+    assert f"CLAUDE_CONFIG_DIR from {creds / 'claude_oauth'}" in detail
+    assert "daemon.env" not in detail and "Claude Code's settings" not in detail
+
+
 def test_settings_json_warns_for_shell_only_value_with_a_service(
         no_config_dir, tmp_path, monkeypatch):
     from aipager import service
@@ -461,6 +478,40 @@ def test_settings_json_warns_for_relative_config_dir(no_config_dir, tmp_path):
     r = doctor.check_settings_json()
     assert r.status == doctor.WARN
     assert any("not an absolute path" in d for d in r.detail)
+
+
+def test_settings_json_relative_fix_names_daemon_env_for_a_daemon_env_value(no_config_dir):
+    _daemon_env(no_config_dir, "CLAUDE_CONFIG_DIR=relative/config\n")
+    assert str(no_config_dir) in doctor.check_settings_json().fix
+
+
+def test_settings_json_relative_fix_names_the_settings_file_for_its_value(no_config_dir):
+    """A relative value in a settings env block is not overridden by
+    daemon.env: the fix names the settings file."""
+    start = claude_paths.DEFAULT_CONFIG_HOME / "settings.json"
+    start.parent.mkdir(parents=True, exist_ok=True)
+    start.write_text(json.dumps({"env": {"CLAUDE_CONFIG_DIR": "relative/config"}}))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.WARN
+    assert str(start) in r.fix
+    assert "daemon.env" not in r.fix
+
+
+def test_settings_json_relative_fix_names_daemon_env_while_its_value_is_relative(
+        no_config_dir, tmp_path, monkeypatch):
+    """A relative daemon.env value decides the global config too (which no
+    settings file moves): that one is fixed first, even when the settings
+    file it leads to holds a relative value as well."""
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    monkeypatch.chdir(folder)
+    _daemon_env(no_config_dir, "CLAUDE_CONFIG_DIR=rel\n")
+    (folder / "rel").mkdir()
+    (folder / "rel" / "settings.json").write_text(
+        json.dumps({"env": {"CLAUDE_CONFIG_DIR": "rel2"}}))
+    assert claude_paths.for_sessions().relative_settings_file is not None
+    r = doctor.check_settings_json()
+    assert str(no_config_dir) in r.fix
 
 
 def test_settings_json_shows_a_settings_layer_move_as_a_detail(no_config_dir, tmp_path):

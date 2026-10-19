@@ -413,14 +413,16 @@ def _config_dir_notes(paths) -> tuple[list[str], str | None]:
     if not paths.from_env:
         return notes, warn
     key = "CLAUDE_CONFIG_DIR"
-    in_file = daemon_secrets.read_daemon_credential().get(key)
+    source, values = daemon_secrets.read_daemon_credential_from()
+    in_file = values.get(key)
     shell = os.environ.get(key)
     if paths.moved_by_settings:
         notes.append(f"Claude Code's settings move its config to {paths.config_home}; "
                      "aipager follows it")
     else:
         if in_file is not None:
-            where = "daemon.env"
+            # The service's copy ($CREDENTIALS_DIRECTORY) is named by its path.
+            where = "daemon.env" if source == daemon_secrets.DAEMON_ENV_PATH else str(source)
         elif shell is not None:
             where = "this shell"
         else:  # a settings env block that names the start home itself
@@ -435,7 +437,11 @@ def _config_dir_notes(paths) -> tuple[list[str], str | None]:
         notes.append(f"transcripts go to {paths.projects}")
     if paths.relative or paths.global_relative:
         notes.append(f"{key} is not an absolute path")
-        warn = f"set an absolute {key} in {daemon_secrets.DAEMON_ENV_PATH}"
+        # daemon.env does not override a settings file's env block.
+        where = daemon_secrets.DAEMON_ENV_PATH
+        if paths.relative_settings_file is not None and not paths.global_relative:
+            where = paths.relative_settings_file
+        warn = f"set an absolute {key} in {where}"
     return notes, warn
 
 

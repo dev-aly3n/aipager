@@ -93,6 +93,10 @@ class ClaudePaths:
     global_relative: bool
     #: A settings ``env`` block moved the settings home off the start home.
     moved_by_settings: bool
+    #: The settings file whose ``env`` block holds the relative
+    #: ``CLAUDE_CONFIG_DIR`` behind ``relative`` (None: no such value, or
+    #: it is the session's environment's own).
+    relative_settings_file: Path | None
     global_config: Path
     #: ``global_config`` is the legacy ``.config.json``.
     legacy: bool
@@ -177,13 +181,14 @@ def _managed_layers() -> list[dict]:
     return [read_settings(p) for p in managed_settings_files()]
 
 
-def _last_value(blocks: list[dict]) -> str | None:
-    """The last ``CLAUDE_CONFIG_DIR`` text value among settings *blocks*."""
+def _last_value(layers: list[tuple[Path, dict]]) -> tuple[str, Path] | None:
+    """The last ``CLAUDE_CONFIG_DIR`` text value among settings *layers*
+    (``(file, settings)`` pairs), with the file it is in."""
     found = None
-    for settings in blocks:
+    for path, settings in layers:
         value = _env_block(settings).get(_CONFIG_DIR_KEY)
         if value is not None:
-            found = value
+            found = (value, path)
     return found
 
 
@@ -228,26 +233,32 @@ def locate(env: Mapping[str, str], *, cwd: str | None = None) -> ClaudePaths:
         start_home, start_rel = _home_from(value, cwd)
     global_config, legacy, global_rel = _global_config(env, start_home, start_rel, cwd)
 
-    start_settings = read_settings(start_home / "settings.json")
-    managed = _managed_layers()
+    start_file = start_home / "settings.json"
+    start_layer = (start_file, read_settings(start_file))
+    managed = [(p, read_settings(p)) for p in managed_settings_files()]
     # Measured with 2.1.303 (P2, P7): the start file's or managed settings'
     # value moves the settings file and the credentials, one hop.
-    hop = _last_value([start_settings, *managed])
+    hop = _last_value([start_layer, *managed])
     config_home, home_rel = start_home, start_rel
     moved = False
     projects_home, projects_rel = start_home, start_rel
+    rel_file = None
     if hop is not None:
-        config_home, home_rel = _home_from(hop, cwd)
+        config_home, home_rel = _home_from(hop[0], cwd)
         moved = config_home != start_home
         projects_home, projects_rel = config_home, home_rel
+        rel_file = hop[1] if home_rel else None
         if moved:
             # The moved file's env block is applied too, but sets off no
             # further load: a CLAUDE_CONFIG_DIR there moves only the
             # transcripts (measured with 2.1.303, P7). Managed still wins.
-            final = _last_value([start_settings, read_settings(config_home / "settings.json"),
+            moved_file = config_home / "settings.json"
+            final = _last_value([start_layer, (moved_file, read_settings(moved_file)),
                                  *managed])
-            if final is not None and final != hop:
-                projects_home, projects_rel = _home_from(final, cwd)
+            if final is not None and final[0] != hop[0]:
+                projects_home, projects_rel = _home_from(final[0], cwd)
+                if projects_rel and rel_file is None:
+                    rel_file = final[1]
     return ClaudePaths(
         config_home=config_home,
         start_home=start_home,
@@ -255,6 +266,7 @@ def locate(env: Mapping[str, str], *, cwd: str | None = None) -> ClaudePaths:
         relative=home_rel or projects_rel,
         global_relative=global_rel,
         moved_by_settings=moved,
+        relative_settings_file=rel_file,
         global_config=global_config,
         legacy=legacy,
         user_settings=config_home / "settings.json",

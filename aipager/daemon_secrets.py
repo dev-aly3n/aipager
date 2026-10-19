@@ -61,6 +61,12 @@ def read_daemon_credential() -> dict[str, str]:
     systemd's ``LoadCredential=``), then ``daemon.env`` directly.
     ``{}`` on any failure — never raises.
     """
+    return read_daemon_credential_from()[1]
+
+
+def read_daemon_credential_from() -> tuple[Path | None, dict[str, str]]:
+    """:func:`read_daemon_credential` with the file it read: ``(file,
+    values)``, ``(None, {})`` when neither could be read. Never raises."""
     # UnicodeDecodeError is NOT an OSError, so catching OSError alone left
     # the "never raises" promise unmet: a credential file that is truncated
     # mid-write, or written by another tool in another encoding, raised out
@@ -70,13 +76,13 @@ def read_daemon_credential() -> dict[str, str]:
     if creds_dir:
         candidate = Path(creds_dir) / "claude_oauth"
         try:
-            return _parse_env_file(candidate.read_text(encoding="utf-8"))
+            return candidate, _parse_env_file(candidate.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError):
             pass
     try:
-        return _parse_env_file(DAEMON_ENV_PATH.read_text(encoding="utf-8"))
+        return DAEMON_ENV_PATH, _parse_env_file(DAEMON_ENV_PATH.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError):
-        return {}
+        return None, {}
 
 
 # Set once, by claude_bootstrap's startup recovery sweep, and only ever
@@ -132,5 +138,6 @@ def build_session_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
 
 __all__ = [
     "DAEMON_ENV_PATH", "build_session_env", "read_daemon_credential",
+    "read_daemon_credential_from",
     "recovered_credential", "set_recovered_credential",
 ]

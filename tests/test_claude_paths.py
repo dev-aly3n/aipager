@@ -243,6 +243,61 @@ def test_a_config_dir_in_the_session_env_reads_that_homes_settings(home, tmp_pat
     assert p.global_config == cfg / ".claude.json"
 
 
+def test_a_relative_session_value_names_no_settings_file(home, tmp_path):
+    p = claude_paths.locate({"CLAUDE_CONFIG_DIR": "rel"}, cwd=str(tmp_path / "proj"))
+    assert p.relative and p.relative_settings_file is None
+
+
+def test_an_absolute_setup_names_no_relative_settings_file(home, tmp_path):
+    _write(home / ".claude" / "settings.json",
+           {"env": {"CLAUDE_CONFIG_DIR": str(tmp_path / "moved")}})
+    p = claude_paths.locate({})
+    assert not p.relative and p.relative_settings_file is None
+
+
+def test_an_absolute_chain_names_no_relative_settings_file(home, tmp_path):
+    c1, c2 = tmp_path / "c1", tmp_path / "c2"
+    _write(home / ".claude" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": str(c1)}})
+    _write(c1 / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": str(c2)}})
+    p = claude_paths.locate({})
+    assert p.projects == c2 / "projects"
+    assert not p.relative and p.relative_settings_file is None
+
+
+def test_a_relative_hop_is_named_before_a_relative_last_value(home, tmp_path):
+    """Both relative: the hop's file is the one to fix first (it decides
+    which settings file is read at all)."""
+    folder = tmp_path / "proj"
+    start = _write(home / ".claude" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel1"}})
+    _write(folder / "rel1" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel2"}})
+    p = claude_paths.locate({}, cwd=str(folder))
+    assert p.projects == folder / "rel2" / "projects"
+    assert p.relative_settings_file == start
+
+
+def test_a_relative_hop_names_the_settings_file_it_is_in(home, tmp_path):
+    start = _write(home / ".claude" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel"}})
+    p = claude_paths.locate({}, cwd=str(tmp_path / "proj"))
+    assert p.relative and p.relative_settings_file == start
+
+
+def test_a_relative_managed_hop_names_the_managed_file(home, tmp_path):
+    _write(home / ".claude" / "settings.json",
+           {"env": {"CLAUDE_CONFIG_DIR": str(tmp_path / "u")}})
+    managed = _managed("managed-settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel"}})
+    p = claude_paths.locate({}, cwd=str(tmp_path / "proj"))
+    assert p.relative and p.relative_settings_file == managed
+
+
+def test_a_relative_last_value_names_the_moved_file(home, tmp_path):
+    """An absolute hop whose own settings name a relative transcripts home."""
+    c1 = tmp_path / "c1"
+    _write(home / ".claude" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": str(c1)}})
+    moved = _write(c1 / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel"}})
+    p = claude_paths.locate({}, cwd=str(tmp_path / "proj"))
+    assert p.relative and p.relative_settings_file == moved
+
+
 def test_a_settings_value_that_is_not_text_moves_nothing(home):
     _write(home / ".claude" / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": 7}})
     p = claude_paths.locate({})

@@ -30,7 +30,9 @@ _REINSTALL = "uv tool install --reinstall aipager"
 RELATIVE_HOME = ("CLAUDE_CONFIG_DIR is not an absolute path ({home}): Claude Code "
                  "keeps its settings inside each session's folder, and aipager "
                  "writes no hooks there.")
-RELATIVE_FIX = "Set an absolute CLAUDE_CONFIG_DIR in {env_file}, then run this again."
+#: ``{where}``: daemon.env, or the settings file whose ``env`` block holds
+#: the relative value (daemon.env does not override that).
+RELATIVE_FIX = "Set an absolute CLAUDE_CONFIG_DIR in {where}, then run this again."
 
 
 @dataclass(frozen=True)
@@ -343,8 +345,8 @@ def relative_home() -> tuple[str, str] | None:
     paths = claude_paths.for_sessions()
     if not paths.relative:
         return None
-    return (RELATIVE_HOME.format(home=paths.start_home),
-            RELATIVE_FIX.format(env_file=daemon_secrets.DAEMON_ENV_PATH))
+    where = paths.relative_settings_file or daemon_secrets.DAEMON_ENV_PATH
+    return RELATIVE_HOME.format(home=paths.start_home), RELATIVE_FIX.format(where=where)
 
 
 def plan_settings(path: Path | None = None) -> SettingsPlan:

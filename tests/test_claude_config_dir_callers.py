@@ -468,6 +468,26 @@ def test_the_wizard_writes_no_hooks_into_a_relative_config_dir(
     assert "Set an absolute CLAUDE_CONFIG_DIR" in out
 
 
+def test_a_relative_session_value_is_fixed_in_daemon_env(tmp_path, monkeypatch):
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "rel")
+    monkeypatch.chdir(tmp_path)
+    _problem, fix = settings_patch.relative_home()
+    assert str(daemon_secrets.DAEMON_ENV_PATH) in fix
+
+
+def test_a_relative_value_in_a_settings_env_block_is_fixed_there(tmp_path, monkeypatch):
+    """daemon.env does not override a settings file's env block: the fix
+    names the file whose block holds the relative value."""
+    monkeypatch.setattr(daemon_secrets, "_recovered", {})
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    start = _write(_default() / "settings.json", {"env": {"CLAUDE_CONFIG_DIR": "rel"}})
+    _problem, fix = settings_patch.relative_home()
+    assert str(start) in fix
+    assert str(daemon_secrets.DAEMON_ENV_PATH) not in fix
+
+
 def test_the_wizard_still_writes_an_absolute_config_dir(cfg, capsys):
     """Control for the test above: an absolute value is patched."""
     settings_patch._step_settings()
