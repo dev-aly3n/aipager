@@ -146,7 +146,8 @@ def _legacy_case(case: str, cfg: Path) -> None:
     ("directory", False),
     ("symlink-to-nonempty", True),
     ("stat-error", False),
-])
+], ids=["nonempty", "empty-writable-no-new", "empty-writable-new-exists", "empty-readonly",
+        "directory", "symlink-to-nonempty", "stat-error"])
 def test_the_legacy_rule(home, tmp_path, case, legacy):
     cfg = tmp_path / "cfg"
     cfg.mkdir()
