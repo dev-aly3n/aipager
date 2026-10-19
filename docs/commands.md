@@ -1187,7 +1187,7 @@ aipager doctor --json
 
 What it does, in this order: reads the bot token, checks it with
 Telegram (getMe), checks everything on this machine without writing
-(the existing config, the dependencies, `~/.claude/settings.json`,
+(the existing config, the dependencies, Claude Code's `settings.json`,
 whether a daemon runs), sends one test message to the person ("aipager
 is set up for you. ..."), and only then writes. Files written, the same
 as the wizard writes them:
@@ -1195,9 +1195,11 @@ as the wizard writes them:
 - `~/.config/aipager/aipager.yaml` (mode 0600): `bot_token` and one DM
   scope whose only member is the person (`label: owner`, role owner or
   admin).
-- `~/.claude/settings.json`: the aipager hooks and the statusLine (the
-  existing file is backed up to `settings.json.bak.<time>` when it
-  changes).
+- `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`, the
+  file the daemon's sessions read: this shell's environment plus
+  `daemon.env`): the aipager hooks and the statusLine (the existing file
+  is backed up to `settings.json.bak.<time>` when it changes).
+  `settings_json.path` in the JSON output names it.
 - The audit log gets a `grant-owner` record when someone becomes owner.
 - With `--service`, the background service (the same as `aipager
   service install --yes`).
@@ -1413,7 +1415,7 @@ markup), and anything shaped like a bot token is replaced by
 
 It keeps aipager's data, so a reinstall picks up where it left off: `~/.local/share/aipager` (session folders, downloaded helpers, lock and marker files), `~/.local/state/aipager` (problem report records and the language state), `~/.claude/aipager-audit.jsonl` (the log of permission answers), `~/.claude/aipager-flood-state.json` (Telegram rate-limit history), `~/.claude/aipager-pending-users.json` (people who tried the bot without access) and `~/aipager-users` (members' [root folders](groups.md#root-folders), with their work). Before asking, it lists the ones that exist on your machine, and at the end it prints the `rm -rf` command that removes them too.
 
-It also takes aipager's own entries out of Claude Code's `~/.claude/settings.json`: the hooks that run `aipager-hook` and the status line that runs `aipager-statusline` (a status line of your own stays). Everything else in that file stays as it was, and the file as it was is kept beside it as `settings.json.bak.<time>`. If the file is a link to another file, cannot be read, is not valid JSON, or is not in the shape Claude Code reads, it is left exactly as it is and uninstall says which entries to remove by hand. A hook of your own that still mentions `aipager-hook` or `aipager-statusline` (for example an `aipager-hook-capped.sh` wrapper) stays too, and uninstall names it. Claude Code sessions already open keep running the hooks they loaded until you restart them. `aipager config` adds the entries again after a reinstall. Your Telegram bot and any older `settings.json.bak.*` backups are not touched, and neither is `skipDangerousModePermissionPrompt` (the setting that skips Claude Code's warning before it runs with permission checks off), which aipager sets but you may have set yourself.
+It also takes aipager's own entries out of Claude Code's `~/.claude/settings.json`, and out of the one the daemon's sessions read when `CLAUDE_CONFIG_DIR` names another: the hooks that run `aipager-hook` and the status line that runs `aipager-statusline` (a status line of your own stays). Everything else in that file stays as it was, and the file as it was is kept beside it as `settings.json.bak.<time>`. If the file is a link to another file, cannot be read, is not valid JSON, or is not in the shape Claude Code reads, it is left exactly as it is and uninstall says which entries to remove by hand. A hook of your own that still mentions `aipager-hook` or `aipager-statusline` (for example an `aipager-hook-capped.sh` wrapper) stays too, and uninstall names it. Claude Code sessions already open keep running the hooks they loaded until you restart them. `aipager config` adds the entries again after a reinstall. Your Telegram bot and any older `settings.json.bak.*` backups are not touched, and neither is `skipDangerousModePermissionPrompt` (the setting that skips Claude Code's warning before it runs with permission checks off), which aipager sets but you may have set yourself.
 
 ## Command line: `aipager report`
 

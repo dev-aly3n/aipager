@@ -9,7 +9,9 @@ audit log.
 ## How it is wired
 
 `aipager config` (or `aipager setup`) adds aipager's entries to
-`~/.claude/settings.json`, and the daemon checks them at every start:
+`~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`, the
+file the daemon's sessions read), and the daemon checks them at every
+start:
 
 - one `aipager-hook` command for each of the 16 events below, with the
   matcher `*` on the tool events (`PreToolUse`, `PostToolUse`,

@@ -114,7 +114,7 @@ for it at most 30 seconds.
 Setup checks the token with Telegram, checks this machine, sends the
 person one test message ("aipager is set up for you. ..."), and only
 then writes its config, adds the Claude Code hooks to
-`~/.claude/settings.json`, and, with `--service`, installs and starts
+`~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`), and, with `--service`, installs and starts
 the background service. If any check fails, nothing is written.
 
 Add `--dry-run` to see what would change first. `--role admin` makes
@@ -195,7 +195,7 @@ Tell them, in a few lines:
   line (`--token` is refused anyway). Pass it only as a file or on
   stdin.
 - Do not edit `~/.config/aipager/` (apart from the token file in step
-  2) or `~/.claude/settings.json` by hand. `aipager setup` and
+  2) or Claude Code's `settings.json` by hand. `aipager setup` and
   `aipager config` write them.
 - Do not add `--force` without asking the person: it replaces their
   existing token, chat or role.
