@@ -2490,7 +2490,7 @@ def _miniapp_details(env):
         d("POST", "/api/sessions", {"name": name})
     for cwd in (5, "/tmp/\x00", "/nonexistent-aipager-dir", "/usr"):
         d("POST", "/api/sessions", {"name": "n1", "cwd": cwd})
-    for model in (5, "m" * 70, "-x"):
+    for model in (5, "m" * 130, "-x"):
         d("POST", "/api/sessions", {"name": "n1", "model": model})
     d("POST", "/api/sessions", {"name": LABEL})
     for parent, name in (("", "web"), ("/tmp", 5), ("/tmp", " "), ("/tmp", "a" * 70),

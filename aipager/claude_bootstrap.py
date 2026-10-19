@@ -13,9 +13,12 @@ normally what writes them:
 
 2. ``~/.claude.json`` — without ``hasTrustDialogAccepted`` for the
    working directory, claude shows a "Do you trust this folder?" picker
-   on launch in any new cwd. Same Telegram failure mode. Not written at
-   start: ``inject.launch_session`` calls :func:`ensure_folder_trusted`
-   for each session's folder right before the session starts there.
+   on launch in any new cwd. Same Telegram failure mode. An
+   ``ANTHROPIC_API_KEY`` it was never told about opens a "use this API
+   key?" picker, and a home that never finished Claude Code's first run
+   opens on its theme picker. Not written at start:
+   ``inject.launch_session`` calls :func:`prepare_session_start` right
+   before each session starts.
 
 3. ``~/.claude/settings.json`` ``hooks`` + ``statusLine`` — without the
    ``aipager-hook`` wired into ``UserPromptSubmit``/``Stop``/etc.,
@@ -44,7 +47,8 @@ import shutil
 import stat
 import sys
 import tempfile
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from aipager._test_guard import check_write
@@ -284,22 +288,308 @@ def ensure_folder_trusted(folder: str) -> bool:
     session ends. The key is the folder's real path, the one Claude Code
     looks up."""
     folder = os.path.realpath(folder)
+    return _update_json(_CLAUDE_JSON, lambda data: _trust_in(data, folder))
+
+
+def _trust_in(data: dict, folder: str) -> bool:
+    """Mark the real path *folder* trusted in the parsed ~/.claude.json
+    *data*, unless it or a folder above it is. True when *data* changed."""
+    projects = data.setdefault("projects", {})
+    if not isinstance(projects, dict) or _trusted(projects, folder):
+        return False
+    entry = projects.get(folder)
+    if not isinstance(entry, dict):
+        entry = {}
+    entry.setdefault("allowedTools", [])
+    entry.setdefault("mcpContextUris", [])
+    entry.setdefault("mcpServers", {})
+    entry.setdefault("hasClaudeMdExternalIncludesWarningShown", False)
+    entry["hasTrustDialogAccepted"] = True
+    projects[folder] = entry
+    return True
+
+
+# ---- Claude Code's other start-up questions ------------------------------
+#
+# Measured with Claude Code 2.1.302 in a throwaway home, against a fake
+# provider on 127.0.0.1, and read from its binary:
+#
+# - An ANTHROPIC_API_KEY whose last 20 characters (after trim) are in
+#   neither ``customApiKeyResponses.approved`` nor ``.rejected`` opens an
+#   interactive session with "Do you want to use this API key?", No
+#   preselected. The first message aipager types answers it: No, recorded
+#   for good. Never asked on Bedrock, Vertex or Foundry, nor in ``-p``.
+# - A refused key falls back to an apiKeyHelper, a saved Console key, then
+#   a claude.ai login; with none of them every prompt answers "Not logged
+#   in". An approved key wins over a claude.ai login (per-token billing).
+# - Without ``hasCompletedOnboarding: true`` a session opens on the
+#   first-run screens (theme, security note, login). ``claude auth login``
+#   sets it, ``claude setup-token`` does not.
+# - ``oauthAccount`` is written at a claude.ai or Console login and removed
+#   at logout.
+
+_API_KEY = "ANTHROPIC_API_KEY"
+_KEY_TAIL = 20
+#: Claude Code's switches to a provider other than its own API (2.1.303's
+#: list); on one of them it never asks about an ANTHROPIC_API_KEY. Its
+#: "Claude apps gateway" login does the same and is not seen here: then the
+#: question is answered although Claude Code would not ask it.
+_CLOUD_SWITCHES = ("CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+                   "CLAUDE_CODE_USE_FOUNDRY", "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+                   "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_MANTLE")
+_TOKEN_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN")
+
+
+def _claude_settings() -> dict:
+    """~/.claude/settings.json, or {} when it cannot be read whole."""
+    try:
+        data = json.loads(_SETTINGS.read_bytes())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _settings_env(settings: dict) -> dict[str, str]:
+    block = settings.get("env")
+    if not isinstance(block, dict):
+        return {}
+    return {k: v for k, v in block.items() if isinstance(k, str) and isinstance(v, str)}
+
+
+def claude_env(env: Mapping[str, str], settings: dict | None = None) -> dict[str, str]:
+    """The environment Claude Code runs with: *env* with the ``env`` block of
+    ~/.claude/settings.json laid over it, which is what Claude Code does.
+    A project's ``.claude/settings*.json`` and managed settings can set or
+    blank a key too and are not read: then a session is no better off than
+    without these answers. Values are secrets: never log them."""
+    if settings is None:
+        settings = _claude_settings()
+    return {**env, **_settings_env(settings)}
+
+
+def _switch_on(value: str | None) -> bool:
+    """A provider switch is on, read as Claude Code reads it (2.1.303)."""
+    return isinstance(value, str) and value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _helper_set(settings: dict) -> bool:
+    helper = settings.get("apiKeyHelper")
+    return isinstance(helper, str) and bool(helper.strip())
+
+
+def _other_login(data: dict, env: Mapping[str, str], settings: dict) -> bool:
+    """Something other than ANTHROPIC_API_KEY logs a session in: a token in
+    its environment, a saved claude.ai or Console login, or an apiKeyHelper.
+    The login file's existence is checked; it is never read."""
+    if any((env.get(var) or "").strip() for var in _TOKEN_VARS):
+        return True
+    account = data.get("oauthAccount")
+    if isinstance(account, dict) and account:
+        return True
+    saved_key = data.get("primaryApiKey")
+    if isinstance(saved_key, str) and saved_key.strip():
+        return True
+    if _helper_set(settings):
+        return True
+    try:
+        return (_SETTINGS.parent / ".credentials.json").exists()
+    except OSError:
+        return False
+
+
+def _key_set_on_purpose(key: str, settings: dict) -> bool:
+    """*key* was set for Claude Code or for aipager: it is the one in Claude
+    Code's settings.json, or in aipager's own credential file. Otherwise it
+    was only inherited from the environment aipager was started in."""
+    from aipager import daemon_secrets
+
+    sources = (_settings_env(settings).get(_API_KEY),
+               daemon_secrets.read_daemon_credential().get(_API_KEY),
+               daemon_secrets.recovered_credential().get(_API_KEY))
+    return any(isinstance(v, str) and v.strip() == key for v in sources)
+
+
+def api_key_answer(state: str, on_purpose: bool, other_login: bool) -> str | None:
+    """How to answer Claude Code's "use this API key?" for a session:
+    ``"approve"``, ``"decline"`` or None (leave it).
+
+    *state* is Claude Code's record of the key: ``"approved"``,
+    ``"rejected"`` or ``"new"``. A key set on purpose (Claude Code's
+    settings, aipager's daemon.env) is used. A key only inherited from the
+    environment is used when nothing else can log the session in, and
+    otherwise declined, which is Claude Code's own recommended answer: a
+    subscription user who exports an API key for something else must not be
+    moved to per-token billing by aipager. A refusal is kept, unless the key
+    was set on purpose and nothing else can log the session in (the refusal
+    may well be a first Telegram message that answered the question)."""
+    if state == "new":
+        return "approve" if on_purpose or not other_login else "decline"
+    if state == "rejected" and on_purpose and not other_login:
+        return "approve"
+    return None
+
+
+def _key_state(data: dict, key: str) -> str | None:
+    """Claude Code's record of *key* in the parsed ~/.claude.json: its last
+    20 characters in ``approved`` (checked first, as Claude Code does) or in
+    ``rejected``, else ``"new"``. None when the record is not in the shape
+    Claude Code writes, which is then left alone."""
+    responses = data.get("customApiKeyResponses")
+    if responses is None:
+        responses = {}
+    if not isinstance(responses, dict):
+        return None
+    approved = responses.get("approved")
+    rejected = responses.get("rejected")
+    approved = [] if approved is None else approved
+    rejected = [] if rejected is None else rejected
+    if not isinstance(approved, list) or not isinstance(rejected, list):
+        return None
+    tail = key[-_KEY_TAIL:]
+    if tail in [x for x in approved if isinstance(x, str)]:
+        return "approved"
+    if tail in [x for x in rejected if isinstance(x, str)]:
+        return "rejected"
+    return "new"
+
+
+def _answer_key(data: dict, key: str, on_purpose: bool, other_login: bool,
+                notes: list[str]) -> tuple[str | None, bool]:
+    """Record the answer for *key* in *data*. Returns what changed
+    (``"key-approved"``, ``"key-declined"`` or None) and whether sessions
+    will use the key; *notes* gets what the log should say
+    (:func:`_log_note`)."""
+    state = _key_state(data, key)
+    if state is None:
+        notes.append("odd-record")
+        return None, False
+    answer = api_key_answer(state, on_purpose, other_login)
+    if answer is None:
+        if state == "rejected" and not other_login:
+            notes.append("refused-no-login")
+        elif state == "rejected" and on_purpose:
+            notes.append("refused-other-login")
+        return None, state == "approved"
+    responses = data.get("customApiKeyResponses") or {}
+    approved = list(responses.get("approved") or [])
+    rejected = list(responses.get("rejected") or [])
+    tail = key[-_KEY_TAIL:]
+    if answer == "approve":
+        # What Claude Code's own /config toggle does: off one list, onto the other.
+        responses["rejected"] = [x for x in rejected if x != tail]
+        responses["approved"] = [*approved, tail]
+    else:
+        responses["approved"] = approved
+        responses["rejected"] = [*rejected, tail]
+    data["customApiKeyResponses"] = responses
+    if answer == "approve":
+        return "key-approved", True
+    return "key-declined", False
+
+
+@dataclass(frozen=True)
+class _SessionCredential:
+    """What decides Claude Code's start-up answers for a session, read from
+    the environment it gets. Holds the key: never log it."""
+
+    run_env: dict = field(repr=False)
+    settings: dict = field(repr=False)
+    #: Claude Code reads ~/.claude.json (CLAUDE_CONFIG_DIR is not set).
+    own_file: bool = True
+    cloud: bool = False
+    #: The ANTHROPIC_API_KEY Claude Code would ask about, trimmed, or "".
+    key: str = field(default="", repr=False)
+    on_purpose: bool = False
+
+
+def _session_credential(env: Mapping[str, str]) -> _SessionCredential:
+    settings = _claude_settings()
+    run_env = claude_env(env, settings)
+    # CLAUDE_CONFIG_DIR moves Claude Code's config to a file this does not write.
+    own_file = not (run_env.get("CLAUDE_CONFIG_DIR") or "").strip()
+    cloud = any(_switch_on(run_env.get(var)) for var in _CLOUD_SWITCHES)
+    key = (run_env.get(_API_KEY) or "").strip() if own_file and not cloud else ""
+    return _SessionCredential(run_env=run_env, settings=settings, own_file=own_file,
+                              cloud=cloud, key=key,
+                              on_purpose=bool(key) and _key_set_on_purpose(key, settings))
+
+
+def refused_key_strands_sessions(env: Mapping[str, str]) -> bool:
+    """Read only, for ``aipager doctor``: sessions started now would get an
+    ANTHROPIC_API_KEY that Claude Code was told not to use, aipager would
+    leave that answer as it is, and nothing else would log them in, so they
+    answer "Not logged in". ``claude -p`` (the credential probe) uses such a
+    key anyway, so the probe alone reports it as working. Never raises."""
+    try:
+        cred = _session_credential(env)
+        if not cred.key:
+            return False
+        data = json.loads(_read_bytes(_CLAUDE_JSON))
+        if not isinstance(data, dict) or _key_state(data, cred.key) != "rejected":
+            return False
+        other = _other_login(data, cred.run_env, cred.settings)
+        return not other and api_key_answer("rejected", cred.on_purpose, other) is None
+    except Exception:
+        return False
+
+
+def prepare_session_start(folder: str | None, env: Mapping[str, str]) -> list[str]:
+    """Answer, in ~/.claude.json, the questions Claude Code would open a
+    session with, as its owner would in a terminal. A session started from
+    Telegram cannot answer them: the first message lands on one as Enter.
+
+    - *folder* (a real path, or None for none): trusted, as
+      :func:`ensure_folder_trusted` does.
+    - The ANTHROPIC_API_KEY the session gets (*env* with Claude Code's
+      settings.json ``env`` over it): answered per :func:`api_key_answer`.
+    - The first-run screens: marked done when the session has a credential
+      that needs no login screen.
+
+    One read and one write of the file, under :func:`_update_json`'s rules.
+    Returns what changed: ``"trusted"``, ``"key-approved"``,
+    ``"key-declined"``, ``"onboarded"``. Never logs a key or part of one."""
+    cred = _session_credential(env)
+    folder = os.path.realpath(folder) if folder is not None else None
+    done: list[str] = []
+    notes: list[str] = []
 
     def change(data: dict) -> bool:
-        projects = data.setdefault("projects", {})
-        if not isinstance(projects, dict) or _trusted(projects, folder):
-            return False
-        entry = projects.get(folder)
-        if not isinstance(entry, dict):
-            entry = {}
-        entry.setdefault("allowedTools", [])
-        entry.setdefault("mcpContextUris", [])
-        entry.setdefault("mcpServers", {})
-        entry.setdefault("hasClaudeMdExternalIncludesWarningShown", False)
-        entry["hasTrustDialogAccepted"] = True
-        projects[folder] = entry
-        return True
-    return _update_json(_CLAUDE_JSON, change)
+        # Runs again when the file changed under it: start over each time.
+        done.clear()
+        notes.clear()
+        if folder is not None and _trust_in(data, folder):
+            done.append("trusted")
+        if cred.own_file:
+            other = _other_login(data, cred.run_env, cred.settings)
+            key_used = False
+            if cred.key:
+                answered, key_used = _answer_key(data, cred.key, cred.on_purpose, other, notes)
+                if answered:
+                    done.append(answered)
+            if (data.get("hasCompletedOnboarding") is not True
+                    and (key_used or cred.cloud or other)):
+                data["hasCompletedOnboarding"] = True
+                done.append("onboarded")
+        return bool(done)
+
+    wrote = _update_json(_CLAUDE_JSON, change)
+    for note in notes:
+        _log_note(note)
+    return list(done) if wrote else []
+
+
+def _log_note(note: str) -> None:
+    if note == "odd-record":
+        log.warning("claude bootstrap: Claude Code's record of API key answers in "
+                    "~/.claude.json is not in the expected shape - left as it is")
+    elif note == "refused-no-login":
+        log.warning("claude bootstrap: Claude Code was told not to use the ANTHROPIC_API_KEY "
+                    "sessions get, and nothing else logs them in: they will answer \"Not "
+                    "logged in\". To use the key, set it in aipager's daemon.env, or turn on "
+                    "\"Use custom API key\" under /config in a terminal session")
+    elif note == "refused-other-login":
+        log.info("claude bootstrap: Claude Code was told not to use the session's "
+                 "ANTHROPIC_API_KEY; sessions use the other login")
 
 
 def _resolve(cmd: str) -> str | None:
@@ -548,7 +838,8 @@ def recover_auth_or_notice(pending: PendingAuthCheck) -> str | None:
 # environment being rejected.
 _ENV_KINDS: tuple[tuple[str, str], ...] = (
     ("CLAUDE_CODE_OAUTH_TOKEN", "setup token"),
-    ("ANTHROPIC_AUTH_TOKEN", "setup token"),
+    # A gateway's or provider's bearer token, not a `claude setup-token` one.
+    ("ANTHROPIC_AUTH_TOKEN", "auth token"),
     ("ANTHROPIC_API_KEY", "API key"),
     ("AWS_BEARER_TOKEN_BEDROCK", "Bedrock token"),
     ("CLAUDE_CODE_USE_BEDROCK", "Bedrock setting"),

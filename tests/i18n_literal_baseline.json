@@ -41,7 +41,7 @@
  "aipager/cli/resume.py": 38,
  "aipager/cli/session.py": 13,
  "aipager/config.py": 31,
- "aipager/doctor.py": 233,
+ "aipager/doctor.py": 230,
  "aipager/dtach/__init__.py": 1,
  "aipager/dtach/enforce.py": 4,
  "aipager/dtach/hook_receiver.py": 13,

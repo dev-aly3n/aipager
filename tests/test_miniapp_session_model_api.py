@@ -278,7 +278,7 @@ def test_rate_limited(server, run_async, monkeypatch):
     "--dangerously-skip-permissions",
     "opus[2m]",
     "[1m]",
-    "a" * 65,
+    "a" * 129,                      # over the cap
     "",
     None,
     123,

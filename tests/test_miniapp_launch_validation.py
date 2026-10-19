@@ -468,6 +468,86 @@ def test_a_label_resolving_to_something_hostile_is_still_rejected():
     assert validate_model("Weird", choices)[0] == ""
 
 
+# The names gateways and providers use, from their official Claude Code
+# setup pages (2026-10). Claude Code 2.1.302 sends each unchanged.
+_PROVIDER_NAMES = [
+    "openrouter/acme/model-y@v1:free",
+    "~anthropic/claude-opus-latest",
+    "~anthropic/claude-opus-latest[1m]",
+    "claude-haiku-4-5@20251001",
+    "arn:aws:bedrock:us-east-2:123456789012:application-inference-profile/opus-46-prod",
+    "qwen3.5:cloud",
+    "deepseek,deepseek-chat",
+    "MiniMax-M3.1-Flash-Preview[1m]",
+    "gpt-5.6_terra",
+    "a" * MAX_MODEL_LENGTH,
+]
+_NOT_NAMES = [
+    ".hidden", "/abs", "@x", ",x", ":x", "_x", "-x",
+    "a[2m]", "a[1m][1m]", "a[1m]b", "a b", "a\tb", "a'b", 'a"b', "a\\b", "a*b",
+    "a?b", "a#b", "a+b", "a=b", "a%b", "a;b", "a|b", "a&b", "a$b", "a>b",
+    "modèle", "a" * (MAX_MODEL_LENGTH + 1),
+]
+
+
+@pytest.mark.parametrize("value", _PROVIDER_NAMES, ids=lambda v: v[:40])
+def test_the_names_providers_use_are_accepted(value):
+    assert validate_model(value, _CHOICES) == (value, "")
+
+
+@pytest.mark.parametrize("value", _NOT_NAMES, ids=lambda v: repr(v)[:40])
+def test_what_no_model_name_holds_is_refused(value):
+    resolved, err = validate_model(value, _CHOICES)
+    assert resolved == "", f"{value!r} was accepted"
+    assert err
+
+
+def test_the_mini_app_checks_the_same_rule_as_the_server():
+    """The page's check is a courtesy before the server's, and they had
+    drifted: the page refused `opus[1m]`, which the server takes."""
+    import re
+
+    from aipager.miniapp import launch
+    from aipager.miniapp.static import _app, _shell
+
+    found = re.search(r"var MODEL_RE = /(.+)/;", _app.APP_JS)
+    assert found, "MODEL_RE is gone from the Mini App"
+    page = re.compile(found.group(1).replace("\\/", "/"))
+    for value in _PROVIDER_NAMES + _NOT_NAMES + ["opus", "opus[1m]", "~"]:
+        if len(value) > launch.MAX_MODEL_LENGTH:
+            continue
+        assert bool(page.match(value)) == bool(launch._VALID_MODEL.match(value)), value
+    field = re.search(r'id="new-model-name".*?maxlength="(\d+)"', _shell.HTML_BODY, re.S)
+    assert field and int(field.group(1)) == launch.MAX_MODEL_LENGTH
+
+
+@pytest.mark.parametrize("model", ["~anthropic/claude-opus-latest",
+                                   "claude-haiku-4-5@20251001", "deepseek,deepseek-chat"])
+def test_a_provider_name_reaches_claude_exactly_as_typed(monkeypatch, run_async, model):
+    """It lands inside a `bash -c` string: a leading `~` must be quoted, or
+    bash would expand it to a home folder."""
+    import shlex
+
+    from aipager.dtach import inject
+
+    captured = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured["argv"] = args
+        raise RuntimeError("stop before spawning anything")
+
+    monkeypatch.setattr(inject, "_create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
+
+    with pytest.raises(RuntimeError):
+        run_async(inject.launch_session("dev", mode="ask", model=model))
+    bash_cmd = captured["argv"][-1]
+    words = shlex.split(bash_cmd)
+    assert words[words.index("--model") + 1] == model
+    if model.startswith("~"):
+        assert f"--model '{model}'" in bash_cmd
+
+
 # ===== the model reaches the launch command, not the session ==============
 
 def test_launch_session_puts_the_model_on_the_command_line(monkeypatch, run_async):

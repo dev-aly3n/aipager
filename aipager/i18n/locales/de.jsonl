@@ -1150,7 +1150,7 @@
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "Berechtigungsmodus"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "Modellname"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "Gib einen Modellnamen ein, um fortzufahren."}
-{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Verwende nur Buchstaben ohne Umlaute, Ziffern, Punkte und Bindestriche; beginne mit einem Buchstaben oder einer Ziffer."}
+{"k": "ui.new.model_pattern", "src": "2717b992", "v": "Verwende nur Buchstaben ohne Umlaute, Ziffern und . _ - : / @ ~ , ohne Leerzeichen; beginne mit einem Buchstaben oder einer Ziffer."}
 {"k": "ui.new.more", "src": "86c0a35e", "v": "Weitere Optionen"}
 {"k": "ui.new.name", "src": "709a2322", "v": "Name"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "Neuer Ordner"}

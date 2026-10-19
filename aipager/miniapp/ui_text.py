@@ -738,8 +738,10 @@ NEW_MODE_AUTO_HELP = Msg("ui.new.mode_auto_help",
 NEW_MODE_FULL_HELP = Msg("ui.new.mode_full_help", "Everything runs with no checks")
 NEW_REQUIRES_ADMIN = Msg("ui.new.requires_admin", "Requires admin")
 NEW_MODEL_PATTERN = Msg("ui.new.model_pattern",
-                        "Use letters, numbers, dots and hyphens; start with a letter or number.",
-                        note="What a model name may hold (Latin letters)")
+                        "Use letters, numbers and . _ - : / @ ~ , with no spaces; start with "
+                        "a letter or number.",
+                        note="What a model name may hold (Latin letters); keep the symbols "
+                             "as they are")
 NEW_MODEL_NEEDED = Msg("ui.new.model_needed", "Type a model name to continue.")
 NEW_PICK_DIR_FIRST = Msg("ui.new.pick_dir_first", "Pick a working directory above first.")
 NEW_CREATING = Msg("ui.new.creating", "Creating…", note="Mini App: a folder is being created")

@@ -1150,7 +1150,7 @@
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "Chế độ quyền"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "Tên mô hình"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "Nhập tên mô hình để tiếp tục."}
-{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Dùng chữ cái không dấu, chữ số, dấu chấm và gạch nối; bắt đầu bằng chữ cái hoặc chữ số."}
+{"k": "ui.new.model_pattern", "src": "2717b992", "v": "Dùng chữ cái không dấu, chữ số và . _ - : / @ ~ , không có khoảng trắng; bắt đầu bằng chữ cái hoặc chữ số."}
 {"k": "ui.new.more", "src": "86c0a35e", "v": "Thêm tùy chọn"}
 {"k": "ui.new.name", "src": "709a2322", "v": "Tên"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "Thư mục mới"}

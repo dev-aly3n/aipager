@@ -558,7 +558,7 @@ def test_a_full_model_name_is_passed_through(server, run_async):
     "opus\x00evil",                 # NUL
     "-rf",                          # reads as another FLAG, not a value
     "--dangerously-skip-permissions",   # ...and THAT one is the admin gate
-    "a" * 65,                       # over the cap
+    "a" * 129,                      # over the cap
     123, [], {},                    # not text
 ])
 def test_a_hostile_model_is_refused_and_nothing_is_launched(server, run_async, model):

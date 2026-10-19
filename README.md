@@ -354,6 +354,15 @@ The keyboard's **Model** menu and the Mini App offer Claude Code's family aliase
 </details>
 
 <details>
+<summary><b>I use an API key, a gateway or another provider. Does aipager work?</b></summary>
+
+<br>
+
+Yes. aipager runs Claude Code as you set it up, and answers the questions Claude Code asks at start (the folder, the API key, the first-run screens), so a session started from Telegram does not stop at them. Put the settings in the `env` block of `~/.claude/settings.json`, or in `~/.config/aipager/daemon.env` (one `KEY=value` a line, no quotes). The Opus, Sonnet and Haiku buttons follow `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL` and `ANTHROPIC_DEFAULT_HAIKU_MODEL`, and any other model can be typed by name. Anthropic supports Claude Code with Claude models only. See [Troubleshooting](https://github.com/dev-aly3n/aipager/blob/main/docs/troubleshooting.md#using-an-api-key-a-gateway-or-another-provider).
+
+</details>
+
+<details>
 <summary><b>What does it cost?</b></summary>
 
 <br>

@@ -67,7 +67,9 @@ import secrets
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 from pathlib import Path
 
 from aipager._test_guard import RealHomeWriteError, check_write
@@ -586,6 +588,25 @@ def _cleanup_probe_artifacts(tmpdir: str) -> None:
         raise
     except Exception:
         pass
+
+
+_ANTHROPIC_HOSTS = ("anthropic.com", "claude.com", "claude.ai")
+
+
+def uses_custom_endpoint(env: Mapping[str, str]) -> bool:
+    """*env* (as Claude Code runs with it) points Claude Code at an address
+    that is not Anthropic's own: a gateway or another provider set in
+    ANTHROPIC_BASE_URL. Then "log in to Claude" is the wrong fix for a
+    refused credential (``aipager doctor``): the key for that address is."""
+    url = (env.get("ANTHROPIC_BASE_URL") or "").strip()
+    if not url:
+        return False
+    try:
+        # A bare "api.anthropic.com" has no scheme, so no host to urlsplit.
+        host = (urlsplit(url if "//" in url else "//" + url).hostname or "").lower()
+    except ValueError:
+        return True
+    return not any(host == h or host.endswith("." + h) for h in _ANTHROPIC_HOSTS)
 
 
 def _with_article(kind: str) -> str:

@@ -1150,7 +1150,7 @@
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "权限模式"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "模型名称"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "请输入模型名称以继续。"}
-{"k": "ui.new.model_pattern", "src": "7222f368", "v": "请使用英文字母、数字、点和连字符，并以英文字母或数字开头。"}
+{"k": "ui.new.model_pattern", "src": "2717b992", "v": "请使用英文字母、数字和 . _ - : / @ ~ , 这些符号，不要有空格，并以英文字母或数字开头。"}
 {"k": "ui.new.more", "src": "86c0a35e", "v": "更多选项"}
 {"k": "ui.new.name", "src": "709a2322", "v": "名称"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "新建文件夹"}

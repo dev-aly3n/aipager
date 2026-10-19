@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Any model name Claude Code takes can be typed for a new session.** On `/new`'s model step and in the Mini App, a typed name may now hold `/`, `@`, `~` and `,` as well as letters, digits and `. _ - :`, up to 128 characters, as the names of gateways and providers do (`vendor/model`, a Vertex `model@date`, a Bedrock ARN). It must still start with a letter, a digit or `~`. The Mini App also takes the `[1m]` ending now, as the server already did.
+
+### Fixed
+- **A session started from Telegram no longer stops at Claude Code's "Do you want to use this API key?" question.** With `ANTHROPIC_API_KEY` set, the first message answered it with No, and Claude Code then refused the key for good, so every session answered "Not logged in". aipager now answers it right before the session starts: yes for a key set in Claude Code's `settings.json` or aipager's `daemon.env`, or when nothing else logs the session in; no for a key that only comes from the environment aipager was started in when you are logged in to Claude another way, so your sessions stay on that login and its plan. It keeps an answer you gave yourself, except a no that leaves a key set in those files as the only way in. `aipager doctor` now warns when such a no leaves sessions with no login, which its probe could not see.
+- **A session on a new machine or container no longer stops at Claude Code's first-run screens.** Where Claude Code never finished its first run (after `claude setup-token`, or with only a key), a session opened on the theme picker. aipager marks the first run done when the session has a credential.
+- **`aipager doctor` gives the right fix for a gateway or another provider.** With `ANTHROPIC_BASE_URL` set to a gateway or another provider it points at the key for that address instead of `claude auth login`, and `doctor --fix` no longer offers to add a second credential to a `daemon.env` that holds `ANTHROPIC_AUTH_TOKEN` or a Bedrock, Vertex or Foundry switch. The startup notice calls an `ANTHROPIC_AUTH_TOKEN` an auth token, not a setup token. [Troubleshooting](docs/troubleshooting.md#using-an-api-key-a-gateway-or-another-provider) has a new section on these setups.
+
 ## [1.3.7] - 2026-10-18
 
 ### Added

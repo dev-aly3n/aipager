@@ -235,9 +235,17 @@ person's tap. Three things let calls run with no prompt to a person:
   not trusted. Versions before this one marked the daemon's folder at
   every start, `/` included for a macOS service (which ran in `/`);
   aipager cannot tell such an entry from one you made, so it leaves
-  it. aipager leaves `~/.claude.json` and `~/.claude/settings.json`
-  alone when it cannot read them whole, or when a running Claude
-  changed them while aipager was updating them.
+  it. In the same write, right before a session starts, aipager answers
+  Claude Code's "Do you want to use this API key?" question for the
+  `ANTHROPIC_API_KEY` the session gets, the way its owner would
+  ([which answer](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)):
+  it records the key's last 20 characters in `customApiKeyResponses`,
+  as Claude Code does, and never the key, which it never logs either.
+  Where Claude Code never finished its first run and the session has a
+  credential, it sets `hasCompletedOnboarding`, so the session does not
+  stop at the theme picker. aipager leaves `~/.claude.json` and
+  `~/.claude/settings.json` alone when it cannot read them whole, or
+  when a running Claude changed them while aipager was updating them.
 - **Allow always**, which hands Claude Code back the "don't ask again"
   rule it offered with the prompt, exactly as that option in its own
   dialog would.

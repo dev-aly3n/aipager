@@ -5,10 +5,11 @@ Claude Code asks "Do you trust this folder?" in a folder it has never
 trusted; the first message sent from Telegram answers it with Enter on
 "No, exit" and the session ends (real Claude Code 2.1.301). So
 ``inject.launch_session`` trusts the folder first
-(``claude_bootstrap.ensure_folder_trusted``). ~/.claude.json is Claude
-Code's whole user config and every running Claude rewrites it, so
-``_update_json`` never writes a file it could not read whole, and never
-replaces one that changed since it read it.
+(``claude_bootstrap.prepare_session_start``, which also answers the API key
+question and the first-run screens: tests/test_session_start_answers.py).
+~/.claude.json is Claude Code's whole user config and every running Claude
+rewrites it, so ``_update_json`` never writes a file it could not read
+whole, and never replaces one that changed since it read it.
 """
 
 from __future__ import annotations
@@ -515,7 +516,9 @@ def test_launch_never_trusts_a_folder_that_holds_the_home_folder(
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     cwd = {"above home": tmp_path, "root": Path("/")}[where]
-    raw = _write(claude_json, {"oauthAccount": {"x": 1}})
+    # First run done already, so a trust entry is the only thing that
+    # could change the file.
+    raw = _write(claude_json, {"oauthAccount": {"x": 1}, "hasCompletedOnboarding": True})
     seen: dict = {}
     _spawn_recorder(monkeypatch, seen, claude_json)
 
@@ -527,10 +530,10 @@ def test_launch_never_trusts_a_folder_that_holds_the_home_folder(
 
 
 def test_launch_goes_on_when_trusting_raises(claude_json, tmp_path, monkeypatch, run_async):
-    def _boom(folder):
+    def _boom(folder, env):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(claude_bootstrap, "ensure_folder_trusted", _boom)
+    monkeypatch.setattr(claude_bootstrap, "prepare_session_start", _boom)
     seen: dict = {}
     _spawn_recorder(monkeypatch, seen, claude_json)
 

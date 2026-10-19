@@ -1150,7 +1150,7 @@
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "Modo de permisos"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "Nombre del modelo"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "Escribe un nombre de modelo para continuar."}
-{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Usa solo letras sin tildes, números, puntos y guiones; empieza con una letra o un número."}
+{"k": "ui.new.model_pattern", "src": "2717b992", "v": "Usa solo letras sin tildes, números y . _ - : / @ ~ , sin espacios; empieza con una letra o un número."}
 {"k": "ui.new.more", "src": "86c0a35e", "v": "Más opciones"}
 {"k": "ui.new.name", "src": "709a2322", "v": "Nombre"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "Nueva carpeta"}

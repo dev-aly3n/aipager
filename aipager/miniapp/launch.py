@@ -103,7 +103,7 @@ _FOLDER_EXISTS = Msg("app.launch.folder_exists",
                      "A folder with that name already exists there. Pick a new name.")
 _MODEL_NOT_TEXT = Msg("app.launch.model_not_text", "Model must be text.")
 _MODEL_TOO_LONG = Msg("app.launch.model_too_long",
-                      "Model name must be {max} characters or fewer.", eg={"max": 64})
+                      "Model name must be {max} characters or fewer.", eg={"max": 128})
 _MODEL_PATTERN = Msg("app.launch.model_pattern",
                      "Use one of the listed models, or a full model name like {example}.",
                      eg={"example": "claude-opus-5"},
@@ -189,20 +189,30 @@ _VALID_DIR_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 # 'opus', or 'sonnet') or a model's full name (e.g. 'claude-fable-5')",
 # so the set cannot be enumerated — but it can be constrained.
 #
-# The first character MUST be alphanumeric, and that is the load-bearing
-# part: the value becomes claude's own argv, where a token starting with
-# `-` is parsed as another FLAG rather than as this flag's value.
-# `{"model": "--dangerously-skip-permissions"}` would then be a way past
-# the admin gate on Full access mode. `shlex.quote` does not help with that at
-# all — it makes a value shell-safe, not argv-safe.
+# The first character MUST be a letter, a digit or `~`, and that is the
+# load-bearing part: the value becomes claude's own argv, where a token
+# starting with `-` is parsed as another FLAG rather than as this flag's
+# value. `{"model": "--dangerously-skip-permissions"}` would then be a way
+# past the admin gate on Full access mode. `shlex.quote` does not help with
+# that at all - it makes a value shell-safe, not argv-safe. A leading `/`
+# or `.` would read as a path, so neither starts a name either.
 #
-# `:` is allowed for Bedrock/Vertex-style ids (`...-v1:0`). One exact
-# trailing `[1m]` is allowed too: it is Claude Code's own 1M-context
-# suffix (`claude-opus-5-5[1m]`, `opus[1m]`). Only that literal — `[` and
-# `]` are glob characters, so the allow-list stays as narrow as the one
-# form Claude Code documents rather than admitting brackets in general.
-MAX_MODEL_LENGTH = 64
-_VALID_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*(?:\[1m\])?$")
+# The rest is what the names gateways and providers use are made of
+# (their official docs, 2026-10): `:` for Bedrock ids (`...-v1:0`) and
+# Ollama tags (`qwen3.5:cloud`), `/` for OpenRouter and LiteLLM names and
+# Bedrock ARNs (`vendor/model`, `arn:aws:bedrock:...:application-inference-
+# profile/x`), `@` for Vertex dates (`claude-haiku-4-5@20251001`), `~` for
+# OpenRouter's "latest" names (`~anthropic/claude-opus-latest`), `,` for
+# claude-code-router's `provider,model`. Claude Code sends any of them
+# unchanged (checked with 2.1.302, `--model` and a typed `/model`), and
+# `shlex.quote` quotes a leading `~`, so bash never expands it. One exact
+# trailing `[1m]` is allowed too: Claude Code's own 1M-context suffix
+# (`claude-opus-5-5[1m]`, `opus[1m]`), stripped before the name is sent.
+# Only that literal - `[` and `]` are glob characters, so brackets in
+# general stay out. The longest documented name is an 85-character ARN.
+# The Mini App checks the same rule (static/_app.py MODEL_RE).
+MAX_MODEL_LENGTH = 128
+_VALID_MODEL = re.compile(r"^[A-Za-z0-9~][A-Za-z0-9._:/@~,-]*(?:\[1m\])?$")
 
 
 def validate_session_name(name: object) -> tuple[str, str]:

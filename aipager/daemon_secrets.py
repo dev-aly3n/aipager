@@ -103,6 +103,12 @@ def set_recovered_credential(overlay: dict[str, str]) -> None:
     _recovered = dict(overlay)
 
 
+def recovered_credential() -> dict[str, str]:
+    """A copy of the overlay :func:`set_recovered_credential` recorded
+    (empty in the normal case). Values are secrets: never log them."""
+    return dict(_recovered)
+
+
 def build_session_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
     """``(base_env or os.environ)`` overlaid with the daemon credential file.
 
@@ -126,5 +132,5 @@ def build_session_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
 
 __all__ = [
     "DAEMON_ENV_PATH", "build_session_env", "read_daemon_credential",
-    "set_recovered_credential",
+    "recovered_credential", "set_recovered_credential",
 ]

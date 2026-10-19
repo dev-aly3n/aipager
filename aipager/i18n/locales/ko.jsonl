@@ -1150,7 +1150,7 @@
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "권한 모드"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "모델 이름"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "계속하려면 모델 이름을 입력하세요."}
-{"k": "ui.new.model_pattern", "src": "7222f368", "v": "영문자, 숫자, 점, 하이픈을 쓰고 영문자나 숫자로 시작해 주세요."}
+{"k": "ui.new.model_pattern", "src": "2717b992", "v": "영문자, 숫자와 . _ - : / @ ~ , 기호를 공백 없이 쓰고 영문자나 숫자로 시작해 주세요."}
 {"k": "ui.new.more", "src": "86c0a35e", "v": "옵션 더 보기"}
 {"k": "ui.new.name", "src": "709a2322", "v": "이름"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "새 폴더"}

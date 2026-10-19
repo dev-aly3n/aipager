@@ -1150,7 +1150,7 @@
 {"k": "ui.new.mode_title", "src": "9c8c621a", "v": "İzin modu"}
 {"k": "ui.new.model_name", "src": "5ebb9765", "v": "Model adı"}
 {"k": "ui.new.model_needed", "src": "c585e482", "v": "Devam etmek için bir model adı yaz."}
-{"k": "ui.new.model_pattern", "src": "7222f368", "v": "Yalnızca Latin harfleri (Türkçe karakter olmadan), rakam, nokta ve tire kullan; bir harf ya da rakamla başla."}
+{"k": "ui.new.model_pattern", "src": "2717b992", "v": "Yalnızca Latin harfleri (Türkçe karakter olmadan), rakam ve . _ - : / @ ~ , kullan, boşluk bırakma; bir harf ya da rakamla başla."}
 {"k": "ui.new.more", "src": "86c0a35e", "v": "Daha fazla seçenek"}
 {"k": "ui.new.name", "src": "709a2322", "v": "Ad"}
 {"k": "ui.new.new_folder", "src": "a711999b", "v": "Yeni klasör"}

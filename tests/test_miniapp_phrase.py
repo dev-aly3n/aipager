@@ -152,7 +152,7 @@ def test_launch_errors_are_today_s_english_and_render_with_their_command():
         (launch.validate_new_dir_name("a" * 70), "Folder name must be 64 characters or fewer."),
         (launch.validate_new_dir_name("a/b"),
          "Use letters, numbers, dots, hyphens and underscores; start with a letter or number."),
-        (launch.validate_model("m" * 70, ()), "Model name must be 64 characters or fewer."),
+        (launch.validate_model("m" * 130, ()), "Model name must be 128 characters or fewer."),
         (launch.validate_model("-x", ()),
          "Use one of the listed models, or a full model name like claude-opus-5."),
         (launch.validate_cwd(5, ["/"]), "Working directory must be text."),

@@ -3632,8 +3632,9 @@ APP_JS = r"""
   };
   // Sentinel for a typed model; chosenModel() resolves it.
   var MODEL_CUSTOM = "custom:free-text";
-  // The server's rule (launch._VALID_MODEL), as a courtesy.
-  var MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+  // The server's rule (launch._VALID_MODEL), as a courtesy; a test keeps
+  // them the same.
+  var MODEL_RE = /^[A-Za-z0-9~][A-Za-z0-9._:\/@~,-]*(?:\[1m\])?$/;
   var CWD_NEW_FOLDER = "cwd:new-folder";
   // Set when a reveal opens, consumed by the next render: focusing on
   // every render would steal the keyboard.

@@ -244,7 +244,7 @@ HTML_BODY = """\
     <label class="reveal-label" for="new-model-name" data-i18n="ui.new.model_name">Model name</label>
     <input id="new-model-name" class="field-input" type="text" autocomplete="off" dir="ltr"
            autocapitalize="none" spellcheck="false" placeholder="claude-opus-5"
-           maxlength="64">
+           maxlength="128">
     <div id="new-model-note" class="reveal-note"></div>
   </div>
 

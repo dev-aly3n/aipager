@@ -1023,21 +1023,38 @@ async def launch_session(
     # session, and a session started from Telegram cannot give it. Never /
     # or a folder above home, which would reach every such folder on the
     # machine.
+    # The same goes for Claude Code's "use this API key?" question and its
+    # first-run screens: they are answered in the same write, from the very
+    # environment the session gets (claude_bootstrap.prepare_session_start).
     from aipager import claude_bootstrap, safety
+    session_env = daemon_secrets.build_session_env()
     try:
+        trust = launch_cwd
         if safety.holds_home_folder(launch_cwd):
+            trust = None
             log.info("[%s] the session's folder is / or a folder above the home folder "
                      "- not marked trusted for Claude Code", name)
-        elif claude_bootstrap.ensure_folder_trusted(launch_cwd):
-            log.info("[%s] marked the session's folder trusted for Claude Code", name)
+        for change in claude_bootstrap.prepare_session_start(trust, session_env):
+            if change == "trusted":
+                log.info("[%s] marked the session's folder trusted for Claude Code", name)
+            elif change == "key-approved":
+                log.info("[%s] told Claude Code to use the session's ANTHROPIC_API_KEY", name)
+            elif change == "key-declined":
+                log.info("[%s] told Claude Code not to use the ANTHROPIC_API_KEY aipager "
+                         "inherited from its environment: sessions use the other login (to "
+                         "use the key, turn it on with /config, \"Use custom API key\", in a "
+                         "terminal session that has it)", name)
+            elif change == "onboarded":
+                log.info("[%s] marked Claude Code's first-run screens done", name)
     except Exception:
-        log.warning("[%s] could not mark the session's folder trusted", name, exc_info=True)
+        log.warning("[%s] could not prepare Claude Code's start-up answers", name,
+                    exc_info=True)
 
     try:
         proc = await _create_subprocess_exec(
             _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,
             cwd=launch_cwd,
-            env=daemon_secrets.build_session_env(),
+            env=session_env,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )

@@ -315,7 +315,11 @@ entry sends a canned prompt or slash command:
   pinned models (`claude-opus-5-5`, `claude-opus-5-5[1m]` with the 1M
   context window, `claude-sonnet-5-5`, `claude-fable-5-1`,
   `claude-haiku-5-5`). The Mini App's launch and session pickers use
-  the same list. A switch is refused while the session is working or a
+  the same list. Any other model is typed by name on `/new`'s model
+  step or in the Mini App, as Claude Code or your provider writes it:
+  up to 128 characters of letters, digits and `. _ - : / @ ~ ,`, with
+  `[1m]` allowed at the end ([providers](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
+  A switch is refused while the session is working or a
   prompt is open. The `🔄` reply then changes to show the model the
   session reports, or says the switch was not confirmed (see
   [Switching a running session's model](#switching-a-running-sessions-model)).

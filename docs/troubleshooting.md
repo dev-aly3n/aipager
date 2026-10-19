@@ -480,7 +480,7 @@ A check that crashes on an unexpected environment shows as a single
 | `role_shell_access` | Warns once for every role a member holds that can run Bash (its safety rules are best-effort, not a boundary; see [groups](groups.md#roles)) | give that role no Bash in `policy.yaml`, or accept it |
 | `peer_messages` | Messages between Claude sessions: where their receipts are kept and whether that folder is private, whether this system can check the sender's start time, and a warning for every role a policy lets use SendMessage (see [security](security.md#messages-between-claude-sessions)) | remove a shared receipt folder (aipager recreates it), or give that role no SendMessage |
 | `claude` | Resolves the `claude` binary the way every launch does (`claude_path` in `aipager.yaml` or `$AIPAGER_CLAUDE_BIN` win outright; otherwise the newest of `~/.local/bin`, PATH and Homebrew), and lists every OTHER distinct install found | install Claude Code, or set `claude_path` / `AIPAGER_CLAUDE_BIN` |
-| `claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs**: "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN` |
+| `claude_auth` | Probes `claude auth status` in the same environment a real session gets. **Never FAILs**: "not logged in" and "the probe itself failed" are reported distinctly, and neither stops a session from launching. It also warns when Claude Code was told not to use the sessions' `ANTHROPIC_API_KEY` and nothing else logs them in | `claude auth login`, or set an API key / `CLAUDE_CODE_OAUTH_TOKEN`; with `ANTHROPIC_BASE_URL` set, the key for that address ([providers](#using-an-api-key-a-gateway-or-another-provider)) |
 | `dtach` | `dtach` binary found (aipager's own `dtach-bin`, or one on PATH) | `uv tool install --reinstall aipager` |
 | `hook_scripts` | `aipager-hook` and `aipager-statusline` are on PATH | `uv tool install --reinstall aipager` |
 | `settings_json` | `~/.claude/settings.json` has the aipager hooks wired up | `aipager config` |
@@ -538,6 +538,59 @@ aipager service stop && aipager service start
 
 See [Security model - The Claude credential](security.md#the-claude-credential-what-actually-protects-it)
 for what this file does and doesn't protect against.
+
+## Using an API key, a gateway or another provider
+
+aipager runs Claude Code as you set it up, so a session started from
+Telegram logs in the way `claude` does in your terminal: a claude.ai
+login, an Anthropic API key, a gateway (LiteLLM, Vercel, Cloudflare and
+the like) or another company's Anthropic-format address set in
+`ANTHROPIC_BASE_URL`. Anthropic supports Claude Code with Claude models
+only; other models can behave differently.
+
+- **Where the settings go.** In the `env` block of
+  `~/.claude/settings.json`, which every Claude Code session reads, or in
+  `~/.config/aipager/daemon.env`, which only the sessions aipager starts
+  get: one `KEY=value` a line, with no quotes (they would become part of
+  the value). A service (`aipager service install`) never reads your
+  shell's profile, so an `export` there does not reach it. Restart aipager
+  after you change `daemon.env`.
+- **Which key setting.** For a gateway or another provider, Claude Code's
+  docs suggest `ANTHROPIC_AUTH_TOKEN`, which it never asks about. For
+  `ANTHROPIC_API_KEY` it asks once "Do you want to use this API key?", and
+  a session started from Telegram cannot answer, so aipager answers in
+  `~/.claude.json` right before the session starts:
+  - Yes, when the key is set in `settings.json` or `daemon.env`, or when
+    nothing else can log the session in.
+  - No, when the key only comes from the environment aipager was started
+    in and you are logged in to Claude another way: your sessions stay on
+    that login and its plan. To use the key, turn it on in a terminal
+    session that has it, with `/config` and "Use custom API key".
+  - An answer you gave yourself stays, except a No for a key set in
+    `settings.json` or `daemon.env` when nothing else can log a session
+    in. `aipager doctor` says when a No leaves sessions with no login;
+    turn the key back on in a terminal with `/config` and "Use custom API
+    key".
+- **First-run screens.** Where Claude Code never finished its first run
+  (a new machine or container), aipager marks it done when the session
+  has a credential, so a session does not stop at the theme picker. With
+  no credential at all, run `claude` once in a terminal and log in.
+- **Models.** The Opus, Sonnet and Haiku buttons send Claude Code's
+  `opus`, `sonnet` and `haiku`, which it maps to your provider's models
+  when you set `ANTHROPIC_DEFAULT_OPUS_MODEL`,
+  `ANTHROPIC_DEFAULT_SONNET_MODEL` and `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
+  The `claude-...` buttons need a provider that has those models. Type any
+  other model on `/new`'s model step or in the Mini App, as your provider
+  writes it: up to 128 characters of letters, digits and `. _ - : / @ ~ ,`,
+  with Claude Code's `[1m]` ending allowed. `keyboard.json` changes the
+  buttons (see [Persistent keyboard](commands.md#persistent-keyboard)).
+- **`ANTHROPIC_BASE_URL` with no key.** Claude Code then sends your
+  claude.ai login to that address. Set the provider's key too, unless the
+  address is a gateway meant to pass your login on to Anthropic.
+- **Not supported:** tools that run Claude Code on another company's chat
+  subscription (a ChatGPT plan, for example) through a local proxy. That
+  company has not approved Claude Code for its plans, and such use can put
+  that account at risk.
 
 ## The daemon's control socket moved
 

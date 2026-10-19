@@ -237,6 +237,10 @@ def check_claude() -> CheckResult:
     return CheckResult(OK, "claude CLI", detail=detail)
 
 
+#: The row :func:`check_claude_auth` reports on.
+_AUTH_ROW = "claude auth"
+
+
 def check_claude_auth() -> CheckResult:
     """Probe `claude auth status` against the SAME environment a real
     session launch gets — never the daemon's own bare ``os.environ``.
@@ -248,14 +252,19 @@ def check_claude_auth() -> CheckResult:
     failure must never be conflated with "not logged in" (that's
     reported as a WARN with a distinct message, not treated as FAIL).
     """
-    from aipager import claude_resolve, daemon_secrets
+    from aipager import claude_bootstrap, claude_resolve, daemon_secrets
 
     try:
         resolved = claude_resolve.resolve_claude_binary(force=True)
     except claude_resolve.ClaudeNotFoundError as e:
-        return CheckResult(WARN, "claude auth", detail=[f"can't probe - {e}"])
+        return CheckResult(WARN, _AUTH_ROW, detail=[f"can't probe - {e}"])
 
     env = daemon_secrets.build_session_env()
+    # A gateway or another provider (ANTHROPIC_BASE_URL): its key is the
+    # fix, not a claude.ai login.
+    custom = claude_resolve.uses_custom_endpoint(claude_bootstrap.claude_env(env))
+    login_fix = ("check the key for the address in ANTHROPIC_BASE_URL" if custom
+                 else "claude auth login")
     auth = claude_resolve.detect_auth(
         resolved.chosen.path, resolved.chosen.version, env,
     )
@@ -265,11 +274,12 @@ def check_claude_auth() -> CheckResult:
     detail_line = line.split("· ", 1)[-1] if "· " in line else line
 
     if auth.source in ("probe-failed", "version-gated"):
-        return CheckResult(WARN, "claude auth", detail=[detail_line])
+        return CheckResult(WARN, _AUTH_ROW, detail=[detail_line])
     if not auth.logged_in:
         return CheckResult(
-            WARN, "claude auth", detail=[detail_line],
-            fix="claude auth login  # or set an API key / CLAUDE_CODE_OAUTH_TOKEN",
+            WARN, _AUTH_ROW, detail=[detail_line],
+            fix=login_fix if custom else (
+                "claude auth login  # or set an API key / CLAUDE_CODE_OAUTH_TOKEN"),
         )
 
     # `auth status` says we have a credential — but it only checks that
@@ -280,25 +290,36 @@ def check_claude_auth() -> CheckResult:
     check = claude_resolve.validate_credential(resolved.chosen.path, env)
     if check.state == "rejected":
         return CheckResult(
-            WARN, "claude auth",
+            WARN, _AUTH_ROW,
             detail=[f"{detail_line} - but the API rejected it "
                     "(expired or revoked)"],
-            fix="claude auth login  # the stored credential is no longer valid",
+            fix=login_fix if custom else (
+                "claude auth login  # the stored credential is no longer valid"),
         )
     if check.state == "absent":
         return CheckResult(
-            WARN, "claude auth",
+            WARN, _AUTH_ROW,
             detail=[f"{detail_line} - but claude reports no usable credential"],
-            fix="claude auth login",
+            fix=login_fix,
+        )
+    if claude_bootstrap.refused_key_strands_sessions(env):
+        # The probe runs `claude -p`, which uses a key Claude Code was told
+        # not to use; an interactive session does not, and has no other login.
+        return CheckResult(
+            WARN, _AUTH_ROW,
+            detail=[f"{detail_line} - but Claude Code was told not to use this "
+                    "ANTHROPIC_API_KEY, so sessions answer \"Not logged in\""],
+            fix="set the key in daemon.env, or turn on \"Use custom API key\" under "
+                "/config in `claude`",
         )
     if check.state == "unknown":
         # Offline, or a probe we could not interpret. Report the cheap
         # check's answer rather than inventing a verdict.
         return CheckResult(
-            OK, "claude auth",
+            OK, _AUTH_ROW,
             detail=[f"{detail_line} (not re-verified: {check.detail})"],
         )
-    return CheckResult(OK, "claude auth", detail=[f"{detail_line} (verified)"])
+    return CheckResult(OK, _AUTH_ROW, detail=[f"{detail_line} (verified)"])
 
 
 def check_service_unit_path() -> CheckResult:
@@ -946,8 +967,7 @@ def _daemon_env_state(path) -> str:
     """``"credential"`` when ``daemon.env`` holds a non-empty Claude
     credential, ``"unreadable"`` when it exists but cannot be read, else
     ``"none"`` (missing, empty, or other lines only)."""
-    from aipager import daemon_secrets
-    from aipager.service import _TOKEN_KEYS
+    from aipager import claude_bootstrap, daemon_secrets
 
     try:
         text = path.read_text(encoding="utf-8")
@@ -956,7 +976,12 @@ def _daemon_env_state(path) -> str:
     except (OSError, UnicodeDecodeError):
         return "unreadable"
     values = daemon_secrets._parse_env_file(text)
-    return "credential" if any(values.get(k) for k in _TOKEN_KEYS) else "none"
+    # Any credential Claude Code takes counts, a gateway's
+    # ANTHROPIC_AUTH_TOKEN and a cloud provider switch included: --fix must
+    # not offer to add a second, OAuth one next to them.
+    found = claude_bootstrap._kinds_in(values) or any(
+        claude_bootstrap._switch_on(values.get(var)) for var in claude_bootstrap._CLOUD_SWITCHES)
+    return "credential" if found else "none"
 
 
 def _fix_daemon_credential() -> None:

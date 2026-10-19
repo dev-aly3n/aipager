@@ -364,7 +364,7 @@
   "That path isn't a directory.",
   "That directory isn't one this chat already works in.",
   "Model must be text.",
-  "Model name must be 64 characters or fewer.",
+  "Model name must be 128 characters or fewer.",
   "Use one of the listed models, or a full model name like claude-opus-5.",
   "A session named x1 already exists in this chat.",
   "Pick a working directory to create the folder in.",
