@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ 4ce4791d -->
+<!-- i18n-source: docs/commands.md @ df3e74b6 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -114,7 +114,7 @@ La página de una sesión en marcha tiene un control de **Modelo** que muestra e
 - **Solo con la sesión lista, no mientras Claude trabaja ni con una solicitud abierta.** Claude Code ejecuta `/model` al momento, incluso a mitad de una tarea, y no después, así que el cambio se rechaza hasta que termina la tarea. El teclado del chat también lo rechaza en esos casos, con las mismas palabras.
 - **La pregunta «Switch model?» de Claude Code.** Claude Code suele preguntar esto antes de un cambio, porque la siguiente respuesta tiene que volver a leer toda la conversación. Con Claude Code 2.1.251 o posterior, el hook `PreModelSwitch` de aipager aprueba el cambio que acaba de escribir aipager, así que la pregunta no se hace (mira [hooks](hooks.md#premodelswitch)). Cualquier otro cambio sigue preguntando. Con un Claude Code anterior, o en un cambio hacia o desde `opusplan`, la pregunta todavía puede aparecer. Entonces el cambio se muestra como *no confirmado* y la pregunta espera en la terminal. Respóndela ahí antes de enviarle nada más a la sesión, o tu siguiente mensaje se escribiría en ella. Por la misma razón, aipager rechaza otro cambio de esa sesión durante un minuto después de uno sin confirmar, o hasta que la sesión informa un modelo nuevo.
 - **Un mensaje enviado justo después de un cambio espera.** Claude Code primero comprueba el modelo con una solicitud (hasta 15 segundos) y pierde lo que se escriba mientras tanto, así que un mensaje que envíes en ese momento queda retenido (👀) y llega a Claude cuando la sesión informa el nuevo modelo, o a los 17 segundos.
-- **El modelo también pasa a ser el predeterminado de Claude Code para las sesiones nuevas.** Igual que con `/model` en la terminal, Claude Code guarda el modelo al que cambias en su `settings.json`, y toda sesión nueva sin modelo propio empieza con él. La respuesta del chat, la tarjeta de la sesión nueva y la Mini App lo dicen cuando pasa. Una sesión que empezó con su propio modelo (en el paso de modelo de `/new` o desde los valores de `/settings`) lo conserva.
+- **El modelo también pasa a ser el predeterminado de Claude Code para las sesiones nuevas.** Igual que con `/model` en la terminal, Claude Code guarda el modelo al que cambias en su `settings.json`, y toda sesión nueva sin modelo propio empieza con él. La respuesta del chat, la tarjeta de la sesión nueva y la Mini App lo dicen cuando pasa. Una sesión que empezó con su propio modelo (en el paso de modelo de `/new` o desde los valores de `/settings`) lo conserva. En un grupo, un miembro cuyo rol no puede administrar el chat (`user`, `read_only`) cambia solo su propia sesión: aipager devuelve el predeterminado de Claude Code a como estaba.
 
 ## <a id="the-pinned-status-bar"></a>La barra de estado fijada
 

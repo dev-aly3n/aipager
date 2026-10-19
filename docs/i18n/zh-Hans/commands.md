@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ 4ce4791d -->
+<!-- i18n-source: docs/commands.md @ df3e74b6 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
@@ -114,7 +114,7 @@ aipager 会说 English、Español、Русский、Português (Brasil)、简�
 - **只在会话就绪时，不在 Claude 工作中或有打开的请求时。** Claude Code 会立即运行 `/model`，即使在任务进行到一半时，而不是等任务完成之后，所以在任务结束之前更换会被拒绝。聊天里的键盘在同样的状态下也会拒绝，措辞相同。
 - **Claude Code 的“Switch model?”问题。** Claude Code 通常会在更换之前问这个问题，因为下一次回答必须重新读取整段对话。在 Claude Code 2.1.251 及更高版本上，aipager 的 `PreModelSwitch` hook 会批准 aipager 刚刚输入的那次更换，所以这个问题不会出现（见 [hook](hooks.md#premodelswitch)）。其他每次更换仍然会询问。在更旧的 Claude Code 上，或者更换到 `opusplan` 或从它换走时，这个问题仍可能出现。这时更换会显示为*未确认*，问题会在终端里等待。请先在那里回答，再向会话发送任何东西，否则你的下一条消息会被输入到那个问题里。也是出于这个原因，在一次未确认的更换之后的一分钟内，或者直到会话报告了新的模型之前，aipager 会拒绝对那个会话的再次更换。
 - **切换后马上发送的消息会等待。** Claude Code 会先用一个请求检查模型（最多 15 秒），这期间输入的内容都会丢失，所以这时发送的消息会先被暂存（👀），等会话报告新模型后，或 17 秒后，再发给 Claude。
-- **这个模型也会成为 Claude Code 新会话的默认模型。** 和在终端里用 `/model` 一样，Claude Code 会把你切换到的模型保存到它的 `settings.json`，之后所有没有指定模型的新会话都会用它启动。发生这种情况时，聊天里的回复、新会话的卡片和 Mini App 会告诉你。用自己的模型启动的会话（在 `/new` 的模型步骤或通过 `/settings` 默认值）会保留它。
+- **这个模型也会成为 Claude Code 新会话的默认模型。** 和在终端里用 `/model` 一样，Claude Code 会把你切换到的模型保存到它的 `settings.json`，之后所有没有指定模型的新会话都会用它启动。发生这种情况时，聊天里的回复、新会话的卡片和 Mini App 会告诉你。用自己的模型启动的会话（在 `/new` 的模型步骤或通过 `/settings` 默认值）会保留它。在群组中，角色无法管理该聊天的成员（`user`、`read_only`）只会切换自己会话的模型：aipager 会把 Claude Code 的默认模型改回原样。
 
 ## <a id="the-pinned-status-bar"></a>置顶状态栏
 

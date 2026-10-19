@@ -1,6 +1,6 @@
 # Commandes et interface du bot
 
-<!-- i18n-source: docs/commands.md @ 4ce4791d -->
+<!-- i18n-source: docs/commands.md @ df3e74b6 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../commands.md))
 
@@ -114,7 +114,7 @@ La page d'une session en cours a un contrôle **Modèle** qui montre le modèle 
 - **Seulement quand la session est prête, pas pendant que Claude travaille ni quand une demande est ouverte.** Claude Code exécute `/model` tout de suite, même en pleine tâche, plutôt qu'après la tâche, donc le changement est refusé jusqu'à la fin de la tâche. Le clavier de la discussion refuse dans les mêmes états, avec les mêmes mots.
 - **La question « Switch model? » de Claude Code.** Claude Code pose en général cette question avant un changement, parce que la réponse suivante doit relire toute la conversation. Avec Claude Code 2.1.251 ou plus récent, le hook `PreModelSwitch` d'aipager approuve le changement qu'aipager vient de taper, donc la question n'est pas posée (voir [hooks](hooks.md#premodelswitch)). Tout autre changement pose toujours la question. Avec un Claude Code plus ancien, ou pour un changement vers ou depuis `opusplan`, la question peut encore apparaître. Le changement s'affiche alors comme *non confirmé* et la question attend dans le terminal. Répondez-y là avant d'envoyer quoi que ce soit d'autre à la session, sinon votre prochain message y serait tapé. Pour la même raison, aipager refuse un autre changement de cette session pendant une minute après un changement non confirmé, ou jusqu'à ce que la session signale un nouveau modèle.
 - **Un message envoyé juste après un changement attend.** Claude Code vérifie d'abord le modèle par une requête (jusqu'à 15 secondes) et perd tout ce qui est tapé pendant ce temps : un message envoyé à ce moment est donc retenu (👀) et part vers Claude dès que la session indique le nouveau modèle, ou après 17 secondes.
-- **Le modèle devient aussi le modèle par défaut de Claude Code pour les nouvelles sessions.** Comme avec `/model` dans le terminal, Claude Code enregistre le modèle choisi dans son `settings.json`, et chaque nouvelle session sans modèle propre démarre avec. La réponse dans le chat, la carte de la nouvelle session et la Mini App le disent quand cela arrive. Une session lancée avec son propre modèle (à l'étape du modèle de `/new` ou depuis les valeurs par défaut de `/settings`) le garde.
+- **Le modèle devient aussi le modèle par défaut de Claude Code pour les nouvelles sessions.** Comme avec `/model` dans le terminal, Claude Code enregistre le modèle choisi dans son `settings.json`, et chaque nouvelle session sans modèle propre démarre avec. La réponse dans le chat, la carte de la nouvelle session et la Mini App le disent quand cela arrive. Une session lancée avec son propre modèle (à l'étape du modèle de `/new` ou depuis les valeurs par défaut de `/settings`) le garde. Dans un groupe, un membre dont le rôle ne peut pas gérer le chat (`user`, `read_only`) ne change que sa propre session : aipager remet le modèle par défaut de Claude Code.
 
 ## <a id="the-pinned-status-bar"></a>La barre d'état épinglée
 

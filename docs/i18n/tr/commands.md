@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 4ce4791d -->
+<!-- i18n-source: docs/commands.md @ df3e74b6 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -114,7 +114,7 @@ Uygulama, değiştirdiğinde Telegram'ın açık ya da koyu temasını izler ve 
 - **Yalnızca oturum hazırken, Claude çalışırken ya da bir istek açıkken değil.** Claude Code `/model` komutunu bir görevin ortasında bile sonrasında değil hemen çalıştırır, bu yüzden değişiklik görev bitene kadar reddedilir. Sohbetteki klavye de aynı durumlarda aynı sözcüklerle reddeder.
 - **Claude Code'un “Switch model?” sorusu.** Değiştirmeden önce Claude Code genelde bu soruyu sorar, çünkü sonraki yanıtın tüm konuşmayı yeniden okuması gerekir. Claude Code 2.1.251 ya da sonrasıyla aipager'ın `PreModelSwitch` hook'u, aipager'ın az önce yazdığı değişikliği onaylar, bu yüzden soru sorulmaz (bkz. [hooks](hooks.md#premodelswitch)). Diğer her değişiklik yine sorar. Eski bir Claude Code ile ya da `opusplan` modeline veya o modelden geçerken soru yine de görünebilir. O zaman değişiklik *onaylanmadı* olarak gösterilir ve soru terminalde bekler. Oturuma başka bir şey göndermeden önce orada yanıtla, yoksa bir sonraki mesajın o soruya yazılırdı. Aynı nedenle aipager, onaylanmamış bir değişiklikten sonraki bir dakika içinde ya da oturum yeni bir model bildirene kadar bu oturum için bir değişikliği daha reddeder.
 - **Model değiştirdikten hemen sonra gönderilen mesaj bekler.** Claude Code önce modeli bir istekle kontrol eder (15 saniyeye kadar) ve bu sırada yazılan her şeyi kaybeder; bu yüzden o sırada gönderdiğin mesaj bekletilir (👀) ve oturum yeni modeli bildirir bildirmez ya da 17 saniye sonra Claude'a gider.
-- **Model, Claude Code'un yeni oturumlar için varsayılanı da olur.** Terminaldeki `/model` gibi, Claude Code geçtiğin modeli kendi `settings.json` dosyasına kaydeder ve kendi modeli olmayan her yeni oturum onunla başlar. Sohbetteki yanıt, yeni oturumun kartı ve Mini App bu olduğunda bunu söyler. Kendi modeliyle başlatılan bir oturum (`/new` model adımında ya da `/settings` varsayılanlarıyla) modelini korur.
+- **Model, Claude Code'un yeni oturumlar için varsayılanı da olur.** Terminaldeki `/model` gibi, Claude Code geçtiğin modeli kendi `settings.json` dosyasına kaydeder ve kendi modeli olmayan her yeni oturum onunla başlar. Sohbetteki yanıt, yeni oturumun kartı ve Mini App bu olduğunda bunu söyler. Kendi modeliyle başlatılan bir oturum (`/new` model adımında ya da `/settings` varsayılanlarıyla) modelini korur. Bir grupta, rolü sohbeti yönetemeyen bir üye (`user`, `read_only`) yalnızca kendi oturumunun modelini değiştirir: aipager Claude Code'un varsayılanını geri koyar.
 
 ## <a id="the-pinned-status-bar"></a>Sabitlenmiş durum satırı
 

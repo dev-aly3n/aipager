@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 4ce4791d -->
+<!-- i18n-source: docs/commands.md @ df3e74b6 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -114,7 +114,7 @@ Trang của một phiên đang chạy có ô chọn **Mô hình**, hiện mô h�
 - **Chỉ khi phiên đang sẵn sàng, không phải khi Claude đang làm việc hay đang có một yêu cầu mở.** Claude Code chạy `/model` ngay lập tức, kể cả giữa một việc, chứ không phải sau khi việc xong, nên lần đổi bị từ chối cho tới khi việc kết thúc. Bàn phím trong chat cũng từ chối trong cùng những trạng thái đó, với cùng lời lẽ.
 - **Câu hỏi “Switch model?” của Claude Code.** Claude Code thường hỏi câu này trước khi đổi, vì câu trả lời tiếp theo phải đọc lại cả cuộc trò chuyện. Với Claude Code 2.1.251 trở lên, hook `PreModelSwitch` của aipager chấp thuận lần đổi mà aipager vừa gõ, nên câu hỏi không xuất hiện (xem [hook](hooks.md#premodelswitch)). Mọi lần đổi khác vẫn hỏi. Với Claude Code cũ hơn, hoặc khi đổi sang hay từ `opusplan`, câu hỏi vẫn có thể xuất hiện. Khi đó lần đổi hiện là *chưa xác nhận* và câu hỏi chờ trong terminal. Hãy trả lời ở đó trước khi gửi thêm gì cho phiên, nếu không tin nhắn tiếp theo của bạn sẽ bị gõ vào câu hỏi đó. Cũng vì lý do đó, aipager từ chối thêm một lần đổi nữa cho phiên đó trong một phút sau một lần đổi chưa xác nhận, hoặc cho tới khi phiên báo một mô hình mới.
 - **Tin nhắn gửi ngay sau khi đổi mô hình sẽ chờ.** Claude Code trước tiên kiểm tra mô hình bằng một yêu cầu (tối đa 15 giây) và làm mất mọi thứ được gõ trong lúc đó, nên tin nhắn bạn gửi lúc này được giữ lại (👀) và gửi đến Claude ngay khi phiên báo mô hình mới, hoặc sau 17 giây.
-- **Mô hình đó cũng thành mặc định của Claude Code cho các phiên mới.** Giống `/model` trong terminal, Claude Code lưu mô hình bạn chuyển sang vào `settings.json` của nó, và mọi phiên mới không có mô hình riêng sẽ bắt đầu với mô hình đó. Câu trả lời trong chat, thẻ của phiên mới và Mini App sẽ nói khi điều này xảy ra. Phiên bắt đầu với mô hình riêng (ở bước chọn mô hình của `/new` hoặc từ mặc định trong `/settings`) vẫn giữ mô hình đó.
+- **Mô hình đó cũng thành mặc định của Claude Code cho các phiên mới.** Giống `/model` trong terminal, Claude Code lưu mô hình bạn chuyển sang vào `settings.json` của nó, và mọi phiên mới không có mô hình riêng sẽ bắt đầu với mô hình đó. Câu trả lời trong chat, thẻ của phiên mới và Mini App sẽ nói khi điều này xảy ra. Phiên bắt đầu với mô hình riêng (ở bước chọn mô hình của `/new` hoặc từ mặc định trong `/settings`) vẫn giữ mô hình đó. Trong nhóm, một thành viên có vai trò không quản lý được chat (`user`, `read_only`) chỉ đổi mô hình cho phiên của mình: aipager đặt lại mặc định của Claude Code như cũ.
 
 ## <a id="the-pinned-status-bar"></a>Thanh trạng thái được ghim
 
