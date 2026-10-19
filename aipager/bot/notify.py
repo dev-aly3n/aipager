@@ -2307,9 +2307,17 @@ class NotifyMixin:
         implementation — a message queued while a job's background work is
         still open drains on the very next idle moment (interim OR real)
         rather than waiting specifically for the real Finished. A no-op
-        when the queue is empty.
+        when the queue is empty, and while a typed ``/model`` may still be
+        checking its model (the queue then goes on with
+        :meth:`_settle_model_hold`).
         """
         if not sess.pending_queue:
+            return
+        if sess.model_check_running():
+            # A typed /model may still be checking its model, and text typed
+            # now is lost (a turn whose answer went out after the /model).
+            # The queue goes on once the check is over (_settle_model_hold).
+            sess.model_hold = True
             return
         if sess.prompt_wait_carry:
             # A turn's end with an agent's prompt still open (roadmap

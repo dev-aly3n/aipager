@@ -647,3 +647,80 @@ def test_the_default_is_read_from_the_config_home_the_sessions_use(
     (home / "settings.json").write_text(json.dumps({"model": "haiku"}))
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
     assert session_ops.claude_default_model() == "haiku"
+
+
+# ---- the drain at another turn's end (release e2e, 2026-10-19) ------------------
+
+def test_the_previous_turns_end_types_nothing_during_the_check(
+        wired, mk_update, run_async):
+    """The /model came after a turn ended but before its answer went out:
+    the answer's path drains the queue (``_drain_next_queued``) while the
+    check still runs. Typed then, the held message was lost."""
+    bot, sess, typed = wired
+    session_ops.mark_model_switch_sent(sess, "opus")
+    _send(bot, mk_update, run_async, "now refactor the parser")
+    run_async(bot._drain_next_queued(sess))
+    assert typed == []
+    assert [q[0] for q in sess.pending_queue] == ["now refactor the parser"]
+    sess.model_name = "Opus 5.5"
+    run_async(bot.notify(sess, "pinned_update", {}))
+    assert typed == ["now refactor the parser"] and sess.pending_queue == []
+
+
+def test_a_message_queued_mid_turn_waits_for_the_check_too(
+        wired, run_async, monkeypatch):
+    """Queued while a turn ran, not held for the model: the turn's end
+    during a check keeps it, and the window running out sends it (the
+    hold is marked, so the settle paths see it)."""
+    from aipager.session_monitor import SessionMonitor
+
+    bot, sess, typed = wired
+    sess.queue_prompt("queued during the turn", 77)
+    session_ops.mark_model_switch_sent(sess, "opus")
+    run_async(bot._drain_next_queued(sess))
+    assert typed == [] and len(sess.pending_queue) == 1
+    assert sess.model_hold is True
+
+    async def _live():
+        return [NAME]
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions", _live)
+    monitor = SessionMonitor(bot.registry, bot.notify)
+    sess.model_check_until = time.monotonic() - 0.01
+    run_async(monitor._scan())
+    assert typed == ["queued during the turn"] and sess.model_hold is False
+
+
+def test_a_job_interim_answer_during_the_check_keeps_the_queue(
+        wired, run_async, monkeypatch):
+    """One real caller end to end: a background job's interim answer goes
+    out during the check; its drain types nothing."""
+    bot, sess, typed = wired
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": time.monotonic()}
+    sess.busy_msg_id = 42
+    sess.queue_prompt("next prompt", 55)
+    session_ops.mark_model_switch_sent(sess, "opus")
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", AsyncMock(return_value={}))
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "interim"}))
+    assert typed == [] and [q[0] for q in sess.pending_queue] == ["next prompt"]
+    assert sess.model_hold is True
+
+
+def test_an_answered_dialog_during_the_check_keeps_them_held(
+        wired, mk_update, run_async):
+    """The dialog hold's settle drains in a loop: during a check it stops
+    at once (nothing typed, no endless loop) and the model hold sends on."""
+    bot, sess, typed = wired
+    bot.registry.transition(NAME, Status.INTERACTIVE)
+    sess.pending_permission = {"tool_summary": "Bash: ls"}
+    _send(bot, mk_update, run_async, "hello")
+    assert sess.dialog_hold is not None
+    session_ops.mark_model_switch_sent(sess, "opus")
+    sess.pending_permission = None
+    bot.registry.transition(NAME, Status.IDLE)
+    sess.dialog_hold["closed"] = "answered"
+    run_async(bot._settle_dialog_hold(sess))
+    assert typed == [] and [q[0] for q in sess.pending_queue] == ["hello"]
+    sess.model_name = "Opus 5.5"
+    run_async(bot.notify(sess, "pinned_update", {}))
+    assert typed == ["hello"]
