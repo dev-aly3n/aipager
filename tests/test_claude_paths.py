@@ -85,6 +85,24 @@ def test_an_empty_config_dir_is_the_launch_folder_but_the_global_config_stays_ho
     assert p.global_config == home / ".claude.json" and not p.global_relative
 
 
+def test_an_empty_config_dirs_legacy_file_is_relative(home, tmp_path):
+    """`""` with a non-empty `.config.json` in the session's folder: that
+    file is the global config (measured with 2.1.303), and it sits in the
+    session's own folder, so it counts as relative. An absolute value's
+    legacy file does not."""
+    folder = tmp_path / "proj"
+    _write(folder / ".config.json", {"x": 1})
+    p = claude_paths.locate({"CLAUDE_CONFIG_DIR": ""}, cwd=str(folder))
+    assert p.global_config == folder / ".config.json" and p.legacy
+    assert p.global_relative
+
+    cfg = tmp_path / "cfg"
+    _write(cfg / ".config.json", {"x": 1})
+    p = claude_paths.locate({"CLAUDE_CONFIG_DIR": str(cfg)}, cwd=str(folder))
+    assert p.global_config == cfg / ".config.json" and p.legacy
+    assert not p.global_relative
+
+
 def test_a_whitespace_config_dir_is_a_folder_of_that_name(home, tmp_path):
     folder = tmp_path / "proj"
     p = claude_paths.locate({"CLAUDE_CONFIG_DIR": "  "}, cwd=str(folder))

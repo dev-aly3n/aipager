@@ -88,7 +88,8 @@ class ClaudePaths:
     #: A ``CLAUDE_CONFIG_DIR`` that decides the settings home or the
     #: transcripts folder is relative (``""`` and whitespace included).
     relative: bool
-    #: The global config's folder came from a relative value.
+    #: The global config's folder came from a relative value (the legacy
+    #: file of a relative start home included).
     global_relative: bool
     #: A settings ``env`` block moved the settings home off the start home.
     moved_by_settings: bool
@@ -186,11 +187,14 @@ def _last_value(blocks: list[dict]) -> str | None:
     return found
 
 
-def _global_config(env: Mapping[str, str], start_home: Path,
+def _global_config(env: Mapping[str, str], start_home: Path, start_rel: bool,
                    cwd: str | None) -> tuple[Path, bool, bool]:
     """``(file, legacy, relative)`` of the global config, from the session's
     environment alone (measured with 2.1.303: a settings value does not move
-    it, and the legacy check looks in the start home)."""
+    it, and the legacy check looks in the start home). ``relative``: the
+    chosen file's folder came from a relative value, so the legacy file of
+    a relative start home is relative even for an empty value (it sits in
+    the session's own folder)."""
     value = config_dir_value(env)
     relative = False
     if value:  # Claude Code's `||`: an empty value falls back to the home folder.
@@ -208,7 +212,7 @@ def _global_config(env: Mapping[str, str], start_home: Path,
         st = os.stat(legacy)
         if stat.S_ISREG(st.st_mode) and (
                 st.st_size > 0 or (st.st_mode & 0o222 and not os.path.exists(new_style))):
-            return legacy, True, relative
+            return legacy, True, start_rel
     except (OSError, ValueError):
         pass
     return new_style, False, relative
@@ -222,7 +226,7 @@ def locate(env: Mapping[str, str], *, cwd: str | None = None) -> ClaudePaths:
         start_home, start_rel = DEFAULT_CONFIG_HOME, False
     else:
         start_home, start_rel = _home_from(value, cwd)
-    global_config, legacy, global_rel = _global_config(env, start_home, cwd)
+    global_config, legacy, global_rel = _global_config(env, start_home, start_rel, cwd)
 
     start_settings = read_settings(start_home / "settings.json")
     managed = _managed_layers()

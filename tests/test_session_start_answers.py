@@ -689,6 +689,25 @@ def test_a_whitespace_config_dir_writes_nothing(home, tmp_path):
     assert not (folder / "  ").exists()
 
 
+def test_an_empty_config_dir_writes_nothing_into_the_folders_legacy_file(home, tmp_path):
+    """With CLAUDE_CONFIG_DIR="" the start home is the session's folder, and
+    a non-empty `.config.json` there is the global config Claude Code reads
+    (measured with 2.1.303). It is the project's own file: aipager writes
+    nothing into it, as into any relative config home."""
+    folder = tmp_path / "proj"
+    folder.mkdir()
+    legacy = folder / ".config.json"
+    _write(legacy, {"theirs": 1})
+    before = legacy.read_bytes()
+    _write(home["claude_json"], {})
+
+    assert claude_bootstrap.prepare_session_start(
+        str(folder), {"ANTHROPIC_API_KEY": KEY, "CLAUDE_CONFIG_DIR": ""},
+        cwd=str(folder)) == []
+    assert legacy.read_bytes() == before
+    assert _read(home["claude_json"]) == {}
+
+
 # ---- project, local and managed settings ------------------------------------------
 
 def _managed(name: str, data) -> Path:
