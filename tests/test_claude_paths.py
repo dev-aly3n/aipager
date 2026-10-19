@@ -65,8 +65,9 @@ def test_an_absolute_config_dir_moves_every_file(home, tmp_path):
     assert p.projects == cfg / "projects"
 
 
-def test_a_blank_config_dir_counts_as_unset():
-    """Only a missing key is unset: Claude Code reads `??` there."""
+def test_only_a_missing_config_dir_is_unset():
+    """Only a missing key (or a value that is not text) is unset: a blank
+    value is kept as it is, since Claude Code reads `??` there."""
     assert claude_paths.config_dir_value({}) is None
     assert claude_paths.config_dir_value({"CLAUDE_CONFIG_DIR": ""}) == ""
     assert claude_paths.config_dir_value({"CLAUDE_CONFIG_DIR": "  "}) == "  "
