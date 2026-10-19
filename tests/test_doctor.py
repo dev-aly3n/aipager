@@ -426,6 +426,22 @@ def test_settings_json_says_when_the_value_comes_from_this_shell(
     assert any("this shell" in d for d in r.detail)
 
 
+def test_settings_json_says_when_the_value_comes_from_claude_codes_settings(
+        no_config_dir, tmp_path, monkeypatch):
+    """A settings env block that names the start home itself moves nothing,
+    but it is where the value came from: not this shell."""
+    home = claude_paths.DEFAULT_CONFIG_HOME
+    _ours(home / "settings.json")
+    data = json.loads((home / "settings.json").read_text())
+    data["env"] = {"CLAUDE_CONFIG_DIR": str(home)}
+    (home / "settings.json").write_text(json.dumps(data))
+    r = doctor.check_settings_json()
+    assert r.status == doctor.OK
+    detail = " ".join(r.detail)
+    assert "CLAUDE_CONFIG_DIR from Claude Code's settings" in detail
+    assert "this shell" not in detail
+
+
 def test_settings_json_warns_for_shell_only_value_with_a_service(
         no_config_dir, tmp_path, monkeypatch):
     from aipager import service

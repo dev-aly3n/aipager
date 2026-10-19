@@ -51,6 +51,8 @@ _TOKEN_ROW = "Telegram bot token"
 _SETTINGS_ROW = "Claude Code settings.json"
 #: The row :func:`check_service_unit_path` reports on.
 _UNIT_PATH_ROW = "service unit PATH"
+#: The row :func:`check_team` reports on.
+_TEAM_ROW = "team config"
 #: The fix for a settings file that cannot be read as settings.
 _FIX_RESTORE = "restore the auto-backup or re-run `aipager config`"
 
@@ -417,7 +419,12 @@ def _config_dir_notes(paths) -> tuple[list[str], str | None]:
         notes.append(f"Claude Code's settings move its config to {paths.config_home}; "
                      "aipager follows it")
     else:
-        where = "daemon.env" if in_file is not None else "this shell"
+        if in_file is not None:
+            where = "daemon.env"
+        elif shell is not None:
+            where = "this shell"
+        else:  # a settings env block that names the start home itself
+            where = "Claude Code's settings"
         notes.append(f"sessions read {paths.user_settings} ({key} from {where})")
     if in_file is not None and shell is not None and shell != in_file:
         notes.append(f"a `claude` started in this shell reads {shell} instead")
@@ -647,14 +654,14 @@ def check_team() -> CheckResult:
     if not TEAM_CONFIG_PATH.exists():
         scopes_line = _scope_mode_line()
         if scopes_line:
-            return CheckResult(OK, "team config", detail=[scopes_line])
-        return CheckResult(OK, "team config", detail=["personal mode (no team.yaml)"])
+            return CheckResult(OK, _TEAM_ROW, detail=[scopes_line])
+        return CheckResult(OK, _TEAM_ROW, detail=["personal mode (no team.yaml)"])
 
     try:
         team = load_team(TEAM_CONFIG_PATH)
     except TeamConfigError as e:
         return CheckResult(
-            FAIL, "team config",
+            FAIL, _TEAM_ROW,
             detail=[f"team.yaml malformed: {e}"],
             fix="edit ~/.config/aipager/team.yaml or re-run `aipager config`",
         )
@@ -662,7 +669,7 @@ def check_team() -> CheckResult:
     if team is None:
         # Present but `mode != team` — treat as personal.
         return CheckResult(
-            OK, "team config",
+            OK, _TEAM_ROW,
             detail=["team.yaml present but mode != team (personal mode)"],
         )
 
@@ -706,7 +713,7 @@ def check_team() -> CheckResult:
     if issues:
         status = FAIL if any("CHAT_ID" in i for i in issues) else WARN
         return CheckResult(
-            status, "team config",
+            status, _TEAM_ROW,
             detail=[
                 f"team mode · {len(team.users)} user(s) · "
                 f"{team.admin_count()} admin(s)",
@@ -718,7 +725,7 @@ def check_team() -> CheckResult:
 
     if suggestions:
         return CheckResult(
-            WARN, "team config",
+            WARN, _TEAM_ROW,
             detail=[
                 f"team mode · {len(team.users)} user(s) · "
                 f"{team.admin_count()} admin(s)",
@@ -727,7 +734,7 @@ def check_team() -> CheckResult:
         )
 
     return CheckResult(
-        OK, "team config",
+        OK, _TEAM_ROW,
         detail=[
             f"team mode · {len(team.users)} user(s) · "
             f"{team.admin_count()} admin(s) · "
