@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A compaction while a session is idle no longer shows the last finished card a second time.** When Claude Code compacted a session between turns (on its own, or for a `/compact`), its "Compacting" message turned into a copy of the previous turn's done card half a minute after it read "Compacted". It now keeps "Compacted" with the before and after context.
+
 ## [1.3.8] - 2026-10-19
 
 ### Changed

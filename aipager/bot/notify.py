@@ -3437,11 +3437,43 @@ class NotifyMixin:
             self._stop_animation(sess)
             popped = sess.pop_compacting()
             target_msg_id = sess.busy_msg_id
+            # Nothing live underneath and no turn left to own the message:
+            # Claude Code compacted on its own, or ran a /compact, while the
+            # session sat idle. The "Compacted" text is then this message's
+            # last word. Tracked as the busy card, it would be an orphan the
+            # sweeper settles by painting the last finished turn's card into
+            # it: that turn's done card a second time.
+            standalone = not target_msg_id and not (
+                sess.status in (Status.BUSY, Status.INTERACTIVE)
+                or sess.job_background_open()
+                or sess.finish_gate is not None
+            )
             if not target_msg_id and popped is not None:
                 target_msg_id = popped.msg_id
             tr = i18n.for_sess(sess)
             text = tr.html(COMPACTED, session=label, before=tr.num(f"{before_pct}%"),
                            after=tr.num(f"{after_pct}%"))
+            if standalone:
+                # Not tracked, so a turn that starts meanwhile opens a card
+                # of its own, and nothing here may touch that card. Under
+                # the card-edit lock, as at compact_timeout: a card edit
+                # already out for this message (a phantom SubagentStop's
+                # repaint) lands first, and one taking the lock later finds
+                # the stack popped and sends nothing.
+                try:
+                    async with _card_edit_lock(sess):
+                        if target_msg_id and target_msg_id > 0:
+                            await self._edit_busy_raw(target_msg_id, text,
+                                                      chat_id=resolve_chat_id(sess))
+                        else:
+                            await bot.send_message(
+                                resolve_chat_id(sess), text, parse_mode="HTML",
+                                reply_to_message_id=sess.trigger_msg_id,
+                            )
+                except Exception:
+                    log.warning("Failed to show compact_done", exc_info=True)
+                sess.last_token_pct = after_pct
+                return
             if target_msg_id and target_msg_id > 0:
                 result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:

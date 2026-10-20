@@ -6,8 +6,11 @@ Stack").
 
 from __future__ import annotations
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from aipager.state import Status, TrackedSession
 
@@ -173,6 +176,117 @@ def test_compact_done_with_nothing_live_sends_fresh_and_records_busy_card_trigge
     bot._app.bot.send_message.assert_awaited_once()
     assert sess.busy_msg_id == 321
     assert sess.busy_card_trigger == 9
+
+
+# ===== compact_done between turns: the message is not a card ================
+
+def _idle_compaction(bot, run_async, monkeypatch, sess):
+    """Run a compaction Claude Code started between turns: compacting
+    sends its own message (555), compact_done resolves it."""
+    sess.trigger_msg_id = 9
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=555))
+    bot._app.bot.delete_message = AsyncMock()
+    bot._animate_compact = AsyncMock()
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    bot._start_animation = MagicMock()
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+    run_async(bot.notify(sess, "compacting", {"trigger": "auto"}))
+    assert sess.busy_msg_id == 555
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 20, "after_pct": 3}))
+
+
+def test_idle_compaction_leaves_compacted_as_the_message_last_word(
+    mk_bot, run_async, monkeypatch,
+):
+    """A compaction between turns ends on its "Compacted" text, and
+    nothing tracks the message as a busy card: the orphan sweeper must
+    never find it, or it paints the last finished turn's card into it
+    (that turn's done card a second time)."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=None)
+    _idle_compaction(bot, run_async, monkeypatch, sess)
+
+    edited_id, text = bot._edit_busy_raw.await_args.args[:2]
+    assert edited_id == 555
+    assert "Compacted: 20% → 3%" in text
+    assert sess.busy_msg_id is None
+    assert sess.stack_top_kind() is None
+    bot._start_animation.assert_not_called()
+    assert sess.last_token_pct == 3
+    assert not sess.card_orphaned(time.monotonic() + 3600)
+    run_async(bot._settle_orphan_card(sess))
+    bot._edit_busy_rich.assert_not_awaited()
+    bot._app.bot.delete_message.assert_not_awaited()
+
+
+def test_idle_compaction_with_no_message_sends_one_it_does_not_track(
+    mk_bot, run_async, monkeypatch,
+):
+    """compacting could not send: compact_done still shows the result,
+    as a message nothing tracks."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=None)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+    bot._start_animation = MagicMock()
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 20, "after_pct": 3}))
+
+    bot._app.bot.send_message.assert_awaited_once()
+    assert sess.busy_msg_id is None
+    bot._start_animation.assert_not_called()
+    assert not sess.card_orphaned(time.monotonic() + 3600)
+
+
+def test_turn_started_during_idle_compact_done_keeps_its_own_card(
+    mk_bot, run_async, monkeypatch,
+):
+    """A turn that opens its card while compact_done edits the message
+    keeps that card: compact_done neither takes the slot back for the
+    compaction message nor touches the new card's animation."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=None)
+    sess.trigger_msg_id = 9
+    sess.push_compacting(555, time.monotonic(), deadline_seconds=180.0)
+    bot._start_animation = MagicMock()
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+
+    async def _edit(msg_id, text, **kwargs):
+        sess.status = Status.BUSY
+        sess.trigger_msg_id = 10
+        sess.busy_msg_id = 777  # the new turn's card, as send_busy claims it
+        return True
+
+    bot._edit_busy_raw = AsyncMock(side_effect=_edit)
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 20, "after_pct": 3}))
+
+    assert sess.busy_msg_id == 777
+    assert sess.stack_top_kind() == "busy"
+    bot._start_animation.assert_not_called()
+
+
+@pytest.mark.parametrize("owner", ["busy", "interactive", "job_open", "finishing"])
+def test_compaction_a_turn_still_owns_resumes_its_card(
+    mk_bot, run_async, monkeypatch, owner,
+):
+    """While a turn (or its background job, or its finish) is still on,
+    the compaction message is that turn's card: re-tracked, re-anchored
+    and animated again, as before."""
+    bot = mk_bot()
+    status = {"busy": Status.BUSY, "interactive": Status.INTERACTIVE}.get(
+        owner, Status.IDLE)
+    sess = _sess(status=status, busy_msg_id=None)
+    if owner == "job_open":
+        sess.active_subagents["a1"] = {"type": "pipeline-runner"}
+    if owner == "finishing":
+        sess.finish_gate = asyncio.Event()
+    _idle_compaction(bot, run_async, monkeypatch, sess)
+
+    assert sess.busy_msg_id == 555
+    assert sess.stack_top_kind() == "busy"
+    assert sess.busy_card_trigger == 9
+    bot._start_animation.assert_called_once()
 
 
 def test_absorption_after_compaction_bypass_still_reanchors(
@@ -363,3 +477,63 @@ def test_late_hook_after_deadline_fire_still_ends_with_the_honest_compacted_text
     # revealed is the SAME one criterion 7's resume already exposed.
     assert sess.stack_top_kind() == "busy"
     assert sess.busy_msg_id == 100
+
+
+def test_idle_compaction_over_a_tracked_card_keeps_tracking_it(
+    mk_bot, run_async, monkeypatch,
+):
+    """A card still tracked underneath the compaction (a restored card in
+    its adoption window, or one waiting for its settle) stays tracked:
+    whoever owns it settles it, as before."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=100)
+    sess.push_compacting(100, time.monotonic(), deadline_seconds=180.0)
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._start_animation = MagicMock()
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 20, "after_pct": 3}))
+
+    assert bot._edit_busy_raw.await_args.args[0] == 100
+    assert sess.busy_msg_id == 100
+    assert sess.stack_top_kind() == "busy"
+    bot._start_animation.assert_called_once()
+
+
+def test_idle_compact_done_lands_after_a_card_edit_already_out(
+    mk_bot, run_async, monkeypatch,
+):
+    """A card edit already holding the card-edit lock (a phantom
+    SubagentStop's "Working" repaint of the compaction message) lands
+    before the "Compacted" text, never over it: that repaint would leave
+    a Stop button nothing tracks any more."""
+    from aipager.bot.animation import _card_edit_lock
+
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=None)
+    sess.push_compacting(555, time.monotonic(), deadline_seconds=180.0)
+    bot._start_animation = MagicMock()
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+    order = []
+
+    async def _edit(msg_id, text, **kwargs):
+        order.append("compacted")
+        return True
+
+    bot._edit_busy_raw = AsyncMock(side_effect=_edit)
+
+    async def scenario():
+        lock = _card_edit_lock(sess)
+        await lock.acquire()
+        done = asyncio.ensure_future(bot.notify(
+            sess, "compact_done", {"before_pct": 20, "after_pct": 3}))
+        for _ in range(20):
+            await asyncio.sleep(0)
+        order.append("working")
+        lock.release()
+        await done
+
+    run_async(scenario())
+
+    assert order == ["working", "compacted"]
+    assert sess.busy_msg_id is None
