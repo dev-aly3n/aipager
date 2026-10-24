@@ -21,6 +21,9 @@ write to the daemon's socket):
 - :func:`job_state`: whether a job is busy, idle or gone;
 - :func:`run_claude` / :func:`run_claude_sync`: ``claude stop`` and
   ``claude agents --json``, through module seams.
+- :func:`read_exit`, :func:`exit_signal`, :func:`is_start_failure`: the
+  exit record the launch shell writes (``aipager.claude_launch.exit_record``)
+  and what it says about why a session ended.
 
 Daemon side only (it may use asyncio); never imported by the hook, and it
 never imports ``aipager.i18n``. Every reader is bounded and never raises:
@@ -35,6 +38,7 @@ import json
 import logging
 import os
 import re
+import signal
 import subprocess
 import time
 from dataclasses import dataclass
@@ -700,3 +704,48 @@ def _prepare_resume_sync(session_id: str) -> ResumePlan:
     plan.action = "stopped"
     log.info("stopped background job %s, which held conversation %s", job, target)
     return plan
+
+
+# -- the exit record ------------------------------------------------------------
+
+def read_exit(session: str, now: float) -> dict | None:
+    """The exit record of *session*'s launch shell, ``{"code", "start",
+    "end"}`` (ints; wall-clock seconds), when it is ours (owner-checked, a
+    symlink ignored), well formed, and fresh: its ``end`` is within
+    :data:`EXIT_FRESH_SECONDS` of *now* (``time.time()``). A launch
+    removes the previous record, so a fresh one belongs to this launch.
+    None otherwise: no record reads as today's "crashed or killed"."""
+    data = bg_jobs.read_own_json(bg_jobs.exit_path(session))
+    if data is None:
+        return None
+    values = [data.get(k) for k in ("code", "start", "end")]
+    if not all(isinstance(v, int) and not isinstance(v, bool) for v in values):
+        return None
+    code, start, end = values
+    if not 0 <= code <= 255 or end < start:
+        return None
+    if abs(now - end) > EXIT_FRESH_SECONDS:
+        return None
+    return {"code": code, "start": start, "end": end}
+
+
+def exit_signal(code: int) -> str:
+    """The signal's name (``SIGKILL``) when a shell's exit status *code*
+    is 128+N for a known signal N; "" otherwise."""
+    if not isinstance(code, int) or code <= 128:
+        return ""
+    try:
+        return signal.Signals(code - 128).name
+    except ValueError:
+        return ""
+
+
+def is_start_failure(record: dict | None) -> bool:
+    """Whether *record* says claude stopped right after starting: a
+    non-zero code that is not a signal, within
+    :data:`START_WINDOW_SECONDS` of the start."""
+    if not record:
+        return False
+    code = record.get("code")
+    return (bool(code) and not exit_signal(code)
+            and record["end"] - record["start"] <= START_WINDOW_SECONDS)

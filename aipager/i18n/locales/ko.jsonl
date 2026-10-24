@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · 아직 작업 중 ({n}분째 소식 없음)\n\n아직 새 업데이트가 없어요. 보통은 정상이에요.\n\n<blockquote expandable>무슨 일이 있을 수 있나요\n  • 오래 걸리는 도구 (Bash, WebSearch, 큰 다운로드)\n  • 아주 큰 컨텍스트로 무거운 답변 작성\n  • 대화 압축 중\n  • 속도 제한이나 구독 한도로 대기 중\n  • 네트워크 끊김 또는 Claude 비정상 종료</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · 세션 초기화됨"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · 세션 비정상 종료 또는 종료됨"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · 오류 코드 {code}(으)로 세션 종료됨"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · 세션 닫힘"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · 세션 로그아웃됨"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · 권한 오류로 세션 닫힘"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · 세션이 다른 대화로 전환됨"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · 시그널 {signal}(으)로 세션 종료됨"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · Claude Code가 시작하자마자 종료됨 (종료 코드 {code})"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · 대화가 Claude Code 백그라운드에서 실행 중이라 Claude Code가 시작하자마자 종료됨"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 위에서 아직 답변을 기다리고 있어요"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "권한: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "질문: {summary}"}

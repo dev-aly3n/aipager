@@ -3682,11 +3682,24 @@ class NotifyMixin:
                 log.info("[%s] session_end right after /kill (%s) — not "
                          "alerting", label, source)
                 return
-            # By the hook's source id, one whole line each.
-            text = i18n.for_sess(sess).html(
-                SESSION_END_MSGS[_SESSION_END_SOURCES.get(source, "exited")], session=label)
+            # By the hook's source id, or what the exit record says, one
+            # whole line each.
+            reason, params = session_end_reason(context)
+            tr = i18n.for_sess(sess)
+            text = tr.html(SESSION_END_MSGS[reason], session=label, **params)
+            markup = None
+            if reason == "start_failed_bg":
+                # Its conversation is in a Claude Code background job: the
+                # button resumes it here, stopping the job first (R2).
+                from aipager.bot import session_parity
+                markup = session_parity.bg_park_keyboard(
+                    self, resolve_chat_id_int(sess) or 0, sess, tr)
             try:
-                await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML")
+                if markup is None:
+                    await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML")
+                else:
+                    await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML",
+                                           reply_markup=markup)
             except Exception:
                 log.warning("Failed to send session_end notification", exc_info=True)
             return
@@ -4911,6 +4924,29 @@ SESSION_END_MSGS: dict[str, Msg] = {
                        note="Claude Code stopped on a permissions error", eg={"session": "x1"}),
     "crashed": Msg("notice.session_end.crashed", "🔴 <b>{session}</b> · Session crashed or killed",
                    note="The session's process vanished", eg={"session": "x1"}),
+    # Why a vanished session ended, from the exit code its launch shell
+    # recorded (aipager.claude_launch.exit_record).
+    "start_failed": Msg(
+        "notice.session_end.start_failed",
+        "🔴 <b>{session}</b> · Claude Code stopped right after starting (exit code {code})",
+        note="Claude Code quit within seconds of starting, with this exit code",
+        eg={"session": "x1", "code": "1"}),
+    "start_failed_bg": Msg(
+        "notice.session_end.start_failed_bg",
+        "🔴 <b>{session}</b> · Claude Code stopped right after starting because its "
+        "conversation is running in Claude Code's background",
+        note="Claude Code quit at start because a background job of Claude Code holds "
+             "the conversation; a Bring it back button follows",
+        eg={"session": "x1"}),
+    "signal": Msg(
+        "notice.session_end.signal", "🔴 <b>{session}</b> · Session killed by signal {signal}",
+        note="Claude Code was killed by an operating-system signal; {signal} is its "
+             "name, such as SIGKILL, kept as it is",
+        eg={"session": "x1", "signal": "SIGKILL"}),
+    "exit_code": Msg(
+        "notice.session_end.exit_code",
+        "🔴 <b>{session}</b> · Session exited with error code {code}",
+        note="Claude Code exited with this non-zero exit code", eg={"session": "x1", "code": "2"}),
 }
 _SESSION_END_SOURCES = {
     "clear": "clear", "resume": "resume", "logout": "logout",
@@ -4921,6 +4957,33 @@ _SESSION_END_SOURCES = {
     # vanished).
     "other": "exited", "unknown": "exited",
 }
+
+
+def session_end_reason(context: dict) -> tuple[str, dict]:
+    """The ``SESSION_END_MSGS`` key for a ``session_end`` *context*, and
+    its extra parameters. A vanished session (``disappeared``) with the
+    exit record its launch shell left (``exit``, added by the monitor)
+    says why: 0 exited; 128+N a signal, by name; another code within
+    ``START_WINDOW_SECONDS`` of the start stopped right after starting
+    (``start_failed_bg`` when a Claude Code background job holds the
+    conversation, ``bg_holder``); any other code its error code. Without
+    a record: as before."""
+    from aipager import claude_jobs
+    source = context.get("source", "unknown")
+    record = context.get("exit") if source == "disappeared" else None
+    if not isinstance(record, dict) or not isinstance(record.get("code"), int):
+        return _SESSION_END_SOURCES.get(source, "exited"), {}
+    code = record["code"]
+    if code == 0:
+        return "exited", {}
+    name = claude_jobs.exit_signal(code)
+    if name:
+        return "signal", {"signal": name}
+    if claude_jobs.is_start_failure(record):
+        if context.get("bg_holder"):
+            return "start_failed_bg", {}
+        return "start_failed", {"code": code}
+    return "exit_code", {"code": code}
 
 
 def memory_cap_body(hook_name: str, has_owner: bool, tr=None) -> str:

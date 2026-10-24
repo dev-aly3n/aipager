@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · masih bekerja ({n} menit tanpa kabar)\n\nBelum ada pembaruan. Ini biasanya normal.\n\n<blockquote expandable>Yang mungkin sedang terjadi\n  • Alat yang berjalan lama (Bash, WebSearch, unduhan besar)\n  • Jawaban berat dengan konteks yang sangat besar\n  • Percakapan sedang diringkas\n  • Menunggu karena batas kecepatan atau batas langganan\n  • Jaringan macet atau Claude crash</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Sesi dibersihkan"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Sesi crash atau diakhiri"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · Sesi berakhir dengan kode error {code}"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Sesi berakhir"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Sesi keluar dari akun"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Sesi berakhir karena masalah izin"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Sesi beralih ke percakapan lain"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · Sesi dihentikan oleh sinyal {signal}"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · Claude Code berhenti tepat setelah dimulai (kode keluar {code})"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · Claude Code berhenti tepat setelah dimulai karena percakapannya sedang berjalan di latar belakang Claude Code"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · masih menunggu jawabanmu di atas"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Izin: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pertanyaan: {summary}"}

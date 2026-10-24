@@ -59,3 +59,48 @@ def base_system_prompt(name: str, claude_version: str | None) -> str:
     if has_send_tool(claude_version):
         prompt = f"{prompt}\n\n{SEND_FILES_NOTE}"
     return prompt
+
+
+# -- why a session ended (the exit record) -----------------------------------
+# Both launch paths run claude under a shell that writes claude's exit code
+# and its start and end times (wall clock, seconds) to a per-session exit
+# file once claude exits: ``{"code": N, "start": S, "end": E}``. The monitor
+# reads it when a session's socket vanishes (aipager/session_monitor.py),
+# so the notice can say why. claude is never the shell's last command, so
+# the shell cannot exec it away; aipager's kill (SIGTERM to the dtach
+# master, a pty hang-up) still ends claude, and a shell that dies with it
+# writes nothing, which reads as today's notice.
+#
+# The fragments are built from space-free tokens, so no English-looking
+# literal joins the i18n ratchet. The record is written to ``<file>.tmp``
+# with mode 0600 under noclobber (a planted symlink there makes the write
+# fail rather than follow it) and moved into place.
+
+def _sh(*tokens: str) -> str:
+    return " ".join(tokens)
+
+
+def exit_record(path_var: str) -> tuple[str, str]:
+    """``(prefix, suffix)``: the shell around claude that records its exit
+    in the file named by the shell variable *path_var*. The prefix removes
+    an earlier launch's record and stamps the start; the suffix, run right
+    after claude, keeps claude's status in ``rc``, writes the record and
+    ends the shell with that status."""
+    p = f'"${path_var}"'
+    tmp = f'"${path_var}.tmp"'
+    prefix = _sh("rm", "-f", "--", p + ";", "s=$(date", "+%s);")
+    suffix = _sh(
+        "rc=$?;", "rm", "-f", "--", tmp + ";", "umask", "077;", "set", "-C;",
+        "printf", "'{\"code\":%d,\"start\":%d,\"end\":%d}\\n'",
+        '"$rc"', '"${s:-0}"', '"$(date', "+%s)\"",
+        "2>/dev/null", ">" + tmp, "&&", "mv", "-f", "--", tmp, p + ";",
+        "exit", "$rc")
+    return prefix, suffix
+
+
+def exit_wrapper_script() -> str:
+    """The ``sh -c`` script the terminal's ``aipager session`` runs under
+    dtach: ``sh -c SCRIPT sh <exit file> <command...>``. The command stays
+    positional (``"$@"``), so no argument is ever read by a shell again."""
+    prefix, suffix = exit_record("p")
+    return _sh("p=$1;", "shift;", prefix, '"$@";', suffix)

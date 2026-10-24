@@ -730,3 +730,71 @@ def test_an_old_claude_gets_no_note(tmp_path, monkeypatch, run_async):
     assert SEND_FILES_NOTE not in _prompt_of(bash_cmd)
     # The switch is set whatever the version: it does nothing on an older one.
     assert "export CLAUDE_CODE_ATTACHMENTS_BY_PATH=1; " in bash_cmd
+
+
+# ---- why the session ends: claude's exit is recorded (step 4, T4.1) ---------
+
+def _exit_launch_cmd(tmp_path, monkeypatch, run_async, claude_path="/opt/claude"):
+    from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    resolved = ResolvedClaude(chosen=ClaudeInstall(path=claude_path,
+                                                   realpath=claude_path,
+                                                   version="2.1.302"))
+    monkeypatch.setattr(dtach_inject.claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: resolved)
+    ok, err = run_async(dtach_inject.launch_session("jim", mode="ask", cwd=str(tmp_path)))
+    assert ok, err
+    assert captured["args"][4:6] == ("bash", "-c")
+    return captured["args"][-1]
+
+
+def test_the_exit_record_is_removed_before_claude_and_written_after(
+        tmp_path, monkeypatch, run_async):
+    import shlex as _shlex
+
+    from aipager.dtach import bg_jobs
+    cmd = _exit_launch_cmd(tmp_path, monkeypatch, run_async)
+    quoted = _shlex.quote(str(bg_jobs.exit_path("claude-jim")))
+    claude_at = cmd.index("/opt/claude ")
+    assert cmd.index(f"p={quoted}; ") < cmd.index('rm -f -- "$p";') < claude_at
+    after = cmd[cmd.index("--append-system-prompt"):]
+    assert after.index("rc=$?;") < after.index("printf") < after.index(
+        'mv -f -- "$p.tmp" "$p";')
+    # claude is not the last command: bash cannot exec it away.
+    assert cmd.rsplit(";", 1)[-1].strip() == "exit $rc"
+
+
+def test_the_launch_shell_records_a_stand_in_claudes_exit(tmp_path, monkeypatch, run_async):
+    """The captured ``bash -c`` command, run for real on a stand-in claude
+    (no claude, no dtach): the earlier launch's record is gone while the
+    stand-in runs, and its exit code is recorded after it."""
+    import os
+    import subprocess
+
+    from aipager.dtach import bg_jobs
+    stand_in = tmp_path / "stand-in"
+    stand_in.write_text('#!/bin/sh\n[ -e "$REC" ] && exit 9\nexit 5\n')
+    stand_in.chmod(0o755)
+    record = bg_jobs.exit_path("claude-jim")
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text('{"code": 0, "start": 1, "end": 1}')
+    cmd = _exit_launch_cmd(tmp_path, monkeypatch, run_async, claude_path=str(stand_in))
+    before = int(time.time())
+    done = subprocess.run(["bash", "-c", cmd], cwd=tmp_path, capture_output=True,
+                          timeout=30, env={"PATH": os.environ.get("PATH", ""),
+                                           "REC": str(record)})
+    assert done.returncode == 5, done.stderr
+    data = json.loads(record.read_text())
+    assert data["code"] == 5
+    assert before <= data["start"] <= data["end"] <= int(time.time())

@@ -59,7 +59,11 @@ def test_every_end_line_has_its_own_words():
     """No two source lines render the same in any language."""
     for code in ("en", "fa", "ru"):
         tr = i18n.get(code)
-        lines = [tr.html(m, session="x1") for m in notify_mod.SESSION_END_MSGS.values()]
+        # The exit-record lines carry a code or a signal name too.
+        extra = {"start_failed": {"code": "1"}, "exit_code": {"code": "1"},
+                 "signal": {"signal": "SIGKILL"}}
+        lines = [tr.html(m, session="x1", **extra.get(reason, {}))
+                 for reason, m in notify_mod.SESSION_END_MSGS.items()]
         assert len(set(lines)) == len(lines), code
 
 

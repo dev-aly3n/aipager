@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · hâlâ çalışıyor ({n} dk'dır haber yok)\n\nHenüz güncelleme yok. Bu genelde normaldir.\n\n<blockquote expandable>Neler oluyor olabilir\n  • Uzun süren bir araç (Bash, WebSearch, büyük bir indirme)\n  • Çok büyük bir bağlamla ağır bir yanıt\n  • Konuşma sıkıştırılıyor\n  • Hız sınırı ya da abonelik sınırı yüzünden bekleme\n  • Ağ takıldı ya da Claude çöktü</blockquote>", "other": "⏳ <b>{session}</b> · hâlâ çalışıyor ({n} dk'dır haber yok)\n\nHenüz güncelleme yok. Bu genelde normaldir.\n\n<blockquote expandable>Neler oluyor olabilir\n  • Uzun süren bir araç (Bash, WebSearch, büyük bir indirme)\n  • Çok büyük bir bağlamla ağır bir yanıt\n  • Konuşma sıkıştırılıyor\n  • Hız sınırı ya da abonelik sınırı yüzünden bekleme\n  • Ağ takıldı ya da Claude çöktü</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Oturum temizlendi"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Oturum çöktü ya da sonlandırıldı"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · Oturum {code} hata koduyla sona erdi"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Oturum sona erdi"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Oturumda hesaptan çıkıldı"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Oturum bir izin hatası yüzünden kapandı"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Oturum başka bir konuşmaya geçti"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · Oturum {signal} sinyaliyle sonlandırıldı"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · Claude Code başlar başlamaz kapandı (çıkış kodu {code})"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · Sohbeti Claude Code arka planında çalıştığı için Claude Code başlar başlamaz kapandı"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · hâlâ yukarıdaki yanıtını bekliyor"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "İzin: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Soru: {summary}"}

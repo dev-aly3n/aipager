@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · 仍在工作（{n} 分钟没有消息）\n\n还没有新的状态更新。这通常是正常的。\n\n<blockquote expandable>可能在发生什么\n  • 某个工具运行时间很长（Bash、WebSearch、大量下载）\n  • 在很大的上下文上生成很重的回复\n  • 正在压缩对话\n  • 因速率限制或订阅额度而等待\n  • 网络中断或 Claude 崩溃</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · 会话已清空"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · 会话崩溃或被结束"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · 会话以错误码 {code} 退出"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · 会话已关闭"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · 会话已退出登录"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · 会话因权限错误而关闭"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · 会话已切换到另一个对话"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · 会话被信号 {signal} 结束"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · Claude Code 刚启动就退出了（退出码 {code}）"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · Claude Code 刚启动就退出了，因为它的对话正在 Claude Code 后台运行"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · 仍在等你回复上面的内容"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "权限：{summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "问题：{summary}"}

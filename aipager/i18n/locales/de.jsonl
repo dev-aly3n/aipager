@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · arbeitet noch ({n} Min. ohne Neuigkeiten)\n\nNoch keine Updates. Das ist meist normal.\n\n<blockquote expandable>Was gerade passieren könnte\n  • Ein Tool, das lange braucht (Bash, WebSearch, ein großer Download)\n  • Eine aufwendige Antwort mit sehr großem Kontext\n  • Die Unterhaltung wird komprimiert\n  • Warten wegen eines Ratenlimits oder Abo-Limits\n  • Netzwerk hängt oder Claude ist abgestürzt</blockquote>", "other": "⏳ <b>{session}</b> · arbeitet noch ({n} Min. ohne Neuigkeiten)\n\nNoch keine Updates. Das ist meist normal.\n\n<blockquote expandable>Was gerade passieren könnte\n  • Ein Tool, das lange braucht (Bash, WebSearch, ein großer Download)\n  • Eine aufwendige Antwort mit sehr großem Kontext\n  • Die Unterhaltung wird komprimiert\n  • Warten wegen eines Ratenlimits oder Abo-Limits\n  • Netzwerk hängt oder Claude ist abgestürzt</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Sitzung geleert"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Sitzung abgestürzt oder beendet"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · Sitzung mit Fehlercode {code} beendet"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Sitzung beendet"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Sitzung vom Konto abgemeldet"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Sitzung wegen eines Berechtigungsfehlers beendet"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Sitzung zu einer anderen Unterhaltung gewechselt"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · Sitzung durch Signal {signal} beendet"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · Claude Code wurde direkt nach dem Start beendet (Exit-Code {code})"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · Claude Code wurde direkt nach dem Start beendet, weil das Gespräch im Hintergrund von Claude Code läuft"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · wartet noch auf deine Antwort oben"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Berechtigung: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Frage: {summary}"}

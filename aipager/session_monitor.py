@@ -1049,6 +1049,62 @@ class SessionMonitor:
             except Exception:
                 log.warning("on_tick callback failed", exc_info=True)
 
+    def _exit_context(self, sess: TrackedSession) -> dict:
+        """What the launch shell's exit record says about why *sess*
+        vanished (``aipager.claude_launch.exit_record``): ``{"exit":
+        {"code", "start", "end"}}`` when this launch left one, plus
+        ``bg_holder`` for a claude that stopped right after starting while
+        a Claude Code background job holds its conversation. Empty when
+        there is no fresh record of ours (today's "crashed or killed").
+        Never raises; logs the code."""
+        try:
+            record = claude_jobs.read_exit(sess.name, time.time())
+        except Exception:
+            log.debug("[%s] exit record unreadable", sess.name, exc_info=True)
+            record = None
+        if record is None:
+            log.info("[%s] socket vanished: no exit record from claude", sess.name)
+            return {}
+        log.info("[%s] socket vanished: claude exit code %d after %ds",
+                 sess.name, record["code"], record["end"] - record["start"])
+        ctx: dict = {"exit": record}
+        if claude_jobs.is_start_failure(record):
+            held = self._held_conversation(sess)
+            ctx["bg_holder"] = bool(held)
+            if held:
+                log.info("[%s] its conversation %s is held by a Claude Code "
+                         "background job", sess.name, held)
+                if not sess.claude_session_id:
+                    # A resume clears the id before its launch (so a claude
+                    # that dies at once is not resumed in a loop); the
+                    # "Bring it back" button resumes this id, and the
+                    # resume stops the job first.
+                    sess.claude_session_id = held
+                    self.registry.mark_dirty()
+        return ctx
+
+    @staticmethod
+    def _held_conversation(sess: TrackedSession) -> str:
+        """The conversation of *sess* a live Claude Code background job
+        holds (itself, or where it moved), or "": the session's id, else
+        the id its transcript is named after (a resume clears the id
+        before its launch)."""
+        try:
+            stem = os.path.basename(sess.transcript_path or "")
+            ids = [sess.claude_session_id, stem.removesuffix(".jsonl")]
+            entries = claude_jobs.read_registry()
+            if entries is None:
+                return ""
+            for sid in dict.fromkeys(i for i in ids if claude_jobs.valid_session_id(i)):
+                moved = claude_jobs.follow_continued(sid, entries)
+                for candidate in dict.fromkeys((sid, moved)):
+                    if claude_jobs.live_holder(candidate, entries) is not None:
+                        return sid
+        except Exception:
+            log.debug("[%s] background holder check failed", sess.name,
+                      exc_info=True)
+        return ""
+
     async def _scan(self) -> None:
         _sweep_flood_backoff()
         sessions = await dtach_inject.list_sessions()
@@ -1088,9 +1144,10 @@ class SessionMonitor:
                     log.debug("preview extraction failed for %s", name,
                               exc_info=True)
                 self.registry.mark_dirty()
+                end_ctx = {"source": "disappeared", "notes": gone_notes}
+                end_ctx.update(self._exit_context(sess))
                 try:
-                    await self.notify_fn(sess, "session_end", {
-                        "source": "disappeared", "notes": gone_notes})
+                    await self.notify_fn(sess, "session_end", end_ctx)
                 except Exception:
                     log.warning("Failed to notify session_end for %s", name)
 

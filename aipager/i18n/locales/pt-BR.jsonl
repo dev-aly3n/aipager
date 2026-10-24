@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"many": "⏳ <b>{session}</b> · ainda trabalhando ({n} min sem novidades)\n\nAinda sem atualizações. Isso costuma ser normal.\n\n<blockquote expandable>O que pode estar acontecendo\n  • Uma ferramenta demorada (Bash, WebSearch, um download grande)\n  • Uma resposta pesada com um contexto muito grande\n  • Compactando a conversa\n  • Espera por limite de velocidade ou da assinatura\n  • Queda de rede ou o Claude caiu</blockquote>", "one": "⏳ <b>{session}</b> · ainda trabalhando ({n} min sem novidades)\n\nAinda sem atualizações. Isso costuma ser normal.\n\n<blockquote expandable>O que pode estar acontecendo\n  • Uma ferramenta demorada (Bash, WebSearch, um download grande)\n  • Uma resposta pesada com um contexto muito grande\n  • Compactando a conversa\n  • Espera por limite de velocidade ou da assinatura\n  • Queda de rede ou o Claude caiu</blockquote>", "other": "⏳ <b>{session}</b> · ainda trabalhando ({n} min sem novidades)\n\nAinda sem atualizações. Isso costuma ser normal.\n\n<blockquote expandable>O que pode estar acontecendo\n  • Uma ferramenta demorada (Bash, WebSearch, um download grande)\n  • Uma resposta pesada com um contexto muito grande\n  • Compactando a conversa\n  • Espera por limite de velocidade ou da assinatura\n  • Queda de rede ou o Claude caiu</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Sessão limpa"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · A sessão caiu ou foi encerrada"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · Sessão encerrada com o código de erro {code}"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Sessão encerrada"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · A sessão saiu da conta"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · A sessão fechou por um erro de permissão"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · A sessão passou para outra conversa"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · Sessão encerrada pelo sinal {signal}"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · O Claude Code parou logo depois de iniciar (código de saída {code})"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · O Claude Code parou logo depois de iniciar porque a conversa está rodando no segundo plano do Claude Code"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · ainda esperando sua resposta lá em cima"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Permissão: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Pergunta: {summary}"}

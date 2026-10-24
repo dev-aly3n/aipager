@@ -512,10 +512,14 @@
 {"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · vẫn đang làm việc ({n} phút chưa có tin)\n\nChưa có cập nhật mới. Việc này thường là bình thường.\n\n<blockquote expandable>Điều có thể đang diễn ra\n  • Một công cụ chạy lâu (Bash, WebSearch, tải dữ liệu lớn)\n  • Đang viết câu trả lời nặng với ngữ cảnh rất lớn\n  • Đang thu gọn cuộc trò chuyện\n  • Đang chờ vì giới hạn tốc độ hoặc giới hạn gói đăng ký\n  • Mạng bị kẹt hoặc Claude bị crash</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Phiên đã được xóa sạch"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Phiên bị crash hoặc đã bị tắt"}
+{"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · Phiên đã thoát với mã lỗi {code}"}
 {"k": "notice.session_end.exited", "src": "740bdc75", "v": "🔴 <b>{session}</b> · Phiên đã đóng"}
 {"k": "notice.session_end.logout", "src": "32b24dbd", "v": "🔴 <b>{session}</b> · Phiên đã đăng xuất khỏi tài khoản"}
 {"k": "notice.session_end.permissions", "src": "c18e3dc6", "v": "🔴 <b>{session}</b> · Phiên đã đóng vì lỗi quyền"}
 {"k": "notice.session_end.resume", "src": "86761a3d", "v": "🔴 <b>{session}</b> · Phiên đã chuyển sang cuộc trò chuyện khác"}
+{"k": "notice.session_end.signal", "src": "277af33d", "v": "🔴 <b>{session}</b> · Phiên bị tắt bởi tín hiệu {signal}"}
+{"k": "notice.session_end.start_failed", "src": "6d755572", "v": "🔴 <b>{session}</b> · Claude Code đã dừng ngay sau khi khởi động (mã thoát {code})"}
+{"k": "notice.session_end.start_failed_bg", "src": "4aa81617", "v": "🔴 <b>{session}</b> · Claude Code đã dừng ngay sau khi khởi động vì cuộc trò chuyện của nó đang chạy ở chế độ chạy nền của Claude Code"}
 {"k": "notice.waiting", "src": "f784d26b", "v": "⬆️ <b>{session}</b> · vẫn đang chờ bạn trả lời ở trên"}
 {"k": "notice.waiting_permission", "src": "e39388ee", "v": "Quyền: {summary}"}
 {"k": "notice.waiting_question", "src": "2348fa66", "v": "Câu hỏi: {summary}"}

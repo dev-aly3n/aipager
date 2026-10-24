@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 from aipager import claude_launch, daemon_secrets, instance
+from aipager.dtach import bg_jobs
 from aipager.dtach import redraw as _dtach_redraw
 from aipager.dtach.inject import _RESERVED, normalize_session_name
 from aipager.errors import friendly_error, friendly_warn
@@ -511,8 +512,15 @@ def launch(name: str, claude_args: list[str] | None = None,
     if spawn_status:
         spawn_status.__enter__()
     try:
+        # Under ``sh -c SCRIPT sh <exit file> <command...>``, so claude's
+        # exit code is recorded for the daemon's "session ended" notice
+        # (claude_launch.exit_wrapper_script). The command and the user's
+        # args (already rewritten by _prepare_resume_args) stay positional:
+        # no shell ever reads them again.
         spawn = subprocess.run(
             [dtach, "-n", sock, "-Ez",
+             "sh", "-c", claude_launch.exit_wrapper_script(), "sh",
+             str(bg_jobs.exit_path(session)),
              "env", f"CLAUDE_DTACH_SESSION={session}",
              f"{claude_launch.ATTACHMENTS_ENV}=1",
              claude_bin or "claude",

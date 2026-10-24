@@ -20,6 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from aipager import claude_launch, claude_resolve, daemon_secrets, instance, perm_modes
+from aipager.dtach import bg_jobs
 
 log = logging.getLogger(__name__)
 
@@ -202,6 +203,10 @@ def _stash_expired_credentials_file(path: Path | None = None) -> Path | None:
 
 # Computed once at import (the daemon env is fixed for its lifetime).
 SOCK_PREFIX = instance.dtach_sock_prefix()
+
+#: The launch shell's variable holding the session's exit record path
+#: (:func:`aipager.claude_launch.exit_record`).
+_EXIT_VAR = "p"
 
 
 def _resolve_dtach() -> str:
@@ -1090,6 +1095,7 @@ async def launch_session(
         "stripping" if unset_token else "keeping",
         "fresh" if unset_token else "missing/expired",
     )
+    exit_prefix, exit_suffix = claude_launch.exit_record(_EXIT_VAR)
     bash_cmd = (
         f"unset CLAUDECODE; "
         f"{unset_token}"
@@ -1097,13 +1103,20 @@ async def launch_session(
         # Claude Code's SendUserFile (2.1.301+): read once, at start; the
         # hook checks every file and the daemon delivers it to the chat.
         f"export {claude_launch.ATTACHMENTS_ENV}=1; "
+        # Why the session ends (step 4 of the background-jobs design): the
+        # previous exit record is removed before claude starts, and claude's
+        # exit code is recorded after it. claude is therefore not the last
+        # command, so bash cannot exec it away.
+        f"{_EXIT_VAR}={shlex.quote(str(bg_jobs.exit_path(f'claude-{name}')))}; "
+        f"{exit_prefix} "
         # Every sibling value on this line is shlex.quote()d; the binary
         # was the lone exception, safe only because it came verbatim from
         # shutil.which(). Once it can come from config (claude_path) or
         # AIPAGER_CLAUDE_BIN, an unquoted value is a shell-injection sink
         # into this `bash -c` string.
         f"{shlex.quote(claude_bin)} {perms} {resume} {model_flag} "
-        f"--append-system-prompt {shlex.quote(sys_prompt)}"
+        f"--append-system-prompt {shlex.quote(sys_prompt)} ; "
+        f"{exit_suffix}"
     )
 
     # Claude Code asks "Do you trust this folder?" in a folder it has never
