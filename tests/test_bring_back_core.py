@@ -1337,6 +1337,18 @@ def test_a_halt_that_waits_out_a_releasing_bring_back_lets_nothing_out(world, ru
     assert sess.bg_release_blocked is False
 
 
+def test_a_failed_bring_back_keeps_an_earlier_release_pending(world, run_async):
+    """The nit of review 2: a bring-back that fails after arming undoes
+    only its own arming; a release an earlier bring-back left pending (a
+    re-park within its backstop) is still pending."""
+    sess = world.sess
+    sess.arm_bg_release()               # the earlier bring-back's
+    earlier = sess.bg_release_armed_at
+    world.launch_ok = False
+    assert run_async(world.bot._bring_back_core(sess)).reason == "launch_failed"
+    assert (sess.bg_release_pending, sess.bg_release_armed_at) == (True, earlier)
+
+
 def test_a_release_event_while_the_bring_back_runs_is_kept_for_its_end(world, run_async,
                                                                       monkeypatch):
     """``bg_release`` reaching notify while the bring-back still runs is

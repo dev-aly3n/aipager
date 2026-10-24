@@ -2680,13 +2680,24 @@ class TrackedSession:
         self.park_epoch += 1
         self.park_changed_at = time.monotonic()
 
-    def arm_bg_release(self) -> None:
+    def arm_bg_release(self) -> tuple:
         """A bring-back is about to launch the conversation again: the
         messages held for the park go out once the relaunched claude is up
-        (its first own SessionStart, or the monitor's backstop)."""
+        (its first own SessionStart, or the monitor's backstop). Returns
+        the release state from before, for :meth:`restore_bg_release`."""
+        prior = (self.bg_release_pending, self.bg_release_armed_at,
+                 self.bg_start_seen)
         self.bg_release_pending = True
         self.bg_release_armed_at = time.monotonic()
         self.bg_start_seen = False
+        return prior
+
+    def restore_bg_release(self, prior: tuple) -> None:
+        """The bring-back that armed the release (:meth:`arm_bg_release`
+        returned *prior*) did not bring the session back: the release is
+        as it was before, so an earlier one still pending stays pending,
+        and no later SessionStart releases anything for this one."""
+        self.bg_release_pending, self.bg_release_armed_at, self.bg_start_seen = prior
 
     def disarm_bg_release(self) -> None:
         """The bring-back that armed the release did not bring the session

@@ -3115,6 +3115,8 @@ class SessionOpsMixin:
             if err:
                 sess.restarting_until = earlier_window
                 return self._bg_refused_restart(sess, ("bg_stop_failed", err), mode)
+        armed: list[tuple] = []
+
         def arm() -> None:
             # The old client is gone and the new claude not launched yet:
             # its own hooks record their pid afresh, and its first
@@ -3122,17 +3124,23 @@ class SessionOpsMixin:
             sess.claude_pid = 0
             sess.claude_pid_start = 0
             if release_held:
-                sess.arm_bg_release()
+                armed.append(sess.arm_bg_release())
+
+        def disarm() -> None:
+            # Only this run's arming is undone: an earlier release still
+            # pending (a re-park within its backstop) stays pending.
+            if armed:
+                sess.restore_bg_release(armed.pop())
 
         try:
             outcome = await self._kill_and_relaunch_in_flight(
                 sess, target_mode=mode, interrupt_first=False, resume_id=resume_id,
                 before_launch=arm)
         except BaseException:
-            sess.disarm_bg_release()
+            disarm()
             raise
         if not outcome.ok:
-            sess.disarm_bg_release()
+            disarm()
             sess.restarting_until = earlier_window
             return outcome
         self._clear_park(sess)
