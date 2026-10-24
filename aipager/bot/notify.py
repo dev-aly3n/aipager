@@ -2372,6 +2372,16 @@ class NotifyMixin:
             # Sent now, this one would join that turn; it stays held and
             # drains at that turn's end, as its own turn.
             return
+        if sess.bg_release_pending and not sess.claim_bg_release():
+            # A bring-back's release is pending and a safety halt waits out
+            # that bring-back (``bg_release_blocked``): the halt drops what
+            # is held, so nothing goes out meanwhile.
+            return
+        # A drain while a bring-back's release is still pending (its
+        # relaunched claude's SessionStart never came, and a turn typed in
+        # the terminal ended) claims that release above: one site ever
+        # releases, so a later own SessionStart or the backstop adds
+        # nothing to the turn this message starts.
         (
             queued_text, queued_trigger, _queued_at,
             queued_reply_context, queued_driver_user_id,

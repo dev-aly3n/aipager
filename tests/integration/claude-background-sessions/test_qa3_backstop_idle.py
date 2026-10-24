@@ -169,15 +169,13 @@ def test_once_idle_more_ticks_add_nothing(stack, mk_update, past):
 LATE_START = [pytest.param("resume", id="resume"), pytest.param("clear", id="clear")]
 
 
-LATE_START_RELEASES = (
-    "qa finding tester-iter3-001: when the backstop waited out a BUSY turn "
-    "and the first held message went out at that turn's end, the release "
-    "stays armed (bg_release_pending is still True), so a later own "
-    "SessionStart of the same claude (/clear at the terminal) sends the "
-    "second held message into the first one's running turn")
+# qa finding tester-iter3-001 (fixed in fix iteration 3): when the backstop
+# waited out a BUSY turn and the first held message went out at that turn's
+# end, the release stayed armed, so a later own SessionStart of the same
+# claude (/clear at the terminal) sent the second held message into the
+# first one's running turn. The turn end's drain now claims the release.
 
 
-@pytest.mark.xfail(strict=True, reason=LATE_START_RELEASES)
 @pytest.mark.parametrize("source", LATE_START)
 @pytest.mark.parametrize("past", PAST)
 def test_once_idle_a_late_session_start_adds_nothing(stack, mk_update, past, source):

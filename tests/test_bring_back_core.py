@@ -930,6 +930,39 @@ def test_the_backstop_releases_once_when_no_session_start_came(world, run_async,
     assert len(typed) == 1, "neither a second backstop nor a late SessionStart"
 
 
+# ---- tester-iter3-001: a turn end's drain claims a pending release -------------------
+
+def test_a_turn_ends_drain_claims_the_pending_release(world, run_async, monkeypatch):
+    """No SessionStart came, a turn typed in the terminal ended, and its
+    drain sent the first held message: that was the release, so a later own
+    SessionStart (or the backstop) adds nothing to the turn it started."""
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("first held", 31)
+    sess.queue_prompt("second held", 32)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert typed == [] and sess.bg_release_pending is True
+    run_async(world.bot._drain_next_queued(sess))      # the terminal turn's end
+    assert len(typed) == 1 and typed[0].endswith("first held")
+    assert sess.bg_release_pending is False
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    run_async(_session_start(recv))
+    _backstop(world, run_async)
+    assert len(typed) == 1, "neither the SessionStart nor the backstop adds one"
+
+
+def test_a_turn_ends_drain_sends_nothing_while_a_halt_blocks_the_release(
+        world, run_async, monkeypatch):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("held", 31)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    sess.bg_release_blocked = True
+    run_async(world.bot._drain_next_queued(sess))
+    assert typed == [] and sess.bg_release_pending is True
+    assert [q[0] for q in sess.pending_queue] == ["held"]
+
+
 def test_the_backstop_waits_while_the_session_is_busy(world, run_async, monkeypatch):
     """The nit of review 2: a turn runs (typed in the terminal, say, after a
     daemon restart): the backstop releases nothing until the session is
