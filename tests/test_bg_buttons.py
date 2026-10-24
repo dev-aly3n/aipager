@@ -464,3 +464,11 @@ def test_an_ended_sessions_bare_force_still_stops_the_holder(world, run_async):
     _ended_with_a_busy_holder(world)
     _tap(world, run_async, "bgforce")
     assert world.runs()[0] == ["stop", JOB]
+
+
+def test_an_ended_sessions_mode_button_forces_like_stop_and_bring_back(world, run_async):
+    """A mode switch's "Stop and bring back" tapped after the session
+    ended: the resume stops the job it was shown for, like ``bgforce``."""
+    _ended_with_a_busy_holder(world)
+    _tap(world, run_async, f"bgmodeauto{JOB}")
+    assert world.runs()[0] == ["stop", JOB]
