@@ -182,17 +182,31 @@ def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]
     itself.
 
     A live session whose conversation moved into a Claude Code background
-    job (``parked_job``) is ``"background"``, whatever its own status: its
-    terminal shows Claude Code's agent view, and nothing may be typed
-    there until it is brought back.
+    job (``parked_job``) is ``"background"``: its terminal shows Claude
+    Code's agent view, and nothing may be typed there until it is brought
+    back. One exception: the job waits on a permission prompt that is
+    answered through the hook's reply (no keys typed, so it works while
+    parked): a person is what blocks the work, so it is ``"waiting"``
+    (needs you), still ``parked`` (:func:`_parked`). A prompt that can
+    only be answered with keys (a question, the keystroke fallback) stays
+    ``"background"``.
     """
     if sess.parked_job and sess.status != Status.GONE:
-        return _BACKGROUND_STATUS, None, None
+        if not (sess.status == Status.INTERACTIVE
+                and (sess.pending_permission or {}).get("hook_reply")):
+            return _BACKGROUND_STATUS, None, None
     if sess.status != Status.INTERACTIVE:
         return sess.status.name.lower(), None, None
 
     kind, summary = sess.waiting_on_human()
     return _WAITING_STATUS, kind, summary
+
+
+def _parked(sess: "TrackedSession", status: str) -> bool:
+    """Whether the row of *sess* (with *status*) is parked on a Claude
+    Code background job: ``background``, or ``waiting`` on its job's
+    prompt."""
+    return bool(getattr(sess, "parked_job", "")) and status != "gone"
 
 
 # Display order for the grid (design §2: "ordered by last activity", with
@@ -285,7 +299,7 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
         "cost_usd": stats["cost_usd"],
         "last_active_seconds_ago": last_active,
         "project": os.path.basename(sess.cwd) if sess.cwd else "",
-        "parked": status == _BACKGROUND_STATUS,
+        "parked": _parked(sess, status),
     }
 
 
@@ -326,6 +340,7 @@ def session_actions(
     status: str, *, resumable: bool, can_act: bool,
     is_admin: bool = False, queue_depth: int = 0,
     context_pct: int = 0, turn_running: bool = True, tr=None,
+    parked: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """The status→button matrix (design.md), computed server-side so
     every refusal rule — status match, resumability, permission, admin,
@@ -358,6 +373,9 @@ def session_actions(
     - ``stop`` on a ``background`` session: unavailable when no turn is
       running (``turn_running`` False, :data:`NOT_BUSY_REASON`): the
       stop route would only answer "nothing to stop".
+    - *parked* (a ``waiting`` session whose prompt is its Claude Code
+      background job's): ``bringback`` is offered too, and ``perms`` is
+      not.
     - ``perms``: the menu's mode slot. Which modes it offers, and which
       of them this caller may pick, is :func:`mode_options` (Full access
       needs an admin; Ask and Auto do not), so the slot itself has no
@@ -369,6 +387,11 @@ def session_actions(
     relevant = _STATUS_ACTION_KEYS.get(status)
     if relevant is None:
         return {}
+    if parked and status == _WAITING_STATUS:
+        # Waiting on its Claude Code background job's prompt: Bring it
+        # back too, and no mode switch (Shift+Tab would go to the parked
+        # client).
+        relevant = (relevant - {"perms"}) | {"bringback"}
 
     actions: dict[str, dict[str, Any]] = {}
     for key in _CANONICAL_ACTION_ORDER:
@@ -490,8 +513,8 @@ def session_detail(
         "timeline": build_timeline(sess, now),
         # Parked on a Claude Code background job, and since when (seconds,
         # from the wall clock the park was recorded with; None otherwise).
-        "parked": status == _BACKGROUND_STATUS,
-        "parked_seconds_ago": _parked_age(sess) if status == _BACKGROUND_STATUS else None,
+        "parked": _parked(sess, status),
+        "parked_seconds_ago": _parked_age(sess) if _parked(sess, status) else None,
     }
     detail["modes"] = mode_options(sess, can_act=can_act, is_admin=is_admin, tr=tr)
     if status != "gone":
@@ -506,6 +529,7 @@ def session_detail(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
         is_admin=is_admin, queue_depth=queue_depth,
         context_pct=detail["context_pct"], turn_running=sess.can_be_stopped(), tr=tr,
+        parked=detail["parked"],
     )
     return detail
 

@@ -489,3 +489,43 @@ def test_a_perms_force_that_is_not_a_boolean_is_400(world, run_async, bad):
     status, body = run_async(_post(world, ADMIN_ID, "perms", {"mode": "full", "force": bad}))
     assert (status, body["error"]) == (400, "bad_request")
     core.assert_not_awaited()
+
+
+# ---- review open decision: a parked session waiting on its job's prompt ------------------
+
+def _waiting_on_the_job(hook_reply=True) -> TrackedSession:
+    sess = _parked(Status.INTERACTIVE)
+    sess.pending_permission = {
+        "tool_summary": "Bash: make deploy", "tool_info": {"name": "Bash"},
+        "wait_started_at": time.monotonic(), "shown_wall": time.time(),
+        **({"hook_reply": {"sock": "/run/x", "id": "r1"}} if hook_reply else {})}
+    return sess
+
+
+def test_a_prompt_answered_through_the_hook_needs_you():
+    sess = _waiting_on_the_job()
+    row = session_summary(sess, time.monotonic())
+    assert (row["status"], row["parked"]) == ("waiting", True)
+    d = session_detail(sess, time.monotonic())
+    assert (d["status"], d["parked"]) == ("waiting", True)
+    assert 89 <= d["parked_seconds_ago"] <= 92
+    assert "bringback" in d["actions"] and "perms" not in d["actions"]
+    assert d["answer"] is not None, "Answer in chat is offered"
+
+
+@pytest.mark.parametrize("how", ["keys-only", "question"])
+def test_a_prompt_only_keys_could_answer_stays_in_the_background(how):
+    sess = _waiting_on_the_job(hook_reply=False)
+    if how == "question":
+        sess.pending_permission.update(ask_question=True, question="Which one?",
+                                       tool_info={"name": "AskUserQuestion"})
+    row = session_summary(sess, time.monotonic())
+    assert (row["status"], row["parked"]) == ("background", True)
+
+
+def test_the_waiting_menu_of_a_session_not_parked_is_unchanged():
+    plain = session_actions("waiting", resumable=True, can_act=True, queue_depth=1)
+    assert "bringback" not in plain and "perms" in plain
+    parked = session_actions("waiting", resumable=True, can_act=True, queue_depth=1,
+                             parked=True)
+    assert list(parked) == ["bringback", "stop", "clearqueue", "rename", "restart"]
