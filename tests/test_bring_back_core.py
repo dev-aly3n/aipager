@@ -1255,6 +1255,36 @@ def test_a_halt_whose_stop_failed_says_the_job_may_still_run(world, run_async):
     assert world.sess.parked_job == JOB
 
 
+@pytest.mark.parametrize("how", ["stop-failed", "still-running-bring-back"])
+def test_a_halt_that_could_not_stop_the_job_does_not_say_stopped(world, run_async, how):
+    """Tester-iter2-003: the first line says "(stopped)" only when the work
+    was stopped; the next line says it may still run."""
+    if how == "stop-failed":
+        world.stop_rc = 1
+    else:
+        world.sess.relaunch_in_flight = True      # never ends
+    first, second = _halt(world, run_async).split("\n")
+    assert first == ("🛑 <b>x</b> · Blocked by safety policy: "
+                     "rm -rf outside the project")
+    assert "could not be stopped" in second
+
+
+def test_a_halt_that_stopped_the_job_says_stopped(world, run_async):
+    assert _halt(world, run_async) == ("🛑 <b>x</b> · Blocked by safety policy: "
+                                       "rm -rf outside the project (stopped)")
+
+
+def test_the_not_stopped_notice_in_another_language():
+    from aipager.bot import safety_notice
+    fa = i18n.get("fa")
+    stopped = safety_notice.notice_html(fa, "x", "rm -rf outside the project")
+    not_stopped = safety_notice.notice_html(fa, "x", "rm -rf outside the project",
+                                            stopped=False)
+    # The Persian "(stopped)" is gone; the rest of the line is the same.
+    assert "(" in stopped and "(" not in not_stopped
+    assert "rm -rf outside the project" in not_stopped
+
+
 def test_a_halt_that_stopped_the_job_says_nothing_more(world, run_async):
     notice = _halt(world, run_async)
     assert "could not be stopped" not in notice

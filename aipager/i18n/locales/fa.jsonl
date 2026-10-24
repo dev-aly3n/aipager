@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "کدام سشن؟ به یکی از پیام‌هایش جواب بدهید، یا پیامتان را با {command} بفرستید."}
 {"k": "route.which_stop", "src": "aba80827", "v": "کدام متوقف شود؟"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · قانون ایمنی جلویش را گرفت: {reason} (متوقف شد)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · قانون ایمنی جلویش را گرفت: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "قانون ایمنی جلوی دستور Bash را گرفت"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "قانون ایمنی جلوی دستور Bash را گرفت: جست‌وجو یا فهرست گرفتن از کل پوشهٔ خانه یا / مجاز نیست؛ به‌جایش داخل پوشهٔ یک پروژه جست‌وجو کنید"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} با یک glob که با .. از پوشه بیرون می‌رود"}

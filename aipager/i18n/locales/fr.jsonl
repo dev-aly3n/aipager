@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Quelle session ? Répondez à l'un de ses messages, ou écrivez {command} suivi de votre message."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Laquelle arrêter ?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Bloqué par une règle de sécurité : {reason} (arrêtée)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Bloqué par une règle de sécurité : {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Une règle de sécurité a bloqué la commande Bash"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Une règle de sécurité a bloqué la commande Bash : il est interdit de chercher ou de lister tout le dossier personnel ou / ; cherchez plutôt dans un dossier de projet"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} avec un glob qui sort du dossier avec .."}

@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Qual sessão? Responda a uma das mensagens dela ou escreva {command} seguido da sua mensagem."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Qual parar?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Bloqueado por uma regra de segurança: {reason} (interrompida)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Bloqueado por uma regra de segurança: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Uma regra de segurança bloqueou o comando do Bash"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Uma regra de segurança bloqueou o comando do Bash: não é permitido buscar ou listar a pasta pessoal inteira ou /; pesquise dentro de uma pasta de projeto"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} com um glob que sai da pasta com .."}

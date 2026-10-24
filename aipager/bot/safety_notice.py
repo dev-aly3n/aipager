@@ -175,6 +175,14 @@ NOTICE = Msg("safety.notice",
              "🛑 <b>{session}</b> · Blocked by safety policy: {reason} (stopped)",
              note="A tool call was blocked and the session's turn stopped; {reason} is "
                   "why", eg={"session": "x1", "reason": "Write on protected path ~/.ssh/**"})
+#: The same notice when the work could not be stopped (a Claude Code
+#: background job the halt could not stop): no "(stopped)", and the next
+#: line says why (``bg.halt_not_stopped``).
+NOTICE_NOT_STOPPED = Msg(
+    "safety.notice_not_stopped", "🛑 <b>{session}</b> · Blocked by safety policy: {reason}",
+    note="A tool call was blocked, but the work could not be stopped (the next line "
+         "says it may still be running in Claude Code's background); {reason} is why",
+    eg={"session": "x1", "reason": "Write on protected path ~/.ssh/**"})
 
 #: safety.py's shapes, in its order (enforce's two first).
 _SHAPES: tuple[tuple[str, re.Pattern], ...] = tuple(
@@ -216,12 +224,14 @@ def reason_text(tr, reason: str, kind: str = "html") -> str:
     return getattr(tr, kind)(REASON_MSGS[parsed.code], **params)
 
 
-def notice_html(tr, label: str, reason: str) -> str:
+def notice_html(tr, label: str, reason: str, *, stopped: bool = True) -> str:
     """`🛑 x1 · Blocked by safety policy: <why> (stopped)` in *tr*'s
-    language (HTML). The reason as received when there is no key for it
-    (and in English, where the key would say the same): a plain value, so
-    it is escaped and, in a right-to-left language, isolated like any
-    other."""
+    language (HTML); without "(stopped)" when *stopped* is False (the
+    work could not be stopped). The reason as received when there is no
+    key for it (and in English, where the key would say the same): a plain
+    value, so it is escaped and, in a right-to-left language, isolated
+    like any other."""
+    msg = NOTICE if stopped else NOTICE_NOT_STOPPED
     if tr.code == "en" or parse_reason(reason) is None:
-        return tr.html(NOTICE, session=label, reason=str(reason))
-    return tr.html(NOTICE, session=label, reason=Safe(reason_text(tr, reason)))
+        return tr.html(msg, session=label, reason=str(reason))
+    return tr.html(msg, session=label, reason=Safe(reason_text(tr, reason)))

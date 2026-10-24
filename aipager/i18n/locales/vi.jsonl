@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Phiên nào? Trả lời một tin nhắn của phiên đó, hoặc gửi {command} kèm tin nhắn của bạn."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Dừng phiên nào?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Bị quy tắc an toàn chặn: {reason} (đã dừng)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Bị quy tắc an toàn chặn: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Lệnh Bash bị quy tắc an toàn chặn"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Lệnh Bash bị quy tắc an toàn chặn: không được tìm kiếm hay liệt kê toàn bộ thư mục home hoặc /; hãy tìm bên trong một thư mục dự án"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} dùng glob đi ra ngoài thư mục bằng .."}

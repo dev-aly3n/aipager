@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Sesi yang mana? Balas salah satu pesannya, atau kirim {command} beserta pesanmu."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Hentikan yang mana?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Diblokir aturan keamanan: {reason} (dihentikan)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Diblokir aturan keamanan: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Perintah Bash diblokir aturan keamanan"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Perintah Bash diblokir aturan keamanan: mencari atau mendaftar seluruh folder home atau / tidak diizinkan; cari di dalam folder proyek saja"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} dengan glob yang keluar dari folder lewat .."}

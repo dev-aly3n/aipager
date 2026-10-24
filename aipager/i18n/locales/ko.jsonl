@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "어느 세션인가요? 그 세션의 메시지에 답장하거나 {command} 뒤에 메시지를 붙여 보내세요."}
 {"k": "route.which_stop", "src": "aba80827", "v": "어느 세션을 중지할까요?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · 안전 규칙으로 차단됨: {reason} (중지됨)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · 안전 규칙으로 차단됨: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Bash 명령이 안전 규칙으로 차단됨"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash 명령이 안전 규칙으로 차단됨: 홈 폴더 전체나 /를 재귀적으로 검색하거나 나열할 수 없어요. 프로젝트 폴더 안에서 검색하세요"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool}: .. 로 폴더 밖으로 나가는 glob 사용"}

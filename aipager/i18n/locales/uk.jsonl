@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Яка сесія? Дай відповідь на одне з її повідомлень або напиши {command} і далі своє повідомлення."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Яку зупинити?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Заблоковано правилом безпеки: {reason} (зупинена)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Заблоковано правилом безпеки: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Правило безпеки заблокувало команду Bash"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Правило безпеки заблокувало команду Bash: шукати чи переглядати всю домашню папку або / не дозволено; шукай усередині папки проєкту"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} з glob, який виходить назовні через .."}

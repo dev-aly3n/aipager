@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Quale sessione? Rispondi a uno dei suoi messaggi o scrivi {command} seguito dal tuo messaggio."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Quale fermare?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Bloccato da una regola di sicurezza: {reason} (fermata)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Bloccato da una regola di sicurezza: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Una regola di sicurezza ha bloccato il comando Bash"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Una regola di sicurezza ha bloccato il comando Bash: non è consentito cercare o elencare tutta la cartella home o /; cerca dentro una cartella di progetto"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} con un glob che esce dalla cartella con .."}

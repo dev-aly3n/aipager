@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "哪个会话？请回复它的某条消息，或发送 {command} 加上你的消息。"}
 {"k": "route.which_stop", "src": "aba80827", "v": "要停止哪个会话？"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · 被安全规则阻止：{reason}（已停止）"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · 被安全规则阻止：{reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Bash 命令被安全规则阻止"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bash 命令被安全规则阻止：不允许递归搜索或列出整个主文件夹或 /；请在某个项目文件夹内搜索"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} 使用了用 .. 跳出文件夹的 glob"}

@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "أي جلسة؟ يمكنك الرد على إحدى رسائلها، أو إرسال {command} مع رسالتك."}
 {"k": "route.which_stop", "src": "aba80827", "v": "أي جلسة يُراد إيقافها؟"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · منعتها قاعدة الأمان: {reason} (أُوقفت)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · منعتها قاعدة الأمان: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "منعت قاعدة الأمان أمر Bash"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "منعت قاعدة الأمان أمر Bash: البحث أو العرض المتكرر في المجلد الرئيسي كله أو في / غير مسموح؛ يمكن البحث داخل مجلد مشروع بدلًا من ذلك"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} بنمط glob يخرج من المجلد عبر .."}

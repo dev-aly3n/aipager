@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Welche Sitzung? Antworte auf eine ihrer Nachrichten oder schreib {command} und dahinter deine Nachricht."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Welche stoppen?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Von einer Sicherheitsregel blockiert: {reason} (gestoppt)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Von einer Sicherheitsregel blockiert: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Eine Sicherheitsregel hat den Bash-Befehl blockiert"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Eine Sicherheitsregel hat den Bash-Befehl blockiert: Den ganzen Home-Ordner oder / zu durchsuchen oder aufzulisten ist nicht erlaubt; suche in einem Projektordner"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool} mit einem Glob, das mit .. den Ordner verlässt"}

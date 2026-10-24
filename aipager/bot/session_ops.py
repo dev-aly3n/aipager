@@ -2107,7 +2107,10 @@ class SessionOpsMixin:
         # in the chat's language; the reason Claude got stays English.
         from aipager.bot import peer_notice, safety_notice
         tr = i18n.for_sess(sess)
-        notice = safety_notice.notice_html(tr, sess.label, reason)
+        # The first line says "(stopped)" only when it was: a background job
+        # the halt could not stop may go on (the line added below says so).
+        notice = safety_notice.notice_html(tr, sess.label, reason,
+                                           stopped=not job_left_running)
         # A turn another Claude session started or narrowed: say so here,
         # and tell the sending session's chat ("peer message authority").
         peer_from = getattr(sess, "peer_from", None)

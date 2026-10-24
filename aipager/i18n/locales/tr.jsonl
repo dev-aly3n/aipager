@@ -690,6 +690,7 @@
 {"k": "route.which_reply", "src": "6771e2f8", "v": "Hangi oturum? Mesajlarından birini yanıtla ya da {command} yazıp ardından mesajını ekle."}
 {"k": "route.which_stop", "src": "aba80827", "v": "Hangisi durdurulsun?"}
 {"k": "safety.notice", "src": "d9e4c4b5", "v": "🛑 <b>{session}</b> · Bir güvenlik kuralı engelledi: {reason} (durduruldu)"}
+{"k": "safety.notice_not_stopped", "src": "e5c1a7f7", "v": "🛑 <b>{session}</b> · Bir güvenlik kuralı engelledi: {reason}"}
 {"k": "safety.reason.bash", "src": "f380389e", "v": "Bir güvenlik kuralı Bash komutunu engelledi"}
 {"k": "safety.reason.bash_search", "src": "74dafe28", "v": "Bir güvenlik kuralı Bash komutunu engelledi: tüm ev klasöründe ya da / içinde arama veya listeleme yapmaya izin verilmez; bir proje klasörünün içinde ara"}
 {"k": "safety.reason.glob_climbs", "src": "a10bc4b6", "v": "{tool}, .. ile dışarı çıkan bir glob ile"}
