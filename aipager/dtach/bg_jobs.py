@@ -50,6 +50,9 @@ MAX_BYTES = 64 * 1024
 
 #: How many of Claude's registry files one resolution reads at most.
 REGISTRY_LIMIT = 64
+#: How many registry file names one resolution looks at (each only
+#: stat'ed) to pick the newest :data:`REGISTRY_LIMIT` of them.
+REGISTRY_NAMES_LIMIT = 4096
 
 #: Module seam: tests simulate a file owned by someone else without
 #: patching the global ``os`` module.
@@ -158,21 +161,31 @@ _REGISTRY_FILE = re.compile(r"^[0-9]{1,10}\.json$")
 
 def scan_registry(config: str, limit: int = REGISTRY_LIMIT) -> list[dict]:
     """The entries of Claude's session registry (``<config>/sessions/
-    <pid>.json``), at most *limit* files, each read owner-checked. Empty
-    when the folder cannot be read."""
+    <pid>.json``), each read owner-checked: of every file name there (at
+    most :data:`REGISTRY_NAMES_LIMIT`, only stat'ed), the *limit* most
+    recently written ones, so stale files left behind by old claudes
+    never hide the entry ``←`` just wrote. Empty when the folder cannot
+    be read."""
     out: list[dict] = []
+    folder = os.path.join(config, "sessions")
+    found: list[tuple[int, str]] = []
     try:
-        with os.scandir(os.path.join(config, "sessions")) as it:
-            names = []
+        with os.scandir(folder) as it:
             for entry in it:
-                if _REGISTRY_FILE.match(entry.name):
-                    names.append(entry.name)
-                    if len(names) >= limit:
-                        break
+                if not _REGISTRY_FILE.match(entry.name):
+                    continue
+                try:
+                    mtime = entry.stat(follow_symlinks=False).st_mtime_ns
+                except OSError:
+                    continue
+                found.append((mtime, entry.name))
+                if len(found) >= REGISTRY_NAMES_LIMIT:
+                    break
     except OSError:
         return out
-    for name in sorted(names):
-        data = read_own_json(os.path.join(config, "sessions", name))
+    newest = sorted(found, key=lambda f: (-f[0], f[1]))[:limit]
+    for _mtime, name in sorted(newest, key=lambda f: f[1]):
+        data = read_own_json(os.path.join(folder, name))
         if data is not None:
             out.append(data)
     return out

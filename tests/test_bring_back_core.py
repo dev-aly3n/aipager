@@ -992,3 +992,27 @@ def test_the_gate_asks_at_once_when_a_turn_is_in_flight(world, run_async, mk_upd
     question = i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
     assert [c.kwargs.get("text") for c in world.bot._app.bot.send_message.await_args_list
             ] == [question]
+
+
+# ---- review rev-iter1-005: a job left out of a partial read is not gone ----------------
+
+def test_a_job_left_out_of_a_partial_registry_read_is_still_stopped(world, run_async,
+                                                                    monkeypatch):
+    """The listing fails and the job's file was not parsed (the parse
+    budget went to newer files): its state is unknown, not gone, so a
+    forced bring-back still runs ``claude stop`` before the kill."""
+    monkeypatch.setattr(claude_jobs, "REGISTRY_SCAN_LIMIT", 1)
+    world.reg(CLIENT, kind="interactive", sessionId=X, parkedJobId=JOB)  # the newest
+    out = run_async(world.bot._bring_back_core(world.sess, force=True))
+    assert out.ok
+    assert ("run", ["stop", JOB]) in world.calls
+    assert world.calls.index(("run", ["stop", JOB])) < world.kinds(sleeps=True).index("kill")
+
+
+def test_a_job_left_out_of_a_partial_registry_read_is_asked_about(world, run_async,
+                                                                  monkeypatch):
+    monkeypatch.setattr(claude_jobs, "REGISTRY_SCAN_LIMIT", 1)
+    world.reg(CLIENT, kind="interactive", sessionId=X, parkedJobId=JOB)
+    out = run_async(world.bot._bring_back_core(world.sess))
+    assert (out.ok, out.reason) == (False, "bg_busy")
+    assert "kill" not in world.kinds()

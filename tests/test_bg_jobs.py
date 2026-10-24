@@ -330,3 +330,20 @@ def test_the_real_paths_follow_the_runtime_folder(tmp_path, monkeypatch):
     assert mod.link_path(JOB) == tmp_path / f"claude-bgjob-{JOB}.json"
     assert mod.pidmap_path() == tmp_path / "claude-bgjob-pids.json"
     assert mod.exit_path("claude-x") == tmp_path / "claude-exit-claude-x.json"
+
+
+def test_the_newest_registry_files_are_read_among_many_stale_ones(tmp_path):
+    """Claude leaves old claudes' files behind: the entry ``←`` just wrote
+    is read even when it sorts after more stale names than the bound
+    (review nit: collect every name, then pick)."""
+    import os
+    sessions = _registry(tmp_path)
+    for pid in range(1000, 1100):
+        path = sessions / f"{pid}.json"
+        path.write_text(json.dumps({"pid": pid}))
+        os.utime(path, ns=(1_600_000_000_000_000_000 + pid, 1_600_000_000_000_000_000 + pid))
+    newest = sessions / "99999.json"
+    newest.write_text(json.dumps({"pid": 99999, "kind": "interactive"}))
+    got = bg_jobs.scan_registry(str(tmp_path / "cfg"))
+    assert len(got) == bg_jobs.REGISTRY_LIMIT
+    assert {"pid": 99999, "kind": "interactive"} in got

@@ -274,3 +274,75 @@ def test_no_test_runs_a_real_claude_command(run_async):
     nothing and reports no claude."""
     assert run_async(claude_jobs.run_claude(["agents", "--json"], 1)).error == "no_claude"
     assert claude_jobs.run_claude_sync(["agents", "--json"], 1).error == "no_claude"
+
+
+# ---- review rev-iter1-005: no entry is "gone" only in a registry read whole ----------
+
+def _aged(cfg, pid, age_s, **fields):
+    """A registry file written *age_s* seconds before the newest ones."""
+    import os
+    reg(cfg, pid, **fields)
+    path = cfg / "sessions" / f"{pid}.json"
+    ns = 1_800_000_000_000_000_000 - int(age_s * 1e9)
+    os.utime(path, ns=(ns, ns))
+
+
+def test_every_name_is_looked_at_and_the_newest_are_parsed(cfg, monkeypatch):
+    """More files than one read may parse: the job's file, written last, is
+    parsed even when it sorts after all the stale ones."""
+    monkeypatch.setattr(claude_jobs, "REGISTRY_SCAN_LIMIT", 5)
+    for pid in range(1000, 1020):
+        _aged(cfg, pid, 2000 - pid, kind="interactive", sessionId=W)
+    _aged(cfg, 99999, 0, kind="bg", jobId="aaaaaaaa", sessionId=X, status="idle")
+    entries = claude_jobs.read_registry()
+    assert claude_jobs.job_entry("aaaaaaaa", entries) is not None
+    assert entries.complete is False, "15 files were left out"
+
+
+def test_a_registry_read_whole_is_complete(cfg):
+    for pid in range(1000, 1010):
+        reg(cfg, pid, kind="interactive", sessionId=W)
+    assert claude_jobs.read_registry().complete is True
+
+
+def test_too_many_names_is_not_complete(cfg, monkeypatch):
+    monkeypatch.setattr(claude_jobs, "REGISTRY_NAMES_LIMIT", 3)
+    for pid in range(1000, 1005):
+        reg(cfg, pid, kind="interactive", sessionId=W)
+    assert claude_jobs.read_registry().complete is False
+
+
+def test_a_file_that_cannot_be_parsed_is_not_complete(cfg):
+    reg(cfg, 1000, kind="interactive", sessionId=W)
+    (cfg / "sessions" / "1001.json").write_text("{ half written")
+    entries = claude_jobs.read_registry()
+    assert len(entries) == 1 and entries.complete is False
+    # and the cached failure is remembered as one
+    assert claude_jobs.read_registry().complete is False
+
+
+@pytest.mark.parametrize("how", ["parse-budget", "broken-file", "too-many-names"])
+def test_a_failed_listing_with_a_partial_registry_is_unknown(cfg, agents, run_async,
+                                                              monkeypatch, how):
+    agents.rc = 1
+    if how == "parse-budget":
+        monkeypatch.setattr(claude_jobs, "REGISTRY_SCAN_LIMIT", 1)
+        reg(cfg, 1000, kind="interactive", sessionId=W)
+        reg(cfg, 1001, kind="interactive", sessionId=X)
+    elif how == "broken-file":
+        (cfg / "sessions" / "1001.json").write_text("{ half written")
+    else:
+        monkeypatch.setattr(claude_jobs, "REGISTRY_NAMES_LIMIT", 1)
+        reg(cfg, 1000, kind="interactive", sessionId=W)
+        reg(cfg, 1001, kind="interactive", sessionId=X)
+    assert run_async(claude_jobs.job_state("aaaaaaaa")) == "unknown"
+
+
+def test_the_listing_is_matched_by_job_id_only(cfg, agents, run_async):
+    """Once Claude's daemon runs, the listing holds the interactive
+    sessions too, with no ``id``: they are not the job (live check 1,
+    finding 3)."""
+    agents.stdout = json.dumps([
+        {"kind": "interactive", "sessionId": X, "status": "busy"},
+        {"id": "bbbbbbbb", "kind": "background", "status": "busy"}])
+    assert run_async(claude_jobs.job_state("aaaaaaaa")) == "gone"

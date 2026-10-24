@@ -40,6 +40,7 @@ import os
 import re
 import signal
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,8 +69,12 @@ RELEASE_BACKSTOP = 10
 #: unforced bring-back waits it out or asks, never stops the job.
 PARK_SETTLE_SECONDS = 3.0
 
-#: How many registry files one read looks at, at most.
+#: How many registry files one read parses, at most (files already
+#: parsed and unchanged cost no parse).
 REGISTRY_SCAN_LIMIT = 512
+#: How many registry file names one read looks at, at most (each only
+#: stat'ed).
+REGISTRY_NAMES_LIMIT = 4096
 #: How much of a transcript's end the ``continued-in`` check reads.
 TAIL_READ_BYTES = 256 * 1024
 #: How many ``continued-in`` hops :func:`follow_continued` takes at most.
@@ -147,6 +152,8 @@ def _pid_tagged(pid: int, session: str) -> bool:
 # -- where Claude's files are -------------------------------------------------
 
 _config_cache: tuple[float, Path] | None = None
+#: The registry and transcript caches are also used from worker threads.
+_REGISTRY_LOCK = threading.Lock()
 
 
 def config_dir() -> Path:
@@ -180,8 +187,18 @@ def valid_job(value) -> bool:
 
 _INTERACTIVE = "interactive"
 
-#: file path -> (mtime_ns, size, parsed entry or None)
-_REGISTRY_CACHE: dict[str, tuple[int, int, dict | None]] = {}
+#: file path -> (mtime_ns, size, parsed entry or None, read whole)
+_REGISTRY_CACHE: dict[str, tuple[int, int, dict | None, bool]] = {}
+
+
+class Registry(list):
+    """What :func:`read_registry` returns: the entries, and ``complete``,
+    False when a file was left out (too many names, the parse budget
+    spent, a file that could not be read or parsed). Only a complete
+    registry may say a job has no entry, so is gone. A plain list (a
+    caller's own) counts as complete."""
+
+    complete: bool = True
 
 
 def _as_int(value) -> int | None:
@@ -213,47 +230,66 @@ def _entry(data: dict, file_pid: int) -> dict | None:
     }
 
 
-def read_registry(config: Path | None = None) -> list[dict] | None:
+def read_registry(config: Path | None = None) -> Registry | None:
     """Claude's session registry: one normalised entry per readable file
-    of ``<config>/sessions/<pid>.json`` (at most
-    :data:`REGISTRY_SCAN_LIMIT`), each read owner-checked and parsed again
-    only when its (mtime, size) changed. A file that cannot be read or
-    parsed is left out. None when the folder cannot be read."""
+    of ``<config>/sessions/<pid>.json``, each read owner-checked and
+    parsed again only when its (mtime, size) changed. Every file name is
+    looked at (at most :data:`REGISTRY_NAMES_LIMIT`), and at most
+    :data:`REGISTRY_SCAN_LIMIT` new parses are made, newest files first.
+    A file that cannot be read or parsed is left out, and then the
+    result's ``complete`` is False. None when the folder cannot be read.
+    Safe to call from a worker thread."""
     folder = os.path.join(str(config if config is not None else config_dir()),
                           "sessions")
     found: list[tuple[str, int]] = []
+    complete = True
     try:
         with os.scandir(folder) as it:
             for item in it:
                 m = _REGISTRY_FILE.match(item.name)
                 if m:
                     found.append((item.name, int(m.group(1))))
-                    if len(found) >= REGISTRY_SCAN_LIMIT:
+                    if len(found) >= REGISTRY_NAMES_LIMIT:
+                        complete = False
                         break
     except OSError:
         return None
-    entries: list[dict] = []
-    seen: set[str] = set()
-    for name, file_pid in sorted(found):
-        path = os.path.join(folder, name)
-        seen.add(path)
+    stats: list[tuple[str, int, os.stat_result]] = []
+    for name, file_pid in found:
         try:
-            st = os.stat(path, follow_symlinks=False)
+            stats.append((name, file_pid,
+                          os.stat(os.path.join(folder, name), follow_symlinks=False)))
         except OSError:
-            continue
-        key = (st.st_mtime_ns, st.st_size)
-        cached = _REGISTRY_CACHE.get(path)
-        if cached is not None and cached[:2] == key:
-            entry = cached[2]
-        else:
+            continue                    # gone since the listing
+    with _REGISTRY_LOCK:
+        parsed: dict[str, tuple[dict | None, bool]] = {}
+        budget = REGISTRY_SCAN_LIMIT
+        for name, file_pid, st in sorted(stats, key=lambda x: -x[2].st_mtime_ns):
+            path = os.path.join(folder, name)
+            cached = _REGISTRY_CACHE.get(path)
+            if cached is not None and cached[:2] == (st.st_mtime_ns, st.st_size):
+                parsed[name] = (cached[2], cached[3])
+                continue
+            if budget <= 0:
+                complete = False
+                continue
+            budget -= 1
             data = bg_jobs.read_own_json(path)
             entry = _entry(data, file_pid) if data is not None else None
-            _REGISTRY_CACHE[path] = (key[0], key[1], entry)
+            _REGISTRY_CACHE[path] = (st.st_mtime_ns, st.st_size, entry, data is not None)
+            parsed[name] = (entry, data is not None)
+        seen = {os.path.join(folder, name) for name, _pid, _st in stats}
+        for stale in [p for p in _REGISTRY_CACHE
+                      if p not in seen and os.path.dirname(p) == folder]:
+            del _REGISTRY_CACHE[stale]
+    entries = Registry()
+    for name, _pid, _st in sorted(stats):
+        entry, whole = parsed.get(name, (None, False))
+        if not whole:
+            complete = False
         if entry is not None:
             entries.append(dict(entry))
-    for stale in [p for p in _REGISTRY_CACHE
-                  if p not in seen and os.path.dirname(p) == folder]:
-        del _REGISTRY_CACHE[stale]
+    entries.complete = complete
     return entries
 
 
@@ -601,6 +637,9 @@ def _agents_state(job: str, run: ClaudeRun) -> str:
     if not isinstance(listing, list):
         return UNKNOWN
     for item in listing:
+        # By id only: once Claude's daemon runs, the listing also holds
+        # the interactive sessions (kind "interactive", no "id"), so being
+        # listed does not make an item a job (live check 1, finding 3).
         if isinstance(item, dict) and item.get("id") == job:
             status = item.get("status")
             return _state_of(status if isinstance(status, str) else "")
@@ -612,16 +651,24 @@ async def job_state(job: str, entries: list[dict] | None = None) -> str:
     :data:`GONE`; :data:`UNKNOWN` when neither the registry nor
     ``claude agents --json`` can tell. The job's own registry entry
     decides first (a parked client's ``status`` is never read: it is
-    unreliable while parked); without one, the listing does."""
+    unreliable while parked); without one, the listing does. When the
+    listing fails, no entry means gone only in a registry read whole
+    (``Registry.complete``): a file left out may be the job's."""
     if entries is None:
         entries = read_registry()
     entry = job_entry(job, entries)
     if entry is not None:
         return _state_of(entry.get("status") or "")
     listed = _agents_state(job, await run_claude(["agents", "--json"], AGENTS_TIMEOUT))
-    if listed == UNKNOWN and entries is not None:
-        return GONE  # the registry is readable and has no entry for it
+    if listed == UNKNOWN and _read_whole(entries):
+        return GONE  # the registry was read whole and has no entry for it
     return listed
+
+
+def _read_whole(entries) -> bool:
+    """Whether *entries* is a registry read completely (a plain list
+    counts as one): only then does a missing entry mean a job is gone."""
+    return entries is not None and getattr(entries, "complete", True) is True
 
 
 def job_state_sync(job: str, entries: list[dict] | None = None) -> str:
@@ -632,7 +679,7 @@ def job_state_sync(job: str, entries: list[dict] | None = None) -> str:
     if entry is not None:
         return _state_of(entry.get("status") or "")
     listed = _agents_state(job, run_claude_sync(["agents", "--json"], AGENTS_TIMEOUT))
-    if listed == UNKNOWN and entries is not None:
+    if listed == UNKNOWN and _read_whole(entries):
         return GONE
     return listed
 
