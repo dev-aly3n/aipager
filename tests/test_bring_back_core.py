@@ -1076,6 +1076,22 @@ def test_the_gate_waits_out_a_young_park_instead_of_asking(world, run_async,
                    for c in world.bot._app.bot.send_message.await_args_list)
 
 
+@pytest.mark.parametrize("mono_age, young", [
+    (1.0, True),                  # noticed a second ago: still young
+    (10.0, False),                # noticed long ago: settled
+    (None, True),                 # not noticed by this daemon: just noticed
+])
+def test_a_wall_clock_gone_back_does_not_settle_a_park(world, mono_age, young):
+    """The nit of review 2: ``parked_since`` lies in the future (the clock
+    was set back): the monotonic clock gives the park's age."""
+    sess = world.sess
+    sess.parked_since = time.time() + 3600
+    sess.park_changed_at = time.monotonic() - mono_age if mono_age is not None else 0.0
+    wait = world.bot._park_settles_in(sess)
+    assert (wait > 0) is young
+    assert wait <= claude_jobs.PARK_SETTLE_SECONDS
+
+
 def test_a_wait_for_another_park_does_not_settle_this_one(world, run_async):
     """The nit of review 2: *settled* names the park that was waited out;
     for a young park on another job it counts for nothing."""

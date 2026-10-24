@@ -3056,11 +3056,20 @@ class SessionOpsMixin:
     @staticmethod
     def _park_settles_in(sess: TrackedSession) -> float:
         """Seconds until *sess*'s park is ``PARK_SETTLE_SECONDS`` old; 0
-        when it is (or its time is not known)."""
+        when it is (or its time is not known).
+
+        The age is the persisted wall-clock ``parked_since`` (it survives a
+        daemon restart). When the wall clock went back since the park, the
+        age comes from the monotonic clock instead (``park_changed_at``,
+        for a park noticed by this daemon), or the park counts as just
+        noticed: never as settled at once."""
         from aipager import claude_jobs
         if sess.parked_since <= 0:
             return 0.0
         age = time.time() - sess.parked_since
+        if age < 0:
+            age = (time.monotonic() - sess.park_changed_at
+                   if sess.park_changed_at > 0 else 0.0)
         if 0 <= age < claude_jobs.PARK_SETTLE_SECONDS:
             return claude_jobs.PARK_SETTLE_SECONDS - age
         return 0.0
