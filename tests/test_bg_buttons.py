@@ -472,3 +472,27 @@ def test_an_ended_sessions_mode_button_forces_like_stop_and_bring_back(world, ru
     _ended_with_a_busy_holder(world)
     _tap(world, run_async, f"bgmodeauto{JOB}")
     assert world.runs()[0] == ["stop", JOB]
+
+
+@pytest.mark.parametrize("mode", ["ask", "full"])
+def test_an_ended_sessions_mode_button_resumes_in_its_mode(world, run_async, mode):
+    """Review 3 nit 1: the session that ended meanwhile comes back in the
+    mode the switch asked for, as docs/troubleshooting.md says."""
+    _ended_with_a_busy_holder(world)
+    world.bot._may_use_full_access = MagicMock(return_value=True)
+    assert world.sess.perm_mode == "auto"
+    _tap(world, run_async, f"bgmode{mode}{JOB}")
+    assert [launch["mode"] for launch in world.launches()] == [mode]
+    assert world.sess.perm_mode == mode
+
+
+def test_an_ended_sessions_full_access_button_needs_an_admin_at_tap_time(world,
+                                                                        run_async):
+    """Full access is checked at tap time on an ended session too: the tap
+    is refused with an alert and nothing is stopped or resumed."""
+    _ended_with_a_busy_holder(world)
+    world.bot._may_use_full_access = MagicMock(return_value=False)
+    q = _tap(world, run_async, f"bgmodefull{JOB}")
+    assert world.calls == []
+    assert world.sess.status == Status.GONE and world.sess.perm_mode == "auto"
+    assert q.answer.await_args.kwargs.get("show_alert") is True

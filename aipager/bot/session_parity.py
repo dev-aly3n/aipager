@@ -919,24 +919,9 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
         return
     mode = BG_MODE_VERBS.get(action)
     force = action == "bgforce" or mode is not None
-    if sess.status == Status.GONE:
-        async def _reply(text, **kw):
-            await _edit(query, text, kw.pop("reply_markup", None))
-
-        await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
-                                                  session=sess.label))
-        if force and job:
-            # A keyed button was shown for one job: it forces only that one
-            # (an ended session's resume follows its conversation, and a
-            # later job may hold it now).
-            await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
-                                 query=query, sess=sess, force=True, force_job=job)
-        else:
-            await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
-                                 query=query, sess=sess, force=force)
-        return
-    if (not sess.parked_job or job is None
-            or sess.parked_job[:BG_JOB_KEY_LEN] != job):
+    is_gone = sess.status == Status.GONE
+    if (not is_gone and (not sess.parked_job or job is None
+                         or sess.parked_job[:BG_JOB_KEY_LEN] != job)):
         # Not parked, or parked on another job than the button's: a
         # "Stop and bring back" days old must not stop today's job.
         await bot._safe_answer(query, person.text(_ops.BG_TOAST_NOT_PARKED,
@@ -944,9 +929,30 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
         await _drop_keyboard(query)
         return
     if mode == perm_modes.FULL and not bot._may_use_full_access(user_id, chat_id):
-        # Full access needs an admin, like every other way into it.
+        # Full access needs an admin, like every other way into it, also
+        # for a session that ended meanwhile.
         from aipager.bot.mode_switch import TOAST_NEEDS_ADMIN_FULL
         await bot._safe_answer(query, person.text(TOAST_NEEDS_ADMIN_FULL), show_alert=True)
+        return
+    if is_gone:
+        async def _reply(text, **kw):
+            await _edit(query, text, kw.pop("reply_markup", None))
+
+        await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
+                                                  session=sess.label))
+        # A mode verb resumes in its mode, as it would have brought the
+        # live session back in it.
+        extra = {"mode_override": mode} if mode is not None else {}
+        if force and job:
+            # A keyed button was shown for one job: it forces only that one
+            # (an ended session's resume follows its conversation, and a
+            # later job may hold it now).
+            await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
+                                 query=query, sess=sess, force=True, force_job=job,
+                                 **extra)
+        else:
+            await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
+                                 query=query, sess=sess, force=force, **extra)
         return
     await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
                                               session=sess.label))
