@@ -2159,20 +2159,30 @@ class SessionOpsMixin:
         another bring-back runs (the message gate's, which never stops a
         busy job), it waits for that one to end, at most
         :data:`_HALT_WAIT_SECONDS`, and then stops the job itself when the
-        session is still parked."""
-        outcome = await self._bring_back_core(sess, force=True, release_held=False)
-        if outcome.reason != "already_restarting":
-            return outcome
-        waited = 0.0
-        while sess.relaunch_in_flight and waited < _HALT_WAIT_SECONDS:
-            await _sleep(_HALT_WAIT_POLL)
-            waited += _HALT_WAIT_POLL
-        if sess.relaunch_in_flight:
-            return outcome
-        if not sess.parked_job:
-            # The other bring-back stopped the job and brought it back.
-            return RestartOutcome(ok=True, reason="done", label=sess.label)
-        return await self._bring_back_core(sess, force=True, release_held=False)
+        session is still parked.
+
+        Nothing held is released while it waits (``bg_release_blocked``):
+        the other bring-back may have armed its release and its relaunched
+        claude may come up meanwhile, but the halt drops the held messages,
+        so the release is disarmed when the wait is over."""
+        sess.bg_release_blocked = True
+        try:
+            outcome = await self._bring_back_core(sess, force=True, release_held=False)
+            if outcome.reason != "already_restarting":
+                return outcome
+            waited = 0.0
+            while sess.relaunch_in_flight and waited < _HALT_WAIT_SECONDS:
+                await _sleep(_HALT_WAIT_POLL)
+                waited += _HALT_WAIT_POLL
+            if sess.relaunch_in_flight:
+                return outcome
+            if not sess.parked_job:
+                # The other bring-back stopped the job and brought it back.
+                return RestartOutcome(ok=True, reason="done", label=sess.label)
+            return await self._bring_back_core(sess, force=True, release_held=False)
+        finally:
+            sess.disarm_bg_release()
+            sess.bg_release_blocked = False
 
     async def _kill_session_core(self, session_name: str, label: str) -> KillOutcome:
         """Kill a session by its (already-resolved) dtach session name.

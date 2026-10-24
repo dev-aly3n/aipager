@@ -1297,6 +1297,46 @@ def test_a_halt_that_cannot_wait_out_a_bring_back_says_so(world, run_async):
     assert len(polls) == int(session_ops._HALT_WAIT_SECONDS / session_ops._HALT_WAIT_POLL)
 
 
+def test_a_halt_that_waits_out_a_releasing_bring_back_lets_nothing_out(world, run_async,
+                                                                       monkeypatch):
+    """Review rev-iter2-004: the gate's bring-back (which releases held
+    messages) is in its launch when a safety halt comes; the relaunched
+    claude's SessionStart arrives there too. The halt waits the bring-back
+    out, and nothing held is typed: the halt drops it."""
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("held", 31)
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    world.bot._settle_card_text = AsyncMock(return_value=True)
+    world.bot._mark_not_delivered = AsyncMock()
+    inner = world._sleep
+
+    async def sleep(seconds):          # the halt's wait lets the bring-back go on
+        await inner(seconds)
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(session_ops, "_sleep", sleep)
+    tasks = {}
+
+    async def during_launch():
+        tasks["halt"] = asyncio.ensure_future(
+            world.bot._halt_for_safety(sess, "rm -rf outside the project"))
+        await asyncio.sleep(0)         # the halt starts and waits
+        await _session_start(recv)     # the relaunched claude is up
+
+    world.during_launch = during_launch
+
+    async def scenario():
+        out = await world.bot._bring_back_core(sess)
+        await tasks["halt"]
+        return out
+
+    assert run_async(scenario()).ok
+    assert typed == []
+    assert sess.pending_queue == [] and sess.bg_release_pending is False
+    assert sess.bg_release_blocked is False
+
+
 def test_a_release_event_while_the_bring_back_runs_is_kept_for_its_end(world, run_async,
                                                                       monkeypatch):
     """``bg_release`` reaching notify while the bring-back still runs is

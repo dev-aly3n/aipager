@@ -943,6 +943,10 @@ class TrackedSession:
     bg_release_armed_at: float = 0.0
     bg_start_seen: bool = False
     bg_released_at: float = 0.0
+    # A safety halt is waiting out a bring-back already in flight: nothing
+    # held may be released meanwhile (the halt drops the held messages,
+    # and disarms the release when its wait is over). Transient.
+    bg_release_blocked: bool = False
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute
@@ -2695,7 +2699,7 @@ class TrackedSession:
         """True exactly once per armed release: checks and clears it with
         no await in between, so the bring-back, the SessionStart and the
         backstop together send one held message, never two."""
-        if not self.bg_release_pending:
+        if not self.bg_release_pending or self.bg_release_blocked:
             return False
         self.disarm_bg_release()
         return True
