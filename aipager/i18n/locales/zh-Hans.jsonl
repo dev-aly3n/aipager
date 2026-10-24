@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "停止命令 claude stop 以退出码 {code} 结束"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "停止命令 claude stop 没有及时响应"}
 {"k": "bg.failed", "src": "00860287", "v": "没能把 <b>{session}</b> 从 Claude Code 后台带回来：{error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ 没能停止 <b>{session}</b> 的 Claude Code 后台任务，被阻止的工作可能还在那里运行：{error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ 没能停止 <b>{session}</b> 的 Claude Code 后台任务，被阻止的工作可能还在那里运行。"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "你发给 <b>{session}</b> 的消息会一直等着，直到有人把这个会话从 Claude Code 后台带回来。"}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> 会继续在 Claude Code 后台工作。"}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "没能把 <b>{session}</b> 带回来，因为 Claude Code 没有为它保存任何对话。"}

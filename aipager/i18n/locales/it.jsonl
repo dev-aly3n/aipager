@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop è terminato con il codice di uscita {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop non ha risposto in tempo"}
 {"k": "bg.failed", "src": "00860287", "v": "Non è stato possibile riportare qui <b>{session}</b> dal background di Claude Code: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ Non è stato possibile fermare il job in background di Claude Code di <b>{session}</b>, quindi il lavoro bloccato potrebbe essere ancora in esecuzione lì: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ Non è stato possibile fermare il job in background di Claude Code di <b>{session}</b>, quindi il lavoro bloccato potrebbe essere ancora in esecuzione lì."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Il tuo messaggio per <b>{session}</b> aspetta finché qualcuno non riporta qui la sessione dal background di Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> continua a lavorare nel background di Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Non è stato possibile riportare qui <b>{session}</b> perché Claude Code non ha nessuna conversazione salvata per questa sessione."}

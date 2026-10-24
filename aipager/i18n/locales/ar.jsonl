@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "انتهى أمر الإيقاف claude stop برمز الخروج {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "لم يستجب أمر الإيقاف claude stop في الوقت المناسب"}
 {"k": "bg.failed", "src": "00860287", "v": "تعذّرت إعادة <b>{session}</b> من خلفية Claude Code: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ تعذّر إيقاف مهمة خلفية Claude Code الخاصة بـ <b>{session}</b>، لذا قد يظل العمل المحظور قيد التشغيل هناك: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ تعذّر إيقاف مهمة خلفية Claude Code الخاصة بـ <b>{session}</b>، لذا قد يظل العمل المحظور قيد التشغيل هناك."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "تنتظر رسالتك إلى <b>{session}</b> حتى يعيد أحد الجلسة من خلفية Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "تواصل <b>{session}</b> العمل في خلفية Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "تعذّرت إعادة <b>{session}</b> لأن Claude Code لا يملك محادثة محفوظة لهذه الجلسة."}

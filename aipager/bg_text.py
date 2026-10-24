@@ -157,6 +157,20 @@ BG_TOAST_BRINGING_BACK = Msg("bg.toast_bringing_back", "Bringing {session} back�
                              note="Pop-up: a bring-back from Claude Code's background started",
                              eg={"session": "x1"})
 
+BG_HALT_NOT_STOPPED = Msg(
+    "bg.halt_not_stopped",
+    "⚠️ The Claude Code background job of <b>{session}</b> could not be stopped, so the "
+    "blocked work may still be running there: {error}",
+    note="HTML. Under a safety halt's notice: the session's conversation runs in a Claude "
+         "Code background job, and stopping that job failed; {error} is one of bg.err.*",
+    eg={"session": "x1", "error": "claude stop did not answer in time"})
+BG_HALT_NOT_STOPPED_PLAIN = Msg(
+    "bg.halt_not_stopped_plain",
+    "⚠️ The Claude Code background job of <b>{session}</b> could not be stopped, so the "
+    "blocked work may still be running there.",
+    note="HTML. bg.halt_not_stopped when there is no reason to give",
+    eg={"session": "x1"})
+
 #: The reasons a bring-back or a resume gives when a background job is in
 #: the way (RestartOutcome / ResumeOutcome).
 BG_FAILURES = frozenset({"bg_busy", "bg_stop_failed", "bg_no_conversation"})
@@ -196,6 +210,14 @@ def bg_outcome_text(tr, outcome, label: str) -> str | None:
     if outcome.reason == "parked":
         return tr.text(BG_TOAST_REFUSED_PARKED, session=label)
     return None
+
+
+def halt_not_stopped_html(tr, outcome, label: str) -> str:
+    """The line a safety halt adds when it could not stop the background
+    job its session's conversation runs in (HTML, *tr*'s language)."""
+    if outcome is not None and getattr(outcome, "bg_err", ()):
+        return tr.html(BG_HALT_NOT_STOPPED, session=label, error=bg_error(tr, outcome))
+    return tr.html(BG_HALT_NOT_STOPPED_PLAIN, session=label)
 
 
 def stop_refused_html(tr, outcome) -> str:

@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop terminó con el código de salida {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop no respondió a tiempo"}
 {"k": "bg.failed", "src": "00860287", "v": "No se pudo traer <b>{session}</b> de vuelta del segundo plano de Claude Code: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ No se pudo detener la tarea en segundo plano de Claude Code de <b>{session}</b>, así que el trabajo bloqueado puede seguir en marcha allí: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ No se pudo detener la tarea en segundo plano de Claude Code de <b>{session}</b>, así que el trabajo bloqueado puede seguir en marcha allí."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Tu mensaje para <b>{session}</b> espera hasta que alguien traiga la sesión de vuelta del segundo plano de Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> sigue trabajando en el segundo plano de Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "No se pudo traer <b>{session}</b> de vuelta porque Claude Code no tiene ninguna conversación guardada para ella."}

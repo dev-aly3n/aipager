@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "دستور توقف claude stop با کد خروج {code} تمام شد"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "دستور توقف claude stop به‌موقع جواب نداد"}
 {"k": "bg.failed", "src": "00860287", "v": "برگرداندن <b>{session}</b> از پس‌زمینهٔ Claude Code نشد: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ کار پس‌زمینهٔ Claude Code برای <b>{session}</b> متوقف نشد، پس ممکن است کاری که جلویش گرفته شد هنوز آنجا در حال اجرا باشد: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ کار پس‌زمینهٔ Claude Code برای <b>{session}</b> متوقف نشد، پس ممکن است کاری که جلویش گرفته شد هنوز آنجا در حال اجرا باشد."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "پیام شما به <b>{session}</b> منتظر می‌ماند تا کسی سشن را از پس‌زمینهٔ Claude Code برگرداند."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> در پس‌زمینهٔ Claude Code به کارش ادامه می‌دهد."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "<b>{session}</b> برنگشت، چون Claude Code هیچ گفتگوی ذخیره‌شده‌ای برای آن ندارد."}

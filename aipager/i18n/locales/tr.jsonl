@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop {code} çıkış koduyla sona erdi"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop zamanında yanıt vermedi"}
 {"k": "bg.failed", "src": "00860287", "v": "<b>{session}</b> Claude Code arka planından geri getirilemedi: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ <b>{session}</b> için Claude Code arka plan işi durdurulamadı, bu yüzden engellenen iş orada hâlâ çalışıyor olabilir: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ <b>{session}</b> için Claude Code arka plan işi durdurulamadı, bu yüzden engellenen iş orada hâlâ çalışıyor olabilir."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "<b>{session}</b> oturumuna gönderdiğin mesaj, biri oturumu Claude Code arka planından geri getirene kadar bekliyor."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> Claude Code arka planında çalışmaya devam ediyor."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Claude Code'da kayıtlı bir sohbet olmadığı için <b>{session}</b> geri getirilemedi."}

@@ -1103,3 +1103,63 @@ def test_the_ready_cards_mode_switch_says_why(world, run_async, monkeypatch, how
         assert notes[-1] == ("Could not bring x back from Claude Code's background: "
                              "claude stop ended with exit code 1")
 
+
+# ---- review rev-iter1-010: a safety halt that could not stop the job says so -------------
+
+def _halt(world, run_async):
+    world.bot.registry.transition(NAME, Status.BUSY)
+    world.bot._settle_card_text = AsyncMock(return_value=True)
+    world.bot._mark_not_delivered = AsyncMock()
+    run_async(world.bot._halt_for_safety(world.sess, "rm -rf outside the project"))
+    return world.bot._settle_card_text.await_args.args[1]
+
+
+def test_a_halt_whose_stop_failed_says_the_job_may_still_run(world, run_async):
+    world.stop_rc = 1
+    notice = _halt(world, run_async)
+    assert notice.endswith(
+        "\n⚠️ The Claude Code background job of <b>x</b> could not be stopped, so the "
+        "blocked work may still be running there: claude stop ended with exit code 1")
+    assert world.sess.parked_job == JOB
+
+
+def test_a_halt_that_stopped_the_job_says_nothing_more(world, run_async):
+    notice = _halt(world, run_async)
+    assert "could not be stopped" not in notice
+    assert world.runs()[0] == ["stop", JOB]
+
+
+def test_a_halt_waits_for_a_bring_back_already_running_then_stops_the_job(world,
+                                                                         run_async,
+                                                                         monkeypatch):
+    """The gate's (unforced) bring-back was running: the halt waits for it,
+    finds the session still parked and stops the job itself."""
+    sess = world.sess
+    sess.relaunch_in_flight = True
+    polls = []
+    inner = world._sleep
+
+    async def sleep(seconds):
+        await inner(seconds)
+        if seconds == session_ops._HALT_WAIT_POLL:
+            polls.append(seconds)
+            if len(polls) == 3:
+                sess.relaunch_in_flight = False      # it ended: the job was busy
+
+    monkeypatch.setattr(session_ops, "_sleep", sleep)
+    notice = _halt(world, run_async)
+    assert len(polls) == 3
+    assert world.runs()[0] == ["stop", JOB]
+    assert "could not be stopped" not in notice and sess.parked_job == ""
+
+
+def test_a_halt_that_cannot_wait_out_a_bring_back_says_so(world, run_async):
+    sess = world.sess
+    sess.relaunch_in_flight = True             # never ends
+    notice = _halt(world, run_async)
+    assert world.runs() == []
+    assert notice.endswith(
+        "\n⚠️ The Claude Code background job of <b>x</b> could not be stopped, so the "
+        "blocked work may still be running there.")
+    polls = [c for c in world.calls if c == ("sleep", session_ops._HALT_WAIT_POLL)]
+    assert len(polls) == int(session_ops._HALT_WAIT_SECONDS / session_ops._HALT_WAIT_POLL)

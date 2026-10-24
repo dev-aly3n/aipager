@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "lệnh dừng claude stop đã kết thúc với mã thoát {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "lệnh dừng claude stop không trả lời kịp thời"}
 {"k": "bg.failed", "src": "00860287", "v": "Không thể đưa <b>{session}</b> về lại từ chế độ chạy nền của Claude Code: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ Không thể dừng tác vụ chạy nền của Claude Code cho <b>{session}</b>, nên phần việc bị chặn có thể vẫn đang chạy ở đó: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ Không thể dừng tác vụ chạy nền của Claude Code cho <b>{session}</b>, nên phần việc bị chặn có thể vẫn đang chạy ở đó."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Tin nhắn bạn gửi <b>{session}</b> sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> vẫn tiếp tục làm việc trong chế độ chạy nền của Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Không thể đưa <b>{session}</b> về lại vì Claude Code không có cuộc trò chuyện nào được lưu cho phiên này."}

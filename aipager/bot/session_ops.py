@@ -99,6 +99,14 @@ log = logging.getLogger(__name__)
 # in the process and has hung this suite twice (CLAUDE.md). Both default
 # to the real functions; production behaviour is unchanged.
 _sleep = asyncio.sleep
+#: How long a safety halt waits for a bring-back already running before
+#: it stops a Claude Code background job itself, and how often it looks.
+_HALT_WAIT_SECONDS = 30.0
+_HALT_WAIT_POLL = 0.25
+#: A safety halt's bring-back outcomes that leave the background job
+#: running (the stop never happened, or failed).
+_HALT_JOB_LEFT = frozenset({"bg_stop_failed", "already_restarting",
+                            "bg_no_conversation", "not_live"})
 _spawn = asyncio.create_task
 
 #: How long aipager remembers the Claude Code session id its own /kill
@@ -2064,15 +2072,20 @@ class SessionOpsMixin:
         # 1. Interrupt Claude's turn. A session parked on a Claude Code
         # background job runs the turn in the job, and nothing may be typed
         # into the parked client: the job is stopped and the session
-        # brought back instead (its held messages are dropped below).
+        # brought back instead (its held messages are dropped below). When
+        # that fails the notice says so: the blocked work may go on there.
+        job_left_running = False
+        bg_outcome = None
         if sess.parked_job:
             try:
-                outcome = await self._bring_back_core(sess, force=True,
-                                                      release_held=False)
-                if not outcome.ok:
+                bg_outcome = await self._halt_bring_back(sess)
+                job_left_running = (bg_outcome.reason in _HALT_JOB_LEFT
+                                    and bool(sess.parked_job))
+                if not bg_outcome.ok:
                     log.warning("[%s] safety halt: background job not stopped (%s)",
-                                sess.label, outcome.reason)
+                                sess.label, bg_outcome.reason)
             except Exception:
+                job_left_running = True
                 log.warning("[%s] safety halt bring-back failed", sess.label,
                             exc_info=True)
         else:
@@ -2102,6 +2115,9 @@ class SessionOpsMixin:
                                          getattr(sess, "peer_narrowed", False))
         if suffix:
             notice = f"{notice}\n{suffix}"
+        if job_left_running:
+            from aipager.bg_text import halt_not_stopped_html
+            notice = f"{notice}\n{halt_not_stopped_html(tr, bg_outcome, sess.label)}"
         try:
             # Written and retired under the card-edit lock, as in
             # `_stop_session_core`.
@@ -2137,6 +2153,26 @@ class SessionOpsMixin:
         sess.last_idle_at = time.monotonic()
         self.registry.mark_dirty()
         log.info("[%s] halted by safety policy", sess.label)
+
+    async def _halt_bring_back(self, sess: TrackedSession) -> RestartOutcome:
+        """A safety halt's forced bring-back of a parked session. While
+        another bring-back runs (the message gate's, which never stops a
+        busy job), it waits for that one to end, at most
+        :data:`_HALT_WAIT_SECONDS`, and then stops the job itself when the
+        session is still parked."""
+        outcome = await self._bring_back_core(sess, force=True, release_held=False)
+        if outcome.reason != "already_restarting":
+            return outcome
+        waited = 0.0
+        while sess.relaunch_in_flight and waited < _HALT_WAIT_SECONDS:
+            await _sleep(_HALT_WAIT_POLL)
+            waited += _HALT_WAIT_POLL
+        if sess.relaunch_in_flight:
+            return outcome
+        if not sess.parked_job:
+            # The other bring-back stopped the job and brought it back.
+            return RestartOutcome(ok=True, reason="done", label=sess.label)
+        return await self._bring_back_core(sess, force=True, release_held=False)
 
     async def _kill_session_core(self, session_name: str, label: str) -> KillOutcome:
         """Kill a session by its (already-resolved) dtach session name.

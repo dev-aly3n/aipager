@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "команда зупинки claude stop завершилася з кодом виходу {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "команда зупинки claude stop не відповіла вчасно"}
 {"k": "bg.failed", "src": "00860287", "v": "Не вдалося повернути <b>{session}</b> з фонового режиму Claude Code: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ Не вдалося зупинити фонове завдання Claude Code для <b>{session}</b>, тож заблокована робота, можливо, досі триває там: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ Не вдалося зупинити фонове завдання Claude Code для <b>{session}</b>, тож заблокована робота, можливо, досі триває там."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Твоє повідомлення для <b>{session}</b> чекатиме, доки хтось не поверне сесію з фонового режиму Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> і далі працює у фоновому режимі Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Не вдалося повернути <b>{session}</b>: у Claude Code немає збереженої розмови для цієї сесії."}

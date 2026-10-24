@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop wurde mit Exit-Code {code} beendet"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop hat nicht rechtzeitig geantwortet"}
 {"k": "bg.failed", "src": "00860287", "v": "<b>{session}</b> konnte nicht aus dem Hintergrund von Claude Code zurückgeholt werden: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ Der Hintergrund-Job von Claude Code für <b>{session}</b> konnte nicht gestoppt werden, daher läuft die blockierte Arbeit dort vielleicht noch: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ Der Hintergrund-Job von Claude Code für <b>{session}</b> konnte nicht gestoppt werden, daher läuft die blockierte Arbeit dort vielleicht noch."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Deine Nachricht an <b>{session}</b> wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> arbeitet im Hintergrund von Claude Code weiter."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "<b>{session}</b> konnte nicht zurückgeholt werden, weil Claude Code kein gespeichertes Gespräch dafür hat."}

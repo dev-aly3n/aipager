@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop s'est terminé avec le code de sortie {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop n'a pas répondu à temps"}
 {"k": "bg.failed", "src": "00860287", "v": "Impossible de ramener <b>{session}</b> de l'arrière-plan de Claude Code : {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ Impossible d'arrêter la tâche d'arrière-plan de Claude Code de <b>{session}</b>, donc le travail bloqué tourne peut-être encore là-bas : {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ Impossible d'arrêter la tâche d'arrière-plan de Claude Code de <b>{session}</b>, donc le travail bloqué tourne peut-être encore là-bas."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Votre message pour <b>{session}</b> attend que quelqu'un ramène la session de l'arrière-plan de Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> continue de travailler à l'arrière-plan de Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Impossible de ramener <b>{session}</b>, car Claude Code n'a aucune conversation enregistrée pour elle."}

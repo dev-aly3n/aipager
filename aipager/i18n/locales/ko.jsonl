@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "중지 명령 claude stop이 종료 코드 {code}(으)로 끝났어요"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "중지 명령 claude stop이 제때 응답하지 않았어요"}
 {"k": "bg.failed", "src": "00860287", "v": "<b>{session}</b> 세션을 Claude Code 백그라운드에서 다시 가져오지 못했어요: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ <b>{session}</b> 세션의 Claude Code 백그라운드 작업을 멈추지 못해서, 차단된 작업이 아직 거기서 실행 중일 수 있어요: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ <b>{session}</b> 세션의 Claude Code 백그라운드 작업을 멈추지 못해서, 차단된 작업이 아직 거기서 실행 중일 수 있어요."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "<b>{session}</b> 세션에 보낸 메시지는 누군가 이 세션을 Claude Code 백그라운드에서 다시 가져올 때까지 기다려요."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> 세션은 Claude Code 백그라운드에서 계속 작업해요."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Claude Code에 저장된 대화가 없어서 <b>{session}</b> 세션을 다시 가져오지 못했어요."}

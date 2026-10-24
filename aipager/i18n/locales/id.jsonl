@@ -164,6 +164,8 @@
 {"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop berakhir dengan kode keluar {code}"}
 {"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop tidak menjawab tepat waktu"}
 {"k": "bg.failed", "src": "00860287", "v": "Tidak bisa mengembalikan <b>{session}</b> dari latar belakang Claude Code: {error}"}
+{"k": "bg.halt_not_stopped", "src": "6866d8bb", "v": "⚠️ Tugas latar belakang Claude Code untuk <b>{session}</b> tidak bisa dihentikan, jadi pekerjaan yang diblokir mungkin masih berjalan di sana: {error}"}
+{"k": "bg.halt_not_stopped_plain", "src": "5810033d", "v": "⚠️ Tugas latar belakang Claude Code untuk <b>{session}</b> tidak bisa dihentikan, jadi pekerjaan yang diblokir mungkin masih berjalan di sana."}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Pesanmu untuk <b>{session}</b> menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code."}
 {"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> tetap bekerja di latar belakang Claude Code."}
 {"k": "bg.no_conversation", "src": "42ccba55", "v": "Tidak bisa mengembalikan <b>{session}</b> karena Claude Code tidak punya percakapan tersimpan untuknya."}
