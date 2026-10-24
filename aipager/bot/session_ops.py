@@ -330,6 +330,11 @@ class RestartOutcome:
     #: ``(code, params)`` of ``aipager.bg_text.BG_ERRORS`` for
     #: ``bg_stop_failed``; empty otherwise.
     bg_err: tuple = ()
+    #: For ``bg_busy``: seconds until the park is
+    #: ``claude_jobs.PARK_SETTLE_SECONDS`` old, when its youth was the only
+    #: reason (a just-forked job reads idle before it continues a moved
+    #: turn); 0 when the job is busy, or its state unknown, for real.
+    retry_after: float = 0.0
 
 
 @dataclass
@@ -2905,6 +2910,7 @@ class SessionOpsMixin:
     async def _bring_back_core(
         self, sess: TrackedSession, *, force: bool = False,
         release_held: bool = True, target_mode: str | None = None,
+        settled: bool = False,
     ) -> RestartOutcome:
         """Bring a session parked on a Claude Code background job back into
         its own terminal: the one core the park notice's button, Restart,
@@ -2914,8 +2920,17 @@ class SessionOpsMixin:
         1. The conversation (:meth:`_bring_back_conversation`), followed
            where it moved; none gives ``bg_no_conversation`` and nothing
            is touched (never an empty session in its place).
-        2. The job's state: busy, or unknown, and not *force* gives
-           ``bg_busy`` with nothing touched.
+        2. Unless *force*: ``bg_busy`` with nothing touched when aipager
+           sees a turn in flight (the session BUSY or INTERACTIVE, or work
+           in flight: a turn moved mid-run keeps its card until the
+           job's Stop), when the job is busy or its state unknown, or
+           while the park is younger than
+           ``claude_jobs.PARK_SETTLE_SECONDS`` (a just-forked job reads
+           idle for a moment before it continues a moved turn; then
+           ``retry_after`` says how long until it is settled, and a caller
+           that waited that long passes *settled*). The job's entry is
+           read again right before ``claude stop``, and the stricter of
+           the two answers counts.
         3. Under the restart window (opened first, so the job's
            SessionEnd and the parked client's exit are expected),
            ``claude stop <job>`` (skipped for a job that is gone), then a
@@ -2951,15 +2966,40 @@ class SessionOpsMixin:
         sess.relaunch_in_flight = True
         try:
             return await self._bring_back_in_flight(
-                sess, force=force, release_held=release_held, mode=mode)
+                sess, force=force, release_held=release_held, mode=mode,
+                settled=settled)
         finally:
             sess.relaunch_in_flight = False
 
+    @staticmethod
+    def _turn_in_flight(sess: TrackedSession) -> bool:
+        """Whether aipager sees a turn of *sess* in flight (the job's, for
+        a parked session): its own view, independent of any timing."""
+        return (sess.status in (Status.BUSY, Status.INTERACTIVE)
+                or sess.work_in_flight(time.monotonic()))
+
+    @staticmethod
+    def _park_settles_in(sess: TrackedSession) -> float:
+        """Seconds until *sess*'s park is ``PARK_SETTLE_SECONDS`` old; 0
+        when it is (or its time is not known)."""
+        from aipager import claude_jobs
+        if sess.parked_since <= 0:
+            return 0.0
+        age = time.time() - sess.parked_since
+        if 0 <= age < claude_jobs.PARK_SETTLE_SECONDS:
+            return claude_jobs.PARK_SETTLE_SECONDS - age
+        return 0.0
+
     async def _bring_back_in_flight(self, sess: TrackedSession, *, force: bool,
-                                    release_held: bool, mode: str) -> RestartOutcome:
+                                    release_held: bool, mode: str,
+                                    settled: bool = False) -> RestartOutcome:
         from aipager import claude_jobs
         label = sess.label
         job = sess.parked_job
+        if not force and self._turn_in_flight(sess):
+            log.info("[%s] bring-back from job %s refused: a turn is in flight",
+                     label, job)
+            return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
         entries = claude_jobs.read_registry()
         resume_id = self._bring_back_conversation(sess, job, entries)
         if not resume_id:
@@ -2973,10 +3013,21 @@ class SessionOpsMixin:
             # holder is alive until the stop) would resume nothing.
             resume_id = followed
         state = await claude_jobs.job_state(job, entries)
-        if state in (claude_jobs.BUSY, claude_jobs.UNKNOWN) and not force:
-            log.info("[%s] bring-back from job %s refused: the job is %s",
-                     label, job, state)
-            return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
+        if not force:
+            refused = self._bg_unforced_refusal(sess, job, state, settled=settled,
+                                                mode=mode)
+            if refused is not None:
+                return refused
+            # Right before the stop (job_state may have waited for `claude
+            # agents`): the job's entry again, and the stricter answer.
+            again = claude_jobs.job_entry(job, claude_jobs.read_registry())
+            if again is not None:
+                state = claude_jobs.stricter_state(
+                    state, claude_jobs.entry_state(again))
+            refused = self._bg_unforced_refusal(sess, job, state, settled=settled,
+                                                mode=mode)
+            if refused is not None:
+                return refused
         # B3: from here on the job's SessionEnd and the client's exit are
         # expected. Covers the stop and the wait too.
         earlier_window = sess.restarting_until
@@ -3021,6 +3072,28 @@ class SessionOpsMixin:
             # The relaunched claude said it was up while this still ran.
             await self._release_held(sess)
         return outcome
+
+    def _bg_unforced_refusal(self, sess: TrackedSession, job: str, state: str, *,
+                             settled: bool, mode: str) -> RestartOutcome | None:
+        """Why an unforced bring-back must not stop job *job* (in *state*)
+        now, as a ``bg_busy`` outcome; None when it may. S5: a turn in
+        flight, a busy job and an unknown state all ask; a park younger
+        than ``PARK_SETTLE_SECONDS`` asks too, unless the caller waited it
+        out (*settled*), with ``retry_after`` when that is the only
+        reason."""
+        from aipager import claude_jobs
+        label = sess.label
+        if self._turn_in_flight(sess) or state in (claude_jobs.BUSY, claude_jobs.UNKNOWN):
+            why = "a turn is in flight" if self._turn_in_flight(sess) else f"the job is {state}"
+            log.info("[%s] bring-back from job %s refused: %s", label, job, why)
+            return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
+        wait = 0.0 if settled else self._park_settles_in(sess)
+        if wait > 0:
+            log.info("[%s] bring-back from job %s refused: parked %.1fs ago", label,
+                     job, claude_jobs.PARK_SETTLE_SECONDS - wait)
+            return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode,
+                                  retry_after=wait)
+        return None
 
     async def _say_brought_back(self, sess: TrackedSession) -> None:
         """``bg.back`` in the session's chat. Best-effort."""

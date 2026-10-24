@@ -63,6 +63,10 @@ HOLDER_WAIT = 5
 AGENTS_TIMEOUT = 5
 #: After a bring-back, the held messages go out at the latest this late.
 RELEASE_BACKSTOP = 10
+#: A park younger than this may hide a job about to continue a moved turn
+#: (a just-forked job reads "idle" for a moment before "busy"): an
+#: unforced bring-back waits it out or asks, never stops the job.
+PARK_SETTLE_SECONDS = 3.0
 
 #: How many registry files one read looks at, at most.
 REGISTRY_SCAN_LIMIT = 512
@@ -565,6 +569,22 @@ UNKNOWN = "unknown"
 
 def _state_of(status: str) -> str:
     return {"busy": BUSY, "idle": IDLE}.get(status, UNKNOWN)
+
+
+def entry_state(entry: dict) -> str:
+    """A job's state from its own registry entry."""
+    return _state_of(entry.get("status") or "")
+
+
+#: From the most permissive answer to the strictest.
+_STRICTNESS = (GONE, IDLE, UNKNOWN, BUSY)
+
+
+def stricter_state(a: str, b: str) -> str:
+    """The stricter of two answers about one job (busy over unknown over
+    idle over gone)."""
+    rank = {s: i for i, s in enumerate(_STRICTNESS)}
+    return a if rank.get(a, 2) >= rank.get(b, 2) else b
 
 
 def _agents_state(job: str, run: ClaudeRun) -> str:

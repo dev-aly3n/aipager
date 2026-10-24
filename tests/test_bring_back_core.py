@@ -648,10 +648,17 @@ def test_a_safety_halt_of_an_ordinary_session_still_sends_escape(world, run_asyn
 
 def test_a_parked_busy_mode_switch_never_types(world, run_async):
     """A restart-type /mode (into Full access) on a parked BUSY session:
-    the Ctrl-C courtesy would be typed into the parked client."""
+    the Ctrl-C courtesy would be typed into the parked client. A turn in
+    flight asks first (rev-iter1-003); nothing is typed or run."""
     sess = world.sess
     world.bot.registry.transition(NAME, Status.BUSY)
     out = run_async(world.bot._mode_switch_core(sess, "full"))
+    assert (out.ok, out.reason) == (False, "bg_busy")
+    assert world.calls == []
+
+
+def test_a_parked_idle_mode_switch_brings_it_back_in_the_new_mode(world, run_async):
+    out = run_async(world.bot._mode_switch_core(world.sess, "full"))
     assert out.ok, out
     assert "keys" not in world.kinds()
     assert world.calls[0] == ("run", ["stop", JOB])
@@ -863,3 +870,125 @@ def test_an_own_fork_session_start_releases_nothing(world, run_async, monkeypatc
         "hook_event_name": "SessionStart", "source": "fork", "session": NAME,
         "session_id": NEW_ID}).encode()))
     assert typed == [] and sess.bg_release_pending is True
+
+
+# ---- review rev-iter1-003: the fork window -------------------------------------------
+# A just-forked job's entry reads unknown, then idle, then busy when a turn
+# moved with it (live check 2). An unforced bring-back in the idle moment
+# would stop the job about to continue the user's turn.
+
+@pytest.mark.parametrize("how", ["busy", "interactive", "tool-in-flight"])
+def test_a_turn_in_flight_asks_whatever_the_job_says(world, run_async, how):
+    sess = world.sess                    # the job's entry says "idle"
+    if how == "busy":
+        world.bot.registry.transition(NAME, Status.BUSY)
+    elif how == "interactive":
+        world.bot.registry.transition(NAME, Status.INTERACTIVE)
+    else:
+        sess.pending_tool_started_at = time.monotonic()
+    out = run_async(world.bot._bring_back_core(sess))
+    assert (out.ok, out.reason, out.retry_after) == (False, "bg_busy", 0.0)
+    assert world.calls == []
+    _untouched(world)
+
+
+def test_a_turn_in_flight_does_not_stop_a_forced_bring_back(world, run_async):
+    world.bot.registry.transition(NAME, Status.BUSY)
+    out = run_async(world.bot._bring_back_core(world.sess, force=True))
+    assert out.ok and world.calls[0] == ("run", ["stop", JOB])
+
+
+def test_a_young_park_asks_with_the_time_left(world, run_async):
+    world.sess.parked_since = time.time() - 1
+    out = run_async(world.bot._bring_back_core(world.sess))
+    assert (out.ok, out.reason) == (False, "bg_busy")
+    assert 0 < out.retry_after <= claude_jobs.PARK_SETTLE_SECONDS - 0.5
+    assert world.calls == []
+    _untouched(world)
+
+
+def test_a_young_park_waited_out_is_brought_back(world, run_async):
+    world.sess.parked_since = time.time() - 1
+    out = run_async(world.bot._bring_back_core(world.sess, settled=True))
+    assert out.ok and world.calls[0] == ("run", ["stop", JOB])
+
+
+def test_a_young_park_with_a_busy_job_has_no_time_left(world, run_async):
+    """Busy for real: waiting would not change the answer."""
+    world.sess.parked_since = time.time() - 1
+    world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+    out = run_async(world.bot._bring_back_core(world.sess))
+    assert (out.reason, out.retry_after) == ("bg_busy", 0.0)
+
+
+def test_a_settled_idle_park_is_brought_back_as_before(world, run_async):
+    world.sess.parked_since = time.time() - 10
+    out = run_async(world.bot._bring_back_core(world.sess))
+    assert out.ok
+    assert world.kinds() == ["run", "kill", "launch"]
+    assert world.calls[0] == ("run", ["stop", JOB])
+
+
+def test_the_jobs_entry_is_read_again_right_before_the_stop(world, run_async,
+                                                            monkeypatch):
+    """The first answer said idle (as from ``claude agents``, which can take
+    seconds); by the stop the job's own entry says busy: nothing is stopped."""
+    async def idle_then_busy(job, entries=None):
+        world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+        return claude_jobs.IDLE
+
+    monkeypatch.setattr(claude_jobs, "job_state", idle_then_busy)
+    out = run_async(world.bot._bring_back_core(world.sess))
+    assert (out.ok, out.reason) == (False, "bg_busy")
+    assert world.calls == []
+    _untouched(world)
+
+
+def test_a_job_that_read_gone_but_has_an_entry_again_is_stopped(world, run_async,
+                                                                monkeypatch):
+    """The stricter answer: an idle entry beats an earlier "gone", so the
+    job is stopped before the kill, never skipped."""
+    async def gone(job, entries=None):
+        return claude_jobs.GONE
+
+    monkeypatch.setattr(claude_jobs, "job_state", gone)
+    assert run_async(world.bot._bring_back_core(world.sess)).ok
+    assert world.calls[0] == ("run", ["stop", JOB])
+
+
+@pytest.mark.parametrize("a, b, stricter", [
+    ("idle", "busy", "busy"), ("busy", "idle", "busy"), ("gone", "idle", "idle"),
+    ("idle", "unknown", "unknown"), ("unknown", "gone", "unknown"),
+    ("gone", "gone", "gone")])
+def test_the_stricter_answer(a, b, stricter):
+    assert claude_jobs.stricter_state(a, b) == stricter
+
+
+def test_the_gate_waits_out_a_young_park_instead_of_asking(world, run_async,
+                                                          mk_update):
+    sess = world.sess
+    sess.parked_since = time.time() - 1
+    sess.queue_prompt("held", 31)
+    update = mk_update("held", chat_id=CHAT)
+    run_async(world.bot._auto_bring_back(update, sess))
+    assert world.calls[0][0] == "sleep", world.calls
+    assert 0 < world.calls[0][1] <= claude_jobs.PARK_SETTLE_SECONDS
+    assert world.calls[1] == ("run", ["stop", JOB]), (
+        "decided again after the wait, then brought back")
+    assert world.back_messages() and sess.parked_job == ""
+    question = i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
+    assert not any(c.kwargs.get("text") == question
+                   for c in world.bot._app.bot.send_message.await_args_list)
+
+
+def test_the_gate_asks_at_once_when_a_turn_is_in_flight(world, run_async, mk_update):
+    sess = world.sess
+    sess.parked_since = time.time() - 1
+    world.bot.registry.transition(NAME, Status.BUSY)
+    sess.queue_prompt("held", 31)
+    update = mk_update("held", chat_id=CHAT)
+    run_async(world.bot._auto_bring_back(update, sess))
+    assert world.calls == [], "no wait, no stop"
+    question = i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
+    assert [c.kwargs.get("text") for c in world.bot._app.bot.send_message.await_args_list
+            ] == [question]

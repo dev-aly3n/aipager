@@ -483,7 +483,9 @@ def test_only_the_gates_bring_back_is_skipped():
 
 def test_the_message_gates_bring_back_is_unforced():
     """What lets ``_NOT_DESTRUCTIVE`` skip the gate's bring-back: it calls
-    the core without ``force`` (a busy job is asked about, never stopped)."""
+    the core without ``force`` (a busy job is asked about, never stopped).
+    The second call decides again after a young park settled
+    (``settled=True``), still unforced."""
     import aipager
 
     src = (pathlib.Path(aipager.__file__).parent / "bot" / "handlers.py").read_text()
@@ -491,7 +493,9 @@ def test_the_message_gates_bring_back_is_unforced():
               if isinstance(n, ast.AsyncFunctionDef) and n.name == "_auto_bring_back")
     calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr == "_bring_back_core"]
-    assert len(calls) == 1 and calls[0].keywords == [], ast.unparse(calls[0])
+    assert len(calls) == 2, [ast.unparse(c) for c in calls]
+    assert [[k.arg for k in c.keywords] for c in calls] == [[], ["settled"]], (
+        [ast.unparse(c) for c in calls])
 
 
 def _verb_of(test):

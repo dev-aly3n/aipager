@@ -110,7 +110,7 @@ def test_a_linked_session_end_sends_no_end_notice(stack):
 
 
 def test_a_linked_session_end_closes_an_open_turn(stack):
-    qa.park_and_tick(stack)
+    qa.park_and_tick(stack, job_status="busy")     # the moved turn goes on in the job
     assert stack.sess.status == Status.BUSY, "precondition: the moved turn is open"
     stack.hook(hook_event_name="SessionEnd", reason="other", bg_job=stack.ids.JOB,
                session_id=stack.ids.JS)

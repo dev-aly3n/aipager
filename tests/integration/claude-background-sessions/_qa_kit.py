@@ -35,8 +35,12 @@ LEFT = "<b>frontend</b> keeps working in Claude Code's background."
 def park(stack, *, job_status="idle", job=None, js=None, worker=None):
     """``←`` on an empty prompt: the session's own claude parks on the job,
     the job's worker holds the conversation, and the client's transcript
-    ends with ``continued-in``."""
+    ends with ``continued-in``. With a job that is not busy, no turn of the
+    session runs any more (an idle ``←``, or the moved turn's end): the
+    session is IDLE (review rev-iter1-003: a turn in flight asks first)."""
     ids, claude = stack.ids, stack.claude
+    if job_status != "busy" and stack.sess.status == Status.BUSY:
+        stack.registry.transition(ids.NAME, Status.IDLE)
     job = job or ids.JOB
     js = js or ids.JS
     worker = worker or ids.WORKER
@@ -49,9 +53,13 @@ def park(stack, *, job_status="idle", job=None, js=None, worker=None):
 
 
 def park_and_tick(stack, **kw):
+    """:func:`park`, noticed by a tick a while ago: a park younger than
+    ``claude_jobs.PARK_SETTLE_SECONDS`` is not brought back unasked
+    (review rev-iter1-003), which ``test_fork_window.py`` covers."""
     park(stack, **kw)
     stack.tick()
     assert stack.sess.parked_job == (kw.get("job") or stack.ids.JOB), "precondition: parked"
+    stack.sess.parked_since = time.time() - 60
 
 
 def job_status(stack, status, *, job=None, js=None, worker=None):

@@ -930,6 +930,15 @@ class CommandHandlersMixin:
         buttons stop the job or leave it), or why it failed. Never raises."""
         try:
             outcome = await self._bring_back_core(sess)
+            if outcome.reason == "bg_busy" and outcome.retry_after > 0:
+                # Parked a moment ago, and that is the only reason: a job
+                # forked a moment ago can read idle just before it goes on
+                # with a moved turn. The message is held anyway: wait the
+                # moment out and decide again, rather than ask.
+                log.info("[%s] bring-back waits %.1fs for the park to settle",
+                         sess.label, outcome.retry_after)
+                await session_ops_mod._sleep(outcome.retry_after)
+                outcome = await self._bring_back_core(sess, settled=True)
         except Exception:
             log.exception("[%s] automatic bring-back failed", sess.label)
             return
