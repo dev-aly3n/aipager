@@ -2301,12 +2301,19 @@ class HookReceiver:
                 if started_sid:
                     self.registry.killed_sessions.pop(started_sid, None)
                 started = self.registry.get(session_name)
-                if (not bg_job and started is not None and started.bg_release_pending
-                        and not started.parked_job):
+                if (not bg_job and source != "fork" and started is not None
+                        and started.bg_release_pending):
                     # The session's own claude, relaunched by a bring-back
                     # from Claude Code's background, is up: the messages
-                    # held for the park may go out.
-                    await self.notify_fn(started, "bg_release", {})
+                    # held for the park may go out. The release was armed
+                    # before the launch, so this is the new claude (its id
+                    # is not compared: a resume may be given a new one).
+                    if started.parked_job or started.relaunch_in_flight:
+                        # The bring-back is still finishing: it releases
+                        # them itself when it is done.
+                        started.bg_start_seen = True
+                    else:
+                        await self.notify_fn(started, "bg_release", {})
                 return
             sess = self.registry.get_or_create(session_name)
             # Compaction finished — clear the in-flight marker regardless

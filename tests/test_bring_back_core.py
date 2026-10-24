@@ -94,6 +94,7 @@ class World:
         monkeypatch.setattr(session_ops, "Path", MagicMock(
             return_value=MagicMock(is_socket=MagicMock(return_value=False))))
         self.launch_ok = True
+        self.during_launch = None        # a coroutine function run inside the launch
         # the bot and the parked session
         bot = mk_bot()
         bot._app.bot = AsyncMock()
@@ -196,6 +197,8 @@ class World:
 
     async def _launch(self, short_name, **kw):
         self.calls.append(("launch", kw))
+        if self.during_launch is not None:
+            await self.during_launch()
         return (True, "") if self.launch_ok else (False, "dtach not installed")
 
     async def _keys(self, name, key):
@@ -653,3 +656,210 @@ def test_a_parked_busy_mode_switch_never_types(world, run_async):
     assert "keys" not in world.kinds()
     assert world.calls[0] == ("run", ["stop", JOB])
     assert world.launches()[0]["mode"] == "full"
+
+
+# ---- review rev-iter1-002: the release race ----------------------------------------
+# The relaunched claude's own SessionStart can arrive while the bring-back
+# is still finishing (live check 1: it did, and the held message waited for
+# the 10 s backstop). The release is armed before the launch; whichever of
+# the bring-back's end, the SessionStart and the backstop comes, one held
+# message goes out, once.
+
+#: The id the relaunched claude's SessionStart carries: not compared with
+#: the resumed one (a resume may be given a new id).
+NEW_ID = "cd34ef56-0000-4000-8000-000000000007"
+
+
+def _session_start(recv, sid=NEW_ID, n=1):
+    return recv._on_datagram(json.dumps({
+        "hook_event_name": "SessionStart", "source": "resume", "session": NAME,
+        "session_id": sid, "n": n}).encode())
+
+
+def _backstop(world, run_async):
+    """The monitor's backstop, its time long past."""
+    world.sess.restarting_until = 0.0
+    world.unreg(CLIENT)
+    world.sess.bg_released_at = time.monotonic() - (claude_jobs.RELEASE_BACKSTOP + 1)
+    monitor = SessionMonitor(world.bot.registry, world.bot.notify)
+    run_async(monitor._check_parked_tick(NAME, world.sess))
+
+
+def test_a_session_start_during_the_relaunch_releases_at_the_bring_backs_end(
+        world, run_async, monkeypatch):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("first held", 31)
+    sess.queue_prompt("second held", 32)
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    seen = {}
+
+    async def up():
+        await _session_start(recv)
+        seen["typed"] = list(typed)
+        seen["start_seen"] = sess.bg_start_seen
+
+    world.during_launch = up
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert seen == {"typed": [], "start_seen": True}, "nothing typed mid-way"
+    assert len(typed) == 1 and typed[0].endswith("first held"), "no backstop wait"
+    assert sess.bg_release_pending is False and sess.bg_start_seen is False
+    _backstop(world, run_async)
+    assert len(typed) == 1, "the backstop adds nothing"
+    run_async(_session_start(recv, n=2))
+    assert len(typed) == 1, "a later SessionStart adds nothing"
+
+
+def test_a_session_start_after_the_bring_back_releases_once(world, run_async,
+                                                            monkeypatch):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("first held", 31)
+    sess.queue_prompt("second held", 32)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert typed == []
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    run_async(_session_start(recv))
+    assert len(typed) == 1
+    _backstop(world, run_async)
+    assert len(typed) == 1, "the backstop adds nothing"
+
+
+def test_the_backstop_releases_once_when_no_session_start_came(world, run_async,
+                                                               monkeypatch):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("first held", 31)
+    sess.queue_prompt("second held", 32)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    _backstop(world, run_async)
+    assert len(typed) == 1
+    _backstop(world, run_async)
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    run_async(_session_start(recv))
+    assert len(typed) == 1, "neither a second backstop nor a late SessionStart"
+
+
+def test_the_release_is_armed_before_the_launch(world, run_async):
+    """And the old client's pid is forgotten there, before the new claude
+    can report its own."""
+    sess = world.sess
+    seen = {}
+
+    async def at_launch():
+        seen["pending"] = sess.bg_release_pending
+        seen["pid"] = sess.claude_pid
+
+    world.during_launch = at_launch
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert seen == {"pending": True, "pid": 0}
+
+
+def test_the_new_claudes_pid_survives_the_end_of_the_bring_back(world, run_async):
+    sess = world.sess
+    new_pid = 4777
+
+    async def up():
+        sess.claude_pid = new_pid        # what its own SessionStart recorded (D1)
+
+    world.during_launch = up
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert sess.claude_pid == new_pid
+
+
+@pytest.mark.parametrize("how", ["launch_failed", "launch_raises", "still_stopping"])
+def test_a_failed_relaunch_leaves_nothing_armed(world, run_async, monkeypatch, how):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("held", 31)
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+
+    async def up_then(fail):
+        await _session_start(recv)
+        if fail:
+            raise RuntimeError("dtach went away")
+
+    if how == "launch_failed":
+        world.launch_ok = False
+        world.during_launch = lambda: up_then(False)
+        assert run_async(world.bot._bring_back_core(sess)).reason == "launch_failed"
+    elif how == "launch_raises":
+        world.during_launch = lambda: up_then(True)
+        with pytest.raises(RuntimeError):
+            run_async(world.bot._bring_back_core(sess))
+    else:
+        monkeypatch.setattr(session_ops, "Path", MagicMock(
+            return_value=MagicMock(is_socket=MagicMock(return_value=True))))
+        assert run_async(world.bot._bring_back_core(sess)).reason == "still_stopping"
+    assert (sess.bg_release_pending, sess.bg_start_seen,
+            sess.bg_release_armed_at) == (False, False, 0.0)
+    sess.parked_job = ""                 # e.g. a manual /resume later
+    run_async(_session_start(recv, n=3))
+    _backstop(world, run_async)
+    assert typed == [], "no stale release"
+
+
+def test_a_pending_release_survives_a_daemon_restart(world, run_async, monkeypatch,
+                                                     tmp_state_file):
+    """Saved between a bring-back and its release: the first tick after
+    the restart releases one held message."""
+    from aipager.state import SessionRegistry
+    sess = world.sess
+    sess.queue_prompt("first held", 31)
+    sess.queue_prompt("second held", 32)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    sess.restarting_until = 0.0
+    world.bot.registry.save()
+    fresh = SessionRegistry()
+    fresh.load()
+    again = fresh.get(NAME)
+    assert again.bg_release_pending is True
+    world.bot.registry = fresh
+    typed = _drainable(world.bot, monkeypatch)
+    world.unreg(CLIENT)
+
+    async def live():
+        return [NAME]
+
+    monkeypatch.setattr(inject, "list_sessions", live)
+    monitor = SessionMonitor(fresh, world.bot.notify)
+    run_async(monitor._scan())          # seen live again, then the backstop
+    run_async(monitor._scan())
+    assert len(typed) == 1 and typed[0].endswith("first held")
+    assert again.bg_release_pending is False
+
+
+# ---- review rev-iter1-008: the gate's bring-back that finds the park gone ----------
+
+@pytest.mark.parametrize("state, drains", [
+    ("release-pending", False),          # another bring-back's release drains
+    ("turn-running", False),             # the released message's turn drains
+    ("idle", True),                      # a park that ended with no bring-back
+])
+def test_a_spawned_bring_back_that_finds_no_park(world, run_async, monkeypatch,
+                                                 mk_update, state, drains):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.parked_job = ""
+    sess.queue_prompt("held", 31)
+    if state == "release-pending":
+        sess.arm_bg_release()
+    elif state == "turn-running":
+        world.bot.registry.transition(NAME, Status.BUSY)
+    update = mk_update("held", chat_id=CHAT)
+    run_async(world.bot._auto_bring_back(update, sess))
+    assert (len(typed) == 1) is drains
+    assert world.calls == [], "nothing stopped, killed or launched"
+
+
+def test_an_own_fork_session_start_releases_nothing(world, run_async, monkeypatch):
+    """A fork's SessionStart is not the relaunched claude coming up."""
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("held", 31)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    run_async(recv._on_datagram(json.dumps({
+        "hook_event_name": "SessionStart", "source": "fork", "session": NAME,
+        "session_id": NEW_ID}).encode()))
+    assert typed == [] and sess.bg_release_pending is True

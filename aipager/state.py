@@ -910,8 +910,20 @@ class TrackedSession:
     # Transient.
     park_told: set = field(default_factory=set, repr=False)
     # After a bring-back from the background: the held messages may go
-    # out (``bg_release``), and when that happened. Transient.
+    # out (``bg_release``). Armed by the bring-back right before it
+    # launches the conversation again (``bg_release_armed_at``, monotonic),
+    # so the relaunched claude's first own SessionStart can never come
+    # before it; ``bg_start_seen`` records a SessionStart that came while
+    # the bring-back was still running (the bring-back then releases when
+    # it is done); ``bg_released_at`` (monotonic) is when the bring-back
+    # finished, the clock of the monitor's backstop. Exactly one held
+    # message goes out per release: :meth:`claim_bg_release` checks and
+    # clears the flag with no await in between. ``bg_release_pending`` is
+    # persisted (a daemon restart between a bring-back and its release
+    # still releases once); the rest is transient.
     bg_release_pending: bool = False
+    bg_release_armed_at: float = 0.0
+    bg_start_seen: bool = False
     bg_released_at: float = 0.0
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
@@ -2633,6 +2645,30 @@ class TrackedSession:
         — see :meth:`work_in_flight_reason` for the shared definition."""
         return self.work_in_flight_reason(now) is not None
 
+    def arm_bg_release(self) -> None:
+        """A bring-back is about to launch the conversation again: the
+        messages held for the park go out once the relaunched claude is up
+        (its first own SessionStart, or the monitor's backstop)."""
+        self.bg_release_pending = True
+        self.bg_release_armed_at = time.monotonic()
+        self.bg_start_seen = False
+
+    def disarm_bg_release(self) -> None:
+        """The bring-back that armed the release did not bring the session
+        back: no later SessionStart may release anything for it."""
+        self.bg_release_pending = False
+        self.bg_release_armed_at = 0.0
+        self.bg_start_seen = False
+
+    def claim_bg_release(self) -> bool:
+        """True exactly once per armed release: checks and clears it with
+        no await in between, so the bring-back, the SessionStart and the
+        backstop together send one held message, never two."""
+        if not self.bg_release_pending:
+            return False
+        self.disarm_bg_release()
+        return True
+
     def busy_card_should_animate(self) -> bool:
         """True when this session has a live busy card that ought to be
         ticking: a real (positive) message id whose live-stack top is the
@@ -3520,6 +3556,9 @@ def _restore_parked(sess: TrackedSession, sd: dict) -> None:
     notified = sd.get("park_notified_job")
     if isinstance(notified, str) and bg_jobs._JOB_ID.match(notified):
         sess.park_notified_job = notified
+    # A bring-back whose held messages had not gone out yet: the monitor's
+    # backstop releases them once (its clock starts again at zero).
+    sess.bg_release_pending = sd.get("bg_release_pending") is True
 
 
 def _drop_bg_files(name: str, sess: TrackedSession | None) -> None:
@@ -4437,7 +4476,7 @@ class SessionRegistry:
         # parked (never typed into) across a restart, and its notice is
         # not sent twice.
         "parked_job", "parked_job_session_id", "parked_since",
-        "park_notified_job",
+        "park_notified_job", "bg_release_pending",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as

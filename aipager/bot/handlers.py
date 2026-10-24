@@ -936,8 +936,15 @@ class CommandHandlersMixin:
         if outcome.ok or outcome.reason == "already_restarting":
             return
         if outcome.reason == "not_parked":
-            # The park ended meanwhile: what was held may go now.
-            await self._drain_next_queued(sess)
+            # The park ended meanwhile. Another bring-back that finished
+            # between this spawn and its run leaves its release pending
+            # (its relaunched claude may not be up yet), or has released a
+            # held message already and that turn runs: the release and the
+            # turn's end drain the queue, in order. Only a park that ended
+            # with no bring-back (an idle session nobody releases) drains
+            # here.
+            if not sess.bg_release_pending and sess.status == Status.IDLE:
+                await self._drain_next_queued(sess)
             return
         chat_id = calling_chat_id(update)
         if chat_id is None or not self._app:

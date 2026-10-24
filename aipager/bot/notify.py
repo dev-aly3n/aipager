@@ -2322,6 +2322,19 @@ class NotifyMixin:
         except Exception:
             log.warning("[%s] park notice failed", sess.label, exc_info=True)
 
+    async def _release_held(self, sess: TrackedSession) -> None:
+        """A bring-back from Claude Code's background is done and its
+        relaunched claude is up: the first message held for the park goes
+        out (the rest drain at turn ends, as ever). Behind every release
+        site (the bring-back itself, the relaunched claude's SessionStart,
+        the monitor's backstop): ``claim_bg_release`` checks and clears the
+        release with no await in between, so it happens once."""
+        if not sess.claim_bg_release():
+            return
+        log.info("[%s] back from the background: releasing %d held message(s)",
+                 sess.label, len(sess.pending_queue))
+        await self._drain_next_queued(sess)
+
     async def _drain_next_queued(self, sess: TrackedSession) -> None:
         """Pop and inject the next queued prompt, one at a time.
 
@@ -2559,13 +2572,14 @@ class NotifyMixin:
         # Its relaunched claude's first SessionStart (or the monitor's
         # backstop): the messages held for the park may go out now.
         if event == "bg_release":
-            if (not sess.bg_release_pending or sess.parked_job
-                    or sess.relaunch_in_flight):
+            if not sess.bg_release_pending:
                 return
-            sess.bg_release_pending = False
-            log.info("[%s] back from the background: releasing %d held message(s)",
-                     sess.label, len(sess.pending_queue))
-            await self._drain_next_queued(sess)
+            if sess.parked_job or sess.relaunch_in_flight:
+                # The bring-back is still running (or the session parked
+                # again): it releases them itself when it is done.
+                sess.bg_start_seen = True
+                return
+            await self._release_held(sess)
             return
 
         # ── the mode a hook reported, while a mode switch waits on it ──

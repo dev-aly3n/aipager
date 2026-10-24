@@ -2659,10 +2659,15 @@ class SessionOpsMixin:
     async def _kill_and_relaunch_in_flight(
         self, sess: TrackedSession, *, target_mode: str,
         interrupt_first: bool, resume_id: str | None = None,
-        force: bool = False,
+        force: bool = False, before_launch=None,
     ) -> RestartOutcome:
         """The body of :meth:`_kill_and_relaunch_core`, run while its
         ``relaunch_in_flight`` is held.
+
+        *before_launch*: called (synchronously) once the old process is
+        gone, right before the new one is launched: the bring-back arms
+        its release there, so the relaunched claude's first SessionStart
+        can never come before it.
 
         *resume_id*: the conversation to relaunch with instead of
         ``claude_session_id`` (the bring-back's, which has already dealt
@@ -2732,6 +2737,8 @@ class SessionOpsMixin:
         # The killed or interrupted turn is over (an interrupt may fire no
         # Stop), and the relaunched process starts with none (roadmap 8.77).
         _clear_turn_open(session_name)
+        if before_launch is not None:
+            before_launch()
         ok, err = await inject.launch_session(
             short_name, mode=target_mode,
             resume_id=resume_id or None, cwd=cwd, is_relaunch=True,
@@ -2884,15 +2891,15 @@ class SessionOpsMixin:
     def _clear_park(self, sess: TrackedSession) -> None:
         """Forget *sess*'s park after a bring-back: the link file and its
         pid-map entry go (before the fields: the cleanup reads them), the
-        fields are cleared, and the relaunched claude is found afresh."""
+        fields are cleared. The old client's pid was forgotten before the
+        launch (:meth:`_bring_back_in_flight`): the pid the relaunched
+        claude's own SessionStart recorded meanwhile is kept."""
         from aipager.state import _drop_bg_files
         _drop_bg_files(sess.name, sess)
         sess.parked_job = ""
         sess.parked_job_session_id = ""
         sess.parked_since = 0.0
         sess.park_told.clear()
-        sess.claude_pid = 0
-        sess.claude_pid_start = 0
         self.registry.mark_dirty()
 
     async def _bring_back_core(
@@ -2919,10 +2926,16 @@ class SessionOpsMixin:
            (:meth:`_kill_and_relaunch_in_flight`), in *target_mode* (else
            the session's own mode).
         6. The park is forgotten, ``bg.back`` is sent once, and with
-           *release_held* the held messages go out from the relaunched
-           claude's first SessionStart (``bg_release``; the monitor's
-           backstop sends it ``claude_jobs.RELEASE_BACKSTOP`` seconds later
-           when no SessionStart came).
+           *release_held* the held messages go out once the relaunched
+           claude is up: the release is armed right before the launch
+           (``TrackedSession.arm_bg_release``); the relaunched claude's
+           first own SessionStart releases them (``bg_release``), or, when
+           it came while this was still running, this releases them at
+           its end; the monitor's backstop releases them
+           ``claude_jobs.RELEASE_BACKSTOP`` seconds later when no
+           SessionStart came. One check-and-clear
+           (``claim_bg_release``) makes it one release, whichever comes.
+           Any failure after the arming disarms it.
 
         ``not_parked`` for a session that is not parked;
         ``already_restarting`` while a relaunch is in flight."""
@@ -2975,9 +2988,24 @@ class SessionOpsMixin:
             if err:
                 sess.restarting_until = earlier_window
                 return self._bg_refused_restart(sess, ("bg_stop_failed", err), mode)
-        outcome = await self._kill_and_relaunch_in_flight(
-            sess, target_mode=mode, interrupt_first=False, resume_id=resume_id)
+        def arm() -> None:
+            # The old client is gone and the new claude not launched yet:
+            # its own hooks record their pid afresh, and its first
+            # SessionStart finds the release armed (whatever its id).
+            sess.claude_pid = 0
+            sess.claude_pid_start = 0
+            if release_held:
+                sess.arm_bg_release()
+
+        try:
+            outcome = await self._kill_and_relaunch_in_flight(
+                sess, target_mode=mode, interrupt_first=False, resume_id=resume_id,
+                before_launch=arm)
+        except BaseException:
+            sess.disarm_bg_release()
+            raise
         if not outcome.ok:
+            sess.disarm_bg_release()
             sess.restarting_until = earlier_window
             return outcome
         self._clear_park(sess)
@@ -2985,11 +3013,13 @@ class SessionOpsMixin:
         if path is not None:
             sess.transcript_path = str(path)
         if release_held:
-            sess.bg_release_pending = True
             sess.bg_released_at = time.monotonic()
         log.info("[%s] brought back from background job %s (conversation %s, forced=%s)",
                  label, job, resume_id, force)
         await self._say_brought_back(sess)
+        if release_held and sess.bg_start_seen:
+            # The relaunched claude said it was up while this still ran.
+            await self._release_held(sess)
         return outcome
 
     async def _say_brought_back(self, sess: TrackedSession) -> None:

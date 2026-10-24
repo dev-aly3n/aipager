@@ -1014,7 +1014,7 @@ class SessionMonitor:
                 log.warning("Failed to notify bg_parked for %s", name,
                             exc_info=True)
         if (sess.bg_release_pending and sess.status != Status.GONE
-                and not sess.parked_job
+                and not sess.parked_job and not sess.relaunch_in_flight
                 and time.monotonic() - sess.bg_released_at
                 >= claude_jobs.RELEASE_BACKSTOP):
             # A bring-back's held messages, when the relaunched claude's
