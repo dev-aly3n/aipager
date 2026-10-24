@@ -381,12 +381,15 @@ To bring it back:
   Bring it back in the Mini App. `/stop` while the job works stops that
   work and brings the session back. A button left from an earlier move
   into the background answers `x1 is not in Claude Code's background.`
-  and does nothing.
+  and does nothing. When a mode switch that restarts the session (into
+  or out of Full access) meets a working job, its `Stop and bring back`
+  brings the session back in the mode you asked for.
 
 When a safety rule halts the session's work while it is in the
 background, aipager stops the background job. If it cannot, the halt's
-notice says that the blocked work may still be running there; stop the
-job with `claude stop <job>` in a terminal.
+notice says that the blocked work may still be running there, and its
+first line does not end with `(stopped)`; stop the job with `claude stop
+<job>` in a terminal.
 
 Until then, commands that would type into the session (`/compact`,
 `/model`, an Ask or Auto mode switch, `/now`, Retry) answer `Bring x1
