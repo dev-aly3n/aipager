@@ -1212,14 +1212,19 @@ def _readable_snapshot(session) -> dict | None:
     return snap if isinstance(snap, dict) else None
 
 
-def decide(data: dict) -> dict | None:
+def decide(data: dict, *, read_only: bool = False) -> dict | None:
     """Return a block descriptor `{tool, reason}` if the PreToolUse call
     must be denied, else None (allow). Pure aside from file reads. Any
     exception while deciding is a deny (:func:`fail_closed`). The rules it
     allowed under and what the hook reports (:func:`decide_full`) are kept
-    for :func:`take_decide_extra`."""
+    for :func:`take_decide_extra`.
+
+    *read_only* (a Claude Code background worker that counts for no
+    session, ``notify_hook._run_foreign``): take no lock, write nothing
+    (snapshot, loop counter, peer receipts) and deny every call the
+    writing path denies (:func:`_read_only`)."""
     global _decide_extra
-    block, rules, info = decide_full(data)
+    block, rules, info = decide_full(data, read_only=read_only)
     _decide_extra = (rules, info)
     return block
 
@@ -1237,7 +1242,7 @@ def take_decide_extra() -> tuple:
     return extra
 
 
-def decide_full(data: dict) -> tuple[dict | None, dict | None, dict]:
+def decide_full(data: dict, *, read_only: bool = False) -> tuple[dict | None, dict | None, dict]:
     """:func:`decide`, plus what the hook needs besides the answer:
     ``(block, rules, info)``.
 
@@ -1253,7 +1258,7 @@ def decide_full(data: dict) -> tuple[dict | None, dict | None, dict]:
     Never raises: any exception is a :func:`fail_closed` answer."""
     global _decide_error, _cur
     _decide_error = None  # only this call's error, never an earlier one's
-    _cur = {"rules": None, "info": {}}
+    _cur = {"rules": None, "info": {}, "read_only": bool(read_only)}
     if data.get("hook_event_name") != "PreToolUse":
         return None, None, {}
     if data.get("tool_name") == send_check.SEND_TOOL:
@@ -1331,8 +1336,35 @@ def _send_file_codes(data: dict, code: str, reason: str) -> list[dict]:
 
 #: Filled by :func:`_decide` for the call in progress: the rules it
 #: allowed under and what the hook reports. ``_decide`` keeps its old
-#: contract (the verdict only), which tests rely on.
-_cur: dict = {"rules": None, "info": {}}
+#: contract (the verdict only), which tests rely on. ``read_only`` is
+#: :func:`decide`'s keyword, for the helpers (:func:`_read_only`).
+_cur: dict = {"rules": None, "info": {}, "read_only": False}
+
+
+def _read_only() -> bool:
+    """The call in progress may take no lock and write nothing.
+
+    Each writer then answers from what it would have written, never
+    looser than the writing path:
+
+    - the bare /loop adoption (:func:`_scheduled_view`, ``adopt=False``)
+      decides under the same rights, without writing them;
+    - the wait for a /loop's entry (``wait_for_loop``) is skipped: the
+      same rules, a refusal hard instead of soft;
+    - the pending peer check (:func:`_resolve_pending_peer`) answers None,
+      which the caller turns into a soft deny of this call;
+    - a guard's narrowing (:func:`_narrow_to`) returns exactly the
+      snapshot the locked path would write;
+    - unaccounted messages joined from another session
+      (:func:`_missed_joins`) deny this call softly, claiming nothing."""
+    return _cur.get("read_only") is True
+
+
+#: :func:`_missed_joins`' answer in read-only mode when messages joined
+#: the turn that no check accounted for: their receipts may give less
+#: than the peer floor, and claiming one is a write, so the call is
+#: refused softly.
+_MISSED_READ_ONLY = {"read_only_missed": True}
 
 
 #: The error the last :func:`decide` failed on (it answers with
@@ -1404,7 +1436,12 @@ def _resolve_pending_peer(session: str, scan: dict, info: dict) -> dict | None:
     The transcript may not show the message yet (Claude Code writes it
     lazily): then this call is decided under the peer floor, a refusal is
     soft (``info["peer_waiting"]``), and the check waits, for at most
-    :data:`PEER_WAIT_CALLS` calls."""
+    :data:`PEER_WAIT_CALLS` calls.
+
+    Read-only (:func:`_read_only`): None at once, nothing claimed or
+    written; the caller denies this call softly."""
+    if _read_only():
+        return None
     with snapshot_lock(session, timeout=5.0) as held:
         if not held:
             return None
@@ -1502,22 +1539,38 @@ def _narrow_to(session: str, rules_list: list[dict], record: list[dict] | None,
     never wider), under its lock, record *record* in ``joined_peers`` and
     write it. Returns the snapshot to decide under. Without the lock it
     writes nothing (the call is decided under the narrowed rules, and the
-    next call tries again)."""
+    next call tries again).
+
+    Read-only (:func:`_read_only`): no lock and no write, and exactly the
+    snapshot the locked path would write (``joined_from_peer`` included,
+    which keeps a turn read as the terminal's from deciding unrestricted)."""
+    if _read_only():
+        return _narrowed(read_snapshot(session), rules_list, record,
+                         mark_peer=mark_peer)
     with snapshot_lock(session, timeout=5.0) as held:
         cur = read_snapshot(session)
-        new = narrowed_snapshot(cur, rules_list)
         if not held:
+            new = narrowed_snapshot(cur, rules_list)
             new["verify_origin"] = True
             return new
-        new["verify_origin"] = True
-        if mark_peer:
-            new["joined_from_peer"] = True
-        if record:
-            prev = new.get("joined_peers") if isinstance(new.get("joined_peers"), list) else []
-            new["joined_peers"] = [*prev, *record][-16:]
+        new = _narrowed(cur, rules_list, record, mark_peer=mark_peer)
         if new != cur:
             write_merged_snapshot(session, new)
         return new
+
+
+def _narrowed(cur, rules_list: list[dict], record: list[dict] | None,
+              *, mark_peer: bool) -> dict:
+    """What :func:`_narrow_to` writes under the lock: *cur* narrowed, its
+    origin to be checked, *record* added to ``joined_peers``."""
+    new = narrowed_snapshot(cur, rules_list)
+    new["verify_origin"] = True
+    if mark_peer:
+        new["joined_from_peer"] = True
+    if record:
+        prev = new.get("joined_peers") if isinstance(new.get("joined_peers"), list) else []
+        new["joined_peers"] = [*prev, *record][-16:]
+    return new
 
 
 #: Governing prompts from outside the session that no receipt can vouch for.
@@ -1548,6 +1601,8 @@ def _missed_joins(session: str, snap, scan: dict) -> dict | None:
     missed = [s for s in scan.get("peer_enqueues") or () if s not in seen]
     if not missed:
         return None
+    if _read_only():
+        return _MISSED_READ_ONLY
     with snapshot_lock(session, timeout=5.0) as held:
         if not held:
             # A receipt is claimed only when its result can be written:
@@ -1760,7 +1815,8 @@ def _decide(data: dict):
     scan["origin"] = _origin_from_transcript(path, bodies or ())
     # A turn this session's own scheduled prompt may have started (a /loop,
     # a cron): read from its own bytes, whatever the turns before it were.
-    view = _scheduled_view(session, early, path, bodies or (), adopt=True)
+    read_only = _read_only()
+    view = _scheduled_view(session, early, path, bodies or (), adopt=not read_only)
     unreadable = view is _UNREADABLE
     from_view = view is not None and not unreadable
     if from_view:
@@ -1768,7 +1824,8 @@ def _decide(data: dict):
         # Maybe a bare /loop whose entry is not written yet: the floor for
         # now, refused softly, for a few of the turn's own calls (a
         # background agent of an earlier job spends none of them).
-        if waiting and (agent_id or wait_for_loop(session, PEER_WAIT_CALLS)):
+        # Read-only: no wait is counted, so a refusal is hard (never looser).
+        if waiting and not read_only and (agent_id or wait_for_loop(session, PEER_WAIT_CALLS)):
             info["loop_waiting"] = True
     elif scan["origin"] == "scheduled":
         scan, early = _fire_view(session, early, scan, path)
@@ -1793,6 +1850,9 @@ def _decide(data: dict):
         if guarded is not None:
             snap = guarded
         missed = _missed_joins(session, snap, scan)
+        if missed is _MISSED_READ_ONLY:
+            return {"tool": tool_name, "reason": peer_auth.SOFT_DENY_REASON,
+                    "soft": True}
         if missed is not None:
             snap = missed
 

@@ -487,7 +487,18 @@ def _report_error(error: BaseException, *, denied: bool) -> None:
                 pass
 
 
-def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
+def _cap_payload(session: str, bg_job: str = "", tool: str = "") -> bytes:
+    """The cap-hit datagram's bytes: a linked worker's carries its job."""
+    payload = {"type": "hook_memory_cap_hit", "session": session,
+               "hook": "aipager-hook"}
+    if tool:
+        payload["tool"] = tool
+    if bg_job:
+        payload["bg_job"] = bg_job
+    return json.dumps(payload).encode()
+
+
+def _prepare_cap_notifier(session: str, bg_job: str = "") -> tuple[socket.socket | None, bytes]:
     """Pre-open the daemon socket + pre-serialize the cap-hit payload.
 
     MUST be called BEFORE ``resource.setrlimit`` so the allocations here
@@ -498,14 +509,32 @@ def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
     """
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        payload = json.dumps({
-            "type": "hook_memory_cap_hit",
-            "session": session,
-            "hook": "aipager-hook",
-        }).encode()
-        return sock, payload
+        return sock, _cap_payload(session, bg_job)
     except (OSError, MemoryError):
         return None, b""
+
+
+def _resolve_worker(inherited: str) -> dict | None:
+    """Who this hook counts for when Claude Code runs it in a background
+    worker (``CLAUDE_JOB_DIR`` set): ``{"role": "linked"|"foreign", "job",
+    "session"}`` (:mod:`aipager.dtach.bg_jobs`). None for the session's
+    own claude, which never imports that module. Any failure is foreign:
+    a worker never counts for the tag it merely inherited."""
+    if not os.environ.get("CLAUDE_JOB_DIR", "").strip():
+        return None
+    try:
+        from aipager.dtach import bg_jobs
+        return bg_jobs.resolve_from_env(inherited)
+    except Exception:
+        return {"role": "foreign", "job": "", "session": inherited}
+
+
+def _foreign(worker: dict | None) -> bool:
+    return worker is not None and worker.get("role") != "linked"
+
+
+#: ``CLAUDE_PID`` as the hook forwards it (``claude_pid``): digits only.
+_CLAUDE_PID = re.compile(r"[0-9]{1,10}")
 
 
 def _mark_verify_origin(session: str) -> None:
@@ -601,12 +630,25 @@ def main():
     # Read the session env var first — the cap-hit notifier needs it in
     # its pre-serialized payload.
     session = os.environ.get("CLAUDE_DTACH_SESSION", "")
+    # A Claude Code background worker counts by its job, never by the tag
+    # it inherited: a linked one is the session parked on the job, a
+    # foreign one sends and writes nothing (its PreToolUse is still
+    # checked, read-only). Before the cap: its reads are bounded (a link
+    # file, at most 64 small registry files).
+    worker = _resolve_worker(session)
+    if worker is not None and worker.get("role") == "linked":
+        session = worker["session"]
+    foreign = _foreign(worker)
 
     # Pre-allocate everything the cap-hit notifier needs BEFORE the cap
     # is set. At MemoryError time no new allocations are possible, so we
     # must hold a live socket and pre-encoded bytes ready for a raw
-    # sendto().
-    cap_sock, cap_payload = _prepare_cap_notifier(session)
+    # sendto(). A foreign worker has nothing to tell and nothing to undo.
+    if foreign:
+        cap_sock, cap_payload = None, b""
+    else:
+        cap_sock, cap_payload = _prepare_cap_notifier(
+            session, (worker or {}).get("job", ""))
 
     try:
         resource.setrlimit(
@@ -629,10 +671,13 @@ def main():
     # encoded now, while allocating is still possible; removing the file
     # leaves the floor (``enforce`` reads a missing snapshot as the floor).
     cap_slot = [cap_payload, False, False]
-    snap_path = _encoded_snapshot_path(session)
+    snap_path = b"" if foreign else _encoded_snapshot_path(session)
 
     try:
-        _run(session, cap_slot)
+        if worker is None:
+            _run(session, cap_slot)
+        else:
+            _run(session, cap_slot, worker)
     except MemoryError:
         # Cap tripped mid-work. Fire the pre-baked datagram (best-effort,
         # never raises), then exit non-zero so Claude sees the failure —
@@ -655,11 +700,13 @@ def main():
         # NON-blocking error: the tool ran unchecked. Give enforce's own
         # fail-closed answer instead. Any other event keeps its old exit:
         # a non-zero one there never blocks Claude.
+        # A foreign worker reports nothing (its denial still prints).
         if not cap_slot[1]:
-            try:
-                _report_error(e, denied=False)
-            except BaseException:
-                pass
+            if not foreign:
+                try:
+                    _report_error(e, denied=False)
+                except BaseException:
+                    pass
             raise
         try:
             denied = _deny_unhandled_pre_tool_use(session, e)
@@ -667,13 +714,15 @@ def main():
             # Even the answer could not be written: exit 2, which Claude
             # Code reads as a deny for PreToolUse.
             try:
-                _report_error(e, denied=True)
+                if not foreign:
+                    _report_error(e, denied=True)
             finally:
                 sys.exit(2)
-        try:
-            _report_error(e, denied=denied)
-        except BaseException:
-            pass  # the answer is out and stands: exit 0
+        if not foreign:
+            try:
+                _report_error(e, denied=denied)
+            except BaseException:
+                pass  # the answer is out and stands: exit 0
 
 
 def _encoded_snapshot_path(session: str) -> bytes:
@@ -718,10 +767,42 @@ def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> bool:
     return denied
 
 
-def _run(session: str, cap_slot: list) -> None:
+def _run_foreign(session: str, data: dict, cap_slot: list) -> None:
+    """A foreign background worker's event: no datagram, no file written,
+    consumed or removed, no output, except a PreToolUse's deny or soft
+    deny. That one is decided from the inherited session's rules, read-only
+    (``enforce.decide(..., read_only=True)``: never looser than the writing
+    path), and printed exactly as for the session's own claude. An error
+    escapes to ``main``, which denies it (``_deny_unhandled_pre_tool_use``)
+    and reports nothing for a foreign worker."""
+    if data.get("hook_event_name") != "PreToolUse":
+        return
+    if len(cap_slot) > 1:
+        cap_slot[1] = True
+    if session:
+        data["session"] = session
+    from aipager.dtach import enforce
+    enforce.take_decide_extra()  # nothing stale from before
+    block = enforce.decide(data, read_only=True)
+    enforce.take_decide_error()
+    enforce.take_decide_extra()
+    if block and block.get("soft"):
+        print(enforce.soft_deny_json(block["reason"]))
+        sys.stdout.flush()
+    elif block:
+        print(enforce.deny_decision_json(block["reason"]))
+        sys.stdout.flush()
+
+
+def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
     """Main hook body — separated so ``main()`` can wrap it in a single
     ``try/except MemoryError``. Any allocation inside here that pushes
     the process past the cap will trip that handler.
+
+    ``worker`` is ``main``'s background-worker record (None for the
+    session's own claude): a linked worker runs as *session* (already the
+    linked one) and tags every datagram with ``bg_job``; a foreign one
+    only answers a PreToolUse (:func:`_run_foreign`).
 
     ``cap_slot`` holds the pre-serialized cap-hit payload at index 0
     and, when ``main()`` passes it, a PreToolUse flag at index 1 (set
@@ -762,6 +843,11 @@ def _run(session: str, cap_slot: list) -> None:
     _ERROR_CONTEXT["event"] = data.get("hook_event_name")
     _ERROR_CONTEXT["tool"] = data.get("tool_name")
 
+    if _foreign(worker):
+        _run_foreign(session, data, cap_slot)
+        return
+    bg_job = worker.get("job", "") if worker is not None else ""
+
     if data.get("hook_event_name") == "PreModelSwitch":
         _answer_model_switch(session, data)
         return
@@ -774,12 +860,7 @@ def _run(session: str, cap_slot: list) -> None:
     tool_name = data.get("tool_name", "")
     if tool_name:
         try:
-            cap_slot[0] = json.dumps({
-                "type": "hook_memory_cap_hit",
-                "session": session,
-                "hook": "aipager-hook",
-                "tool": tool_name,
-            }).encode()
+            cap_slot[0] = _cap_payload(session, bg_job, tool_name)
         except (MemoryError, ValueError, TypeError):
             pass
 
@@ -787,6 +868,12 @@ def _run(session: str, cap_slot: list) -> None:
         data["session"] = session
     if _AIPAGER_VERSION:
         data["aipager_version"] = _AIPAGER_VERSION
+    if worker is None:
+        # The session's own claude: its pid, so the daemon can find it in
+        # Claude's session registry (a worker's pid is not the session's).
+        pid = os.environ.get("CLAUDE_PID", "").strip()
+        if _CLAUDE_PID.fullmatch(pid):
+            data["claude_pid"] = int(pid)
 
     # Piggyback statusLine token data on hook events. Skipped for
     # MessageDisplay: it runs synchronously inside Claude Code's display
@@ -805,6 +892,10 @@ def _run(session: str, cap_slot: list) -> None:
     # reads it, to skip the reply wait outright when the daemon is
     # provably down rather than blocking for the full deadline.
     def _udp(payload: dict) -> bool:
+        if bg_job:
+            # Every datagram of a linked worker says which job it came
+            # from: the daemon drops one whose job is not linked.
+            payload["bg_job"] = bg_job
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             s.sendto(json.dumps(payload).encode(), SOCKET_PATH)

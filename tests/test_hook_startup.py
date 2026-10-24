@@ -119,6 +119,39 @@ def test_a_fresh_start_loads_nothing_heavy(root, module):
     assert [m for m in HEAVY if m in loaded] == []
 
 
+_RUN_AND_DUMP = (
+    "import atexit, json, sys\n"
+    "atexit.register(lambda: print('\\nMODS=' + json.dumps(sorted(sys.modules))))\n"
+    "from aipager.dtach.{module} import main\n"
+    "main()\n"
+)
+
+
+@pytest.mark.parametrize("worker", [False, True], ids=["own", "worker"])
+@pytest.mark.parametrize("module", ["notify_hook", "statusline_notify"])
+def test_only_a_background_worker_loads_the_job_module(root, module, worker):
+    """Claude Code background workers (``CLAUDE_JOB_DIR`` set) are told
+    apart by ``aipager.dtach.bg_jobs``: only they import it, and a worker's
+    run loads nothing heavy. (The session's own Notification may: that is
+    today's path, unchanged.)"""
+    env = _env(root)
+    if worker:
+        env["CLAUDE_JOB_DIR"] = str(root / "cfg" / "jobs" / "ab12cd34")
+    payload = ({"hook_event_name": "Notification", "session_id": "s-lean"}
+               if module == "notify_hook" else
+               {"session_id": "s-lean", "model": {"display_name": "Opus"}})
+    proc = subprocess.run([sys.executable, "-c", _RUN_AND_DUMP.format(module=module)],
+                          input=json.dumps(payload), capture_output=True, text=True,
+                          env=env, cwd=str(root), timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    line = [x for x in proc.stdout.splitlines() if x.startswith("MODS=")][-1]
+    loaded = json.loads(line[len("MODS="):])
+    assert f"aipager.dtach.{module}" in loaded          # not vacuous
+    assert ("aipager.dtach.bg_jobs" in loaded) is worker
+    if worker:
+        assert [m for m in HEAVY if m in loaded] == []
+
+
 def test_every_way_of_importing_the_packages_still_works(root):
     # A package ``__getattr__`` answering for a name it does not own would
     # shadow a submodule (``from aipager import dtach``) or recurse forever

@@ -103,7 +103,7 @@ def protected_globs() -> tuple[str, ...]:
         return ()
     return tuple(
         os.path.join(inst, f"claude-{kind}-*")
-        for kind in ("policy", "notes", "status", "reply", "dtach")
+        for kind in ("policy", "notes", "status", "reply", "dtach", "bgjob", "exit")
     )
 
 

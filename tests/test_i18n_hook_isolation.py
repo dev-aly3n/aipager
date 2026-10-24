@@ -40,7 +40,13 @@ ENTRY_POINTS = ("aipager.dtach.notify_hook", "aipager.dtach.statusline_notify")
 #: background shell rows). Missing one means the harness stopped
 #: exercising that path.
 CANARIES = ("aipager.state", "aipager.policy_snapshot", "aipager.bg_shells",
-            "aipager.config", "aipager.clockfmt", "aipager.agent_tree")
+            "aipager.config", "aipager.clockfmt", "aipager.agent_tree",
+            # the Claude Code background worker runs (CLAUDE_JOB_DIR set)
+            "aipager.dtach.bg_jobs")
+
+#: A background worker's job folder, relative to the run's root: its hooks
+#: take the worker path (aipager.dtach.bg_jobs and read-only enforcement).
+_JOB_DIR = ("cfg", "jobs", "ab12cd34")
 
 _DUMP = (
     "import atexit, json, sys\n"
@@ -67,11 +73,25 @@ def closure():
     (root / "home").mkdir()
     loaded: set[str] = set()
     try:
+        status = {"session_id": "s", "model": {"display_name": "Opus"},
+                  "context_window": {"used_percentage": 3},
+                  "cost": {"total_cost_usd": 0}}
         runs = [("notify_hook", _payload(e), e) for e in EVENTS]
-        runs.append(("statusline_notify", {"session_id": "s", "model": {
-            "display_name": "Opus"}, "context_window": {"used_percentage": 3},
-            "cost": {"total_cost_usd": 0}}, "statusline"))
+        runs.append(("statusline_notify", status, "statusline"))
+        # The same as a background worker: foreign (no link), then linked
+        # (a link file for the job names the session).
+        worker_runs = [("notify_hook", _payload(e), f"worker-{e}")
+                       for e in ("PreToolUse", "UserPromptSubmit", "Stop")]
+        worker_runs.append(("statusline_notify", status, "worker-statusline"))
+        runs += worker_runs
+        runs += [(m, p, n.replace("worker-", "linked-")) for m, p, n in worker_runs]
         for module, payload, name in runs:
+            env = _env(root)
+            if name.startswith(("worker-", "linked-")):
+                env["CLAUDE_JOB_DIR"] = str(root.joinpath(*_JOB_DIR))
+            if name.startswith("linked-"):
+                (root / f"claude-bgjob-{_JOB_DIR[-1]}.json").write_text(
+                    json.dumps({"job": _JOB_DIR[-1], "session": SESSION}))
             if name == "UserPromptSubmit":
                 # Written by a separate interpreter, so the measured one
                 # never imports the writer.
@@ -86,7 +106,7 @@ def closure():
             proc = subprocess.run(
                 [sys.executable, "-c", _DUMP.format(out=str(out), module=module)],
                 input=json.dumps(payload), capture_output=True, text=True,
-                env=_env(root), cwd=str(root), timeout=60)
+                env=env, cwd=str(root), timeout=60)
             assert out.exists(), f"{name}: no module dump\n{proc.stderr[-800:]}"
             loaded |= set(json.loads(out.read_text()))
     finally:
@@ -208,6 +228,7 @@ def lazy_i18n_imports(module: str, root: Path = REPO) -> dict[int, str]:
 def test_no_closure_module_imports_i18n_anywhere(closure):
     modules = static_closure() | closure
     assert "aipager.dtach.notify_hook" in modules and "aipager.state" in modules
+    assert "aipager.dtach.bg_jobs" in static_closure()  # the lazy worker import
     bad = {}
     for module in sorted(modules):
         path = _path(module)

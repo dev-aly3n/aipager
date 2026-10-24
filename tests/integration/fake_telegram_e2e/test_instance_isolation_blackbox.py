@@ -235,10 +235,10 @@ def test_unset_socket_path_override_beats_xdg(scratch, key):
 
 # ---- (3) safety deny globs ---------------------------------------------------------------
 
-GLOB_KINDS = ("policy", "notes", "status", "reply", "dtach")
+GLOB_KINDS = ("policy", "notes", "status", "reply", "dtach", "bgjob", "exit")
 
 
-def test_protected_globs_are_the_five_control_kinds(iso):
+def test_protected_globs_are_the_control_kinds(iso):
     scratch, out = iso
     inst = str(scratch / "i")
     assert sorted(out["protected_globs"]) == sorted(f"{inst}/claude-{k}-*" for k in GLOB_KINDS)

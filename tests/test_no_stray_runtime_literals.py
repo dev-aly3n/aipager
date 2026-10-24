@@ -29,6 +29,8 @@ ALLOWED = {
     ("safety.py", "/tmp/claude-status-*"),
     ("safety.py", "/tmp/claude-reply-*"),
     ("safety.py", "/tmp/claude-dtach-*"),
+    ("safety.py", "/tmp/claude-bgjob-*"),
+    ("safety.py", "/tmp/claude-exit-*"),
     # Claude Code's own scratchpad root, not an aipager file.
     ("safety.py", "(?<![\\w.~/-])/tmp/claude-\\d+(?=/|[\\s;&|()<>'\\\"`]|$)"),
     # Claude Code's per-user temp folders (every session's scratchpad), which

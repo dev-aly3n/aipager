@@ -61,25 +61,51 @@ def _debug(msg: str) -> None:
         print(f"[aipager-statusline] {msg}", file=sys.stderr)
 
 
-def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
+def _prepare_cap_notifier(session: str, bg_job: str = "") -> tuple[socket.socket | None, bytes]:
     """Pre-open the daemon socket + pre-serialize the cap-hit payload.
     See :mod:`aipager.dtach.notify_hook._prepare_cap_notifier` for the
     full rationale — this is the same pattern for the statusline hook."""
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        payload = json.dumps({
+        payload = {
             "type": "hook_memory_cap_hit",
             "session": session,
             "hook": "aipager-statusline",
-        }).encode()
-        return sock, payload
+        }
+        if bg_job:
+            payload["bg_job"] = bg_job
+        return sock, json.dumps(payload).encode()
     except (OSError, MemoryError):
         return None, b""
 
 
+def _resolve_worker(inherited: str) -> dict | None:
+    """As :func:`aipager.dtach.notify_hook._resolve_worker`: None for the
+    session's own claude, else the background worker's record (any
+    failure is foreign)."""
+    if not os.environ.get("CLAUDE_JOB_DIR", "").strip():
+        return None
+    try:
+        from aipager.dtach import bg_jobs
+        return bg_jobs.resolve_from_env(inherited)
+    except Exception:
+        return {"role": "foreign", "job": "", "session": inherited}
+
+
 def main() -> None:
     session = os.environ.get("CLAUDE_DTACH_SESSION", "")
-    cap_sock, cap_payload = _prepare_cap_notifier(session)
+    # A background worker's status line: a linked one is the session
+    # parked on its job, a foreign one writes no file and sends nothing
+    # (its line is still printed for Claude Code's own status bar).
+    worker = _resolve_worker(session)
+    foreign = worker is not None and worker.get("role") != "linked"
+    bg_job = ""
+    if worker is not None and not foreign:
+        session, bg_job = worker["session"], worker.get("job", "")
+    if foreign:
+        cap_sock, cap_payload = None, b""
+    else:
+        cap_sock, cap_payload = _prepare_cap_notifier(session, bg_job)
 
     try:
         resource.setrlimit(
@@ -89,7 +115,7 @@ def main() -> None:
         pass  # some kernels/containers reject rlimit tightening; never wedge claude
 
     try:
-        _run(session)
+        _run(session, bg_job=bg_job, foreign=foreign)
     except MemoryError:
         if cap_sock is not None:
             try:
@@ -99,12 +125,13 @@ def main() -> None:
         sys.exit(1)
 
 
-def _run(session: str) -> None:
+def _run(session: str, *, bg_job: str = "", foreign: bool = False) -> None:
     """Statusline hook body — separated so ``main()`` can wrap it in a
-    single ``try/except MemoryError``."""
+    single ``try/except MemoryError``. A foreign background worker only
+    prints its line; a linked one's datagram carries ``bg_job``."""
     raw = sys.stdin.read()
 
-    if raw.strip() and session:
+    if raw.strip() and session and not foreign:
         status_file = Path(_STATUS_DIR) / f"claude-status-{session}.json"
         try:
             status_file.write_text(raw)
@@ -134,6 +161,8 @@ def _run(session: str) -> None:
             }
             if _AIPAGER_VERSION:
                 msg["aipager_version"] = _AIPAGER_VERSION
+            if bg_job:
+                msg["bg_job"] = bg_job
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), SOCKET_PATH)
             sock.close()

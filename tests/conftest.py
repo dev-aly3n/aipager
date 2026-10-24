@@ -1127,6 +1127,21 @@ def _isolate_session_tmp_files(tmp_path, monkeypatch):
     downloads = base / "aipager-files"
     monkeypatch.setattr("aipager.config.FILE_DOWNLOAD_DIR", downloads)
     monkeypatch.setattr("aipager.bot.handlers.FILE_DOWNLOAD_DIR", downloads)
+    # Claude Code background jobs: the daemon's job links and pid map
+    # decide which session a worker's hooks count for, and the exit file
+    # says why a session ended. A test must never plant or remove a live
+    # one.
+    monkeypatch.setattr("aipager.dtach.bg_jobs.link_path",
+                        lambda job: base / f"claude-bgjob-{job}.json")
+    monkeypatch.setattr("aipager.dtach.bg_jobs.pidmap_path",
+                        lambda: base / "claude-bgjob-pids.json")
+    monkeypatch.setattr("aipager.dtach.bg_jobs.exit_path",
+                        lambda name: base / f"claude-exit-{name}.json")
+    # The suite may itself run inside a Claude Code session or one of its
+    # background workers: the hook must see neither's own variables
+    # (a test that wants one sets it).
+    monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_PID", raising=False)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -1144,7 +1159,9 @@ def _guard_live_session_files():
 
     def _live() -> set[str]:
         return (set(glob.glob("/tmp/claude-policy-*.json"))
-                | set(glob.glob("/tmp/claude-reply-*.txt")))
+                | set(glob.glob("/tmp/claude-reply-*.txt"))
+                | set(glob.glob("/tmp/claude-bgjob-*.json"))
+                | set(glob.glob("/tmp/claude-exit-*.json")))
 
     before = _live()
     yield

@@ -108,6 +108,8 @@ BASE_DENY = [
     "/tmp/claude-status-*",
     "/tmp/claude-reply-*",
     "/tmp/claude-dtach-*",
+    "/tmp/claude-bgjob-*",
+    "/tmp/claude-exit-*",
 ]
 
 
@@ -207,7 +209,7 @@ def test_isolation_safety_floor_protects_relocated_control_files(isolated):
 
 
 def test_protected_globs_cover_every_tmp_control_prefix(monkeypatch, tmp_path):
-    """The instance list names the same five kinds as the /tmp list."""
+    """The instance list names the same kinds as the /tmp list."""
     monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path))
     tmp_kinds = {g.split("/tmp/claude-")[1].split("-")[0]
                  for g in BASE_DENY if g.startswith("/tmp/claude-")}
