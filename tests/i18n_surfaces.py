@@ -98,20 +98,6 @@ AGENTS_TREE_NEW_SURFACES = frozenset({"card.helpers"})
 APPEARANCE_SURFACES = frozenset({"settings.root", "settings.sections"})
 #: The surface it added (the Appearance page and each choice's page).
 APPEARANCE_NEW_SURFACES = frozenset({"settings.appearance"})
-#: The Mini App surfaces Claude Code background jobs (2026-10-24) added to,
-#: and only by appending: Bring it back's refusals and the background
-#: refusals of Restart and Resume (details), a background session's reasons
-#: (payload texts), and "is back" after a finished session was brought back
-#: (mirrors). All three are already among THREE_MODES_SURFACES, so the base
-#: comparisons exempt them; :func:`only_appended` says the rest is as it was.
-BG_JOBS_SURFACES = frozenset({"miniapp.details", "miniapp.mirrors",
-                              "miniapp.payload_texts"})
-
-
-def only_appended(before: list, after: list) -> bool:
-    """Whether *after* (a surface's texts) is *before* with texts added at
-    its end, and nothing else changed."""
-    return len(after) > len(before) and after[:len(before)] == before
 
 
 def without_card_divider(value):
