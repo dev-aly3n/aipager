@@ -108,6 +108,7 @@ def test_the_own_pid_with_its_start_is_the_client(cfg, proc, mon):
     reg(cfg, CLIENT, kind="interactive", sessionId="other", procStart="777")
     proc.start[CLIENT] = 777
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     found = claude_jobs.find_client(sess, claude_jobs.read_registry())
     assert found is not None and found["pid"] == CLIENT
 
@@ -218,6 +219,7 @@ def test_parked_job_id_parks_the_session(cfg, proc, mon, run_async, monkeypatch)
     bg_parked event."""
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
     reg(cfg, WORKER, kind="bg", sessionId=JOB_SID, jobId=JOB, status="busy")
     _scan(monitor, run_async, monkeypatch)
@@ -237,6 +239,7 @@ def test_parked_job_id_parks_the_session(cfg, proc, mon, run_async, monkeypatch)
 def test_an_entry_without_parked_job_id_clears_the_park(cfg, proc, mon):
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
     assert monitor.check_parked(sess) is True
     assert bg_jobs.link_path(JOB).exists()
@@ -251,6 +254,7 @@ def test_a_stopped_job_keeps_the_session_parked(cfg, proc, mon):
     the job's entry going away never clears the park."""
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
     worker = reg(cfg, WORKER, kind="bg", sessionId=JOB_SID, jobId=JOB)
     assert monitor.check_parked(sess) is True
@@ -262,6 +266,7 @@ def test_a_stopped_job_keeps_the_session_parked(cfg, proc, mon):
 def test_an_ended_mark_survives_a_link_rewrite(cfg, proc, mon):
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
     monitor.check_parked(sess)
     data = _link()
@@ -305,6 +310,7 @@ def test_records_after_continued_in_do_not_park(cfg, proc, mon):
 def test_a_found_client_wins_over_the_transcript(cfg, proc, mon):
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     reg(cfg, CLIENT, kind="interactive", sessionId=SID)
     transcript(cfg, SID, [{"type": "continued-in", "continuedInSessionId": JOB_SID}])
     assert monitor.check_parked(sess) is False
@@ -381,6 +387,7 @@ def test_an_unreadable_registry_changes_nothing(cfg, proc, mon, parked, broken):
 def test_a_broken_file_does_not_hide_the_others(cfg, proc, mon):
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     (cfg / "sessions" / "4000.json").write_text("{not json")
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
     assert monitor.check_parked(sess) is True
@@ -485,6 +492,7 @@ def test_a_new_park_tells_every_sender_again(cfg, proc, mon):
     the list of those told."""
     registry, monitor, notify, sess = mon
     sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)      # level 1 takes a live pid only (rev-iter1-006)
     sess.park_told = {12345}
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
     monitor.check_parked(sess)
@@ -547,3 +555,26 @@ def test_the_receivers_check_during_a_scan_links_the_job(cfg, proc, mon, run_asy
 
     assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch,
                                      receiver) is True
+
+
+# ---- review rev-iter1-006: level 1 takes a live pid whose start matches ------------
+
+def test_a_dead_cached_pid_with_its_file_left_behind_is_no_client(cfg, proc, mon):
+    """Claude leaves a dead claude's registry file behind: the cached pid
+    is not the client, so its stale ``parkedJobId`` parks nothing."""
+    registry, monitor, notify, sess = mon
+    reg(cfg, CLIENT, kind="interactive", sessionId="other", parkedJobId=JOB)
+    sess.claude_pid = CLIENT                 # not in proc.alive
+    assert claude_jobs.find_client(sess, claude_jobs.read_registry()) is None
+    assert monitor.check_parked(sess) is False
+
+
+@pytest.mark.parametrize("linux, found", [(True, False), (False, True)])
+def test_a_start_that_cannot_be_read_matches_only_off_linux(cfg, proc, mon,
+                                                            monkeypatch, linux, found):
+    registry, monitor, notify, sess = mon
+    monkeypatch.setattr(claude_jobs, "_on_linux", lambda: linux)
+    reg(cfg, CLIENT, kind="interactive", sessionId="other", procStart="777")
+    proc.alive.add(CLIENT)                   # proc.start has no entry: unreadable
+    sess.claude_pid = CLIENT
+    assert (claude_jobs.find_client(sess, claude_jobs.read_registry()) is not None) is found

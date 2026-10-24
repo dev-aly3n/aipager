@@ -40,6 +40,7 @@ import os
 import re
 import signal
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -317,20 +318,35 @@ def _descends(pid: int, ancestors: set[int]) -> bool:
     return False
 
 
+def _on_linux() -> bool:
+    """Whether a process's start time is readable here (``/proc``): a
+    module seam, so tests can take either side."""
+    return sys.platform.startswith("linux")
+
+
 def _start_matches(entry: dict, pid: int) -> bool:
+    """Whether *pid* is the process *entry* was written for: its
+    ``procStart`` equals the process's. An entry without one matches.
+    On Linux a start that cannot be read (the process is gone, or the pid
+    is someone else's) is no match; elsewhere nothing can be read, and
+    the pid is taken as it is."""
     recorded = entry.get("procStart")
     if recorded is None:
         return True
     actual = _proc_start(pid)
-    return actual is None or actual == recorded
+    if actual is None:
+        return not _on_linux()
+    return actual == recorded
 
 
 def find_client(sess, entries: list[dict] | None) -> dict | None:
     """The registry entry of *sess*'s own claude (an ``interactive`` one),
     or None. Tried in order, the first level with an answer wins:
 
-    1. the pid its own hooks reported (``sess.claude_pid``), when the
-       entry's ``procStart`` equals the process's (where both are known);
+    1. the pid its own hooks reported (``sess.claude_pid``), when that
+       process is alive and the entry's ``procStart`` equals its start
+       (:func:`_start_matches`): Claude leaves a dead claude's file
+       behind, and a pid can be reused;
     2. only when no pid is known: an entry whose pid descends from the
        session's dtach master;
     3. an entry parked on the job named by the first 8 characters of the
@@ -350,7 +366,8 @@ def find_client(sess, entries: list[dict] | None) -> dict | None:
     decided = False
     pid = sess.claude_pid if isinstance(sess.claude_pid, int) else 0
     if pid > 0:
-        own = [e for e in interactive if e["pid"] == pid and _start_matches(e, pid)]
+        own = [e for e in interactive if e["pid"] == pid and _pid_alive(pid)
+               and _start_matches(e, pid)]
         decided, found = _unique(own)
     if not decided and pid <= 0:
         masters = set(_dtach_pids(sess.name))
