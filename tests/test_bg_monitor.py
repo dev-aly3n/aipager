@@ -495,3 +495,55 @@ def test_a_new_park_tells_every_sender_again(cfg, proc, mon):
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId="ffff0000")
     monitor.check_parked(sess)
     assert sess.parked_job == "ffff0000" and sess.park_told == set()
+
+
+# ---- review rev-iter1-001: a check made while a scan awaits reads afresh ----------
+
+def _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch, inside):
+    """Run one scan that awaits ``notify_fn`` (another session's park
+    notice) after it read the registry, and run *inside* there: the
+    message gate or the receiver checking this session meanwhile."""
+    registry, monitor, notify, sess = mon
+    proc.alive.add(CLIENT)
+    sess.claude_pid = CLIENT
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID)    # not parked yet
+    other = registry.get_or_create("claude-backend")
+    registry.transition("claude-backend", Status.IDLE)
+    other.parked_job = "cd34ef56"
+    monitor._new_parks["claude-backend"] = "cd34ef56"
+    seen = {}
+
+    async def notify_fn(s, event, ctx):
+        if event == "bg_parked" and "inside" not in seen:
+            # ← in the session's terminal, after the scan read the registry
+            reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+            seen["inside"] = await inside(sess)
+
+    monitor.notify_fn = notify_fn
+    _scan(monitor, run_async, monkeypatch, names=(NAME, "claude-backend"))
+    return seen["inside"]
+
+
+def test_the_gates_check_during_a_scan_sees_a_new_park(cfg, proc, mon, run_async,
+                                                       monkeypatch):
+    registry, monitor, notify, sess = mon
+
+    async def gate(s):
+        return monitor.check_parked(s)
+
+    assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch, gate) is True
+    assert sess.parked_job == JOB
+
+
+def test_the_receivers_check_during_a_scan_links_the_job(cfg, proc, mon, run_async,
+                                                         monkeypatch):
+    from aipager.dtach import hook_receiver as hr
+    registry, monitor, notify, sess = mon
+    recv = hr.HookReceiver(registry, AsyncMock())
+    recv.parked_check = monitor.check_parked
+
+    async def receiver(s):
+        return recv._bg_job_linked(NAME, JOB)
+
+    assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch,
+                                     receiver) is True

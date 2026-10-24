@@ -755,11 +755,11 @@ class SessionMonitor:
         self._dialog_checked: dict[str, tuple] = {}
         # Claude Code background jobs (check_parked): Claude's session
         # registry as read for the scan in progress (shared by every
-        # session of one tick; None outside a scan), the link file last
+        # session's own check in one tick, and by nothing else: the public
+        # check_parked always reads afresh; None outside a scan), the link file last
         # written per session, the pid map last written, and the parks
         # noticed since the last scan, whose event is still to be sent.
         self._tick_registry: list[dict] | None = None
-        self._tick_registry_read = False
         self._links_written: dict[str, dict] = {}
         self._pidmap_written: dict | None = None
         self._new_parks: dict[str, str] = {}
@@ -874,13 +874,6 @@ class SessionMonitor:
 
     # -- Claude Code background jobs ------------------------------------
 
-    def _registry_now(self) -> list[dict] | None:
-        """Claude's session registry: read once per scan, fresh outside
-        one."""
-        if self._tick_registry_read:
-            return self._tick_registry
-        return claude_jobs.read_registry()
-
     def check_parked(self, sess: TrackedSession) -> bool:
         """Whether *sess* is parked on a Claude Code background job, read
         again from Claude's files now; sets or clears ``parked_job`` (and
@@ -893,17 +886,25 @@ class SessionMonitor:
         park (Claude Code leaves ``parkedJobId`` set after the job stops).
         Only when no entry is found does the transcript decide: a
         conversation whose last record is ``continued-in`` parks on the
-        job its new id starts with. Nothing readable changes nothing."""
+        job its new id starts with. Nothing readable changes nothing.
+
+        Always reads the registry afresh, also while a scan is in progress:
+        the scan awaits Telegram sends, and a park newer than the scan's
+        own read must still hold the message that called this."""
+        return self._check_parked_with(sess, claude_jobs.read_registry())
+
+    def _check_parked_with(self, sess: TrackedSession, entries) -> bool:
+        """:meth:`check_parked` against *entries* (a registry read already
+        made: the scan's own). Never raises."""
         try:
-            return self._check_parked(sess)
+            return self._check_parked(sess, entries)
         except Exception:
             log.warning("[%s] parked check failed", sess.label, exc_info=True)
             return bool(sess.parked_job)
 
-    def _check_parked(self, sess: TrackedSession) -> bool:
+    def _check_parked(self, sess: TrackedSession, entries) -> bool:
         if sess.status == Status.GONE or sess.is_restarting():
             return bool(sess.parked_job)
-        entries = self._registry_now()
         client = claude_jobs.find_client(sess, entries)
         if client is not None:
             job = client.get("parkedJobId") or ""
@@ -1003,7 +1004,8 @@ class SessionMonitor:
         event of a park noticed since the last scan (by this check or by
         the message gate or the receiver in between)."""
         if sess.status != Status.GONE and not sess.is_restarting():
-            self.check_parked(sess)
+            # The scan's registry read: only this call uses it.
+            self._check_parked_with(sess, self._tick_registry)
         job = self._new_parks.pop(name, None)
         if job and sess.parked_job == job:
             try:
@@ -1225,12 +1227,10 @@ class SessionMonitor:
 
         # Claude Code background jobs: the registry once for this scan.
         self._tick_registry = claude_jobs.read_registry()
-        self._tick_registry_read = True
         try:
             await self._scan_sessions(now, compact_swept)
         finally:
             self._tick_registry = None
-            self._tick_registry_read = False
         try:
             self._sync_pidmap()
         except Exception:
