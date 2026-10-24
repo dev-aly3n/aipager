@@ -1106,6 +1106,14 @@ class HookReceiver:
         # worker counts only for the session parked on that worker's job.
         # Any other one changes nothing: no session is created, stamped or
         # moved, and its ids are never adopted.
+        #
+        # The check of a job not linked yet awaits a registry read in a
+        # worker thread, so two datagrams from a job's first moment (both
+        # before the park was noticed) can be handled in another order than
+        # they came. The window is one registry read long, and accepted (fix
+        # iteration 2): the session's liveness and the job's ids come out
+        # the same either way. Once the park is known a datagram awaits
+        # nothing here, so the job's later datagrams keep their order.
         bg_job = msg.get("bg_job") or ""
         if bg_job and not await self._bg_job_linked(session_name, bg_job):
             log.debug("dropping %s from an unlinked background job (session %s)",
