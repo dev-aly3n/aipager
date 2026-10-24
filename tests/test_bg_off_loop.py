@@ -3,11 +3,13 @@ rev-iter1-012).
 
 Reading the registry stats every ``<config>/sessions/*.json``, and looking
 for a transcript lists every project folder: on a machine with many
-projects either can take a while, and the message gate, the hook receiver,
-the bring-back and the monitor's scan all run on the daemon's one event
-loop. Each read goes through ``claude_jobs.off_loop`` (a worker thread);
-these tests record the thread every registry read and transcript search
-runs on, and require that none ran on the loop's.
+projects either can take a while, and the daemon has one event loop. The
+message gate, the hook receiver and the bring-back read through
+``claude_jobs.off_loop`` (a worker thread). The monitor's own scan reads the
+registry once per tick on the loop (each file parsed once per change) and
+caches its transcript misses. These tests record the thread every registry
+read and transcript search runs on, and require that none ran on the
+loop's.
 """
 
 from __future__ import annotations
@@ -88,21 +90,6 @@ def test_the_parked_check_reads_off_the_loop(world, threads, run_async):
     monitor = SessionMonitor(world.bot.registry, AsyncMock())
     assert run_async(monitor.check_parked_async(sess)) is True
     assert sess.parked_job == JOB and sess.parked_source == "transcript"
-    _off_the_loop(threads)
-
-
-def test_the_scan_reads_off_the_loop(world, threads, run_async, monkeypatch):
-    sess = world.sess
-    sess.parked_job = ""
-    world.unreg(CLIENT)
-
-    async def live():
-        return [NAME]
-
-    monkeypatch.setattr("aipager.dtach.inject.list_sessions", live)
-    monitor = SessionMonitor(world.bot.registry, AsyncMock())
-    run_async(monitor._scan())
-    assert sess.parked_job == JOB
     _off_the_loop(threads)
 
 
