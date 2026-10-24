@@ -385,14 +385,18 @@ def _never_parked(_session: str) -> bool:
 # daemon sets this probe to read its session registry (cli/daemon.py), so
 # the registry is the only source of truth and a park loaded from disk is
 # honoured at once; this package never imports the bot or the registry.
-_parked_probe: Callable[[str], bool] = _never_parked
-# Sessions a refused write was already logged for, in this park.
-_PARK_WARNED: set[str] = set()
+_parked_probe: Callable[[str], object] = _never_parked
+# Session -> the park a refused write was already logged for (what the
+# probe answered for it): one warning per park, again for the next one.
+_PARK_WARNED: dict[str, object] = {}
 
 
-def set_parked_probe(fn: Callable[[str], bool] | None) -> None:
+def set_parked_probe(fn: Callable[[str], object] | None) -> None:
     """Install *fn* (session name -> parked?) as the parked probe; None
-    puts back the default, which says no session is parked."""
+    puts back the default, which says no session is parked. A truthy
+    answer means parked; when it names the park (the daemon's answers
+    ``(job, park number)``), a new park is told apart from the last one
+    for the once-per-park warning, even with no write in between."""
     global _parked_probe
     _parked_probe = fn if fn is not None else _never_parked
 
@@ -401,23 +405,30 @@ def is_parked(session: str) -> bool:
     """Whether *session* is parked on a Claude Code background job, as the
     probe says. A probe that raises counts as parked: refusing a write is
     safe, typing into a parked session is not."""
+    return bool(_park_of(session))
+
+
+def _park_of(session: str) -> object:
+    """The probe's answer for *session* (falsy: not parked). A probe that
+    raises answers True."""
     try:
-        parked = bool(_parked_probe(session))
+        park = _parked_probe(session)
     except Exception:  # noqa: BLE001 - fail closed
         log.warning("parked probe failed for %s", session, exc_info=True)
-        parked = True
-    if not parked:
-        _PARK_WARNED.discard(session)
-    return parked
+        park = True
+    if not park:
+        _PARK_WARNED.pop(session, None)
+    return park
 
 
 def _refuse_parked(session: str) -> bool:
     """True (and one warning per park) when *session* is parked: the
     calling writer then returns False without writing anything."""
-    if not is_parked(session):
+    park = _park_of(session)
+    if not park:
         return False
-    if session not in _PARK_WARNED:
-        _PARK_WARNED.add(session)
+    if _PARK_WARNED.get(session) != park:
+        _PARK_WARNED[session] = park
         log.warning("Not typing into %s: it is parked on a Claude Code "
                     "background job", session)
     return True

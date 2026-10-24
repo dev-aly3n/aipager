@@ -303,9 +303,13 @@ def _wire_parked_state(registry, hook_receiver, session_monitor, bot) -> None:
     the message gate look for a park again through the monitor's check."""
     from aipager.dtach import inject
 
-    def parked(name: str) -> bool:
+    def parked(name: str):
+        # Falsy when not parked; else which park (the job, and the park's
+        # number on this session), so the guard warns once per park.
         sess = registry.get(name)
-        return bool(sess is not None and sess.parked_job)
+        if sess is None or not sess.parked_job:
+            return False
+        return (sess.parked_job, sess.park_epoch)
 
     inject.set_parked_probe(parked)
     hook_receiver.parked_check = session_monitor.check_parked

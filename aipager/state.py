@@ -909,6 +909,9 @@ class TrackedSession:
     # copy was resumed on purpose). Persisted with the park.
     parked_source: str = ""
     parked_from_session_id: str = ""
+    # How many parks of this session ended (``forget_park``): the terminal
+    # guard tells one park from the next by it. Transient.
+    park_epoch: int = 0
     # The pid of the session's own claude (its hooks forward CLAUDE_PID),
     # and that process's start time when known (0: unknown). Transient:
     # found again from the registry after a restart.
@@ -2664,6 +2667,7 @@ class TrackedSession:
         self.parked_source = ""
         self.parked_from_session_id = ""
         self.park_told.clear()
+        self.park_epoch += 1
 
     def arm_bg_release(self) -> None:
         """A bring-back is about to launch the conversation again: the

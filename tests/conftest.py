@@ -1149,7 +1149,7 @@ def _isolate_session_tmp_files(tmp_path, monkeypatch):
     from aipager import claude_jobs
     from aipager.dtach import inject as _inject
     monkeypatch.setattr(_inject, "_parked_probe", _inject._never_parked)
-    monkeypatch.setattr(_inject, "_PARK_WARNED", set())
+    monkeypatch.setattr(_inject, "_PARK_WARNED", {})
     monkeypatch.setattr(claude_jobs, "_config_cache", None)
 
 

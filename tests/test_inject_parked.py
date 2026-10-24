@@ -155,3 +155,37 @@ def test_one_warning_per_park(spawned, run_async, caplog):
         parked.add(NAME)
         run_async(inject.send_keys(NAME, "Enter"))
         assert _refusals(caplog) == 2, "a new park logs again"
+
+
+def test_a_new_park_with_no_write_in_between_warns_again(spawned, run_async, caplog):
+    """The probe names the park (the daemon's: job and park number): a
+    second park is told apart from the first even when nothing was written
+    while not parked (QA tester-iter1-001)."""
+    park = {"now": ("ab12cd34", 0)}
+    inject.set_parked_probe(lambda name: park["now"] if name == NAME else False)
+    with caplog.at_level(logging.WARNING, logger="aipager.dtach.inject"):
+        run_async(inject.send_keys(NAME, "Enter"))
+        run_async(inject.send_keys(NAME, "Enter"))
+        assert _refusals(caplog) == 1
+        park["now"] = ("ab12cd34", 1)     # unparked and parked again, same job
+        run_async(inject.send_keys(NAME, "Enter"))
+        run_async(inject.send_keys(NAME, "Enter"))
+        assert _refusals(caplog) == 2
+    assert spawned == []
+
+
+def test_the_daemons_probe_names_each_park(tmp_state_file):
+    from types import SimpleNamespace
+
+    from aipager.cli.daemon import _wire_parked_state
+    from aipager.state import SessionRegistry
+    registry = SessionRegistry()
+    sess = registry.get_or_create(NAME)
+    _wire_parked_state(registry, SimpleNamespace(),
+                       SimpleNamespace(check_parked=None), SimpleNamespace())
+    sess.parked_job = "ab12cd34"
+    first = inject._parked_probe(NAME)
+    sess.forget_park()
+    assert inject._parked_probe(NAME) is False
+    sess.parked_job = "ab12cd34"
+    assert first and inject._parked_probe(NAME) and inject._parked_probe(NAME) != first

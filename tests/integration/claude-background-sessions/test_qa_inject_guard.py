@@ -131,10 +131,6 @@ def test_one_warning_per_park(stack, spawned, caplog):
     assert len(warnings) == 1
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "qa finding tester-iter1-001: the once-per-park warning re-arms only when a "
-    "write goes out while not parked, so a second park with no write in between "
-    "is never logged (DESIGN.md P4: logs once per park)"))
 def test_a_new_park_warns_again(stack, spawned, caplog):
     qa.park_and_tick(stack)
     caplog.set_level(logging.WARNING)
