@@ -156,9 +156,11 @@ def _retry_may_press(sess: TrackedSession, pending: ModeSwitch) -> bool:
     switch is still the current one and the session is live, not being
     relaunched and not showing a dialog: a restart or End begun after the
     hook must not get stray Shift+Tabs in the new process, and a dialog
-    would read them as an answer."""
+    would read them as an answer. Never into a session parked on a
+    Claude Code background job."""
     return (sess.mode_switch is pending and not sess.relaunch_in_flight
-            and sess.status != Status.GONE and not sess.dialog_is_open())
+            and sess.status != Status.GONE and not sess.dialog_is_open()
+            and not sess.parked_job and not inject.is_parked(sess.name))
 
 
 async def _retry(bot, sess: TrackedSession, pending: ModeSwitch, count: int,

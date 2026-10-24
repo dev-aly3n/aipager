@@ -1194,6 +1194,9 @@ async def _handle_ready_callback(
                 mode_switch.attach_reply(sess, chat_id, msg_id, "ready", by)
             elif outcome.reason == "dialog_open":
                 await _rerender(note=tr.text(TOAST_MODE_DIALOG_OPEN, session=sess.label))
+            elif outcome.reason == "parked":
+                from aipager.bot.session_ops import BG_TOAST_REFUSED_PARKED  # import cycle
+                await _rerender(note=tr.text(BG_TOAST_REFUSED_PARKED, session=sess.label))
             elif outcome.ok:
                 await _rerender()
             else:
@@ -1249,6 +1252,13 @@ async def _handle_ready_callback(
             await _rerender()
             return
         outcome = await bot._switch_model_core(sess, resolved, driver_user_id=actor)
+        if getattr(outcome, "reason", "") == "parked":
+            from aipager.bot.session_ops import BG_TOAST_REFUSED_PARKED  # import cycle
+            await bot._safe_answer(
+                query, person.text(BG_TOAST_REFUSED_PARKED, session=sess.label),
+                show_alert=True)
+            await _rerender()
+            return
         if not outcome.ok:
             # A refusal by its code, in the tapper's language (the Mini App
             # keeps the English detail); any other detail as said.

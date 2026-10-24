@@ -179,6 +179,11 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"chatmove\.[a-z0-9_.]+", "message", "chars", 300, ""),
     # Files Claude sends (aipager/bot/outbox.py): a line in the chat.
     (r"outbox\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    # Claude Code background jobs (a session parked on one): pop-ups,
+    # buttons, then the chat lines.
+    (r"bg\.toast_[a-z0-9_]+", "toast", "chars", 200, ""),
+    (r"bg\.btn_[a-z0-9_]+", "button", "cells", 40, ""),
+    (r"bg\.[a-z0-9_.]+", "message", "chars", 300, ""),
 )
 
 

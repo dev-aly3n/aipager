@@ -1142,6 +1142,15 @@ def _isolate_session_tmp_files(tmp_path, monkeypatch):
     # (a test that wants one sets it).
     monkeypatch.delenv("CLAUDE_JOB_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_PID", raising=False)
+    # The terminal guard's parked probe and the Claude config folder the
+    # daemon reads (aipager/claude_jobs.py) start fresh in every test: a
+    # probe one test wired (the daemon wiring does) or a folder another
+    # test's home resolved to never carries over.
+    from aipager import claude_jobs
+    from aipager.dtach import inject as _inject
+    monkeypatch.setattr(_inject, "_parked_probe", _inject._never_parked)
+    monkeypatch.setattr(_inject, "_PARK_WARNED", set())
+    monkeypatch.setattr(claude_jobs, "_config_cache", None)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -1348,6 +1357,7 @@ def steady_clock(monkeypatch):
 #: seam that is not listed here.
 SPAWN_SEAMS = (
     "aipager.bot.handlers._create_subprocess_exec",
+    "aipager.claude_jobs._create_subprocess_exec",
     "aipager.dtach.inject._create_subprocess_exec",
 )
 
@@ -1406,6 +1416,25 @@ def _never_spawn_real_dtach(monkeypatch):
     # real session regardless. The constant is what `launch_session` execs.
     monkeypatch.setattr("aipager.dtach.inject._DTACH",
                         "/nonexistent/dtach-blocked-in-tests", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _never_run_real_claude_commands(monkeypatch):
+    """``aipager.claude_jobs`` runs ``claude stop <job>`` and ``claude
+    agents --json`` (a background job of the operator's own could be
+    stopped). With no resolved binary it falls back to ``claude`` on PATH,
+    which on a dev box is the real one. Both runner seams refuse in every
+    test; a test that exercises them sets its own fake (a later
+    ``monkeypatch.setattr`` wins). The runners turn the refusal into "no
+    claude", so nothing is ever spawned."""
+    async def _refuse_exec(*_args, **_kwargs):
+        raise AssertionError("a test ran a real claude command (claude_jobs)")
+
+    def _refuse_run(*_args, **_kwargs):
+        raise AssertionError("a test ran a real claude command (claude_jobs)")
+
+    monkeypatch.setattr("aipager.claude_jobs._create_subprocess_exec", _refuse_exec)
+    monkeypatch.setattr("aipager.claude_jobs._subprocess_run", _refuse_run)
 
 
 @pytest.fixture(autouse=True)

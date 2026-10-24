@@ -14,7 +14,8 @@ import logging
 import os
 import time
 
-from aipager import statusline_file
+from aipager import claude_jobs, statusline_file
+from aipager.dtach import bg_jobs
 from aipager.report import store as report_store
 from aipager.dtach import inject as dtach_inject
 from aipager.config import (
@@ -752,6 +753,16 @@ class SessionMonitor:
         self._dialog_seen: dict[str, tuple[float, int, int]] = {}
         # The same for the INTERACTIVE watchdog's evidence check.
         self._dialog_checked: dict[str, tuple] = {}
+        # Claude Code background jobs (check_parked): Claude's session
+        # registry as read for the scan in progress (shared by every
+        # session of one tick; None outside a scan), the link file last
+        # written per session, the pid map last written, and the parks
+        # noticed since the last scan, whose event is still to be sent.
+        self._tick_registry: list[dict] | None = None
+        self._tick_registry_read = False
+        self._links_written: dict[str, dict] = {}
+        self._pidmap_written: dict | None = None
+        self._new_parks: dict[str, str] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -860,6 +871,146 @@ class SessionMonitor:
             return False
         self._dialog_checked[name] = key
         return True
+
+    # -- Claude Code background jobs ------------------------------------
+
+    def _registry_now(self) -> list[dict] | None:
+        """Claude's session registry: read once per scan, fresh outside
+        one."""
+        if self._tick_registry_read:
+            return self._tick_registry
+        return claude_jobs.read_registry()
+
+    def check_parked(self, sess: TrackedSession) -> bool:
+        """Whether *sess* is parked on a Claude Code background job, read
+        again from Claude's files now; sets or clears ``parked_job`` (and
+        the link file) to match. Synchronous: the message gate and the hook
+        receiver call it too. Never raises.
+
+        The session's own claude's registry entry decides when it is found
+        (``claude_jobs.find_client``): ``parkedJobId`` parks, no
+        ``parkedJobId`` clears. Whether the job still runs never clears a
+        park (Claude Code leaves ``parkedJobId`` set after the job stops).
+        Only when no entry is found does the transcript decide: a
+        conversation whose last record is ``continued-in`` parks on the
+        job its new id starts with. Nothing readable changes nothing."""
+        try:
+            return self._check_parked(sess)
+        except Exception:
+            log.warning("[%s] parked check failed", sess.label, exc_info=True)
+            return bool(sess.parked_job)
+
+    def _check_parked(self, sess: TrackedSession) -> bool:
+        if sess.status == Status.GONE or sess.is_restarting():
+            return bool(sess.parked_job)
+        entries = self._registry_now()
+        client = claude_jobs.find_client(sess, entries)
+        if client is not None:
+            job = client.get("parkedJobId") or ""
+            if claude_jobs.valid_job(job):
+                self._park(sess, job, self._job_session_id(sess, job, entries, client))
+            else:
+                self._unpark(sess)
+            return bool(sess.parked_job)
+        path = claude_jobs.find_transcript(sess.claude_session_id, cache_misses=True)
+        target = claude_jobs.transcript_continued_in(path) if path is not None else ""
+        if target and claude_jobs.valid_job(target[:8]):
+            self._park(sess, target[:8], target)
+        return bool(sess.parked_job)
+
+    @staticmethod
+    def _job_session_id(sess: TrackedSession, job: str, entries, client) -> str:
+        """The conversation job *job* runs: its registry entry's
+        ``sessionId``, else where the client's conversation moved when that
+        id starts with the job, else what was known already."""
+        entry = claude_jobs.job_entry(job, entries)
+        if entry is not None and claude_jobs.valid_session_id(entry.get("sessionId")):
+            return entry["sessionId"]
+        for sid in (client.get("sessionId"), sess.claude_session_id):
+            path = claude_jobs.find_transcript(sid, cache_misses=True) if sid else None
+            target = claude_jobs.transcript_continued_in(path) if path is not None else ""
+            if target.startswith(job):
+                return target
+        return sess.parked_job_session_id if sess.parked_job == job else ""
+
+    def _park(self, sess: TrackedSession, job: str, job_sid: str) -> None:
+        if sess.parked_job != job:
+            log.info("[%s] parked on Claude Code background job %s", sess.label, job)
+            sess.parked_job = job
+            sess.parked_job_session_id = job_sid
+            sess.parked_since = time.time()
+            sess.park_told.clear()
+            self._new_parks[sess.name] = job
+            self.registry.mark_dirty()
+        elif job_sid and job_sid != sess.parked_job_session_id:
+            sess.parked_job_session_id = job_sid
+            self.registry.mark_dirty()
+        self._write_link(sess)
+
+    def _unpark(self, sess: TrackedSession) -> None:
+        if not sess.parked_job:
+            return
+        log.info("[%s] no longer parked on background job %s", sess.label,
+                 sess.parked_job)
+        bg_jobs.remove_own(bg_jobs.link_path(sess.parked_job))
+        self._links_written.pop(sess.name, None)
+        self._new_parks.pop(sess.name, None)
+        sess.parked_job = ""
+        sess.parked_job_session_id = ""
+        sess.parked_since = 0.0
+        sess.park_told.clear()
+        self.registry.mark_dirty()
+
+    def _write_link(self, sess: TrackedSession) -> None:
+        """The link file of the job *sess* is parked on (the hook reads it
+        to count that job's workers for the session), written when what it
+        says changed. An ``ended`` mark the receiver put there is kept."""
+        job = sess.parked_job
+        want = {"job": job, "session": sess.name,
+                "job_session_id": sess.parked_job_session_id,
+                "client_pid": sess.claude_pid or None,
+                "at": sess.parked_since}
+        if self._links_written.get(sess.name) == want:
+            return
+        path = bg_jobs.link_path(job)
+        old = bg_jobs.read_own_json(path)
+        ended = bool(old and old.get("job") == job and old.get("session") == sess.name
+                     and old.get("ended") is True)
+        if bg_jobs.write_own_json(path, {**want, "ended": ended}):
+            self._links_written[sess.name] = want
+
+    def _sync_pidmap(self) -> None:
+        """The pid map (pid of each live session's own claude -> session),
+        rewritten when it changed: a worker's hook uses it when it runs
+        before the link file exists."""
+        pids = {}
+        for name, sess in self.registry.all_sessions().items():
+            if sess.status != Status.GONE and sess.claude_pid > 0:
+                pids[str(sess.claude_pid)] = {
+                    "session": name, "start": sess.claude_pid_start or None}
+        want = {"pids": pids}
+        if want == self._pidmap_written:
+            return
+        path = bg_jobs.pidmap_path()
+        if not pids and self._pidmap_written is None and not path.exists():
+            self._pidmap_written = want
+            return
+        if bg_jobs.write_own_json(path, want):
+            self._pidmap_written = want
+
+    async def _check_parked_tick(self, name: str, sess: TrackedSession) -> None:
+        """The scan's parked check of one session, and the ``bg_parked``
+        event of a park noticed since the last scan (by this check or by
+        the message gate or the receiver in between)."""
+        if sess.status != Status.GONE and not sess.is_restarting():
+            self.check_parked(sess)
+        job = self._new_parks.pop(name, None)
+        if job and sess.parked_job == job:
+            try:
+                await self.notify_fn(sess, "bg_parked", {"job": job})
+            except Exception:
+                log.warning("Failed to notify bg_parked for %s", name,
+                            exc_info=True)
 
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.
@@ -1004,6 +1155,21 @@ class SessionMonitor:
             except Exception:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
+        # Claude Code background jobs: the registry once for this scan.
+        self._tick_registry = claude_jobs.read_registry()
+        self._tick_registry_read = True
+        try:
+            await self._scan_sessions(now, compact_swept)
+        finally:
+            self._tick_registry = None
+            self._tick_registry_read = False
+        try:
+            self._sync_pidmap()
+        except Exception:
+            log.warning("pid map not written", exc_info=True)
+
+    async def _scan_sessions(self, now: float, compact_swept: set[str]) -> None:
+        """The per-session part of :meth:`_scan`."""
         for name, sess in self.registry.all_sessions().items():
             # A files turn on an idle session that never started (a typed
             # prompt that ran no turn): no file Claude sends can come from
@@ -1033,6 +1199,9 @@ class SessionMonitor:
                 except Exception:
                     log.warning("Failed to settle the model hold for %s",
                                 name, exc_info=True)
+            # Parked on a Claude Code background job: never typed into
+            # (dtach/inject.py's probe reads the field this sets).
+            await self._check_parked_tick(name, sess)
             # A dialog answered "No" at the terminal (roadmap 8.113): Claude
             # Code ends the turn like an interrupt and fires no hook, so
             # only the transcript tells. Checked before the watchdog below,

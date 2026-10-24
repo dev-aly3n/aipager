@@ -722,6 +722,12 @@ class HookReceiver:
         # than this daemon mean an update is installed but not running.
         # Never changes how the datagram is handled.
         self.on_hook_version = None
+        # Claude Code background jobs: ``SessionMonitor.check_parked``,
+        # run once, synchronously, for a datagram of a background worker
+        # whose job is not (yet) linked to its session (D2): the hook may
+        # have seen the park before the monitor's next tick. Wired by
+        # cli/daemon.py; None leaves such datagrams unlinked.
+        self.parked_check = None
 
     async def start(self) -> None:
         try:
@@ -904,6 +910,139 @@ class HookReceiver:
         finally:
             sess.prompt_wait_carry = False
 
+    async def _finalize_failed_turn(self, session_name: str, transcript_path: str,
+                                    sess_ref) -> None:
+        """End the turn that is running, with no Stop to say how: a
+        StopFailure, or the SessionEnd of the linked background job that
+        ran it (D3). Always finalizes (see below)."""
+        carry = self._carry_agent_prompts(session_name)
+        try:
+            # The turn is over, whatever step it was in (see the Stop branch).
+            sess_ref.parent_tool_started_at = None
+            # A turn ended in failure — no Stop is emitted, so we must
+            # finalize here or the session strands in BUSY. Unlike the
+            # Stop handler, StopFailure never carries last_assistant_message,
+            # so the debounce bypass that requires it cannot fire. We always
+            # finalize: call transition() and fall back to get() if the
+            # session was already IDLE (race or duplicate). This is the
+            # exact stranding bug being fixed — do not gate on debounce.
+            #
+            # Snapshot outstanding notes BEFORE anything below (notably
+            # notify_fn's queue drain) can write a new one — see
+            # expire_notes_after_turn_end's docstring for why the
+            # ordering matters (a note absorbed mid-turn must be swept;
+            # a note some LATER turn writes must never be touched by
+            # this one's sweep).
+            pre_notes = list_outstanding_notes(session_name)
+            _sf = self.registry.get(session_name)
+            if _sf is not None:
+                _sf.last_prompt_origin = "telegram"  # fail-closed
+                _sf.pending_tool_started_at = None
+                _sf.compact_started_at = None
+            sess = self.registry.transition(session_name, Status.IDLE)
+            # The newest end of Claude's own turn: a turn it starts
+            # with no hook must come after it (files Claude sends).
+            _ended = self.registry.get(session_name)
+            if _ended is not None:
+                _ended.files_turn_stopped(time.time())
+            if sess is None:
+                # Already IDLE (or debounce blocked) — get the session so
+                # we can still notify. Finalizing must not be skipped.
+                log.info("[%s] Stop while already IDLE (debounced or "
+                         "repeated) — finalizing anyway", session_name)
+                sess = self.registry.get(session_name)
+            if sess is None:
+                return
+
+            # Build summary from transcript only — no last_assistant_message
+            # on StopFailure. An empty summary is acceptable.
+            notify_ctx: dict = {"summary": ""}
+            tracked = self.registry.get(session_name)
+            tp = transcript_path or (tracked.transcript_path if tracked else "")
+            if tp:
+                try:
+                    md = extract_last_response(
+                        tp, since=sess.turn_entered_wall or None,
+                    )
+                    if md and RICH_SUMMARIES and "```" in md:
+                        html_summary = markdown_to_telegram_html(md)
+                        notify_ctx = {
+                            "summary": html_summary,
+                            "html_summary": True,
+                            "raw_md": md,
+                        }
+                    elif md:
+                        notify_ctx = {"summary": md}
+                    elif md == "":
+                        notify_ctx["no_response"] = True
+                except Exception:
+                    log.info("[%s] StopFailure: transcript summary failed",
+                             session_name)
+            log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
+            await self.notify_fn(sess, "idle_prompt", notify_ctx)
+            await expire_notes_after_turn_end(session_name, pre_notes)
+        finally:
+            if carry:
+                await self._end_carry(session_name)
+
+    def _bg_job_linked(self, session_name: str, bg_job) -> bool:
+        """Whether *bg_job* is the job the known session *session_name*
+        is parked on. When it is not, the park is looked for once more
+        (``parked_check``, synchronous): a worker's first hook can come
+        before the monitor's tick has seen the park (D2)."""
+        if not isinstance(bg_job, str):
+            return False
+        sess = self.registry.get(session_name)
+        if sess is None:
+            return False
+        if sess.parked_job == bg_job:
+            return True
+        check = getattr(self, "parked_check", None)
+        if check is None:
+            return False
+        try:
+            check(sess)
+        except Exception:
+            log.warning("[%s] parked check failed", sess.label, exc_info=True)
+            return False
+        return sess.parked_job == bg_job
+
+    def _mark_link_ended(self, job: str) -> None:
+        """Mark *job*'s link file ``"ended": true`` (its worker's
+        SessionEnd arrived); the link itself stays until the session is
+        brought back or ends. Best effort."""
+        from aipager.dtach import bg_jobs
+        try:
+            path = bg_jobs.link_path(job)
+            data = bg_jobs.read_own_json(path)
+            if data is not None and data.get("job") == job and not data.get("ended"):
+                data["ended"] = True
+                bg_jobs.write_own_json(path, data)
+        except Exception:
+            log.debug("link of background job %s not marked ended", job,
+                      exc_info=True)
+
+    def _note_claude_pid(self, sess, raw) -> None:
+        """D1: the pid of the session's own claude, from its own hooks
+        (``CLAUDE_PID``). Kept only when that process runs with the
+        session's own tag (another session's claude does not), and read
+        again only when it changes."""
+        if type(raw) is not int or not 0 < raw < 2 ** 31 or raw == sess.claude_pid:
+            return
+        from aipager import claude_jobs
+        try:
+            if not claude_jobs._pid_tagged(raw, sess.name):
+                log.debug("[%s] claude_pid %d is not this session's claude",
+                          sess.label, raw)
+                return
+            start = claude_jobs._proc_start(raw)
+        except Exception:
+            log.debug("[%s] claude_pid %d not checked", sess.label, raw,
+                      exc_info=True)
+            return
+        sess.claude_pid = raw
+        sess.claude_pid_start = start or 0
+
     async def _on_datagram(self, data: bytes) -> None:
         try:
             msg = json.loads(data)
@@ -960,6 +1099,17 @@ class HookReceiver:
             return
         self._recent_fingerprints[fp] = now_mono
 
+        # Claude Code background jobs (D2): a datagram from a background
+        # worker counts only for the session parked on that worker's job.
+        # Any other one changes nothing: no session is created, stamped or
+        # moved, and its ids are never adopted.
+        bg_job = msg.get("bg_job") or ""
+        if bg_job and not self._bg_job_linked(session_name, bg_job):
+            log.debug("dropping %s from an unlinked background job (session %s)",
+                      event, session_name)
+            report_store.record_counter("bg_job_unlinked")
+            return
+
         if event == "send_files_refused":
             # The PreToolUse hook refused files Claude asked to send (it
             # already told Claude why). For the audit only, and only for a
@@ -999,6 +1149,8 @@ class HookReceiver:
         # Update last activity timestamp (stale detection) + store transcript path
         sess_ref = self.registry.get_or_create(session_name)
         sess_ref.last_hook_at = now_mono
+        if not bg_job:
+            self._note_claude_pid(sess_ref, msg.get("claude_pid"))
         # Per-agent liveness (roadmap 8.22). `last_hook_at` above says the
         # SESSION is alive; it says nothing about WHICH of several running
         # agents is. Every hook event fired inside a subagent carries that
@@ -1038,7 +1190,12 @@ class HookReceiver:
                     order["owner_hook_at"] = now_mono
         elif event not in _NOT_TURN_EVIDENCE and event not in _INTERNAL_HOOK_EVENTS:
             sess_ref.parent_hook_at = now_mono
-        if transcript_path:
+        # Ids and folder (D4): from the session's own claude while it is
+        # not parked, and from the linked job's worker (only linked ones
+        # get here). A parked client's own hooks still name the old copy
+        # of the conversation, which moved into the job.
+        adopt_ids = bool(bg_job) or not sess_ref.parked_job
+        if transcript_path and adopt_ids:
             sess_ref.transcript_path = transcript_path
             # The transcript filename IS Claude Code's session id —
             # exactly what `claude --resume <id>` consumes. Cheap to
@@ -1053,7 +1210,7 @@ class HookReceiver:
         # organizes transcripts by encoded-cwd, so we need it later to
         # launch `claude --resume` from the right place.
         cwd = msg.get("cwd", "")
-        if cwd and cwd != sess_ref.cwd:
+        if cwd and cwd != sess_ref.cwd and adopt_ids:
             sess_ref.cwd = cwd
             self.registry.mark_dirty()
 
@@ -2050,6 +2207,18 @@ class HookReceiver:
                     "tool": tool_name,
                 })
 
+        elif event == "SessionEnd" and bg_job:
+            # D3: the linked job's worker ended (``claude stop``, or the
+            # job finished): the session's own claude is still parked in
+            # its terminal, so the session is not GONE. A turn the job was
+            # running is over.
+            if sess_ref.status in (Status.BUSY, Status.INTERACTIVE):
+                await self._finalize_failed_turn(session_name, transcript_path,
+                                                 sess_ref)
+            self._mark_link_ended(bg_job)
+            log.info("[%s] background job %s ended (reason %s)", sess_ref.label,
+                     bg_job, msg.get("reason") or "unknown")
+
         elif event == "SessionEnd":
             sess = self.registry.get_or_create(session_name)
             sess.parent_tool_started_at = None
@@ -2115,6 +2284,11 @@ class HookReceiver:
         elif event == "SessionStart":
             # SessionStart with source=compact fires after compaction completes
             source = msg.get("source", "")
+            if bg_job and source == "fork":
+                # The linked job's first hook (``←`` forked the
+                # conversation into it): liveness and ids only, recorded
+                # above. A turn that was running goes on in the job.
+                return
             if source != "compact":
                 # A new or resumed conversation: no turn of it runs yet, so
                 # none that files Claude sends may come from (a /clear typed
@@ -2236,75 +2410,7 @@ class HookReceiver:
             return  # no further notification — animation reads cached values
 
         elif event == "StopFailure":
-            carry = self._carry_agent_prompts(session_name)
-            try:
-                # The turn is over, whatever step it was in (see the Stop branch).
-                sess_ref.parent_tool_started_at = None
-                # A turn ended in failure — no Stop is emitted, so we must
-                # finalize here or the session strands in BUSY. Unlike the
-                # Stop handler, StopFailure never carries last_assistant_message,
-                # so the debounce bypass that requires it cannot fire. We always
-                # finalize: call transition() and fall back to get() if the
-                # session was already IDLE (race or duplicate). This is the
-                # exact stranding bug being fixed — do not gate on debounce.
-                #
-                # Snapshot outstanding notes BEFORE anything below (notably
-                # notify_fn's queue drain) can write a new one — see
-                # expire_notes_after_turn_end's docstring for why the
-                # ordering matters (a note absorbed mid-turn must be swept;
-                # a note some LATER turn writes must never be touched by
-                # this one's sweep).
-                pre_notes = list_outstanding_notes(session_name)
-                _sf = self.registry.get(session_name)
-                if _sf is not None:
-                    _sf.last_prompt_origin = "telegram"  # fail-closed
-                    _sf.pending_tool_started_at = None
-                    _sf.compact_started_at = None
-                sess = self.registry.transition(session_name, Status.IDLE)
-                # The newest end of Claude's own turn: a turn it starts
-                # with no hook must come after it (files Claude sends).
-                _ended = self.registry.get(session_name)
-                if _ended is not None:
-                    _ended.files_turn_stopped(time.time())
-                if sess is None:
-                    # Already IDLE (or debounce blocked) — get the session so
-                    # we can still notify. Finalizing must not be skipped.
-                    log.info("[%s] Stop while already IDLE (debounced or "
-                             "repeated) — finalizing anyway", session_name)
-                    sess = self.registry.get(session_name)
-                if sess is None:
-                    return
-
-                # Build summary from transcript only — no last_assistant_message
-                # on StopFailure. An empty summary is acceptable.
-                notify_ctx: dict = {"summary": ""}
-                tracked = self.registry.get(session_name)
-                tp = transcript_path or (tracked.transcript_path if tracked else "")
-                if tp:
-                    try:
-                        md = extract_last_response(
-                            tp, since=sess.turn_entered_wall or None,
-                        )
-                        if md and RICH_SUMMARIES and "```" in md:
-                            html_summary = markdown_to_telegram_html(md)
-                            notify_ctx = {
-                                "summary": html_summary,
-                                "html_summary": True,
-                                "raw_md": md,
-                            }
-                        elif md:
-                            notify_ctx = {"summary": md}
-                        elif md == "":
-                            notify_ctx["no_response"] = True
-                    except Exception:
-                        log.info("[%s] StopFailure: transcript summary failed",
-                                 session_name)
-                log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
-                await self.notify_fn(sess, "idle_prompt", notify_ctx)
-                await expire_notes_after_turn_end(session_name, pre_notes)
-            finally:
-                if carry:
-                    await self._end_carry(session_name)
+            await self._finalize_failed_turn(session_name, transcript_path, sess_ref)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             if event.lower() == "stop":

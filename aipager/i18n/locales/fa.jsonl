@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 شما اجازهٔ استفاده از ربات در این چت را ندارید. از مالک ربات بخواهید شناسهٔ Telegram شما ({user_id}) را با {command} اضافه کند."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 شما اجازهٔ استفاده از این ربات را ندارید. از مالک ربات بخواهید شناسهٔ Telegram شما ({user_id}) را با {command} اضافه کند."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 این ربات برای گفتگو با شما تنظیم نشده. از مالک ربات بخواهید شناسهٔ Telegram شما ({user_id}) را با {command} اضافه کند."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "برای جواب دادن به این، اول <b>{session}</b> را از پس‌زمینهٔ Claude Code برگردانید."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "پیام شما به <b>{session}</b> منتظر می‌ماند تا کسی سشن را از پس‌زمینهٔ Claude Code برگرداند."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "اول <b>{session}</b> را از پس‌زمینهٔ Claude Code برگردانید."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "برای جواب دادن به این، اول {session} را از پس‌زمینهٔ Claude Code برگردانید."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "اول {session} را از پس‌زمینهٔ Claude Code برگردانید."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager این ربات را به سشن‌های Claude Code روی کامپیوتر مالکش وصل می‌کند. از همین‌جا می‌بینید Claude مشغول چه کاری است، به سؤال‌ها و درخواست‌های اجازه‌اش جواب می‌دهید و پیام جدید برایش می‌فرستید. فقط کسانی که مالک اضافه کرده باشد می‌توانند از آن استفاده کنند."}
 {"k": "botdesc.short", "src": "483b3675", "v": "سشن‌های Claude Code را از Telegram کنترل کنید."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ بازگشت"}

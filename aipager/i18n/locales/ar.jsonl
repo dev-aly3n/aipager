@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 ليس مسموحًا لك باستخدام البوت في هذه الدردشة. يمكنك أن تطلب من مالك البوت إضافة معرّف Telegram الخاص بك ({user_id}) عبر {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 ليس مسموحًا لك باستخدام هذا البوت. يمكنك أن تطلب من مالك البوت إضافة معرّف Telegram الخاص بك ({user_id}) عبر {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 هذا البوت غير مهيأ للتحدث معك. يمكنك أن تطلب من مالك البوت إضافة معرّف Telegram الخاص بك ({user_id}) عبر {command}."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "للرد على هذا، يجب أولًا إعادة <b>{session}</b> من خلفية Claude Code."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "تنتظر رسالتك إلى <b>{session}</b> حتى يعيد أحد الجلسة من خلفية Claude Code."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "يجب أولًا إعادة <b>{session}</b> من خلفية Claude Code."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "للرد على هذا، يجب أولًا إعادة {session} من خلفية Claude Code."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "يجب أولًا إعادة {session} من خلفية Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "يربط aipager هذا البوت بجلسات Claude Code على كمبيوتر مالكه. من هنا يمكنك متابعة ما يفعله Claude، والرد على ما يطرحه من أسئلة وطلبات إذن، وإرسال رسائل جديدة إليه. لا يستخدمه إلا من أضافهم المالك."}
 {"k": "botdesc.short", "src": "483b3675", "v": "التحكم في جلسات Claude Code من Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ رجوع"}

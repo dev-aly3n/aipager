@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 你不在这个聊天的允许名单中。请让机器人主人通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 你不在这个机器人的允许名单中。请让机器人主人通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 这个机器人还没有设置为与你对话。请让机器人主人通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "要回答这个，请先把 <b>{session}</b> 从 Claude Code 后台带回来。"}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "你发给 <b>{session}</b> 的消息会一直等着，直到有人把这个会话从 Claude Code 后台带回来。"}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "请先把 <b>{session}</b> 从 Claude Code 后台带回来。"}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "要回答这个，请先把 {session} 从 Claude Code 后台带回来。"}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "请先把 {session} 从 Claude Code 后台带回来。"}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager 把这个机器人连接到其所有者电脑上的 Claude Code 会话。在这里，你可以查看 Claude 正在做什么，回答它的问题和权限请求，并给它发送新消息。只有所有者添加的人才能使用。"}
 {"k": "botdesc.short", "src": "483b3675", "v": "通过 Telegram 控制 Claude Code 会话。"}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ 返回"}

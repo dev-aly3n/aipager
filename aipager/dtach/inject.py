@@ -16,6 +16,7 @@ import shlex
 import shutil
 import signal
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from aipager import claude_launch, claude_resolve, daemon_secrets, instance, perm_modes
@@ -369,6 +370,54 @@ def last_write_at(session: str) -> float:
     return _LAST_WRITE_AT.get(session, 0.0)
 
 
+def _never_parked(_session: str) -> bool:
+    return False
+
+
+# Claude Code background jobs: a session whose own claude moved its
+# conversation into a background job (``←``) is parked, and nothing may be
+# typed into it (text typed there can start a stray background job). The
+# daemon sets this probe to read its session registry (cli/daemon.py), so
+# the registry is the only source of truth and a park loaded from disk is
+# honoured at once; this package never imports the bot or the registry.
+_parked_probe: Callable[[str], bool] = _never_parked
+# Sessions a refused write was already logged for, in this park.
+_PARK_WARNED: set[str] = set()
+
+
+def set_parked_probe(fn: Callable[[str], bool] | None) -> None:
+    """Install *fn* (session name -> parked?) as the parked probe; None
+    puts back the default, which says no session is parked."""
+    global _parked_probe
+    _parked_probe = fn if fn is not None else _never_parked
+
+
+def is_parked(session: str) -> bool:
+    """Whether *session* is parked on a Claude Code background job, as the
+    probe says. A probe that raises counts as parked: refusing a write is
+    safe, typing into a parked session is not."""
+    try:
+        parked = bool(_parked_probe(session))
+    except Exception:  # noqa: BLE001 - fail closed
+        log.warning("parked probe failed for %s", session, exc_info=True)
+        parked = True
+    if not parked:
+        _PARK_WARNED.discard(session)
+    return parked
+
+
+def _refuse_parked(session: str) -> bool:
+    """True (and one warning per park) when *session* is parked: the
+    calling writer then returns False without writing anything."""
+    if not is_parked(session):
+        return False
+    if session not in _PARK_WARNED:
+        _PARK_WARNED.add(session)
+        log.warning("Not typing into %s: it is parked on a Claude Code "
+                    "background job", session)
+    return True
+
+
 async def _await_chord(session: str) -> None:
     """Wait (at most ``_CHORD_WAIT_LIMIT``) while a send-now chord is being
     written to *session*, so no other write lands inside it."""
@@ -395,6 +444,8 @@ async def send_now(session: str) -> bool:
     Cancelled during the gap (daemon shutdown), or with a Ctrl+X write that
     timed out after its byte was delivered, a lone Ctrl+X may be left
     pending in Claude Code's input; the next key then ends that chord."""
+    if _refuse_parked(session):
+        return False
     # Marked before the first await, so a write another path starts from
     # here on waits for the chord instead of landing inside it.
     _CHORD_IN_FLIGHT.add(session)
@@ -402,6 +453,9 @@ async def send_now(session: str) -> bool:
         sock = _sock_path(session)
         lock = _write_lock(session)
         async with lock:
+            # Again under the lock: a park noticed while this waited.
+            if _refuse_parked(session):
+                return False
             mark = _note_write(session)
             ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_X)
         if not ok:
@@ -411,6 +465,8 @@ async def send_now(session: str) -> bool:
         # lock during the gap has counted itself by now, and no write can
         # start between this check and the Ctrl+S.
         async with lock:
+            if _refuse_parked(session):
+                return False
             if _WRITES.get(session) != mark:
                 log.warning("Send-now chord → %s broken by another write; "
                             "Ctrl+S not written", session)
@@ -429,10 +485,14 @@ async def send_keys(session: str, keys: str) -> bool:
 
     `keys` can be a logical name ("Enter", "Down") or raw text.
     """
+    if _refuse_parked(session):
+        return False
     await _await_chord(session)
     seq = KEYS.get(keys, keys)
     sock = _sock_path(session)
     async with _write_lock(session):
+        if _refuse_parked(session):
+            return False
         _note_write(session)
         ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
     if ok:
@@ -450,9 +510,13 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     Escape, a send-now chord's check and Ctrl+S) can land between them; it
     is counted once, for the pair.
     """
+    if _refuse_parked(session):
+        return False
     await _await_chord(session)
     sock = _sock_path(session)
     async with _write_lock(session):
+        if _refuse_parked(session):
+            return False
         _note_write(session)
         ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
         if not ok:
@@ -531,6 +595,8 @@ async def discard_queued_input(session: str, chars: int = 0) -> bool:
     so no prompt's text lands in a half-wiped box. Stops at the first
     failed write and returns False; True once every write went out.
     """
+    if _refuse_parked(session):
+        return False
     await _await_chord(session)
     sock = _sock_path(session)
     kills = KEYS["KillLine"].encode() * DISCARD_KILL_BATCH
@@ -540,6 +606,8 @@ async def discard_queued_input(session: str, chars: int = 0) -> bool:
                     session, chars, DISCARD_MAX_PRESSES - DISCARD_MIN_PRESSES)
     writes = presses // DISCARD_KILL_BATCH
     async with _write_lock(session):
+        if _refuse_parked(session):
+            return False
         _note_write(session)
         ok, _ = await _run([_DTACH, "-p", sock], stdin=KEYS["Escape"].encode())
         if not ok:
@@ -572,10 +640,14 @@ async def press_mode_cycle(session: str, presses: int) -> bool:
     failed write and returns False; ``presses <= 0`` writes nothing."""
     if presses <= 0:
         return True
+    if _refuse_parked(session):
+        return False
     await _await_chord(session)
     sock = _sock_path(session)
     seq = KEYS["BackTab"].encode()
     async with _write_lock(session):
+        if _refuse_parked(session):
+            return False
         _note_write(session)
         for i in range(presses):
             if i:

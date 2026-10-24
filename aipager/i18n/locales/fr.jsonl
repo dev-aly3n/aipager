@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Vous n'êtes pas parmi les personnes autorisées dans cette discussion. Demandez au propriétaire du bot d'ajouter votre identifiant Telegram ({user_id}) avec {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Vous n'êtes pas parmi les personnes autorisées de ce bot. Demandez au propriétaire du bot d'ajouter votre identifiant Telegram ({user_id}) avec {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Ce bot n'est pas configuré pour vous parler. Demandez au propriétaire du bot d'ajouter votre identifiant Telegram ({user_id}) avec {command}."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Pour répondre, ramenez d'abord <b>{session}</b> de l'arrière-plan de Claude Code."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "Votre message pour <b>{session}</b> attend que quelqu'un ramène la session de l'arrière-plan de Claude Code."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Ramenez d'abord <b>{session}</b> de l'arrière-plan de Claude Code."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Pour répondre, ramenez d'abord {session} de l'arrière-plan de Claude Code."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Ramenez d'abord {session} de l'arrière-plan de Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager relie ce bot aux sessions Claude Code de l'ordinateur de son propriétaire. D'ici, vous voyez ce que fait Claude, vous répondez à ses questions et à ses demandes d'autorisation, et vous lui envoyez de nouveaux messages. Seules les personnes ajoutées par le propriétaire peuvent l'utiliser."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Contrôlez des sessions Claude Code depuis Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Retour"}

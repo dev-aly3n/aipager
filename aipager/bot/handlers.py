@@ -52,6 +52,8 @@ from aipager.bot import (
     session_parity,
 )
 from aipager.bot.session_ops import (
+    BG_HELD_NOTICE,
+    BG_REFUSED_PARKED,
     MODEL_DEFAULT_SAVED,
     MODEL_UNCONFIRMED,
     await_model_change,
@@ -798,6 +800,11 @@ async def _download_with_retry(media, save_path: Path, *, display_name: str) -> 
 class CommandHandlersMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
+    #: ``SessionMonitor.check_parked`` (wired by cli/daemon.py): the gate
+    #: looks for a Claude Code background-job park again before each
+    #: message, so one noticed between two ticks still holds it.
+    parked_check = None
+
     async def _hold_for_open_dialog(self, update: Update, sess, text: str,
                                     reply_context: str = "") -> object:
         """Queue `text` instead of injecting it while a dialog is open,
@@ -835,8 +842,22 @@ class CommandHandlersMixin:
         if it is discarded first (:mod:`aipager.bot.reactions`).
         """
         held_reason = ""
-        for_dialog = sess.dialog_is_open() or sess.dialog_release_pending()
-        if for_dialog:
+        # Parked on a Claude Code background job, looked for again now
+        # (the park can be newer than the monitor's last tick): ahead of
+        # every other reason, since typed into the parked client the text
+        # can start a stray background job. Held until it is brought back.
+        check = self.parked_check
+        if check is not None:
+            try:
+                check(sess)
+            except Exception:
+                log.warning("[%s] parked check failed", sess.label, exc_info=True)
+        for_park = bool(sess.parked_job)
+        for_dialog = (not for_park
+                      and (sess.dialog_is_open() or sess.dialog_release_pending()))
+        if for_park:
+            held_reason = "parked"
+        elif for_dialog:
             # A dialog is open (or was just answered and the messages held
             # for it are still going out, ahead of this one). Keyed to the
             # dialog, never to a time limit: typed now, the text and its
@@ -881,7 +902,30 @@ class CommandHandlersMixin:
             log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
         if for_dialog:
             await self._tell_held_for_dialog(update, sess)
+        if for_park:
+            await self._tell_held_for_park(update, sess)
         return True
+
+    async def _tell_held_for_park(self, update: Update, sess) -> None:
+        """Tell the sender of a message held for a Claude Code background
+        job why it waits: once per person per park (``park_told``; later
+        messages only get the 👀), as a reply to the held message.
+        Best-effort."""
+        person = driver_id_from_update(update) or 0
+        if person in sess.park_told:
+            return
+        sess.park_told.add(person)  # claimed before the send's await
+        chat_id = calling_chat_id(update)
+        if chat_id is None:
+            return
+        try:
+            await send_text(self._app.bot, chat_id=chat_id,
+                            text=i18n.for_update(update).html(
+                                BG_HELD_NOTICE, session=sess.label),
+                            parse_mode="HTML",
+                            reply_to_message_id=update.message.message_id)
+        except Exception:
+            log.debug("[%s] parked-hold notice failed", sess.label, exc_info=True)
 
     async def _tell_held_for_dialog(self, update: Update, sess) -> None:
         """Tell the sender of a message held behind an open dialog why it
@@ -2889,6 +2933,13 @@ class CommandHandlersMixin:
         # R2): refused while a turn runs or a prompt is open, not held.
         # Claude Code runs /model mid-turn rather than after it.
         is_model_switch = command_text.startswith("/model ")
+        if is_model_switch and sess.parked_job:
+            # Never held for a parked session either: it would be typed
+            # after the bring-back with none of the checks below.
+            await reply_text(update.message,
+                             tr.html(BG_REFUSED_PARKED, session=sess.label),
+                             parse_mode="HTML")
+            return
         if is_model_switch:
             refusal = model_switch_refusal(sess)
             if refusal is not None:

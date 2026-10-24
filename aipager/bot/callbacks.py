@@ -239,11 +239,26 @@ TOAST_PERMS_STALE = Msg("toast.perms_stale", "This card is out of date - nothing
                         note="Pop-up: the mode confirm's record is gone")
 
 
+def _parked(sess) -> bool:
+    """Whether *sess* is parked on a Claude Code background job (nothing
+    may be typed into it): its field, or the terminal guard's probe."""
+    return bool(getattr(sess, "parked_job", "")) or inject.is_parked(sess.name)
+
+
+def _parked_toast(person, sess) -> str:
+    """The pop-up for an action that would type into a parked session."""
+    from aipager.bot.session_ops import BG_TOAST_REFUSED_PARKED  # import cycle
+    return person.text(BG_TOAST_REFUSED_PARKED, session=sess.label)
+
+
 def _switch_refused(outcome, tr=None) -> str:
     """Why a mode switch did not happen, for the reasons left after
     still_stopping and launch_failed, which say their own (in *tr*'s
     language, English when None)."""
     tr = tr or i18n.get("en")
+    if outcome.reason == "parked":
+        from aipager.bot.session_ops import BG_REFUSED_PARKED  # import cycle
+        return tr.html(BG_REFUSED_PARKED, session=outcome.label)
     if outcome.reason == "already_restarting":
         return tr.html(MODE_REFUSED_RESTARTING, session=outcome.label)
     return tr.html(MODE_REFUSED_NOT_RUNNING, session=outcome.label)
@@ -1177,6 +1192,11 @@ class CallbackDispatchMixin:
                 # nothing is typed, the button stays.
                 await self._safe_answer(query, person.text(TOAST_MODEL_CHECKING))
                 return
+            if _parked(sess):
+                # Parked on a Claude Code background job: nothing is typed,
+                # the button stays for after the bring-back.
+                await self._safe_answer(query, _parked_toast(person, sess))
+                return
             if sess.dialog_is_open() or mixed_sender_note_outstanding(sess, update):
                 # Retry buttons outlive the error they were attached to, so
                 # this one can be tapped long after the session has moved on
@@ -1261,6 +1281,9 @@ class CallbackDispatchMixin:
             if sess.model_hold_active():
                 # As for Retry: typed during a /model's check, it is lost.
                 await self._safe_answer(query, person.text(TOAST_MODEL_CHECKING))
+                return
+            if _parked(sess):
+                await self._safe_answer(query, _parked_toast(person, sess))
                 return
             # The tapper is the sender: a sender-less note carried an
             # unknown sender's rights and, lingering (a local command no
@@ -2408,7 +2431,17 @@ class CallbackDispatchMixin:
         """Refuse a tap whose keys could land in another dialog (roadmap
         8.120): with more than one prompt open, keys go only to the one
         Claude Code certainly shows first. A refused tap types nothing,
-        changes nothing and keeps its buttons. True when refused."""
+        changes nothing and keeps its buttons. True when refused.
+
+        Also refused, whatever is open, while the session is parked on a
+        Claude Code background job: no key goes to a parked client. An
+        answer through the permission hook (no keys) is not asked here."""
+        if _parked(sess):
+            log.info("[%s] tap refused: parked on a background job", sess.label)
+            from aipager.bot.session_ops import BG_TOAST_ANSWER_REFUSED
+            await self._safe_answer(query, person.text(BG_TOAST_ANSWER_REFUSED,
+                                                       session=sess.label))
+            return True
         if not isinstance(perm, dict) or not perm:
             return False
         verdict = sess.keys_verdict(perm, time.monotonic())

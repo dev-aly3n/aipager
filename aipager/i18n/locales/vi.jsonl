@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Bạn không có trong danh sách được cho phép dùng bot trong chat này. Hãy nhờ chủ bot thêm ID Telegram của bạn ({user_id}) qua {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Bạn không có trong danh sách được cho phép dùng bot này. Hãy nhờ chủ bot thêm ID Telegram của bạn ({user_id}) bằng {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bot này chưa được thiết lập để nói chuyện với bạn. Hãy nhờ chủ bot thêm ID Telegram của bạn ({user_id}) qua {command}."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Để trả lời, đưa <b>{session}</b> về lại từ chế độ chạy nền của Claude Code trước."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "Tin nhắn bạn gửi <b>{session}</b> sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Đưa <b>{session}</b> về lại từ chế độ chạy nền của Claude Code trước."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Để trả lời, đưa {session} về lại từ chế độ chạy nền của Claude Code trước."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Đưa {session} về lại từ chế độ chạy nền của Claude Code trước."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager kết nối bot này với các phiên Claude Code trên máy tính của chủ sở hữu. Từ đây bạn có thể xem Claude đang làm gì, trả lời câu hỏi và yêu cầu cấp quyền của nó, và gửi tin nhắn mới cho nó. Chỉ những người được chủ sở hữu thêm vào mới dùng được."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Điều khiển các phiên Claude Code từ Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Quay lại"}

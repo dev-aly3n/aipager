@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 이 채팅의 허용 목록에 없어요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 이 봇의 허용 목록에 없어요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "답하려면 먼저 <b>{session}</b> 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "<b>{session}</b> 세션에 보낸 메시지는 누군가 이 세션을 Claude Code 백그라운드에서 다시 가져올 때까지 기다려요."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "먼저 <b>{session}</b> 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "답하려면 먼저 {session} 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "먼저 {session} 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager는 이 봇을 소유자 컴퓨터의 Claude Code 세션에 연결해요. 여기서 Claude가 하는 일을 보고, Claude의 질문과 권한 요청에 답하고, 새 메시지를 보낼 수 있어요. 소유자가 추가한 사람만 쓸 수 있어요."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Telegram에서 Claude Code 세션을 제어해요."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ 뒤로"}

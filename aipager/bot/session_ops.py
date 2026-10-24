@@ -200,6 +200,38 @@ RESUME_LAST_RESPONSE = Msg("sess.resume_last_response",
                            note="Under a resumed session: the start of its last answer",
                            eg={"preview": "All tests pass."})
 
+# Claude Code background jobs: a session whose conversation moved into a
+# background job (``←`` in Claude Code) is parked, and nothing is typed into
+# it until someone brings it back (aipager/claude_jobs.py).
+BG_HELD_NOTICE = Msg(
+    "bg.held_notice",
+    "Your message to <b>{session}</b> waits until someone brings it back from "
+    "Claude Code's background.",
+    note="HTML. Reply to a message held because the session's conversation moved into "
+         "a Claude Code background job; sent once per person",
+    eg={"session": "x1"})
+BG_REFUSED_PARKED = Msg(
+    "bg.refused_parked", "Bring <b>{session}</b> back from Claude Code's background first.",
+    note="HTML. A command (compact, model, mode, /now, Retry) refused because the "
+         "session's conversation is in a Claude Code background job",
+    eg={"session": "x1"})
+BG_TOAST_REFUSED_PARKED = Msg(
+    "bg.toast_refused_parked", "Bring {session} back from Claude Code's background first.",
+    note="Pop-up or plain line: the same refusal as bg.refused_parked",
+    eg={"session": "x1"})
+BG_ANSWER_REFUSED = Msg(
+    "bg.answer_refused",
+    "Bring <b>{session}</b> back from Claude Code's background to answer this.",
+    note="HTML. A prompt answer aipager would type was not typed: the session's "
+         "conversation is in a Claude Code background job",
+    eg={"session": "x1"})
+BG_TOAST_ANSWER_REFUSED = Msg(
+    "bg.toast_answer_refused",
+    "Bring {session} back from Claude Code's background to answer this.",
+    note="Pop-up: a tap on a prompt's button typed nothing, because the session's "
+         "conversation is in a Claude Code background job",
+    eg={"session": "x1"})
+
 CARD_DENIED_TERMINAL = Msg(
     "card.denied_terminal", "🚫 <b>{session}</b> · Denied in the terminal",
     note="The busy card after a permission was refused at the computer's own terminal",
@@ -298,8 +330,9 @@ class ClearQueueOutcome:
 class CompactOutcome:
     """Result of :meth:`SessionOpsMixin._compact_session_core`.
 
-    ``reason`` is one of ``"not_live"``, ``"queue_full"``,
-    ``"send_failed"``, ``"queued"``, ``"sent"``.
+    ``reason`` is one of ``"not_live"``, ``"parked"`` (on a Claude Code
+    background job), ``"queue_full"``, ``"send_failed"``, ``"queued"``,
+    ``"sent"``.
     """
 
     ok: bool
@@ -311,8 +344,9 @@ class CompactOutcome:
 class ModelSwitchOutcome:
     """Result of :meth:`SessionOpsMixin._switch_model_core`.
 
-    ``reason`` is one of ``"not_live"``, ``"busy"``, ``"prompt_open"``,
-    ``"unknown"``, ``"switch_pending"``, ``"send_failed"``, ``"sent"``.
+    ``reason`` is one of ``"not_live"``, ``"parked"`` (on a Claude Code
+    background job), ``"busy"``, ``"prompt_open"``, ``"unknown"``,
+    ``"switch_pending"``, ``"send_failed"``, ``"sent"``.
     ``detail`` is the operator-facing reason for a refusal.
     ``previous_model`` is the statusline's model name at the moment
     ``/model`` was typed — what :func:`await_model_change` compares
@@ -1103,6 +1137,13 @@ class SessionOpsMixin:
         await reply_text(update.message, shown(i18n.for_update(update), NEEDS_ADMIN_REPLY))
         await self._react(update, reactions.NOT_DELIVERED)
 
+    @staticmethod
+    def _parked(sess) -> bool:
+        """Whether *sess* is parked on a Claude Code background job: its
+        own field, or the terminal guard's probe (dtach/inject.py) that
+        every write asks too."""
+        return bool(sess.parked_job) or inject.is_parked(sess.name)
+
     async def _inject_prompt(self, sess, text: str, reply_context: str = "",
                              *, msg_id: int | None = None,
                              chat_id: int | None = None,
@@ -1180,7 +1221,15 @@ class SessionOpsMixin:
         never less, so this trades away Retry's permission elevation in
         the common single-user case rather than risk lending an
         unrelated sender's ``bypass_safety`` to it.
+
+        A session parked on a Claude Code background job takes nothing:
+        False, before any note is written (text typed there can start a
+        stray background job).
         """
+        if self._parked(sess):
+            log.info("[%s] Not sending a prompt: parked on a Claude Code "
+                     "background job", sess.label)
+            return False
         explicit_driver_user_id = driver_user_id
         # Roadmap 8.73 (D-A): the sender's role is the one in the chat
         # this message came from, else the session's own chat; with
@@ -2650,6 +2699,10 @@ class SessionOpsMixin:
             return RestartOutcome(ok=True, reason="already", label=label, mode=target)
         if sess.mode_switch_restarts(target):
             return await self._perms_switch_core(sess, target)
+        if self._parked(sess):
+            # Shift+Tab would go to a client parked on a background job.
+            return RestartOutcome(ok=False, reason="parked", label=label,
+                                  mode=target, in_place=True)
         if sess.dialog_is_open():
             return RestartOutcome(ok=False, reason="dialog_open", label=label,
                                   mode=target, in_place=True)
@@ -2715,6 +2768,20 @@ class SessionOpsMixin:
         """
         from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
 
+        if self._parked(sess):
+            # Parked on a Claude Code background job: what waits is held
+            # here, never typed, so nothing is wiped in the terminal.
+            dropped = len(sess.pending_queue)
+            if not dropped:
+                return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)
+            await self._mark_not_delivered(
+                sess, reactions.held_entries(sess.pending_queue))
+            sess.pending_queue.clear()
+            await self._drop_dialog_hold(sess)
+            self.registry.mark_dirty()
+            log.info("[%s] queue cleared while parked (dropped %d)",
+                     sess.label, dropped)
+            return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)
         # Settle first: an absorption no tick has read yet is 👍, not 🤷.
         await self._settle_queued_targets(sess)
         notes = list_outstanding_notes(sess.name)
@@ -2773,6 +2840,8 @@ class SessionOpsMixin:
         label = sess.label
         if sess.status not in (Status.BUSY, Status.IDLE):
             return CompactOutcome(ok=False, reason="not_live", label=label)
+        if self._parked(sess):
+            return CompactOutcome(ok=False, reason="parked", label=label)
         checking = sess.model_hold_active()
         if sess.status == Status.BUSY or checking:
             # Behind a running turn, or a typed /model still checking its
@@ -2806,6 +2875,11 @@ class SessionOpsMixin:
         answer in the terminal.
         """
         label = sess.label
+        if self._parked(sess):
+            return ModelSwitchOutcome(
+                ok=False, reason="parked", label=label,
+                detail=i18n.get("en").text(BG_TOAST_REFUSED_PARKED, session=label),
+            )
         refusal = model_switch_refusal(sess)
         if refusal is not None:
             return ModelSwitchOutcome(

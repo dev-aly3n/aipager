@@ -610,6 +610,9 @@ class SendNowMixin:
         prompt (D4), no chord already going out. There is NO
         await between the typing check and the chord's start, so a prompt
         injection cannot begin in between."""
+        if sess.parked_job or inject.is_parked(sess.name):
+            # Parked on a Claude Code background job: no key goes to it.
+            return SendNowOutcome("parked", sess.label)
         if target_msg_id is None:
             candidates = list(sess.queued_targets)
             nothing = "nothing"
@@ -708,6 +711,11 @@ class SendNowMixin:
                                                 tapped_id)
             return
         outcome = core.result()
+        if outcome.result == "parked":
+            from aipager.bot.session_ops import BG_TOAST_REFUSED_PARKED  # import cycle
+            await self._safe_answer(query, person.text(BG_TOAST_REFUSED_PARKED,
+                                                       session=sess.label))
+            return
         toast = {
             "sent": TOAST_SENT,
             "taken": TOAST_TAKEN,
@@ -802,6 +810,13 @@ class SendNowMixin:
             await reply_text(update.message, i18n.for_update(update).text(REPLY_NO_SESSION))
             return
         outcome = await self._send_now_core(sess, None)
+        if outcome.result == "parked":
+            from aipager.bot.session_ops import BG_REFUSED_PARKED  # import cycle
+            await reply_text(update.message,
+                             i18n.for_update(update).html(BG_REFUSED_PARKED,
+                                                          session=sess.label),
+                             parse_mode="HTML")
+            return
         if outcome.result == "sent":
             self._drop_all_queued_lines(sess)
         await reply_text(update.message, i18n.for_update(update).text({

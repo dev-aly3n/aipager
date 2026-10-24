@@ -887,6 +887,32 @@ class TrackedSession:
     # `is_resuming()`, which the ageing sweep honours. Transient: a
     # daemon restart means no resume is in flight any more.
     resuming_until: float = 0.0
+    # Claude Code background jobs (aipager/claude_jobs.py). The session's
+    # own claude moved its conversation into background job
+    # `parked_job` (``←``): it stays in the terminal, parked, and aipager
+    # never types into it (dtach/inject.py's parked probe reads this
+    # field). Set and cleared by the session monitor's ``check_parked``
+    # from Claude's session registry. Persisted, with the job's
+    # conversation id, when it was noticed (wall clock) and the job the
+    # park notice was sent for, so a daemon restart neither types into a
+    # parked session nor repeats the notice.
+    parked_job: str = ""
+    parked_job_session_id: str = ""
+    parked_since: float = 0.0
+    park_notified_job: str = ""
+    # The pid of the session's own claude (its hooks forward CLAUDE_PID),
+    # and that process's start time when known (0: unknown). Transient:
+    # found again from the registry after a restart.
+    claude_pid: int = 0
+    claude_pid_start: int = 0
+    # The senders already told their message waits for the park
+    # (handlers' parked hold); emptied when ``parked_job`` changes.
+    # Transient.
+    park_told: set = field(default_factory=set, repr=False)
+    # After a bring-back from the background: the held messages may go
+    # out (``bg_release``), and when that happened. Transient.
+    bg_release_pending: bool = False
+    bg_released_at: float = 0.0
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute
@@ -3474,6 +3500,52 @@ def _clean_line_deletes(raw: object) -> list[list[int]]:
     return out
 
 
+def _restore_parked(sess: TrackedSession, sd: dict) -> None:
+    """The saved Claude Code background-job park of *sess* (see
+    ``TrackedSession.parked_job``). A job id aipager could not name a file
+    after restores as no park, with its other fields; a missing key (a
+    file an older aipager wrote) restores as none."""
+    from aipager.dtach import bg_jobs  # stdlib only, as the hook needs
+    job = sd.get("parked_job")
+    if (isinstance(job, str) and bg_jobs._JOB_ID.match(job)
+            and job not in bg_jobs._RESERVED_JOBS):
+        sess.parked_job = job
+        job_sid = sd.get("parked_job_session_id")
+        sess.parked_job_session_id = job_sid if isinstance(job_sid, str) else ""
+        try:
+            since = float(sd.get("parked_since") or 0.0)
+        except (TypeError, ValueError):
+            since = 0.0
+        sess.parked_since = since if 0.0 < since <= time.time() else 0.0
+    notified = sd.get("park_notified_job")
+    if isinstance(notified, str) and bg_jobs._JOB_ID.match(notified):
+        sess.park_notified_job = notified
+
+
+def _drop_bg_files(name: str, sess: TrackedSession | None) -> None:
+    """Best effort: remove the link file of the job *sess* is parked on
+    and *name*'s entries in the pid map (aipager/dtach/bg_jobs.py), so a
+    worker of that job no longer counts for a session that ended. The
+    parked fields stay: ``session_end`` still reads them. Never raises."""
+    try:
+        from aipager.dtach import bg_jobs
+        if sess is not None and sess.parked_job:
+            link = bg_jobs.link_path(sess.parked_job)
+            data = bg_jobs.read_own_json(link)
+            if data is None or data.get("session") in (None, name):
+                bg_jobs.remove_own(link)
+        path = bg_jobs.pidmap_path()
+        pidmap = bg_jobs.read_own_json(path)
+        pids = pidmap.get("pids") if isinstance(pidmap, dict) else None
+        if isinstance(pids, dict):
+            kept = {pid: rec for pid, rec in pids.items()
+                    if not (isinstance(rec, dict) and rec.get("session") == name)}
+            if len(kept) != len(pids):
+                bg_jobs.write_own_json(path, {"pids": kept})
+    except Exception:  # noqa: BLE001 - cleanup never blocks the caller
+        log.debug("background-job files of %s not removed", name, exc_info=True)
+
+
 class SessionRegistry:
     """Single source of truth for all tracked Claude sessions."""
 
@@ -4043,6 +4115,11 @@ class SessionRegistry:
                 clear_session_files(sess.name, keep_triggers=True)
             except Exception:
                 pass
+            # Its background-job link and pid-map entry: no worker counts
+            # for an ended session (its own claude is gone).
+            _drop_bg_files(sess.name, sess)
+            sess.claude_pid = 0
+            sess.claude_pid_start = 0
 
         log.info("[%s] %s → %s", sess.label, old.name, new_status.name)
         self._dirty = True
@@ -4257,6 +4334,7 @@ class SessionRegistry:
                 clear_session_files(name)
             except Exception:
                 pass
+            _drop_bg_files(name, sess)
 
     def migrate_chat(self, old: int, new: int) -> list[str]:
         """Telegram upgraded the group *old* to the supergroup *new*
@@ -4355,6 +4433,11 @@ class SessionRegistry:
         # ids already copied (see TrackedSession.files_turn_open).
         "files_turn_open", "files_turn_wall", "files_transcript",
         "files_sent_ids", "files_turn_closed_wall",
+        # Claude Code background jobs: a session parked on one stays
+        # parked (never typed into) across a restart, and its notice is
+        # not sent twice.
+        "parked_job", "parked_job_session_id", "parked_since",
+        "park_notified_job",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -4728,6 +4811,7 @@ class SessionRegistry:
                     sd.get("answer_delivered_wall") or 0.0)
             except (TypeError, ValueError):
                 sess.answer_delivered_wall = 0.0
+            _restore_parked(sess, sd)
             # Roadmap 8.101: the card's clock anchor, only with its card.
             # An unusable value restores as 0.0 (the adoption then counts
             # from itself).

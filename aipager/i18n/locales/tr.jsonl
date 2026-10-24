@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Bu sohbette izin verilenler listesinde değilsin. Botun sahibinden Telegram kimliğini ({user_id}) {command} ile eklemesini iste."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Bu botu kullanmasına izin verilenler listesinde değilsin. Botun sahibinden Telegram kimliğini ({user_id}) {command} ile eklemesini iste."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bu bot seninle konuşacak şekilde ayarlanmamış. Botun sahibinden Telegram kimliğini ({user_id}) {command} ile eklemesini iste."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Yanıtlamak için <b>{session}</b> oturumunu Claude Code arka planından geri getir."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "<b>{session}</b> oturumuna gönderdiğin mesaj, biri oturumu Claude Code arka planından geri getirene kadar bekliyor."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Önce <b>{session}</b> oturumunu Claude Code arka planından geri getir."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Yanıtlamak için {session} oturumunu Claude Code arka planından geri getir."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Önce {session} oturumunu Claude Code arka planından geri getir."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager bu botu, sahibinin bilgisayarındaki Claude Code oturumlarına bağlar. Buradan Claude'un ne yaptığını takip edebilir, sorularını ve izin isteklerini yanıtlayabilir, ona yeni mesajlar gönderebilirsin. Botu yalnızca sahibinin eklediği kişiler kullanabilir."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Claude Code oturumlarını Telegram'dan yönet."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Geri"}

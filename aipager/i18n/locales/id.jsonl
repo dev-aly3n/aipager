@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Kamu tidak diizinkan memakai bot di chat ini. Minta pemilik bot menambahkan ID Telegram-mu ({user_id}) lewat {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Kamu tidak diizinkan memakai bot ini. Minta pemilik bot menambahkan ID Telegram-mu ({user_id}) dengan {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bot ini belum diatur untuk bicara denganmu. Minta pemilik bot menambahkan ID Telegram-mu ({user_id}) lewat {command}."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Untuk menjawab, kembalikan dulu <b>{session}</b> dari latar belakang Claude Code."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "Pesanmu untuk <b>{session}</b> menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Kembalikan dulu <b>{session}</b> dari latar belakang Claude Code."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Untuk menjawab, kembalikan dulu {session} dari latar belakang Claude Code."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Kembalikan dulu {session} dari latar belakang Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager menghubungkan bot ini ke sesi Claude Code di komputer pemiliknya. Dari sini kamu bisa melihat apa yang sedang dikerjakan Claude, menjawab pertanyaan dan permintaan izinnya, dan mengirim pesan baru kepadanya. Hanya orang yang sudah ditambahkan pemilik yang bisa memakainya."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Kendalikan sesi Claude Code dari Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Kembali"}

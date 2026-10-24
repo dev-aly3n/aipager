@@ -237,6 +237,9 @@ COUNTER_KEYS = ("watchdog_restart", "watchdog_refresh", "interactive_demoted",
                 "tg_400_parse_entities", "tg_400_too_long", "tg_400_other",
                 "tg_404_rich", "tg_5xx", "tg_network", "tg_429_small",
                 "hook_cap_hit", "hook_fail_closed", "hook_error", "dtach_failed",
+                # A Claude Code background worker's datagram for a job no
+                # session is parked on (dropped).
+                "bg_job_unlinked",
                 # Environment errors: counted, never a fingerprint or an offer.
                 "tg_retry_after", "tg_conflict", "tg_forbidden", "tg_invalid_token",
                 "env_network", "env_timeout", "env_cancelled", "env_disk_full",

@@ -175,6 +175,17 @@ def _chat_tr(chat_id):
     return i18n.for_chat(chat_id)
 
 
+def _parked_response(tr, label: str):
+    """409 for an action that would type into a session parked on a
+    Claude Code background job: bring it back first."""
+    from aiohttp import web
+
+    from aipager.bot.session_ops import BG_TOAST_REFUSED_PARKED
+    return web.json_response(
+        {"error": "parked", "detail": tr.text(BG_TOAST_REFUSED_PARKED, session=label)},
+        status=409)
+
+
 def _model_refusals() -> dict:
     """A model switch's refusal code -> its sentence (sessions.py's)."""
     from aipager.miniapp import sessions
@@ -2344,6 +2355,8 @@ class MiniAppServer:
             return refused
 
         outcome = await self.bot._mode_switch_core(sess, target)
+        if outcome.reason == "parked":
+            return _parked_response(tr, outcome.label)
         if outcome.reason == "already":
             return web.json_response({"status": "already", "label": outcome.label,
                                       "mode": target})
@@ -2437,6 +2450,8 @@ class MiniAppServer:
 
         outcome = await self.bot._compact_session_core(sess, driver_user_id=user_id)
         tr = self._viewer_tr(request, user_id)
+        if outcome.reason == "parked":
+            return _parked_response(tr, outcome.label)
         if outcome.reason == "not_live":
             return web.json_response({
                 "error": "not_live", "detail": tr.text(_NOT_RUNNING),
@@ -2545,6 +2560,8 @@ class MiniAppServer:
             sess, model, driver_user_id=user_id,
         )
         if not outcome.ok:
+            if outcome.reason == "parked":
+                return _parked_response(tr, outcome.label)
             if outcome.reason == "send_failed":
                 return web.json_response({
                     "error": "send_failed",

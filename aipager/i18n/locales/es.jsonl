@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 No estás entre las personas permitidas en este chat. Pide al propietario del bot que añada tu ID de Telegram ({user_id}) con {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 No estás entre las personas permitidas de este bot. Pide al propietario del bot que añada tu ID de Telegram ({user_id}) con {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Este bot no está configurado para hablar contigo. Pide al propietario del bot que añada tu ID de Telegram ({user_id}) con {command}."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Para responder, trae <b>{session}</b> de vuelta del segundo plano de Claude Code."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "Tu mensaje para <b>{session}</b> espera hasta que alguien traiga la sesión de vuelta del segundo plano de Claude Code."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Primero trae <b>{session}</b> de vuelta del segundo plano de Claude Code."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Para responder, trae {session} de vuelta del segundo plano de Claude Code."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Primero trae {session} de vuelta del segundo plano de Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager conecta este bot con las sesiones de Claude Code en la computadora de su propietario. Desde aquí puedes ver lo que hace Claude, responder a sus preguntas y solicitudes de permiso, y enviarle mensajes nuevos. Solo pueden usarlo las personas que el propietario añadió."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Controla sesiones de Claude Code desde Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Atrás"}

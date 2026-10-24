@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Du stehst in diesem Chat nicht auf der Liste der erlaubten Personen. Bitte den Besitzer des Bots, deine Telegram-ID ({user_id}) mit {command} hinzuzufügen."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Du stehst nicht auf der Liste der erlaubten Personen dieses Bots. Bitte den Besitzer des Bots, deine Telegram-ID ({user_id}) mit {command} hinzuzufügen."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Dieser Bot ist nicht für dich eingerichtet. Bitte den Besitzer des Bots, deine Telegram-ID ({user_id}) mit {command} hinzuzufügen."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Hol <b>{session}</b> aus dem Hintergrund von Claude Code zurück, um das zu beantworten."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "Deine Nachricht an <b>{session}</b> wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Hol <b>{session}</b> zuerst aus dem Hintergrund von Claude Code zurück."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Hol {session} aus dem Hintergrund von Claude Code zurück, um das zu beantworten."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Hol {session} zuerst aus dem Hintergrund von Claude Code zurück."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager verbindet diesen Bot mit Sitzungen von Claude Code auf dem Computer seines Besitzers. Hier kannst du verfolgen, was Claude gerade tut, seine Fragen und Berechtigungsanfragen beantworten und ihm neue Nachrichten schicken. Nur Personen, die der Besitzer hinzugefügt hat, können ihn nutzen."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Steuere Sitzungen von Claude Code über Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Zurück"}

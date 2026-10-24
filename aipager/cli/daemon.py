@@ -296,6 +296,22 @@ async def _finish_auth_check(bot, provenance) -> None:
         log.debug("startup auth check failed", exc_info=True)
 
 
+def _wire_parked_state(registry, hook_receiver, session_monitor, bot) -> None:
+    """Claude Code background jobs: the session registry is the one source
+    of truth for "parked". dtach/inject.py asks it before every write (a
+    park loaded from disk is honoured at once), and the hook receiver and
+    the message gate look for a park again through the monitor's check."""
+    from aipager.dtach import inject
+
+    def parked(name: str) -> bool:
+        sess = registry.get(name)
+        return bool(sess is not None and sess.parked_job)
+
+    inject.set_parked_probe(parked)
+    hook_receiver.parked_check = session_monitor.check_parked
+    bot.parked_check = session_monitor.check_parked
+
+
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import (
@@ -337,6 +353,7 @@ async def _run_daemon(bot_username: str) -> None:
     # the owner is told once per hook version.
     hook_receiver.on_hook_version = bot.updates.note_hook_version
     session_monitor = SessionMonitor(registry, bot.notify)
+    _wire_parked_state(registry, hook_receiver, session_monitor, bot)
 
     # Resolved BEFORE bot.start(), because start() ends by sending the
     # first persistent keyboard and that keyboard has to know whether

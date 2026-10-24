@@ -729,13 +729,36 @@ class AuthMixin:
         sess.pending_permission = None
         await self._auto_deny_notice(sess, tool_info, triggerer)
 
+    async def _say_answer_refused(self, sess: TrackedSession) -> None:
+        """Tell the session's chat a prompt answer was not typed because
+        the session is parked on a Claude Code background job. Never
+        raises."""
+        from aipager import i18n
+        from aipager.bot.session_ops import BG_ANSWER_REFUSED  # import cycle
+        try:
+            await send_text(self._app.bot, resolve_chat_id(sess),
+                            i18n.for_sess(sess).html(BG_ANSWER_REFUSED,
+                                                     session=sess.label),
+                            parse_mode="HTML")
+        except Exception:
+            log.debug("[%s] answer-refused notice not sent", sess.label,
+                      exc_info=True)
+
     async def _type_auto_deny(self, sess: TrackedSession, tool_name: str) -> bool:
         """The Deny button's own keys, into the dialog on top: Down
         ``_DENY_OVERSHOOT`` times, then Enter, so the cursor stops on the
         last row ("No") however many rows the dialog has. A single Down
         stopped on row 2 of a three-row dialog ("Yes, and don't ask again"
         or "switch to auto mode"): a tool the rules deny was allowed."""
-        from aipager.bot.callbacks import _DENY_OVERSHOOT
+        from aipager.bot.callbacks import _DENY_OVERSHOOT, _parked
+        if _parked(sess):
+            # Parked on a Claude Code background job: no key goes to the
+            # parked client. The chat is told the prompt needs the session
+            # back first.
+            log.warning("[%s] auto-deny of %s not typed: parked on a "
+                        "background job", sess.label, tool_name)
+            await self._say_answer_refused(sess)
+            return False
         ok = True
         for _ in range(_DENY_OVERSHOOT):
             if not await inject.send_keys(sess.name, "Down"):

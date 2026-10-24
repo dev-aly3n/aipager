@@ -2313,6 +2313,11 @@ class NotifyMixin:
         """
         if not sess.pending_queue:
             return
+        if sess.parked_job:
+            # Parked on a Claude Code background job (a linked job's turn
+            # end comes here): typed now, the message would go to the
+            # parked client. It stays held until the session is back.
+            return
         if sess.model_check_running():
             # A typed /model may still be checking its model, and text typed
             # now is lost (a turn whose answer went out after the /model).
@@ -2518,6 +2523,15 @@ class NotifyMixin:
         # ── settle a dialog hold (the session monitor's backstop) ──
         # The work is done by `notify` itself, after every event.
         if event in ("dialog_hold_settle", "model_hold_settle"):
+            return
+
+        # ── a session moved into a Claude Code background job ──
+        # The monitor saw the park. Its notice and button come with the
+        # bring-back (later); until then only the log says so, and the
+        # event never reaches the status branches below.
+        if event == "bg_parked":
+            log.info("[%s] parked on background job %s", sess.label,
+                     context.get("job") or "?")
             return
 
         # ── the mode a hook reported, while a mode switch waits on it ──
@@ -3589,6 +3603,21 @@ class NotifyMixin:
                     await self._mark_not_delivered(sess, held)
                     log.info("[%s] session ended with a dialog open: %d "
                              "held message(s) dropped", label, len(held))
+                if sess.parked_job and not sess.is_restarting():
+                    # Its conversation was in a Claude Code background job
+                    # and the parked client ended: nothing will bring the
+                    # held messages to it now. Dropped, with a 🤷.
+                    held = reactions.held_entries(sess.pending_queue)
+                    sess.pending_queue.clear()
+                    log.info("[%s] session ended while parked on background "
+                             "job %s: %d held message(s) dropped", label,
+                             sess.parked_job, len(held))
+                    sess.parked_job = ""
+                    sess.parked_job_session_id = ""
+                    sess.parked_since = 0.0
+                    sess.park_told.clear()
+                    self.registry.mark_dirty()
+                    await self._mark_not_delivered(sess, held)
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:

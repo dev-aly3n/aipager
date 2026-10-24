@@ -149,6 +149,11 @@
 {"k": "auth.refuse.scope", "src": "a54afba9", "v": "🚫 Тебя нет в списке разрешённых в этом чате. Попроси владельца бота добавить твой Telegram ID ({user_id}) командой {command}."}
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Тебя нет в списке разрешённых для этого бота. Попроси владельца бота добавить твой Telegram ID ({user_id}) командой {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Этот бот не настроен общаться с тобой. Попроси владельца бота добавить твой Telegram ID ({user_id}) командой {command}."}
+{"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Чтобы ответить, верни <b>{session}</b> из фонового режима Claude Code."}
+{"k": "bg.held_notice", "src": "8311ad6a", "v": "Твоё сообщение для <b>{session}</b> подождёт, пока кто-нибудь не вернёт сессию из фонового режима Claude Code."}
+{"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Сначала верни <b>{session}</b> из фонового режима Claude Code."}
+{"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Чтобы ответить, верни {session} из фонового режима Claude Code."}
+{"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Сначала верни {session} из фонового режима Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager связывает этого бота с сессиями Claude Code на компьютере его владельца. Здесь ты можешь следить за тем, что делает Claude, отвечать на его вопросы и запросы разрешений и отправлять ему новые сообщения. Пользоваться им могут только люди, которых добавил владелец."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Управляй сессиями Claude Code из Telegram."}
 {"k": "btn.rep.back", "src": "dc381ae2", "v": "‹ Назад"}
