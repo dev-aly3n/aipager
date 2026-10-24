@@ -346,3 +346,13 @@ def test_the_listing_is_matched_by_job_id_only(cfg, agents, run_async):
         {"kind": "interactive", "sessionId": X, "status": "busy"},
         {"id": "bbbbbbbb", "kind": "background", "status": "busy"}])
     assert run_async(claude_jobs.job_state("aaaaaaaa")) == "gone"
+
+
+def test_the_command_line_says_unknown_for_a_partial_registry(cfg, monkeypatch):
+    """``job_state_sync`` (``aipager session --resume``): the same rule."""
+    monkeypatch.setattr(claude_jobs, "REGISTRY_NAMES_LIMIT", 1)
+    reg(cfg, 1000, kind="interactive", sessionId=W)
+    reg(cfg, 1001, kind="interactive", sessionId=X)
+    monkeypatch.setattr(claude_jobs, "_subprocess_run",
+                        lambda *a, **k: SimpleNamespace(returncode=1, stdout=b"", stderr=b""))
+    assert claude_jobs.job_state_sync("aaaaaaaa") == "unknown"

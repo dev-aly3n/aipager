@@ -645,3 +645,14 @@ def test_the_park_source_survives_a_restart(cfg, proc, mon, tmp_state_file, monk
     loaded.load()
     again = loaded.get(NAME)
     assert (again.parked_source, again.parked_from_session_id) == ("transcript", SID)
+
+
+def test_the_daemons_async_check_during_a_scan_sees_a_new_park(cfg, proc, mon, run_async,
+                                                               monkeypatch):
+    """The check the daemon wires (reads off the loop): also afresh."""
+    registry, monitor, notify, sess = mon
+
+    async def gate(s):
+        return await monitor.check_parked_async(s)
+
+    assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch, gate) is True

@@ -1163,3 +1163,29 @@ def test_a_halt_that_cannot_wait_out_a_bring_back_says_so(world, run_async):
         "blocked work may still be running there.")
     polls = [c for c in world.calls if c == ("sleep", session_ops._HALT_WAIT_POLL)]
     assert len(polls) == int(session_ops._HALT_WAIT_SECONDS / session_ops._HALT_WAIT_POLL)
+
+
+def test_a_release_event_while_the_bring_back_runs_is_kept_for_its_end(world, run_async,
+                                                                      monkeypatch):
+    """``bg_release`` reaching notify while the bring-back still runs is
+    not dropped: it is remembered, and nothing is typed yet."""
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("held", 31)
+    sess.arm_bg_release()
+    sess.relaunch_in_flight = True
+    run_async(world.bot.notify(sess, "bg_release", {}))
+    assert typed == [] and sess.bg_start_seen is True and sess.bg_release_pending is True
+
+
+def test_the_backstop_waits_while_a_bring_back_runs(world, run_async, monkeypatch):
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.parked_job = ""
+    sess.queue_prompt("held", 31)
+    sess.arm_bg_release()
+    sess.relaunch_in_flight = True
+    sess.bg_released_at = time.monotonic() - (claude_jobs.RELEASE_BACKSTOP + 1)
+    monitor = SessionMonitor(world.bot.registry, world.bot.notify)
+    run_async(monitor._check_parked_tick(NAME, sess))
+    assert typed == [] and sess.bg_release_pending is True
