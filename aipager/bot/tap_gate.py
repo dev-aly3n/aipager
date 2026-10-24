@@ -154,6 +154,10 @@ PREFIX_CAPS: tuple[tuple[str, Cap], ...] = (
     # Problem reports: owner only, re-checked inside report_flow (no
     # capability says "owner", so a member's tap must reach that check).
     ("rp:", VIEW),
+    # A Claude Code background job's buttons, keyed by the job they were
+    # shown for (bgback<job>, bgforce<job>; the bare verbs are above).
+    ("bgback", PROMPT),
+    ("bgforce", PROMPT),
 )
 
 

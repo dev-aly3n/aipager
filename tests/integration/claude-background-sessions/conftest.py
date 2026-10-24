@@ -289,6 +289,10 @@ class Stack:
 
     def tap(self, verb, *, user_id=12345):
         from aipager.bot import session_parity
+        sess = self.registry.get(NAME)
+        if verb in ("bgback", "bgforce") and sess is not None and sess.parked_job:
+            # The button carries the job it was shown for (review rev-iter1-011).
+            verb += sess.parked_job[:8]
         q = MagicMock()
         q.from_user = MagicMock(id=user_id)
         q.message = MagicMock(chat=MagicMock(id=CHAT), chat_id=CHAT, message_id=77)

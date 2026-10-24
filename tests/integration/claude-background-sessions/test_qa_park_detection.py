@@ -103,7 +103,7 @@ def test_the_notice_carries_bring_it_back_now(stack):
     qa.park(stack)
     stack.tick()
     calls = qa.calls_with_text(stack, "moved to Claude Code's background")
-    assert [qa.buttons(c) for c in calls] == [["bgback"]]
+    assert [qa.buttons(c) for c in calls] == [["bgback" + stack.ids.JOB]]
 
 
 def test_the_notice_button_reads_bring_it_back_now(stack):

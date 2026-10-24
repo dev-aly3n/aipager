@@ -808,23 +808,51 @@ def _restart_outcome_text(outcome, by: str = "", tr=None) -> str:
 
 # ---- Claude Code background jobs -----------------------------------------
 
+#: How much of the job id a bring-back button carries: enough to tell a
+#: button from an earlier park (job ids are 8 characters today).
+BG_JOB_KEY_LEN = 8
+_BG_JOB_KEY = re.compile(r"^[A-Za-z0-9_-]{1,8}$")
+
+
+def _bg_key(sess: TrackedSession) -> str:
+    """What ``bgback``/``bgforce`` carry after the verb: the first
+    :data:`BG_JOB_KEY_LEN` characters of the job *sess* is parked on
+    (``bgforce<job>``), so a button left from an earlier park, or a
+    question days old, never acts on the park of now. Empty for a session
+    not parked (an ended one, whose conversation a job holds)."""
+    return sess.parked_job[:BG_JOB_KEY_LEN] if sess.parked_job else ""
+
+
+def parse_bg_verb(action: str) -> tuple[str, str | None] | None:
+    """``(verb, job)`` for a bring-back button's action (``job`` None for
+    a bare one), or None when *action* is not one."""
+    for verb in ("bgforce", "bgback"):
+        if action.startswith(verb):
+            rest = action[len(verb):]
+            if not rest:
+                return verb, None
+            return (verb, rest) if _BG_JOB_KEY.match(rest) else None
+    return None
+
+
 def bg_park_keyboard(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
                      tr=None) -> InlineKeyboardMarkup:
-    """The park notice's one button: "Bring it back now" (``bgback``)."""
+    """The park notice's one button: "Bring it back now" (``bgback<job>``)."""
     tr = tr or i18n.for_chat(chat_id)
     return InlineKeyboardMarkup([[InlineKeyboardButton(
         tr.text(_ops.BG_BTN_BRING_BACK),
-        callback_data=session_cb(bot, chat_id, sess, "bgback"))]])
+        callback_data=session_cb(bot, chat_id, sess, f"bgback{_bg_key(sess)}"))]])
 
 
 def bg_busy_keyboard(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
                      tr=None) -> InlineKeyboardMarkup:
-    """The busy question's buttons: "Stop and bring back" (``bgforce``)
-    and "Leave it" (``bgleave``)."""
+    """The busy question's buttons: "Stop and bring back"
+    (``bgforce<job>``) and "Leave it" (``bgleave``)."""
     tr = tr or i18n.for_chat(chat_id)
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton(tr.text(_ops.BG_BTN_STOP_AND_BRING),
-                             callback_data=session_cb(bot, chat_id, sess, "bgforce")),
+        InlineKeyboardButton(
+            tr.text(_ops.BG_BTN_STOP_AND_BRING),
+            callback_data=session_cb(bot, chat_id, sess, f"bgforce{_bg_key(sess)}")),
         InlineKeyboardButton(tr.text(_ops.BG_BTN_LEAVE),
                              callback_data=session_cb(bot, chat_id, sess, "bgleave")),
     ]])
@@ -839,26 +867,36 @@ async def _drop_keyboard(query) -> None:
         log.debug("dropping a background-job card's buttons failed", exc_info=True)
 
 
-async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: TrackedSession,
-                         action: str, chat_id, user_id, shared, person) -> None:
-    """``bgback`` (bring it back; asks when the job is busy), ``bgforce``
-    (stop the job and bring it back) and ``bgleave`` (leave it running).
-    Each is re-checked like Restart at tap time
-    (``_bring_back_refusal``). For an ended session whose conversation a
-    background job holds, the first two resume it (R2)."""
+async def _bg_tap_refused(bot: "TelegramBot", query, sess: TrackedSession, chat_id,
+                          user_id, person) -> bool:
+    """Restart's check for a background-job button, at tap time: True
+    (and the tapper told why) when *user_id* may not use it here."""
     refusal = bot._bring_back_refusal(sess, user_id, chat_id)
     if refusal == "prompt":
         await bot._safe_answer(query, person.text(TOAST_CANT_RESTART))
-        return
+        return True
     if refusal == "foreign":
         await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
-        return
+        return True
     if refusal:
         from aipager.bot.sibling_text import shown as shown_text
         await bot._safe_answer(query, shown_text(person, refusal), show_alert=True)
-        return
-    if action == "bgleave":
-        await _edit(query, shared.html(_ops.BG_LEFT, session=sess.label), None)
+        return True
+    return False
+
+
+async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: TrackedSession,
+                         action: str, chat_id, user_id, shared, person,
+                         job: str | None = None) -> None:
+    """``bgback`` (bring it back; asks when the job is busy) and
+    ``bgforce`` (stop the job and bring it back); ``bgleave`` (leave it
+    running) is the dispatcher's. Each is re-checked like Restart at tap time
+    (``_bring_back_refusal``). For an ended session whose conversation a
+    background job holds, the first two resume it (R2). On a live session
+    they act only on the park they were shown for (*job*, the first
+    characters of its id): any other is out of date ("not in the
+    background")."""
+    if await _bg_tap_refused(bot, query, sess, chat_id, user_id, person):
         return
     force = action == "bgforce"
     if sess.status == Status.GONE:
@@ -870,7 +908,10 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
         await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
                              query=query, sess=sess, force=force)
         return
-    if not sess.parked_job:
+    if (not sess.parked_job or job is None
+            or sess.parked_job[:BG_JOB_KEY_LEN] != job):
+        # Not parked, or parked on another job than the button's: a
+        # "Stop and bring back" days old must not stop today's job.
         await bot._safe_answer(query, person.text(_ops.BG_TOAST_NOT_PARKED,
                                                   session=sess.label))
         await _drop_keyboard(query)
@@ -1590,7 +1631,8 @@ async def handle_callback(
             or (action.startswith("restartok") and action[9:].isdigit())
             or (action.startswith("modeask") and action[7:].isdigit())
             or (action.startswith("modeauto") and action[8:].isdigit())
-            or (action.startswith("modefull") and action[8:].isdigit())):
+            or (action.startswith("modefull") and action[8:].isdigit())
+            or parse_bg_verb(action) is not None):
         return False
 
     # The card is the chat's; a pop-up is the tapper's.
@@ -1879,9 +1921,14 @@ async def handle_callback(
         card_owner.release(bot, chat_id, _tapped_id(query))
         return True
 
-    if action in ("bgback", "bgforce", "bgleave"):
-        await _handle_bg_tap(bot, update, query, sess, action, chat_id, user_id,
-                             shared, person)
+    if action == "bgleave":
+        if not await _bg_tap_refused(bot, query, sess, chat_id, user_id, person):
+            await _edit(query, shared.html(_ops.BG_LEFT, session=sess.label), None)
+        return True
+    bg = parse_bg_verb(action)
+    if bg is not None:
+        await _handle_bg_tap(bot, update, query, sess, bg[0], chat_id, user_id,
+                             shared, person, job=bg[1])
         return True
 
     if action == "restart-confirm":

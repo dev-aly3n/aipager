@@ -187,6 +187,12 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # The /mode card's third switch (Full access, 2026-10-11): the same
     # turn key; "_:sx:<idx>:modefull" + 16 digits is ~33 bytes.
     "modefull{sess.turn_key}",
+    # session_parity.py's Claude Code background-job buttons (review
+    # rev-iter1-011): the first 8 characters of the parked job's id
+    # (`_bg_key`, sliced to BG_JOB_KEY_LEN), never a session name:
+    # "_:sx:<idx>:bgforce" + 8 characters is ~27 bytes.
+    "bgback{_bg_key(sess)}",
+    "bgforce{_bg_key(sess)}",
 })
 
 
@@ -781,10 +787,15 @@ def test_the_background_job_buttons_are_built_through_session_cb():
     session only through ``session_cb`` (so the guard above covers them),
     and the longest of their verbs still leaves the short form far inside
     the cap."""
+    from types import SimpleNamespace
+
     from aipager.bot import session_parity
     src = (AIPAGER_ROOT / "bot" / "session_parity.py").read_text()
-    for verb in ("bgback", "bgforce", "bgleave"):
-        assert f'session_cb(bot, chat_id, sess, "{verb}")' in src, verb
-    # `_:sx:<idx>:<verb>` with a five-digit index
-    assert len(f"_:sx:99999:{max(('bgback', 'bgforce', 'bgleave'), key=len)}") <= 64
+    for verb in ("bgback", "bgforce"):
+        assert f'session_cb(bot, chat_id, sess, f"{verb}{{_bg_key(sess)}}")' in src, verb
+    assert 'session_cb(bot, chat_id, sess, "bgleave")' in src
+    # `_:sx:<idx>:<verb><job key>` with a five-digit index
+    key = "x" * session_parity.BG_JOB_KEY_LEN
+    assert len(f"_:sx:99999:bgforce{key}".encode()) <= 64
     assert {"bgback", "bgforce", "bgleave"} <= session_parity._SESSION_ACTIONS
+    assert session_parity._bg_key(SimpleNamespace(parked_job="y" * 64)) == "y" * len(key)

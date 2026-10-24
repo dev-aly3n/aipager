@@ -108,6 +108,9 @@ def _stop_fails(stack, monkeypatch, how):
 
 def _tap(stack, verb, *, user=12345, chat=None):
     chat = stack.ids.CHAT if chat is None else chat
+    if verb in ("bgback", "bgforce") and stack.sess.parked_job:
+        # The button carries the job it was shown for (review rev-iter1-011).
+        verb += stack.sess.parked_job[:8]
     q = MagicMock()
     q.from_user = MagicMock(id=user)
     q.message = MagicMock(chat=MagicMock(id=chat), chat_id=chat, message_id=77)

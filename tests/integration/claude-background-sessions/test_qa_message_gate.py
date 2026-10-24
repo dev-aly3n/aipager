@@ -222,7 +222,7 @@ def test_the_question_offers_stop_and_bring_back_or_leave_it(stack, mk_update):
     _msg(stack, mk_update, "carry on", 41)
     stack.run_spawned()
     calls = qa.calls_with_text(stack, "is still working in Claude Code's background")
-    assert [qa.buttons(c) for c in calls] == [["bgforce", "bgleave"]]
+    assert [qa.buttons(c) for c in calls] == [["bgforce" + stack.ids.JOB, "bgleave"]]
 
 
 def test_a_busy_job_asks_each_sender_once(team, mk_update):
@@ -458,7 +458,8 @@ def test_a_button_tap_racing_the_auto_bring_back_brings_it_back_once(stack, mk_u
     q.edit_message_reply_markup = AsyncMock()
     u = MagicMock(callback_query=q, effective_chat=MagicMock(id=stack.ids.CHAT),
                   effective_user=MagicMock(id=12345))
-    stack.run(session_parity.handle_callback(stack.bot, u, q, stack.ids.NAME, "bgback"))
+    stack.run(session_parity.handle_callback(stack.bot, u, q, stack.ids.NAME,
+                                             "bgback" + stack.ids.JOB))
     stack.run_spawned()
     assert (qa.stops(stack), stack.kinds()) == ([["stop", stack.ids.JOB]], ["kill", "launch"])
 
@@ -479,7 +480,8 @@ def test_a_button_tap_racing_the_auto_bring_back_still_delivers_the_message(
     q.edit_message_reply_markup = AsyncMock()
     u = MagicMock(callback_query=q, effective_chat=MagicMock(id=stack.ids.CHAT),
                   effective_user=MagicMock(id=12345))
-    stack.run(session_parity.handle_callback(stack.bot, u, q, stack.ids.NAME, "bgback"))
+    stack.run(session_parity.handle_callback(stack.bot, u, q, stack.ids.NAME,
+                                             "bgback" + stack.ids.JOB))
     stack.run_spawned()
     qa.relaunched_start(stack)
     assert [t.endswith("carry on") for t in stack.typed] == [True]
@@ -519,7 +521,8 @@ def test_stop_and_bring_back_releases_the_held_messages_in_order(stack, mk_updat
     q.edit_message_reply_markup = AsyncMock()
     u = MagicMock(callback_query=q, effective_chat=MagicMock(id=stack.ids.CHAT),
                   effective_user=MagicMock(id=12345))
-    stack.run(session_parity.handle_callback(stack.bot, u, q, stack.ids.NAME, "bgforce"))
+    stack.run(session_parity.handle_callback(stack.bot, u, q, stack.ids.NAME,
+                                             "bgforce" + stack.ids.JOB))
     assert _drain(stack, 2) == ["one", "two"]
 
 

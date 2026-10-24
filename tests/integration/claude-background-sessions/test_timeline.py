@@ -92,7 +92,7 @@ def test_the_park_is_followed_from_the_arrow_to_the_message_that_brings_it_back(
     assert len(notices) == 1
     assert notices[0].kwargs["text"] == EN.html(
         _msg("BG_PARK_NOTICE"), session=ids.LABEL)
-    assert _buttons(notices[0]) == ["bgback"]
+    assert _buttons(notices[0]) == ["bgback" + ids.JOB]
 
     # 4. The moved turn ends in the job: the worker's Stop finishes it.
     stack.hook(hook_event_name="Stop", bg_job=ids.JOB, session_id=ids.JS,
@@ -149,7 +149,7 @@ def test_the_button_on_a_busy_job_asks_then_stops_it(stack):
     assert q.edit_message_text.await_args.args[0] == question
     kb = q.edit_message_text.await_args.kwargs["reply_markup"]
     assert [b.callback_data.rsplit(":", 1)[1] for row in kb.inline_keyboard
-            for b in row] == ["bgforce", "bgleave"]
+            for b in row] == ["bgforce" + ids.JOB, "bgleave"]
     assert stack.claude.runs == [] and stack.kinds() == []
 
     # Leave it: nothing happens.

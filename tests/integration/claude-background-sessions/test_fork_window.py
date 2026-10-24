@@ -69,7 +69,7 @@ def test_a_message_while_the_moved_turn_runs_asks(stack, mk_update):
 def test_the_button_right_after_the_park_asks(stack):
     """An unforced tap in the moment: the question, never a stop."""
     _fresh_park(stack)
-    q = stack.tap("bgback")
+    q = stack.tap("bgback")              # the button's own job (Stack.tap)
     assert qa.stops(stack) == []
     texts = [c.args[0] if c.args else c.kwargs.get("text", "")
              for c in q.edit_message_text.await_args_list]

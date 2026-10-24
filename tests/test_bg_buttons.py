@@ -129,7 +129,7 @@ def test_a_busy_job_asks_each_sender_once(chat, mk_update, run_async):
     assert len(asked) == 1
     assert asked[0].kwargs["reply_to_message_id"] == 31
     buttons = [b for row in asked[0].kwargs["reply_markup"].inline_keyboard for b in row]
-    assert [b.callback_data.rsplit(":", 1)[1] for b in buttons] == ["bgforce", "bgleave"]
+    assert [b.callback_data.rsplit(":", 1)[1] for b in buttons] == [f"bgforce{JOB}", "bgleave"]
     _send(world, mk_update, run_async, "three", msg_id=33, user_id=777)
     _run_spawned(world, run_async)
     assert _texts(world).count(question) == 2, "another sender is asked too"
@@ -195,7 +195,7 @@ def test_one_park_notice_per_job(world, run_async):
     assert len(notices) == 1 and notices[0].kwargs["chat_id"] == CHAT
     button = notices[0].kwargs["reply_markup"].inline_keyboard[0][0]
     assert button.text == "↩️ Bring it back now"
-    assert button.callback_data.rsplit(":", 1)[1] == "bgback"
+    assert button.callback_data.rsplit(":", 1)[1] == f"bgback{JOB}"
     assert sess.park_notified_job == JOB
     run_async(world.bot.notify(sess, "bg_parked", {"job": JOB}))
     assert len(_notices(world)) == 1, "not on the next tick"
@@ -248,6 +248,11 @@ def test_the_buttons_need_prompt(verb):
     assert verb in session_parity._SESSION_ACTIONS
 
 
+@pytest.mark.parametrize("verb", [f"bgback{JOB}", f"bgforce{JOB}"])
+def test_the_keyed_buttons_need_prompt(verb):
+    assert tap_gate.required_capability(NAME, verb) is tap_gate.PROMPT
+
+
 def _query(chat_id=CHAT, user_id=12345):
     q = MagicMock()
     q.from_user = MagicMock(id=user_id)
@@ -286,14 +291,14 @@ def core(world):
 
 
 def test_bring_back_now_brings_it_back_unforced(world, core, run_async):
-    q = _tap(world, run_async, "bgback")
+    q = _tap(world, run_async, f"bgback{JOB}")
     core.assert_awaited_once_with(world.sess, force=False)
     assert _answers(q)[0][0] == "Bringing x back…"
     q.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 
 def test_stop_and_bring_back_forces(world, core, run_async):
-    _tap(world, run_async, "bgforce")
+    _tap(world, run_async, f"bgforce{JOB}")
     core.assert_awaited_once_with(world.sess, force=True)
 
 
@@ -304,7 +309,7 @@ def test_leave_it_runs_no_core(world, core, run_async):
     assert q.edit_message_text.await_args.args[0] == EN.html(BG_LEFT, session="x")
 
 
-@pytest.mark.parametrize("verb", ["bgback", "bgforce", "bgleave"])
+@pytest.mark.parametrize("verb", [f"bgback{JOB}", f"bgforce{JOB}", "bgleave"])
 def test_a_role_held_to_its_root_gets_an_alert(world, core, run_async, monkeypatch, verb):
     from aipager import member_root
     monkeypatch.setattr(member_root, "relaunch_refusal",
@@ -315,7 +320,7 @@ def test_a_role_held_to_its_root_gets_an_alert(world, core, run_async, monkeypat
     q.edit_message_text.assert_not_awaited()
 
 
-@pytest.mark.parametrize("verb", ["bgback", "bgforce", "bgleave"])
+@pytest.mark.parametrize("verb", [f"bgback{JOB}", f"bgforce{JOB}", "bgleave"])
 def test_another_chats_tap_is_refused(world, core, run_async, verb):
     q = _tap(world, run_async, verb, chat_id=OTHER_CHAT)
     core.assert_not_awaited()
@@ -324,23 +329,23 @@ def test_another_chats_tap_is_refused(world, core, run_async, verb):
 
 def test_someone_who_may_not_prompt_is_refused(world, core, run_async):
     world.bot._can_prompt_user = MagicMock(return_value=False)
-    q = _tap(world, run_async, "bgforce")
+    q = _tap(world, run_async, f"bgforce{JOB}")
     core.assert_not_awaited()
     assert _answers(q)[0][0] == "You can't restart this session."
 
 
 def test_a_busy_job_turns_the_card_into_the_question(world, core, run_async):
     core.return_value = RestartOutcome(ok=False, reason="bg_busy", label="x")
-    q = _tap(world, run_async, "bgback")
+    q = _tap(world, run_async, f"bgback{JOB}")
     text, kb = q.edit_message_text.await_args.args[0], q.edit_message_text.await_args.kwargs
     assert text == EN.html(BG_BUSY_QUESTION, session="x")
     buttons = [b for row in kb["reply_markup"].inline_keyboard for b in row]
-    assert [b.callback_data.rsplit(":", 1)[1] for b in buttons] == ["bgforce", "bgleave"]
+    assert [b.callback_data.rsplit(":", 1)[1] for b in buttons] == [f"bgforce{JOB}", "bgleave"]
 
 
 def test_a_session_no_longer_parked_says_so(world, core, run_async):
     world.sess.parked_job = ""
-    q = _tap(world, run_async, "bgback")
+    q = _tap(world, run_async, f"bgback{JOB}")
     core.assert_not_awaited()
     assert _answers(q)[0][0] == "x is not in Claude Code's background."
 
@@ -356,7 +361,7 @@ def test_on_an_ended_session_the_buttons_resume_it(world, core, run_async, verb,
 
 def test_a_real_tap_brings_it_back(world, run_async):
     """Through the real core: stop, kill, launch, one "is back"."""
-    q = _tap(world, run_async, "bgback")
+    q = _tap(world, run_async, f"bgback{JOB}")
     assert world.sess.parked_job == "" and world.runs()[0] == ["stop", JOB]
     assert _texts(world).count(EN.html(BG_BACK, session="x")) == 1
     q.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
@@ -370,7 +375,7 @@ def test_restart_confirm_of_a_busy_parked_session_asks(world, run_async):
     assert text == EN.html(BG_BUSY_QUESTION, session="x")
     kb = q.edit_message_text.await_args.kwargs["reply_markup"]
     assert [b.callback_data.rsplit(":", 1)[1] for row in kb.inline_keyboard
-            for b in row] == ["bgforce", "bgleave"]
+            for b in row] == [f"bgforce{JOB}", "bgleave"]
     assert world.calls == [] and sess.parked_job == JOB
 
 
@@ -378,7 +383,42 @@ def test_the_callback_data_fits_for_a_long_name(world):
     long_name = "claude-" + "a" * 50 + "__g1001234567890"
     sess = world.bot.registry.get_or_create(long_name)
     sess.label = "a" * 50
-    for verb in ("bgback", "bgforce", "bgleave"):
+    for verb in ("bgback", "bgforce", "bgleave", f"bgforce{'z' * 8}"):
         data = session_parity.session_cb(world.bot, CHAT, sess, verb)
         assert len(data.encode()) <= 64, data
 
+
+
+# ---- review rev-iter1-011: a button acts only on the park it was shown for -------------
+
+@pytest.mark.parametrize("verb", ["bgforce", "bgforce0f0f0f0f", "bgback", "bgback0f0f0f0f"])
+def test_a_button_from_another_park_is_out_of_date(world, core, run_async, verb):
+    """A "Stop and bring back" from an earlier park (another job), or one
+    that names no job at all, never stops the job of now."""
+    q = _tap(world, run_async, verb)
+    core.assert_not_awaited()
+    assert _answers(q)[0][0] == "x is not in Claude Code's background."
+    q.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
+    assert world.sess.parked_job == JOB
+
+
+def test_the_question_of_an_earlier_park_does_not_stop_a_new_one(world, run_async):
+    """Through the real core: the busy question of park A, tapped once the
+    session is parked on job B."""
+    world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+    q = _tap(world, run_async, f"bgback{JOB}")
+    kb = q.edit_message_text.await_args.kwargs["reply_markup"]
+    force_verb = kb.inline_keyboard[0][0].callback_data.rsplit(":", 1)[1]
+    assert force_verb == f"bgforce{JOB}"
+    world.sess.parked_job = "cd34ef56"
+    q2 = _tap(world, run_async, force_verb)
+    assert world.calls == [], "nothing stopped"
+    assert _answers(q2)[0][0] == "x is not in Claude Code's background."
+
+
+@pytest.mark.parametrize("action, parsed", [
+    ("bgback", ("bgback", None)), ("bgforce", ("bgforce", None)),
+    ("bgbackab12cd34", ("bgback", "ab12cd34")), ("bgforceab12cd34", ("bgforce", "ab12cd34")),
+    ("bgforceab12cd34x", None), ("bgback../x", None), ("bgleave", None)])
+def test_the_bring_back_verbs_are_read_strictly(action, parsed):
+    assert session_parity.parse_bg_verb(action) == parsed
