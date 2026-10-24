@@ -1220,10 +1220,21 @@ async def _handle_ready_callback(
             await _rerender(note=tr.text(NOTE_MODE_NOT_SWITCHED, session=sess.label))
             return
         outcome = await bot._mode_switch_core(sess, target)
+        if getattr(outcome, "reason", "") == "bg_busy":
+            # A busy Claude Code background job in the way of the restart:
+            # the card becomes the question, with its buttons.
+            from aipager.bg_text import BG_BUSY_QUESTION
+            from aipager.bot import session_parity  # import cycle
+            await _edit_at(bot, chat_id, msg_id,
+                           tr.html(BG_BUSY_QUESTION, session=sess.label),
+                           session_parity.bg_busy_keyboard(bot, chat_id, sess, tr))
+            return
         if not outcome.ok:
+            from aipager.bg_text import bg_outcome_text
             err = getattr(outcome, "err", "")
-            await _rerender(note=(tr.text(NOTE_MODE_FAILED_ERR, error=err) if err
-                                  else tr.text(NOTE_MODE_FAILED)))
+            bg = bg_outcome_text(tr, outcome, sess.label)
+            await _rerender(note=bg or (tr.text(NOTE_MODE_FAILED_ERR, error=err) if err
+                                        else tr.text(NOTE_MODE_FAILED)))
             return
         await _rerender(changed=(tr.text(CHANGED_MODE, mode=Safe(tr.text(mode_label(target))),
                                          person=Command(by))

@@ -2024,7 +2024,7 @@ class CommandHandlersMixin:
                 note = tr.html(MODE_INITIALIZING, session=sess.label)
             else:
                 note = callbacks_mod._switch_refused(outcome, tr)
-            text, kb = self._mode_card(chat_id, sess, note)
+            text, kb = callbacks_mod._switch_card(self, chat_id, sess, outcome, note, tr)
             card_id = await show(text, kb)
             if outcome.reason == "sent":
                 mode_switch.attach_reply(sess, card_chat, card_id, "mode_card", by)

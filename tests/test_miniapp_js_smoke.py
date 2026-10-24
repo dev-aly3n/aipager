@@ -1842,6 +1842,8 @@ def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):
     ("bg_busy_leave_it", "ok: Leave it closes the question and sends nothing"),
     ("bg_restart_busy_asks",
      "ok: a busy job's restart asks in the app, then restart with force"),
+    ("bg_perms_busy_asks",
+     "ok: a busy job's mode switch asks in the app, then the same mode with force"),
 ])
 def test_session_page_scenarios(node_bin, tmp_path, scenario, expected):
     from aipager.miniapp.static import INDEX_HTML
@@ -1877,13 +1879,21 @@ _DETAIL_MUTANTS = [
         '      if (false &&',
         "bg_busy_asks_in_app", id="bg-busy-asks"),
     pytest.param(
-        '      onConfirm: function () { runDetailAction(label, action, null, true); }',
-        '      onConfirm: function () { runDetailAction(label, action, null, false); }',
+        '      onConfirm: function () { runDetailAction(label, action, mode, true); }',
+        '      onConfirm: function () { runDetailAction(label, action, mode, false); }',
         "bg_busy_asks_in_app", id="bg-busy-forces"),
     pytest.param(
-        '      onConfirm: function () { runDetailAction(label, action, null, true); }',
-        '      onConfirm: function () { runDetailAction(label, "bringback", null, true); }',
+        '      onConfirm: function () { runDetailAction(label, action, mode, true); }',
+        '      onConfirm: function () { runDetailAction(label, "bringback", mode, true); }',
         "bg_restart_busy_asks", id="bg-busy-same-action"),
+    pytest.param(
+        '    var body = action === "perms" ? (force ? { mode: mode, force: true } : { mode: mode })',
+        '    var body = action === "perms" ? { mode: mode }',
+        "bg_perms_busy_asks", id="bg-perms-forces"),
+    pytest.param(
+        '      onConfirm: function () { runDetailAction(label, action, mode, true); }',
+        '      onConfirm: function () { runDetailAction(label, action, null, true); }',
+        "bg_perms_busy_asks", id="bg-perms-keeps-mode"),
     pytest.param(
         '    bodyEl.hidden = !opts.body;   // a question alone has no body',
         '',

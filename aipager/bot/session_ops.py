@@ -3080,9 +3080,11 @@ class SessionOpsMixin:
         reason."""
         from aipager import claude_jobs
         label = sess.label
-        if self._turn_in_flight(sess) or state in (claude_jobs.BUSY, claude_jobs.UNKNOWN):
-            why = "a turn is in flight" if self._turn_in_flight(sess) else f"the job is {state}"
-            log.info("[%s] bring-back from job %s refused: %s", label, job, why)
+        if self._turn_in_flight(sess):
+            log.info("[%s] bring-back from job %s refused: a turn is in flight", label, job)
+            return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
+        if state in (claude_jobs.BUSY, claude_jobs.UNKNOWN):
+            log.info("[%s] bring-back from job %s refused: the job is %s", label, job, state)
             return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
         wait = 0.0 if settled else self._park_settles_in(sess)
         if wait > 0:
@@ -3105,7 +3107,7 @@ class SessionOpsMixin:
             log.debug("[%s] brought-back notice failed", sess.label, exc_info=True)
 
     async def _perms_switch_core(
-        self, sess: TrackedSession, target_mode: str,
+        self, sess: TrackedSession, target_mode: str, *, force: bool = False,
     ) -> RestartOutcome:
         """Switch an already-resolved, live session to *target_mode* by a
         restart (into or out of Full access; see :meth:`_mode_switch_core`,
@@ -3120,11 +3122,15 @@ class SessionOpsMixin:
         flow — goes straight to :meth:`_kill_and_relaunch_core`'s hard
         kill. So the outcome for a given starting status is identical
         to what ``/mode`` would already produce for it.
+
+        *force*: a busy Claude Code background job in the way is stopped
+        (the Mini App's "Stop and bring back" after ``bg_busy``).
         """
         interrupt_first = sess.status == Status.BUSY
         return await self._kill_and_relaunch_core(
             sess, target_mode=target_mode,
             interrupt_first=interrupt_first,
+            **({"force": True} if force else {}),
         )
 
     async def _restart_session_core(self, sess: TrackedSession, *,
@@ -3173,7 +3179,8 @@ class SessionOpsMixin:
             self.registry.mark_dirty()
         return True
 
-    async def _mode_switch_core(self, sess: TrackedSession, target: str) -> RestartOutcome:
+    async def _mode_switch_core(self, sess: TrackedSession, target: str, *,
+                                force: bool = False) -> RestartOutcome:
         """Switch an already-resolved session to *target* (``ask``,
         ``auto`` or ``full``): the one dispatcher chat and the Mini App
         call. The caller has applied the admin rule for Full access.
@@ -3201,6 +3208,9 @@ class SessionOpsMixin:
         if self._already_in_mode(sess, target):
             return RestartOutcome(ok=True, reason="already", label=label, mode=target)
         if sess.mode_switch_restarts(target):
+            # *force*: only a restart has a background job to stop.
+            if force:
+                return await self._perms_switch_core(sess, target, force=True)
             return await self._perms_switch_core(sess, target)
         if self._parked(sess):
             # Shift+Tab would go to a client parked on a background job.

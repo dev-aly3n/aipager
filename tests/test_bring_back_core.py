@@ -1016,3 +1016,90 @@ def test_a_job_left_out_of_a_partial_registry_read_is_asked_about(world, run_asy
     out = run_async(world.bot._bring_back_core(world.sess))
     assert (out.ok, out.reason) == (False, "bg_busy")
     assert "kill" not in world.kinds()
+
+
+# ---- review rev-iter1-009: a mode switch refused by a background job says why --------
+
+def _mode_card_switch(world, run_async, target="full"):
+    """The /mode card's restart-type switch (``_do_perms_switch_via_fn``),
+    returning the card's last text and keyboard."""
+    edits = []
+
+    async def edit(text, **kw):
+        edits.append((text, kw.get("reply_markup")))
+
+    world.bot._mode_card = MagicMock(return_value=("MODE CARD", "MODE KB"))
+    run_async(world.bot._do_perms_switch_via_fn(
+        world.sess, target, edit, turn=world.sess.turn_key, chat_id=CHAT, announce=False))
+    return edits[-1]
+
+
+def test_a_mode_switch_into_a_busy_job_shows_the_question_and_its_buttons(world,
+                                                                          run_async):
+    world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+    text, kb = _mode_card_switch(world, run_async)
+    assert text == i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
+    assert [b.callback_data.rsplit(":", 1)[1] for row in kb.inline_keyboard
+            for b in row] == [f"bgforce{JOB}", "bgleave"]
+    assert world.calls == []
+
+
+@pytest.mark.parametrize("how, expected", [
+    ("stop-failed", "Could not bring <b>x</b> back from Claude Code's background: "
+                    "claude stop ended with exit code 1"),
+    ("no-conversation", "Could not bring <b>x</b> back because Claude Code has no "
+                        "saved conversation for it."),
+])
+def test_a_mode_switch_a_background_job_refused_says_why(world, run_async, how, expected):
+    from aipager.bot import callbacks
+    if how == "stop-failed":
+        world.stop_rc = 1
+    else:
+        world.drop_transcript(JS)
+        world.drop_transcript(X)
+    text, kb = _mode_card_switch(world, run_async)
+    assert (text, kb) == ("MODE CARD", "MODE KB")
+    note = world.bot._mode_card.call_args.args[2]
+    assert note == expected
+    out = session_ops.RestartOutcome(ok=False, reason="not_live", label="x")
+    assert callbacks._switch_refused(out) != expected, "the not-running text is another"
+
+
+@pytest.mark.parametrize("how", ["busy", "stop-failed"])
+def test_the_ready_cards_mode_switch_says_why(world, run_async, monkeypatch, how):
+    """new_flow's Ready card, switching into Full access: a busy job turns
+    the card into the question with its buttons; a failed stop is said in
+    the card's note."""
+    from aipager.bot import new_flow
+    if how == "busy":
+        world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+    else:
+        world.stop_rc = 1
+    edits = []
+
+    async def edit_at(bot, chat_id, message_id, text, kb=None):
+        edits.append((text, kb))
+
+    monkeypatch.setattr(new_flow, "_edit_at", edit_at)
+    notes = []
+    monkeypatch.setattr(new_flow, "render_ready",
+                        lambda bot, update, sess, note="", changed="", **kw:
+                        notes.append(note) or ("READY", None))
+    world.bot._may_use_full_access = MagicMock(return_value=True)
+    world.sess.tap_is_for_this_turn = lambda *a, **k: True
+    query = MagicMock()
+    query.from_user = MagicMock(id=12345)
+    query.message = MagicMock(message_id=88)
+    query.answer = AsyncMock()
+    update = MagicMock(callback_query=query, effective_chat=MagicMock(id=CHAT),
+                       effective_user=MagicMock(id=12345))
+    run_async(new_flow._handle_ready_callback(world.bot, update, query, NAME, "rdy_full"))
+    if how == "busy":
+        text, kb = edits[-1]
+        assert text == i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
+        assert [b.callback_data.rsplit(":", 1)[1] for row in kb.inline_keyboard
+                for b in row] == [f"bgforce{JOB}", "bgleave"]
+    else:
+        assert notes[-1] == ("Could not bring x back from Claude Code's background: "
+                             "claude stop ended with exit code 1")
+

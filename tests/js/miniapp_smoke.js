@@ -435,6 +435,9 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
   bg_busy_leave_it: backgroundDetail(),
   bg_restart_busy_asks: backgroundDetail(),
   bg_menu: backgroundDetail(),
+  // A session not parked whose conversation a busy background job holds:
+  // its mode switch (a restart) is answered bg_busy too.
+  bg_perms_busy_asks: fullDetailFor("idle", { isAdmin: true, mode: "ask" }),
 });
 
 // A session whose conversation moved into a Claude Code background job
@@ -3603,6 +3606,35 @@ function driveBgRestartBusyAsks() {
   }, 10);
 }
 
+function driveBgPermsBusyAsks() {
+  const path = "/api/sessions/dev/perms";
+  bgBusyOverride(path);
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const before = fetchCalls.length;
+    itemNamed(menu, "Switch to Full access mode").click();
+    byId["confirm-ok"].click();     // the mode switch's confirm
+    setTimeoutReal(() => {
+      const first = postsTo(path, before);
+      if (first.length !== 1 || JSON.parse(first[0].body || "{}").force !== undefined)
+        fail("first switch sent " + JSON.stringify(first));
+      bgQuestionShown();
+      POST_STATUS_OVERRIDE = null;
+      const mid = fetchCalls.length;
+      byId["confirm-ok"].click();
+      setTimeoutReal(() => {
+        const again = postsTo(path, mid);
+        const body = again.length === 1 ? JSON.parse(again[0].body || "{}") : {};
+        if (body.force !== true || body.mode !== "full")
+          fail("Stop and bring back sent " + JSON.stringify(again));
+        console.log("ok: a busy job's mode switch asks in the app, then the same mode with force");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
 function driveBgMenu() {
   api.openDetail("dev");
   setTimeoutReal(() => {
@@ -3622,6 +3654,7 @@ Object.assign(DRIVERS, {
   bg_busy_asks_in_app: () => driveBgBusyAsks(false),
   bg_busy_leave_it: () => driveBgBusyAsks(true),
   bg_restart_busy_asks: driveBgRestartBusyAsks,
+  bg_perms_busy_asks: driveBgPermsBusyAsks,
   bg_menu: driveBgMenu,
 });
 

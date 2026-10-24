@@ -456,3 +456,36 @@ def test_a_parked_stop_that_fails_says_why(world, run_async):
     assert (status, body["error"]) == (409, "bg_stop_failed")
     assert "claude stop ended with exit code 1" in body["detail"]
 
+
+
+# ---- review rev-iter1-009: a mode switch takes "Stop and bring back" too -----------------
+
+def test_a_mode_switch_into_a_busy_job_asks_then_forces(world, run_async):
+    """The perms route answers bg_busy with can_force, and the page's
+    "Stop and bring back" sends the same mode with force."""
+    _busy(world)
+    status, body = run_async(_post(world, ADMIN_ID, "perms", {"mode": "full"}))
+    assert status == 409 and body["error"] == "bg_busy" and body["can_force"] is True
+    assert world.calls == []
+    status, body = run_async(_post(world, ADMIN_ID, "perms", {"mode": "full", "force": True}))
+    assert status == 200, body
+    assert world.runs()[0] == ["stop", JOB] and not world.sess.parked_job
+    assert world.launches()[0]["mode"] == "full"
+
+
+def test_the_perms_route_passes_force_and_nothing_else(world, run_async):
+    core = AsyncMock(return_value=RestartOutcome(ok=True, reason="done", label=LABEL,
+                                                 mode="full"))
+    world.bot._mode_switch_core = core
+    run_async(_post(world, ADMIN_ID, "perms", {"mode": "full"}))
+    run_async(_post(world, ADMIN_ID, "perms", {"mode": "full", "force": True}))
+    assert [c.kwargs for c in core.await_args_list] == [{}, {"force": True}]
+
+
+@pytest.mark.parametrize("bad", ["yes", 1, None, [True]])
+def test_a_perms_force_that_is_not_a_boolean_is_400(world, run_async, bad):
+    core = AsyncMock()
+    world.bot._mode_switch_core = core
+    status, body = run_async(_post(world, ADMIN_ID, "perms", {"mode": "full", "force": bad}))
+    assert (status, body["error"]) == (400, "bad_request")
+    core.assert_not_awaited()

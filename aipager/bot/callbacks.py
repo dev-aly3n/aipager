@@ -257,12 +257,26 @@ def _switch_refused(outcome, tr=None) -> str:
     still_stopping and launch_failed, which say their own (in *tr*'s
     language, English when None)."""
     tr = tr or i18n.get("en")
-    if outcome.reason == "parked":
-        from aipager.bot.session_ops import BG_REFUSED_PARKED  # import cycle
-        return tr.html(BG_REFUSED_PARKED, session=outcome.label)
+    from aipager.bg_text import bg_outcome_html
+    # A Claude Code background job in the way (parked, or holding the
+    # conversation): its own words; bg_busy is the question, which the
+    # callers show with its buttons (:func:`_switch_card`).
+    bg = bg_outcome_html(tr, outcome, outcome.label)
+    if bg is not None:
+        return bg
     if outcome.reason == "already_restarting":
         return tr.html(MODE_REFUSED_RESTARTING, session=outcome.label)
     return tr.html(MODE_REFUSED_NOT_RUNNING, session=outcome.label)
+
+
+def _switch_card(bot, chat_id, sess, outcome, note: str, tr):
+    """The mode card after a switch, with *note*: for ``bg_busy`` (a busy
+    Claude Code background job in the way of the restart) the busy
+    question instead, with its "Stop and bring back" / "Leave it"."""
+    if outcome is not None and outcome.reason == "bg_busy":
+        from aipager.bot import session_parity  # import cycle
+        return note, session_parity.bg_busy_keyboard(bot, chat_id, sess, tr)
+    return bot._mode_card(chat_id, sess, note)
 
 
 STOPPED = Msg("ans.stopped", "⏹ Stopped {session}",
@@ -599,10 +613,11 @@ class CallbackDispatchMixin:
         elif outcome.reason == "launch_failed":
             note = tr.html(MODE_SWITCH_FAILED, error=outcome.err)
         else:
-            # not_live / already_restarting: never silence (a refused
-            # switch used to leave its card and buttons as they were).
+            # not_live / already_restarting / a background job in the way:
+            # never silence (a refused switch used to leave its card and
+            # buttons as they were).
             note = _switch_refused(outcome, tr)
-        text, kb = self._mode_card(chat_id, sess, note)
+        text, kb = _switch_card(self, chat_id, sess, outcome, note, tr)
         await edit_fn(text, parse_mode="HTML", reply_markup=kb)
         return outcome
 

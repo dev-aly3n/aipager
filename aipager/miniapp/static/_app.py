@@ -1739,17 +1739,18 @@ APP_JS = r"""
 
   // A Claude Code background job still working on the conversation: ask
   // here, in the app, and ask again with `force` (never a chat card).
-  function askBackgroundBusy(label, action, detail) {
+  function askBackgroundBusy(label, action, detail, mode) {
     openConfirm({
       title: plain(detail), body: "",
       confirmLabel: t("ui.btn.bg_force"), cancelLabel: t("ui.btn.bg_leave"),
-      onConfirm: function () { runDetailAction(label, action, null, true); }
+      onConfirm: function () { runDetailAction(label, action, mode, true); }
     });
   }
 
   function runDetailAction(label, action, mode, force) {
     var method = ACTION_METHODS[action];
-    var body = action === "perms" ? { mode: mode } : (force ? { force: true } : null);
+    var body = action === "perms" ? (force ? { mode: mode, force: true } : { mode: mode })
+      : (force ? { force: true } : null);
     postSessionAction(label, ACTION_PATHS[action], method, body).then(function (r) {
       if (action === "kill" || action === "delete") {
         if (r.status === 200 || (r.status === 404 && action === "kill")) {
@@ -1765,7 +1766,7 @@ APP_JS = r"""
       // stop / resume / clearqueue / compact / perms / restart / bringback
       if (r.status === 409 && r.data && r.data.error === "bg_busy" && r.data.can_force &&
           !force) {
-        askBackgroundBusy(label, action, r.data.detail || "");
+        askBackgroundBusy(label, action, r.data.detail || "", mode);
         return;
       }
       if (r.status === 200) {

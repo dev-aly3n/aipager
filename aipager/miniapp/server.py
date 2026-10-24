@@ -2450,6 +2450,11 @@ class MiniAppServer:
         if not perm_modes.is_mode(target):
             return web.json_response({"error": "bad_request",
                                       "detail": tr.text(_BAD_MODE)}, status=400)
+        # "Stop and bring back" after a 409 bg_busy (a Claude Code
+        # background job in the way of the restart): the same switch, forced.
+        force = body.get("force", False)
+        if not isinstance(force, bool):
+            return web.json_response({"error": "bad_request"}, status=400)
         if (target == perm_modes.FULL
                 and not self.bot._may_use_full_access(user_id, scope_chat_id)):
             log.info("miniapp: session perms rejected (403) - may not use Full access here")
@@ -2466,7 +2471,8 @@ class MiniAppServer:
         if refused is not None:
             return refused
 
-        outcome = await self.bot._mode_switch_core(sess, target)
+        outcome = (await self.bot._mode_switch_core(sess, target, force=True) if force
+                   else await self.bot._mode_switch_core(sess, target))
         if outcome.reason == "parked":
             return _parked_response(tr, outcome.label)
         if outcome.reason == "already":
