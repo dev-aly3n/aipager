@@ -1561,13 +1561,18 @@ def test_a_halt_that_waits_out_a_releasing_bring_back_lets_nothing_out(world, ru
     world.bot._settle_card_text = AsyncMock(return_value=True)
     world.bot._mark_not_delivered = AsyncMock()
     inner = world._sleep
+    tasks = {}
+    done = asyncio.Event()
 
-    async def sleep(seconds):          # the halt's wait lets the bring-back go on
+    async def sleep(seconds):
         await inner(seconds)
-        await asyncio.sleep(0)
+        if asyncio.current_task() is tasks.get("halt"):
+            # The halt's wait lasts until the bring-back is over (its end,
+            # where the release would go out, included): its 30 s budget
+            # never runs out first, whatever the worker threads take.
+            await done.wait()
 
     monkeypatch.setattr(session_ops, "_sleep", sleep)
-    tasks = {}
 
     async def during_launch():
         tasks["halt"] = asyncio.ensure_future(
@@ -1579,6 +1584,7 @@ def test_a_halt_that_waits_out_a_releasing_bring_back_lets_nothing_out(world, ru
 
     async def scenario():
         out = await world.bot._bring_back_core(sess)
+        done.set()
         await tasks["halt"]
         return out
 
