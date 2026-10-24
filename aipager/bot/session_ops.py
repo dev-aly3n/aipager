@@ -2901,10 +2901,7 @@ class SessionOpsMixin:
         claude's own SessionStart recorded meanwhile is kept."""
         from aipager.state import _drop_bg_files
         _drop_bg_files(sess.name, sess)
-        sess.parked_job = ""
-        sess.parked_job_session_id = ""
-        sess.parked_since = 0.0
-        sess.park_told.clear()
+        sess.forget_park()
         self.registry.mark_dirty()
 
     async def _bring_back_core(

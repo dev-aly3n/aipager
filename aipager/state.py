@@ -900,6 +900,15 @@ class TrackedSession:
     parked_job_session_id: str = ""
     parked_since: float = 0.0
     park_notified_job: str = ""
+    # Where the park was found: "registry" (the session's own claude's
+    # entry says ``parkedJobId``) or "transcript" (no entry was found, and
+    # the conversation's transcript ends with ``continued-in``; the id of
+    # that conversation, from before the move, is kept, since
+    # ``claude_session_id`` moves to the job's). A transcript park ends
+    # when that transcript no longer ends with ``continued-in`` (its old
+    # copy was resumed on purpose). Persisted with the park.
+    parked_source: str = ""
+    parked_from_session_id: str = ""
     # The pid of the session's own claude (its hooks forward CLAUDE_PID),
     # and that process's start time when known (0: unknown). Transient:
     # found again from the registry after a restart.
@@ -2645,6 +2654,17 @@ class TrackedSession:
         — see :meth:`work_in_flight_reason` for the shared definition."""
         return self.work_in_flight_reason(now) is not None
 
+    def forget_park(self) -> None:
+        """Clear every field of a Claude Code background-job park (the
+        caller removes the link file first: it reads them). The terminal
+        guard's once-per-park warning starts over for the next park."""
+        self.parked_job = ""
+        self.parked_job_session_id = ""
+        self.parked_since = 0.0
+        self.parked_source = ""
+        self.parked_from_session_id = ""
+        self.park_told.clear()
+
     def arm_bg_release(self) -> None:
         """A bring-back is about to launch the conversation again: the
         messages held for the park go out once the relaunched claude is up
@@ -3553,6 +3573,11 @@ def _restore_parked(sess: TrackedSession, sd: dict) -> None:
         except (TypeError, ValueError):
             since = 0.0
         sess.parked_since = since if 0.0 < since <= time.time() else 0.0
+        source = sd.get("parked_source")
+        sess.parked_source = source if source in ("registry", "transcript") else ""
+        from_sid = sd.get("parked_from_session_id")
+        sess.parked_from_session_id = (
+            from_sid if isinstance(from_sid, str) and len(from_sid) <= 64 else "")
     notified = sd.get("park_notified_job")
     if isinstance(notified, str) and bg_jobs._JOB_ID.match(notified):
         sess.park_notified_job = notified
@@ -4476,6 +4501,7 @@ class SessionRegistry:
         # parked (never typed into) across a restart, and its notice is
         # not sent twice.
         "parked_job", "parked_job_session_id", "parked_since",
+        "parked_source", "parked_from_session_id",
         "park_notified_job", "bg_release_pending",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the

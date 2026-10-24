@@ -909,14 +909,35 @@ class SessionMonitor:
         if client is not None:
             job = client.get("parkedJobId") or ""
             if claude_jobs.valid_job(job):
-                self._park(sess, job, self._job_session_id(sess, job, entries, client))
+                self._park(sess, job, self._job_session_id(sess, job, entries, client),
+                           source="registry")
             else:
                 self._unpark(sess)
             return bool(sess.parked_job)
-        path = claude_jobs.find_transcript(sess.claude_session_id, cache_misses=True)
+        if sess.parked_job and sess.parked_source == "transcript":
+            # Parked by the transcript alone: it decides the end too. Its
+            # conversation from before the move (claude_session_id is the
+            # job's by now) no longer ending with `continued-in` means the
+            # old copy was resumed in the terminal: not parked any more.
+            from_sid = sess.parked_from_session_id
+            path = (claude_jobs.find_transcript(from_sid, cache_misses=True)
+                    if from_sid else None)
+            if path is None:
+                return True             # nothing readable: nothing changes
+            target = claude_jobs.transcript_continued_in(path)
+            if target and claude_jobs.valid_job(target[:8]):
+                self._park(sess, target[:8], target, source="transcript",
+                           from_sid=from_sid)
+            else:
+                self._unpark(sess)
+            return bool(sess.parked_job)
+        # Not parked, or parked by the registry (sticky, Fact 7: only the
+        # client's entry ends it): the transcript can park, never unpark.
+        from_sid = sess.claude_session_id
+        path = claude_jobs.find_transcript(from_sid, cache_misses=True)
         target = claude_jobs.transcript_continued_in(path) if path is not None else ""
         if target and claude_jobs.valid_job(target[:8]):
-            self._park(sess, target[:8], target)
+            self._park(sess, target[:8], target, source="transcript", from_sid=from_sid)
         return bool(sess.parked_job)
 
     @staticmethod
@@ -934,9 +955,13 @@ class SessionMonitor:
                 return target
         return sess.parked_job_session_id if sess.parked_job == job else ""
 
-    def _park(self, sess: TrackedSession, job: str, job_sid: str) -> None:
+    def _park(self, sess: TrackedSession, job: str, job_sid: str, *,
+              source: str, from_sid: str = "") -> None:
         if sess.parked_job != job:
-            log.info("[%s] parked on Claude Code background job %s", sess.label, job)
+            log.info("[%s] parked on Claude Code background job %s (from the %s)",
+                     sess.label, job, source)
+            if sess.parked_job:
+                sess.forget_park()      # another job: a park of its own
             sess.parked_job = job
             sess.parked_job_session_id = job_sid
             sess.parked_since = time.time()
@@ -945,6 +970,10 @@ class SessionMonitor:
             self.registry.mark_dirty()
         elif job_sid and job_sid != sess.parked_job_session_id:
             sess.parked_job_session_id = job_sid
+            self.registry.mark_dirty()
+        if (sess.parked_source, sess.parked_from_session_id) != (source, from_sid):
+            sess.parked_source = source
+            sess.parked_from_session_id = from_sid
             self.registry.mark_dirty()
         self._write_link(sess)
 
@@ -956,10 +985,7 @@ class SessionMonitor:
         bg_jobs.remove_own(bg_jobs.link_path(sess.parked_job))
         self._links_written.pop(sess.name, None)
         self._new_parks.pop(sess.name, None)
-        sess.parked_job = ""
-        sess.parked_job_session_id = ""
-        sess.parked_since = 0.0
-        sess.park_told.clear()
+        sess.forget_park()
         self.registry.mark_dirty()
 
     def _write_link(self, sess: TrackedSession) -> None:

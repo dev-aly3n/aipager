@@ -578,3 +578,69 @@ def test_a_start_that_cannot_be_read_matches_only_off_linux(cfg, proc, mon,
     proc.alive.add(CLIENT)                   # proc.start has no entry: unreadable
     sess.claude_pid = CLIENT
     assert (claude_jobs.find_client(sess, claude_jobs.read_registry()) is not None) is found
+
+
+# ---- review rev-iter1-007: a park found through the transcript can end there ------
+
+def _transcript_park(cfg, monitor, sess):
+    """Parked by the transcript alone (no registry), then the job's hooks
+    moved the session's id to the job's conversation (D4)."""
+    (cfg / "sessions").rmdir()
+    transcript(cfg, SID, [{"type": "user"},
+                          {"type": "continued-in", "continuedInSessionId": JOB_SID}])
+    assert monitor.check_parked(sess) is True
+    assert (sess.parked_source, sess.parked_from_session_id) == ("transcript", SID)
+    sess.claude_session_id = JOB_SID
+    transcript(cfg, JOB_SID, [{"type": "user"}, {"type": "assistant"}])
+
+
+def test_a_transcript_park_ends_when_the_old_copy_is_resumed(cfg, proc, mon):
+    registry, monitor, notify, sess = mon
+    _transcript_park(cfg, monitor, sess)
+    assert bg_jobs.link_path(JOB).exists()
+    transcript(cfg, SID, [{"type": "user"},
+                          {"type": "continued-in", "continuedInSessionId": JOB_SID},
+                          {"type": "user"}, {"type": "assistant"}])
+    assert monitor.check_parked(sess) is False
+    assert (sess.parked_job, sess.parked_source, sess.parked_from_session_id) == ("", "", "")
+    assert not bg_jobs.link_path(JOB).exists()
+
+
+def test_a_transcript_park_holds_while_the_transcript_still_ends_moved(cfg, proc, mon):
+    registry, monitor, notify, sess = mon
+    _transcript_park(cfg, monitor, sess)
+    assert monitor.check_parked(sess) is True
+    assert sess.parked_job == JOB
+
+
+def test_a_transcript_park_holds_when_its_transcript_cannot_be_found(cfg, proc, mon):
+    registry, monitor, notify, sess = mon
+    _transcript_park(cfg, monitor, sess)
+    (cfg / "projects" / "-home-alice-app" / f"{SID}.jsonl").unlink()
+    claude_jobs._FIND_CACHE.clear()
+    assert monitor.check_parked(sess) is True
+
+
+def test_a_registry_park_is_not_ended_by_the_transcript(cfg, proc, mon):
+    """Sticky (Fact 7): only the client's entry ends a registry park."""
+    registry, monitor, notify, sess = mon
+    sess.claude_pid = CLIENT
+    proc.alive.add(CLIENT)
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+    assert monitor.check_parked(sess) is True
+    assert sess.parked_source == "registry"
+    transcript(cfg, SID, [{"type": "user"}])          # no continued-in at all
+    (cfg / "sessions" / f"{CLIENT}.json").unlink()     # the client is not found
+    proc.alive.discard(CLIENT)
+    assert monitor.check_parked(sess) is True
+
+
+def test_the_park_source_survives_a_restart(cfg, proc, mon, tmp_state_file, monkeypatch):
+    registry, monitor, notify, sess = mon
+    _transcript_park(cfg, monitor, sess)
+    registry.save()
+    monkeypatch.setattr("aipager.dtach.inject.live_session_names", lambda: {NAME})
+    loaded = SessionRegistry()
+    loaded.load()
+    again = loaded.get(NAME)
+    assert (again.parked_source, again.parked_from_session_id) == ("transcript", SID)

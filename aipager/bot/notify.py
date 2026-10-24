@@ -3660,10 +3660,7 @@ class NotifyMixin:
                     log.info("[%s] session ended while parked on background "
                              "job %s: %d held message(s) dropped", label,
                              sess.parked_job, len(held))
-                    sess.parked_job = ""
-                    sess.parked_job_session_id = ""
-                    sess.parked_since = 0.0
-                    sess.park_told.clear()
+                    sess.forget_park()
                     self.registry.mark_dirty()
                     await self._mark_not_delivered(sess, held)
             self._stop_animation(sess)
