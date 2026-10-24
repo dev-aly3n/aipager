@@ -149,6 +149,9 @@ behaviour.
 | `/tmp/claude-policy-<name>.json` | Canonical permission snapshot for the running turn | `aipager-hook` (written at pick-up), read by the `PreToolUse` check |
 | `/tmp/claude-policy-.floor-<uid>.json` | The safety floor, built-in list plus your `safety:` section, for the hook's fallbacks | aipager daemon |
 | `/tmp/claude-reply-<name>.txt` | The message you replied to, when you reply to an older message | aipager daemon |
+| `/tmp/claude-bgjob-<job>.json` | Links a Claude Code background job to the session whose conversation moved into it (`job`, `session`, the job's conversation id, the session's claude pid, when, and `ended` once the job's own `SessionEnd` came), so the hooks of that job count for the session ([hooks](hooks.md#what-the-daemon-receives)); mode 0600, removed when the session is brought back or ends | aipager daemon (written), `aipager-hook` and `aipager-statusline` (read) |
+| `/tmp/claude-bgjob-pids.json` | The pid of each live session's own `claude`, for a background job's hooks that run before its link file exists (mode 0600) | aipager daemon (written), `aipager-hook` and `aipager-statusline` (read) |
+| `/tmp/claude-exit-<name>.json` | `claude`'s exit code and when it started and ended (`{"code", "start", "end"}`, mode 0600): the launch shell removes it before `claude` starts and writes it when `claude` exits, and the session's end notice says why from it ([troubleshooting](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)) | the session's launch shell (written), aipager daemon (read) |
 | `/tmp/aipager-files/<chat>/` | Files and voice notes sent from Telegram, one private folder per chat (`0700`, files `0600`) | aipager daemon |
 | `/tmp/aipager.log` | Output of a self-restart when there is no service | aipager daemon |
 | `~/.claude/aipager-sessions.json` | Durable registry state | aipager daemon |
@@ -190,7 +193,8 @@ Set `AIPAGER_INSTANCE_DIR` to an absolute folder you own and every
 shared runtime file above moves into it: the control socket (and the
 reply sockets, flood signal files and model-switch marker beside it),
 the `claude-dtach-*` sockets, the `claude-policy-*`, `claude-notes-*`,
-`claude-status-*` and `claude-reply-*` files, the policy floor file,
+`claude-status-*`, `claude-reply-*`, `claude-bgjob-*` and `claude-exit-*`
+files, the policy floor file,
 the `aipager-files` download folder and the self-restart log. Sessions
 the instance starts inherit the setting, so their hooks talk only to
 that instance, and the safety rules protect the moved files the same
@@ -232,6 +236,23 @@ A session that really ended returns to the shell after the wait
 (Ctrl-C ends it sooner). The attach runs with dtach's detach key
 turned off, so `Ctrl-\` goes to Claude; to leave, close the terminal
 or tmux pane and the session keeps running.
+
+Inside the dtach session, a session the daemon starts runs
+`dtach -> bash -> claude`, and one started with `aipager session` runs
+`dtach -> sh -> claude`: the shell waits for `claude` so it can record
+its exit code (`claude-exit-<name>.json`), which the session's end
+notice reads. The arguments of `aipager session` reach `claude` as
+they are, never through the shell's parsing.
+
+A restart from Telegram kills the session's dtach and starts it again on
+the same conversation. A session whose conversation moved into Claude
+Code's background (← on an empty prompt; see
+[troubleshooting](troubleshooting.md#a-session-moved-to-claude-codes-background))
+is restarted the same way after one more step first: aipager runs
+`claude stop <job>` and waits until no background process holds the
+conversation, then kills the session's dtach and starts it on the job's
+conversation with aipager's own settings. While a session is in Claude
+Code's background, the daemon types nothing into its dtach.
 
 The result: Claude Code runs as if you typed in a terminal, but
 that terminal can come and go without disturbing the running session.

@@ -61,11 +61,33 @@ The datagram is Claude Code's own hook JSON with aipager's fields added
 | `session_id`, `transcript_path`, `cwd`, ... | Claude Code's own fields, as sent. `session_id` is Claude Code's conversation id. |
 | `session` | Added by aipager: its name for the session, `claude-<name>`, from the `CLAUDE_DTACH_SESSION` variable aipager sets when it starts a session. Events from a Claude Code session aipager did not start carry no name and are ignored by the daemon. |
 | `sl_tokens` | Added by aipager, on every event except `MessageDisplay`, when the session's status-line file exists: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added` and `lines_removed`. |
+| `claude_pid` | Added by aipager on the session's own events: the pid of its `claude` (Claude Code's `CLAUDE_PID`), which the daemon uses to find that claude in Claude Code's session list. |
+| `bg_job` | Added by aipager on every event of a Claude Code background job that counts for the session (see below): the job's id. |
 
 Tool events also carry `tool_name` and `tool_input`. Every event fired
 inside a subagent carries `agent_id` (and the subagent events
 `agent_type`); the main loop's own events do not, and aipager uses that
 to put an agent's tool calls on the agent's own row.
+
+Claude Code's background jobs run their hooks too. ← on an empty prompt
+moves a session's conversation into a background job (Claude Code's
+agent view), and Claude Code also keeps spare background processes
+ready for the next job. Their hooks run with `CLAUDE_JOB_DIR` set, and
+they inherit the session name of whatever claude started Claude Code's
+background service, so that name says nothing about them. The hook
+therefore counts a background job only for the session whose own claude
+moved its conversation into that job: it finds that session in the
+job's link file (`claude-bgjob-<job>.json`, which the daemon writes when
+it sees the move, see [architecture](architecture.md#file-and-socket-layout)),
+or else in Claude Code's session list together with the daemon's pid
+map. Such a job's events go to the daemon as that session's, with
+`bg_job` set, so its answer, card and prompts reach the session's chat.
+Any other background process is foreign: its hook writes nothing, sends
+nothing and prints nothing, except that `PreToolUse` still checks its
+tool calls against the session's rules it inherited and prints a deny
+(it never allows more than that session would). The daemon drops a
+`bg_job` event it cannot match to a parked session, and creates nothing
+for it.
 
 ## Event reference
 
@@ -78,12 +100,18 @@ A session started, resumed or was compacted. A session the daemon does
 not track yet is registered. After a compaction the card reads
 `📦 name · Compacted: 82% → 4%` (see [PreCompact](#precompact--postcompact)). For
 a new conversation the hook also clears the previous turn's open mark.
+A background job's first `SessionStart` (source `fork`) only tells the
+daemon the job's conversation id; it does not close the turn that moved
+with it. The first `SessionStart` of a session brought back from
+Claude Code's background sends the messages held meanwhile.
 
 ### `SessionEnd`
 
 The session ended. It is marked GONE: it leaves the pinned status bar
 and moves to the ended sessions, where `/resume` can bring it back.
 `aipager session <name>` or `/new <name>` starts a new one.
+A background job's `SessionEnd` (the job was stopped) never ends the
+session: it ends a turn the job left open, as `StopFailure` does.
 
 ### `UserPromptSubmit`
 

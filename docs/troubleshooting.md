@@ -327,6 +327,70 @@ aipager session <label>            # or a fresh session, no history
 aipager session <label> --continue # fresh dtach, the folder's last conversation
 ```
 
+The notice in the chat says why the session ended, from the exit code
+`claude` left (aipager records it in `claude-exit-<session>.json` when
+`claude` exits):
+
+- `🔴 x1 · Session crashed or killed`: no exit code was recorded (the
+  machine rebooted, or the session's process was killed with it).
+- `🔴 x1 · Session exited`: `claude` ended normally (exit code 0).
+- `🔴 x1 · Session exited with error code 2`: `claude` failed with that
+  code.
+- `🔴 x1 · Session killed by signal SIGKILL`: something killed `claude`
+  (exit codes above 128 name the signal).
+- `🔴 x1 · Claude Code stopped right after starting (exit code 1)`:
+  `claude` gave up within 10 seconds of starting, usually because of its
+  own arguments or setup. Attach with `aipager session x1` to see its
+  message, or start it in a terminal by hand.
+- `🔴 x1 · Claude Code stopped right after starting because its
+  conversation is running in Claude Code's background`: Claude Code
+  refuses to resume a conversation that a background job still holds.
+  Tap `↩️ Bring it back now`: aipager stops that job when it is idle (it
+  asks first when it is working) and resumes the conversation here. See
+  the next section.
+
+## A session moved to Claude Code's background
+
+`🌙 x1 moved to Claude Code's background, and your next message brings it
+back here.`
+
+Pressing ← on an empty prompt in Claude Code moves the session's
+conversation into a Claude Code background job, and the terminal shows
+Claude Code's agent view instead of the conversation. aipager notices
+within a couple of seconds and stops typing into that terminal: anything
+typed there now could start another background job. The job keeps
+working, and its card, answer and permission prompts still reach the
+chat as the session's. In the Mini App the session reads "in the
+background".
+
+To bring it back:
+
+- Send it a message. The message waits (👀), aipager stops the
+  background job (`claude stop <job>`), restarts the session on the job's
+  conversation with aipager's own settings, and then sends the message.
+  While the job is still working you are asked first: `Stop and bring
+  back` stops what it is doing, `Leave it` lets it finish (bring it back
+  later). Someone whose role cannot restart the session gets `Your
+  message to x1 waits until someone brings it back from Claude Code's
+  background.`
+- Or tap `↩️ Bring it back now` under the notice, `/restart x1`, or
+  Bring it back in the Mini App. `/stop` while the job works stops that
+  work and brings the session back.
+
+Until then, commands that would type into the session (`/compact`,
+`/model`, an Ask or Auto mode switch, `/now`, Retry) answer `Bring x1
+back from Claude Code's background first.`, and a prompt answer aipager
+would have to type answers `Bring x1 back from Claude Code's background
+to answer this.` Answers that go through the hook (most permission
+prompts) still work.
+
+A conversation that moved on is followed the same way by `/resume`, the
+Mini App's Resume and `aipager resume`: the newest conversation is
+resumed, and a background job that still holds it is stopped first when
+idle. `aipager session x1 --resume <id>` does the same in the terminal;
+when the job is busy it prints `claude stop <job>` and `claude attach
+<job>` and exits with code 1 instead of starting anything.
+
 ## A permission prompt with no news for 5 minutes
 
 If a session waits on a permission prompt or a question and Claude Code
