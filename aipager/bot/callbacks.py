@@ -272,10 +272,13 @@ def _switch_refused(outcome, tr=None) -> str:
 def _switch_card(bot, chat_id, sess, outcome, note: str, tr):
     """The mode card after a switch, with *note*: for ``bg_busy`` (a busy
     Claude Code background job in the way of the restart) the busy
-    question instead, with its "Stop and bring back" / "Leave it"."""
+    question instead, with its "Stop and bring back" / "Leave it". "Stop
+    and bring back" carries the mode the switch asked for (the outcome's),
+    so the session comes back in it."""
     if outcome is not None and outcome.reason == "bg_busy":
         from aipager.bot import session_parity  # import cycle
-        return note, session_parity.bg_busy_keyboard(bot, chat_id, sess, tr)
+        return note, session_parity.bg_busy_keyboard(
+            bot, chat_id, sess, tr, mode=getattr(outcome, "mode", None) or None)
     return bot._mode_card(chat_id, sess, note)
 
 

@@ -248,9 +248,15 @@ def test_the_buttons_need_prompt(verb):
     assert verb in session_parity._SESSION_ACTIONS
 
 
-@pytest.mark.parametrize("verb", [f"bgback{JOB}", f"bgforce{JOB}"])
+@pytest.mark.parametrize("verb", [f"bgback{JOB}", f"bgforce{JOB}", f"bgmodeask{JOB}",
+                                  f"bgmodeauto{JOB}"])
 def test_the_keyed_buttons_need_prompt(verb):
     assert tap_gate.required_capability(NAME, verb) is tap_gate.PROMPT
+
+
+@pytest.mark.parametrize("verb", [f"bgmodefull{JOB}", "bgmodefull"])
+def test_stop_and_bring_back_into_full_access_needs_manage(verb):
+    assert tap_gate.required_capability(NAME, verb) is tap_gate.MANAGE
 
 
 def _query(chat_id=CHAT, user_id=12345):
@@ -419,6 +425,9 @@ def test_the_question_of_an_earlier_park_does_not_stop_a_new_one(world, run_asyn
 @pytest.mark.parametrize("action, parsed", [
     ("bgback", ("bgback", None)), ("bgforce", ("bgforce", None)),
     ("bgbackab12cd34", ("bgback", "ab12cd34")), ("bgforceab12cd34", ("bgforce", "ab12cd34")),
-    ("bgforceab12cd34x", None), ("bgback../x", None), ("bgleave", None)])
+    ("bgforceab12cd34x", None), ("bgback../x", None), ("bgleave", None),
+    ("bgmodefullab12cd34", ("bgmodefull", "ab12cd34")), ("bgmodeask", ("bgmodeask", None)),
+    ("bgmodeautoab12cd34", ("bgmodeauto", "ab12cd34")), ("bgmodebypass", None),
+    ("bgmodefullab12cd34x", None)])
 def test_the_bring_back_verbs_are_read_strictly(action, parsed):
     assert session_parity.parse_bg_verb(action) == parsed

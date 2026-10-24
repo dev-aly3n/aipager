@@ -1227,7 +1227,8 @@ async def _handle_ready_callback(
             from aipager.bot import session_parity  # import cycle
             await _edit_at(bot, chat_id, msg_id,
                            tr.html(BG_BUSY_QUESTION, session=sess.label),
-                           session_parity.bg_busy_keyboard(bot, chat_id, sess, tr))
+                           session_parity.bg_busy_keyboard(bot, chat_id, sess, tr,
+                                                           mode=target))
             return
         if not outcome.ok:
             from aipager.bg_text import bg_outcome_text

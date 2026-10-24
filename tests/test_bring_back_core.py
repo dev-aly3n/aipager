@@ -1118,9 +1118,62 @@ def test_a_mode_switch_into_a_busy_job_shows_the_question_and_its_buttons(world,
     world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
     text, kb = _mode_card_switch(world, run_async)
     assert text == i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
+    # "Stop and bring back" carries the mode asked for (review rev-iter2-002).
     assert [b.callback_data.rsplit(":", 1)[1] for row in kb.inline_keyboard
-            for b in row] == [f"bgforce{JOB}", "bgleave"]
+            for b in row] == [f"bgmodefull{JOB}", "bgleave"]
     assert world.calls == []
+
+
+def _tap_question(world, run_async, kb, *, user_id=12345):
+    """Tap the question's "Stop and bring back" (its first button)."""
+    from aipager.bot import session_parity
+    verb = kb.inline_keyboard[0][0].callback_data.rsplit(":", 1)[1]
+    q = MagicMock()
+    q.from_user = MagicMock(id=user_id)
+    q.message = MagicMock(chat=MagicMock(id=CHAT), chat_id=CHAT, message_id=77)
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    q.edit_message_reply_markup = AsyncMock()
+    u = MagicMock(callback_query=q, effective_chat=MagicMock(id=CHAT),
+                  effective_user=MagicMock(id=user_id))
+    assert run_async(session_parity.handle_callback(world.bot, u, q, NAME, verb)) is True
+    return q
+
+
+def test_the_mode_switchs_stop_and_bring_back_comes_back_in_the_mode_asked_for(
+        world, run_async):
+    """Review rev-iter2-002: a switch to Full access meets a busy job; its
+    question's "Stop and bring back" stops the job and the session comes
+    back in Full access, as the Mini App's ``{mode, force}`` does."""
+    world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+    world.bot._may_use_full_access = MagicMock(return_value=True)
+    assert world.sess.perm_mode == "auto"
+    _text, kb = _mode_card_switch(world, run_async, target="full")
+    _tap_question(world, run_async, kb)
+    assert world.runs()[0] == ["stop", JOB]
+    assert [lc["mode"] for lc in world.launches()] == ["full"]
+    assert world.sess.perm_mode == "full" and world.sess.parked_job == ""
+
+
+def test_the_mode_switchs_question_into_full_access_needs_an_admin_at_tap_time(
+        world, run_async):
+    world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+    world.bot._may_use_full_access = MagicMock(return_value=True)
+    _text, kb = _mode_card_switch(world, run_async, target="full")
+    world.bot._may_use_full_access = MagicMock(return_value=False)
+    q = _tap_question(world, run_async, kb)
+    assert world.calls == [] and world.sess.parked_job == JOB
+    assert q.answer.await_args.kwargs.get("show_alert") is True
+
+
+def test_the_restart_question_still_keeps_the_sessions_mode(world, run_async):
+    """Restart's question has the plain "Stop and bring back": the session
+    comes back in its own mode."""
+    out = session_ops.RestartOutcome(ok=False, reason="bg_busy", label="x", mode="full")
+    from aipager.bot import session_parity
+    kb = session_parity.bg_busy_keyboard(world.bot, CHAT, world.sess)
+    assert kb.inline_keyboard[0][0].callback_data.endswith(f"bgforce{JOB}")
+    assert out.mode == "full"
 
 
 @pytest.mark.parametrize("how, expected", [
@@ -1177,7 +1230,7 @@ def test_the_ready_cards_mode_switch_says_why(world, run_async, monkeypatch, how
         text, kb = edits[-1]
         assert text == i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
         assert [b.callback_data.rsplit(":", 1)[1] for row in kb.inline_keyboard
-                for b in row] == [f"bgforce{JOB}", "bgleave"]
+                for b in row] == [f"bgmodefull{JOB}", "bgleave"]
     else:
         assert notes[-1] == ("Could not bring x back from Claude Code's background: "
                              "claude stop ended with exit code 1")

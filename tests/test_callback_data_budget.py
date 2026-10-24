@@ -193,6 +193,11 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # "_:sx:<idx>:bgforce" + 8 characters is ~27 bytes.
     "bgback{_bg_key(sess)}",
     "bgforce{_bg_key(sess)}",
+    # The same "Stop and bring back" after a restart-type mode switch
+    # (review rev-iter2-002): a mode checked by perm_modes.is_mode (at most
+    # "auto"/"full", 4 characters) and the same key; "_:sx:<idx>:bgmodeauto"
+    # + 8 characters is ~31 bytes.
+    "bgmode{mode}{_bg_key(sess)}",
 })
 
 
@@ -797,5 +802,8 @@ def test_the_background_job_buttons_are_built_through_session_cb():
     # `_:sx:<idx>:<verb><job key>` with a five-digit index
     key = "x" * session_parity.BG_JOB_KEY_LEN
     assert len(f"_:sx:99999:bgforce{key}".encode()) <= 64
+    assert 'session_cb(bot, chat_id, sess, f"bgmode{mode}{_bg_key(sess)}")' in src
+    longest = max(session_parity.BG_MODE_VERBS, key=len)
+    assert len(f"_:sx:99999:{longest}{key}".encode()) <= 64
     assert {"bgback", "bgforce", "bgleave"} <= session_parity._SESSION_ACTIONS
     assert session_parity._bg_key(SimpleNamespace(parked_job="y" * 64)) == "y" * len(key)

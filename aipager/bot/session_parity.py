@@ -823,10 +823,18 @@ def _bg_key(sess: TrackedSession) -> str:
     return sess.parked_job[:BG_JOB_KEY_LEN] if sess.parked_job else ""
 
 
+#: The busy question after a restart-type mode switch: its "Stop and bring
+#: back" carries the mode asked for (``bgmode<mode><job>``), so the session
+#: comes back in it, as the Mini App's ``{mode, force}`` does.
+BG_MODE_VERBS = {f"bgmode{m}": m for m in (perm_modes.ASK, perm_modes.AUTO,
+                                           perm_modes.FULL)}
+
+
 def parse_bg_verb(action: str) -> tuple[str, str | None] | None:
     """``(verb, job)`` for a bring-back button's action (``job`` None for
-    a bare one), or None when *action* is not one."""
-    for verb in ("bgforce", "bgback"):
+    a bare one), or None when *action* is not one. The verbs are
+    ``bgforce``, ``bgback`` and those of :data:`BG_MODE_VERBS`."""
+    for verb in ("bgforce", "bgback", *BG_MODE_VERBS):
         if action.startswith(verb):
             rest = action[len(verb):]
             if not rest:
@@ -845,14 +853,23 @@ def bg_park_keyboard(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
 
 
 def bg_busy_keyboard(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
-                     tr=None) -> InlineKeyboardMarkup:
+                     tr=None, *, mode: str | None = None) -> InlineKeyboardMarkup:
     """The busy question's buttons: "Stop and bring back"
-    (``bgforce<job>``) and "Leave it" (``bgleave``)."""
+    (``bgforce<job>``) and "Leave it" (``bgleave``). For the question a
+    restart-type mode switch met, *mode* is the mode asked for: "Stop and
+    bring back" is then ``bgmode<mode><job>`` and the session comes back
+    in that mode."""
     tr = tr or i18n.for_chat(chat_id)
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton(
+    if perm_modes.is_mode(mode):
+        stop = InlineKeyboardButton(
             tr.text(_ops.BG_BTN_STOP_AND_BRING),
-            callback_data=session_cb(bot, chat_id, sess, f"bgforce{_bg_key(sess)}")),
+            callback_data=session_cb(bot, chat_id, sess, f"bgmode{mode}{_bg_key(sess)}"))
+    else:
+        stop = InlineKeyboardButton(
+            tr.text(_ops.BG_BTN_STOP_AND_BRING),
+            callback_data=session_cb(bot, chat_id, sess, f"bgforce{_bg_key(sess)}"))
+    return InlineKeyboardMarkup([[
+        stop,
         InlineKeyboardButton(tr.text(_ops.BG_BTN_LEAVE),
                              callback_data=session_cb(bot, chat_id, sess, "bgleave")),
     ]])
@@ -898,7 +915,8 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
     background")."""
     if await _bg_tap_refused(bot, query, sess, chat_id, user_id, person):
         return
-    force = action == "bgforce"
+    mode = BG_MODE_VERBS.get(action)
+    force = action == "bgforce" or mode is not None
     if sess.status == Status.GONE:
         async def _reply(text, **kw):
             await _edit(query, text, kw.pop("reply_markup", None))
@@ -916,9 +934,19 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
                                                   session=sess.label))
         await _drop_keyboard(query)
         return
+    if mode == perm_modes.FULL and not bot._may_use_full_access(user_id, chat_id):
+        # Full access needs an admin, like every other way into it.
+        from aipager.bot.mode_switch import TOAST_NEEDS_ADMIN_FULL
+        await bot._safe_answer(query, person.text(TOAST_NEEDS_ADMIN_FULL), show_alert=True)
+        return
     await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
                                               session=sess.label))
-    outcome = await bot._bring_back_core(sess, force=force)
+    if mode is not None:
+        # The mode switch that met the busy job: the session comes back in
+        # the mode asked for (what the switch's restart would have done).
+        outcome = await bot._bring_back_core(sess, force=True, target_mode=mode)
+    else:
+        outcome = await bot._bring_back_core(sess, force=force)
     if outcome.ok:
         await _drop_keyboard(query)     # the core said "is back" in the chat
         return

@@ -158,6 +158,13 @@ PREFIX_CAPS: tuple[tuple[str, Cap], ...] = (
     # shown for (bgback<job>, bgforce<job>; the bare verbs are above).
     ("bgback", PROMPT),
     ("bgforce", PROMPT),
+    # The same "Stop and bring back" after a restart-type mode switch,
+    # carrying the mode asked for (bgmode<mode><job>): Full access is
+    # MANAGE, like every other way into it (the handler re-checks it).
+    ("bgmodefull", MANAGE),
+    ("bgmodeask", PROMPT),
+    ("bgmodeauto", PROMPT),
+    ("bgmode", PROMPT),         # no other mode: refused inside (not a verb)
 )
 
 

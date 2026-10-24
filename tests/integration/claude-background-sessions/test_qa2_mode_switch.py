@@ -92,7 +92,9 @@ def test_chat_the_question_has_stop_and_bring_back_and_leave_it(stack, mk_update
     _full_and_parked(stack, job_status="busy")
     u = _mode(stack, mk_update)
     markups = [m for t, m in _card(u) if t == qa.BUSY_QUESTION]
-    assert [_datas(m) for m in markups] == [["bgforce" + stack.ids.JOB, "bgleave"]]
+    # The developer's fix of review rev-iter2-002: "Stop and bring back"
+    # carries the mode the switch asked for (bgmode<mode><job>).
+    assert [_datas(m) for m in markups] == [["bgmodeauto" + stack.ids.JOB, "bgleave"]]
 
 
 def test_chat_a_restart_switch_into_a_busy_job_touches_nothing(stack, mk_update):
