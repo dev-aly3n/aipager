@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # aynısı, terminalden
 aipager session <label>            # ya da geçmişi olmayan yeni bir oturum
 aipager session <label> --continue # yeni bir dtach, bu klasörün son konuşması
 ```
+
+Sohbetteki bildirim, oturumun neden sona erdiğini `claude` sürecinin bıraktığı çıkış kodundan söyler (aipager bu kodu `claude` çıkınca `claude-exit-<session>.json` dosyasına kaydeder):
+
+- `🔴 x1 · Oturum çöktü ya da sonlandırıldı`: hiçbir çıkış kodu kaydedilmedi (bilgisayar yeniden başladı ya da oturumun süreci onunla birlikte sonlandırıldı).
+- `🔴 x1 · Oturum sona erdi`: `claude` normal şekilde bitti (çıkış kodu 0).
+- `🔴 x1 · Oturum 2 hata koduyla sona erdi`: `claude` bu kodla başarısız oldu.
+- `🔴 x1 · Oturum SIGKILL sinyaliyle sonlandırıldı`: bir şey `claude` sürecini zorla sonlandırdı (128'in üstündeki çıkış kodları sinyali belirtir).
+- `🔴 x1 · Claude Code başlar başlamaz kapandı (çıkış kodu 1)`: `claude` başladıktan sonraki 10 saniye içinde vazgeçti; genellikle kendi argümanları ya da kurulumu yüzünden. Mesajını görmek için `aipager session x1` ile bağlan ya da onu bir terminalde elle başlat.
+- `🔴 x1 · Sohbeti Claude Code arka planında çalıştığı için Claude Code başlar başlamaz kapandı`: Claude Code, bir arka plan işinin hâlâ tuttuğu bir konuşmaya devam etmeyi reddeder. `↩️ Şimdi geri getir` düğmesine dokun: aipager o iş hiçbir şey yapmıyorsa onu durdurur (çalışıyorsa önce sorar) ve konuşmaya burada devam eder. Bir sonraki bölüme bak.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Bir oturum Claude Code arka planına geçti
+
+`🌙 x1 Claude Code arka planına geçti ve bir sonraki mesajın onu buraya geri getirir.`
+
+Claude Code'da boş bir giriş satırında ← tuşuna basmak, oturumun konuşmasını bir Claude Code arka plan işine taşır ve terminal konuşma yerine Claude Code'un ajan görünümünü gösterir. aipager bunu birkaç saniye içinde fark eder ve o terminale yazmayı bırakır: orada şimdi yazılan her şey başka bir arka plan işi başlatabilir. İş çalışmaya devam eder; kartı, yanıtı ve izin istekleri sohbete hâlâ oturumunkiler olarak ulaşır. Mini App'te oturumun durumu “arka planda” olarak görünür.
+
+Geri getirmek için:
+
+- Ona bir mesaj gönder. Mesaj bekler (👀), aipager arka plan işini durdurur (`claude stop <job>`), oturumu işin konuşmasıyla ve aipager'ın kendi ayarlarıyla yeniden başlatır, sonra mesajı gönderir. İş hâlâ çalışıyorsa önce sana sorulur: `Durdur ve geri getir` yaptığı işi durdurur, `Bırak çalışsın` bitirmesine izin verir (oturumu sonra geri getir). Rolü oturumu yeniden başlatamayan biri şu yanıtı alır: `x1 oturumuna gönderdiğin mesaj, biri oturumu Claude Code arka planından geri getirene kadar bekliyor.`
+- Ya da bildirimin altındaki `↩️ Şimdi geri getir` düğmesine dokun, `/restart x1` gönder ya da Mini App'te Geri getir seçeneğine dokun. İş çalışırken `/stop` o çalışmayı durdurur ve oturumu geri getirir.
+
+O zamana kadar oturuma yazması gereken komutlar (`/compact`, `/model`, Sor ya da Otomatik moda geçiş, `/now`, Yeniden dene) şu yanıtı verir: `Önce x1 oturumunu Claude Code arka planından geri getir.` aipager'ın yazması gereken bir isteğe verilen yanıt da şunu alır: `Yanıtlamak için x1 oturumunu Claude Code arka planından geri getir.` Hook üzerinden giden yanıtlar (izin isteklerinin çoğu) çalışmaya devam eder.
+
+`/resume`, Mini App'teki Devam ettir ve `aipager resume` da taşınmış bir konuşmayı aynı şekilde izler: en yeni konuşmaya devam edilir ve onu hâlâ tutan bir arka plan işi hiçbir şey yapmıyorsa önce durdurulur. `aipager session x1 --resume <id>` aynısını terminalde yapar; iş çalışıyorsa hiçbir şey başlatmak yerine `claude stop <job>` ve `claude attach <job>` yazdırır ve 1 koduyla çıkar.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>5 dakikadır haber gelmeyen bir izin isteği
 

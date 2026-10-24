@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # sama, dari terminal
 aipager session <label>            # atau sesi baru, tanpa riwayat
 aipager session <label> --continue # dtach baru, percakapan terakhir di folder ini
 ```
+
+Pemberitahuan di chat menyebut kenapa sesi berakhir, berdasarkan kode keluar yang ditinggalkan `claude` (aipager mencatatnya di `claude-exit-<session>.json` saat `claude` keluar):
+
+- `🔴 x1 · Sesi crash atau diakhiri`: tidak ada kode keluar yang tercatat (komputer dinyalakan ulang, atau proses sesinya ikut dimatikan).
+- `🔴 x1 · Sesi berakhir`: `claude` berakhir dengan normal (kode keluar 0).
+- `🔴 x1 · Sesi berakhir dengan kode error 2`: `claude` gagal dengan kode itu.
+- `🔴 x1 · Sesi dihentikan oleh sinyal SIGKILL`: ada yang mematikan `claude` (kode keluar di atas 128 menunjukkan sinyalnya).
+- `🔴 x1 · Claude Code berhenti tepat setelah dimulai (kode keluar 1)`: `claude` menyerah dalam 10 detik setelah dimulai, biasanya karena argumen atau pengaturannya sendiri. Sambungkan dengan `aipager session x1` untuk melihat pesannya, atau jalankan sendiri di terminal.
+- `🔴 x1 · Claude Code berhenti tepat setelah dimulai karena percakapannya sedang berjalan di latar belakang Claude Code`: Claude Code menolak melanjutkan percakapan yang masih dipegang tugas latar belakang. Ketuk `↩️ Kembalikan sekarang`: aipager menghentikan tugas itu kalau sedang tidak mengerjakan apa pun (kalau sedang bekerja, aipager bertanya dulu) lalu melanjutkan percakapannya di sini. Lihat bagian berikutnya.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Sesi pindah ke latar belakang Claude Code
+
+`🌙 x1 pindah ke latar belakang Claude Code, dan pesanmu berikutnya akan mengembalikannya ke sini.`
+
+Menekan ← di kolom input yang kosong di Claude Code memindahkan percakapan sesi ke tugas latar belakang Claude Code, dan terminal menampilkan tampilan agen Claude Code, bukan percakapannya. aipager menyadarinya dalam beberapa detik dan berhenti mengetik ke terminal itu: apa pun yang diketik di sana sekarang bisa memulai tugas latar belakang lain. Tugas itu tetap bekerja, dan kartu, jawaban, serta permintaan izinnya tetap sampai ke chat sebagai milik sesi itu. Di Mini App, sesi itu bertuliskan “di latar belakang”.
+
+Untuk mengembalikannya:
+
+- Kirim pesan ke sesi itu. Pesannya menunggu (👀), aipager menghentikan tugas latar belakang (`claude stop <job>`), memulai ulang sesi dengan percakapan tugas itu dan pengaturan aipager sendiri, lalu mengirim pesannya. Kalau tugas itu masih bekerja, kamu ditanya dulu: `Hentikan dan kembalikan` menghentikan yang sedang dikerjakannya, `Biarkan saja` membiarkannya selesai (kembalikan sesinya nanti). Orang yang perannya tidak boleh memulai ulang sesi itu mendapat `Pesanmu untuk x1 menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code.`
+- Atau ketuk `↩️ Kembalikan sekarang` di bawah pemberitahuan itu, `/restart x1`, atau Kembalikan di Mini App. `/stop` saat tugas itu bekerja menghentikan pekerjaan itu dan mengembalikan sesinya.
+
+Sampai saat itu, perintah yang akan mengetik ke sesi (`/compact`, `/model`, pergantian ke Mode Tanya atau Mode Auto, `/now`, Coba lagi) menjawab `Kembalikan dulu x1 dari latar belakang Claude Code.`, dan jawaban untuk permintaan yang harus diketik aipager mendapat `Untuk menjawab, kembalikan dulu x1 dari latar belakang Claude Code.` Jawaban yang lewat hook (sebagian besar permintaan izin) tetap berfungsi.
+
+`/resume`, Lanjutkan di Mini App, dan `aipager resume` mengikuti percakapan yang sudah pindah dengan cara yang sama: percakapan terbaru yang dilanjutkan, dan tugas latar belakang yang masih memegangnya dihentikan dulu kalau sedang tidak mengerjakan apa pun. `aipager session x1 --resume <id>` melakukan hal yang sama di terminal; kalau tugasnya sedang bekerja, perintah ini mencetak `claude stop <job>` dan `claude attach <job>` lalu keluar dengan kode 1 tanpa memulai apa pun.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Permintaan izin tanpa kabar selama 5 menit
 

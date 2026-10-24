@@ -1,6 +1,6 @@
 # Risoluzione dei problemi
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # la stessa cosa, dal terminale
 aipager session <label>            # oppure una sessione nuova, senza cronologia
 aipager session <label> --continue # dtach nuovo, l'ultima conversazione della cartella
 ```
+
+L'avviso nella chat dice perché la sessione è terminata, in base al codice di uscita lasciato da `claude` (aipager lo registra in `claude-exit-<session>.json` quando `claude` esce):
+
+- `🔴 x1 · La sessione è andata in crash o è stata terminata`: non è stato registrato nessun codice di uscita (il computer si è riavviato, o il processo della sessione è stato terminato insieme a lui).
+- `🔴 x1 · Sessione terminata`: `claude` è uscito normalmente (codice di uscita 0).
+- `🔴 x1 · Sessione chiusa con il codice di errore 2`: `claude` è fallito con quel codice.
+- `🔴 x1 · Sessione terminata dal segnale SIGKILL`: qualcosa ha terminato `claude` (i codici di uscita sopra 128 indicano il segnale).
+- `🔴 x1 · Claude Code si è chiuso subito dopo l'avvio (codice di uscita 1)`: `claude` ha rinunciato entro 10 secondi dall'avvio, di solito per colpa dei suoi argomenti o della sua configurazione. Collegati con `aipager session x1` per vedere il suo messaggio, oppure avvialo a mano in un terminale.
+- `🔴 x1 · Claude Code si è chiuso subito dopo l'avvio perché la sua conversazione è in esecuzione nel background di Claude Code`: Claude Code si rifiuta di riprendere una conversazione che un job in background tiene ancora. Tocca `↩️ Riportala qui ora`: aipager ferma quel job se non sta facendo nulla (se lavora, prima chiede) e riprende qui la conversazione. Vedi la sezione successiva.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Una sessione è passata nel background di Claude Code
+
+`🌙 x1 è passata nel background di Claude Code, e il tuo prossimo messaggio la riporta qui.`
+
+Premere ← su un campo di input vuoto in Claude Code sposta la conversazione della sessione in un job in background di Claude Code, e il terminale mostra la vista degli agenti di Claude Code al posto della conversazione. aipager se ne accorge entro un paio di secondi e smette di scrivere in quel terminale: qualsiasi cosa scritta lì adesso potrebbe avviare un altro job in background. Il job continua a lavorare, e la sua scheda, la sua risposta e le sue richieste di permesso arrivano ancora alla chat come quelle della sessione. Nella Mini App la sessione mostra «in background».
+
+Per riportarla qui:
+
+- Mandale un messaggio. Il messaggio aspetta (👀), aipager ferma il job in background (`claude stop <job>`), riavvia la sessione sulla conversazione del job con le impostazioni di aipager e poi invia il messaggio. Se il job sta ancora lavorando, prima ti viene chiesto: `Ferma e riporta qui` ferma quello che sta facendo, `Lasciala andare` lo lascia finire (riportala qui più tardi). Chi ha un ruolo che non può riavviare la sessione riceve `Il tuo messaggio per x1 aspetta finché qualcuno non riporta qui la sessione dal background di Claude Code.`
+- Oppure tocca `↩️ Riportala qui ora` sotto l'avviso, `/restart x1`, o «Riportala qui» nella Mini App. `/stop` mentre il job lavora ferma quel lavoro e riporta qui la sessione.
+
+Fino ad allora, i comandi che scriverebbero nella sessione (`/compact`, `/model`, un passaggio alla modalità «Chiedi» o «Automatico», `/now`, «Riprova») rispondono `Prima riporta qui x1 dal background di Claude Code.`, e la risposta a una richiesta che aipager dovrebbe scrivere riceve `Per rispondere, riporta qui x1 dal background di Claude Code.` Le risposte che passano dall'hook (la maggior parte delle richieste di permesso) funzionano ancora.
+
+`/resume`, «Riprendi» nella Mini App e `aipager resume` seguono allo stesso modo una conversazione passata a un'altra: viene ripresa la conversazione più recente, e un job in background che la tiene ancora viene prima fermato se non sta facendo nulla. `aipager session x1 --resume <id>` fa lo stesso nel terminale; quando il job lavora, stampa `claude stop <job>` e `claude attach <job>` ed esce con il codice 1 invece di avviare qualcosa.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Una richiesta di permesso senza notizie da 5 minuti
 

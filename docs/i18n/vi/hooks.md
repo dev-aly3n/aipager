@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ 6295e500 -->
+<!-- i18n-source: docs/hooks.md @ a7e34bee -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -32,8 +32,12 @@ Datagram là JSON hook của chính Claude Code cùng với các trường aipag
 | `session_id`, `transcript_path`, `cwd`, ... | Các trường của chính Claude Code, giữ nguyên như được gửi. `session_id` là ID cuộc trò chuyện của Claude Code. |
 | `session` | Do aipager thêm: tên của nó cho phiên, `claude-<name>`, lấy từ biến `CLAUDE_DTACH_SESSION` mà aipager đặt khi bắt đầu một phiên. Sự kiện từ một phiên Claude Code mà aipager không khởi động thì không có tên, và aipager bỏ qua chúng. |
 | `sl_tokens` | Do aipager thêm, ở mọi sự kiện trừ `MessageDisplay`, khi file dòng trạng thái của phiên tồn tại: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added` và `lines_removed`. |
+| `claude_pid` | Do aipager thêm, ở các sự kiện của chính phiên: PID của `claude` của phiên đó (`CLAUDE_PID` của Claude Code), mà aipager dùng để tìm claude đó trong danh sách phiên của Claude Code. |
+| `bg_job` | Do aipager thêm, ở mọi sự kiện của một tác vụ chạy nền của Claude Code được tính cho phiên (xem bên dưới): ID của tác vụ. |
 
 Các sự kiện công cụ còn mang `tool_name` và `tool_input`. Mọi sự kiện xảy ra bên trong một subagent đều mang `agent_id` (còn các sự kiện của subagent thì mang thêm `agent_type`); các sự kiện của vòng chính thì không, và aipager dựa vào đó để đặt các lần gọi công cụ của một agent vào đúng dòng của agent đó.
+
+Các tác vụ chạy nền của Claude Code cũng chạy hook của chúng. Nhấn ← khi ô nhập trống sẽ chuyển cuộc trò chuyện của một phiên sang một tác vụ chạy nền (chế độ xem agent của Claude Code), và Claude Code còn giữ sẵn vài tiến trình chạy nền dự phòng cho tác vụ tiếp theo. Hook của chúng chạy với `CLAUDE_JOB_DIR` được đặt, và thừa hưởng tên phiên của bất kỳ claude nào đã khởi động dịch vụ chạy nền của Claude Code, nên tên đó không cho biết gì về chúng. Vì vậy hook chỉ tính một tác vụ chạy nền cho phiên mà chính claude của nó đã chuyển cuộc trò chuyện sang tác vụ đó: hook tìm phiên đó trong file liên kết của tác vụ (`claude-bgjob-<job>.json`, do aipager ghi khi thấy việc chuyển, xem [kiến trúc](architecture.md#file-and-socket-layout)), nếu không thì trong danh sách phiên của Claude Code cùng với danh sách PID của aipager. Sự kiện của tác vụ như vậy được gửi tới aipager như sự kiện của phiên đó, với `bg_job` được đặt, nên câu trả lời, thẻ và các yêu cầu của nó tới được chat của phiên. Mọi tiến trình chạy nền khác đều là tiến trình lạ: hook của nó không ghi gì, không gửi gì và không in gì, chỉ trừ việc `PreToolUse` vẫn kiểm tra các lần gọi công cụ của nó theo quy tắc của phiên mà nó thừa hưởng và in ra một lời từ chối (nó không bao giờ cho phép nhiều hơn phiên đó sẽ cho phép). aipager bỏ một sự kiện `bg_job` mà nó không ghép được với phiên nào đang ở chế độ chạy nền, và không tạo gì cho sự kiện đó.
 
 ## <a id="event-reference"></a>Danh sách sự kiện
 
@@ -41,11 +45,11 @@ Phần xử lý của aipager nằm trong `aipager/dtach/hook_receiver.py`; vi�
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Một phiên vừa bắt đầu, được tiếp tục, hoặc vừa được thu gọn. Một phiên mà aipager chưa theo dõi sẽ được đăng ký. Sau khi thu gọn, thẻ hiện `📦 name · Đã thu gọn cuộc trò chuyện: 82% → 4%` (xem [PreCompact](#precompact--postcompact)). Với một cuộc trò chuyện mới, hook còn xóa dấu việc đang mở của việc trước.
+Một phiên vừa bắt đầu, được tiếp tục, hoặc vừa được thu gọn. Một phiên mà aipager chưa theo dõi sẽ được đăng ký. Sau khi thu gọn, thẻ hiện `📦 name · Đã thu gọn cuộc trò chuyện: 82% → 4%` (xem [PreCompact](#precompact--postcompact)). Với một cuộc trò chuyện mới, hook còn xóa dấu việc đang mở của việc trước. `SessionStart` đầu tiên của một tác vụ chạy nền (nguồn `fork`) chỉ báo cho aipager ID cuộc trò chuyện của tác vụ; nó không đóng việc đang mở đã chuyển đi cùng. `SessionStart` đầu tiên của một phiên được đưa về lại từ chế độ chạy nền của Claude Code sẽ gửi các tin nhắn bị giữ trong lúc đó.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
-Phiên đã kết thúc. Nó được đánh dấu GONE: nó rời khỏi thanh trạng thái được ghim và chuyển sang các phiên đã kết thúc, nơi `/resume` có thể đưa nó trở lại. `aipager session <name>` hoặc `/new <name>` bắt đầu một phiên mới.
+Phiên đã kết thúc. Nó được đánh dấu GONE: nó rời khỏi thanh trạng thái được ghim và chuyển sang các phiên đã kết thúc, nơi `/resume` có thể đưa nó trở lại. `aipager session <name>` hoặc `/new <name>` bắt đầu một phiên mới. `SessionEnd` của một tác vụ chạy nền (tác vụ đã bị dừng) không bao giờ kết thúc phiên: nó kết thúc việc mà tác vụ để ngỏ, giống như `StopFailure`.
 
 ### <a id="userpromptsubmit"></a>`UserPromptSubmit`
 
@@ -102,7 +106,7 @@ Việc kết thúc vì một lỗi API. Phiên trở về trạng thái sẵn s�
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-Một subagent đã bắt đầu hoặc kết thúc. Mỗi subagent có một dòng riêng trên thẻ làm việc, `🤖 <type> · <activity> · <elapsed>`, với các lần gọi công cụ của nó được gộp bên dưới, và được chốt lại thành `✅ 🤖 <type> · N công cụ đã chạy · <elapsed>` khi nó dừng. `SubagentStart` không cho biết agent nào đã khởi động nó: aipager ghép nó với lần gọi `Agent` (`PreToolUse`) cùng loại đang chờ. Khi mọi lần gọi như vậy đều đến từ một agent, agent mới được gắn ngay với agent đó (dòng của nó trên thẻ thành `🤖 pipeline-runner › ship-tester`, và trong trạng thái dưới một câu trả lời nó nằm dưới agent đó); khi chúng đến từ các agent khác nhau, không gì được gắn cho tới khi chính `PostToolUse` của agent đã khởi động nó nêu tên nó. Mô tả của một lần gọi chỉ được dùng khi có đúng một lần gọi loại đó đang chờ. Một subagent mà `SubagentStop` không bao giờ tới sẽ bị bỏ khi nó đã im lặng 30 phút (`AIPAGER_SUBAGENT_SILENCE`, tính bằng giây; không có sự kiện nào mang ID của nó). Một agent đang làm việc gửi sự kiện công cụ vài giây một lần, nên cách này chỉ dọn những agent mà lúc dừng bị bỏ lỡ (một lần khởi động lại, một datagram bị mất); một lần gọi công cụ duy nhất chạy 30 phút mà không có sự kiện nào dưới ID của agent đó cũng bị dọn. `AIPAGER_SUBAGENT_TTL` được chấp nhận như tên cũ của cùng cài đặt này. Các sự kiện `SubagentStop` không có loại và có ID lạ đến thường xuyên và được bỏ qua.
+Một subagent đã bắt đầu hoặc kết thúc. Mỗi subagent có một dòng riêng trên thẻ làm việc, `🤖 <type> · <activity> · <elapsed>`, với các lần gọi công cụ của nó được gộp bên dưới (lần mới nhất luôn hiện sau phần gộp), và được chốt lại thành `✅ 🤖 <type> · N công cụ đã chạy · <elapsed>` khi nó dừng. `SubagentStart` không cho biết agent nào đã khởi động nó: aipager ghép nó với lần gọi `Agent` (`PreToolUse`) cùng loại đang chờ. Khi mọi lần gọi như vậy đều đến từ một agent, agent mới được gắn ngay với agent đó (dòng của nó trên thẻ thành `🤖 pipeline-runner › ship-tester`, và trong trạng thái dưới một câu trả lời nó nằm dưới agent đó); khi chúng đến từ các agent khác nhau, không gì được gắn cho tới khi chính `PostToolUse` của agent đã khởi động nó nêu tên nó. Mô tả của một lần gọi chỉ được dùng khi có đúng một lần gọi loại đó đang chờ. Một subagent mà `SubagentStop` không bao giờ tới sẽ bị bỏ khi nó đã im lặng 30 phút (`AIPAGER_SUBAGENT_SILENCE`, tính bằng giây; không có sự kiện nào mang ID của nó). Một agent đang làm việc gửi sự kiện công cụ vài giây một lần, nên cách này chỉ dọn những agent mà lúc dừng bị bỏ lỡ (một lần khởi động lại, một datagram bị mất); một lần gọi công cụ duy nhất chạy 30 phút mà không có sự kiện nào dưới ID của agent đó cũng bị dọn. `AIPAGER_SUBAGENT_TTL` được chấp nhận như tên cũ của cùng cài đặt này. Các sự kiện `SubagentStop` không có loại và có ID lạ đến thường xuyên và được bỏ qua.
 
 Một agent chạy nền dừng lại trong lúc một agent do nó khởi chạy vẫn đang chạy cũng nhận một `SubagentStop`. aipager coi đó là tạm dừng, không phải kết thúc: agent vẫn đang chạy (dòng của nó, công việc, trạng thái dưới các câu trả lời, thanh được ghim). `SubagentStart` tiếp theo của nó, cùng ID, là lúc nó tiếp tục và không thêm dòng thứ hai; bất kỳ lần gọi công cụ nào do chính nó thực hiện cũng được tính là tiếp tục. Nó kết thúc khi dừng mà không còn agent nào của riêng nó đang chạy. Nếu nó chưa tiếp tục sau hai phút kể từ khi agent cuối cùng trong số đó kết thúc, nó không còn được tính là đang chạy, nhưng không bao giờ được hiện là đã xong. Các agent đang chạy, kể cả những agent đang chờ, được giữ lại khi aipager khởi động lại.
 

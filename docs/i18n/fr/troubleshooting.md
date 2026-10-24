@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # la même chose depuis le terminal
 aipager session <label>            # ou une nouvelle session, sans historique
 aipager session <label> --continue # un nouveau dtach, la dernière conversation du dossier
 ```
+
+L'avis dans la discussion dit pourquoi la session s'est terminée, d'après le code de sortie laissé par `claude` (aipager l'enregistre dans `claude-exit-<session>.json` quand `claude` se termine) :
+
+- `🔴 x1 · La session a planté ou a été terminée` : aucun code de sortie n'a été enregistré (l'ordinateur a redémarré, ou le processus de la session a été arrêté en même temps).
+- `🔴 x1 · Session terminée` : `claude` s'est terminé normalement (code de sortie 0).
+- `🔴 x1 · La session s'est terminée avec le code d'erreur 2` : `claude` a échoué avec ce code.
+- `🔴 x1 · La session a été arrêtée par le signal SIGKILL` : quelque chose a arrêté `claude` de force (les codes de sortie au-dessus de 128 désignent le signal).
+- `🔴 x1 · Claude Code s'est arrêté juste après son démarrage (code de sortie 1)` : `claude` a abandonné dans les 10 secondes qui ont suivi son démarrage, le plus souvent à cause de ses propres arguments ou de sa configuration. Attachez-vous avec `aipager session x1` pour voir son message, ou lancez-le à la main dans un terminal.
+- `🔴 x1 · Claude Code s'est arrêté juste après son démarrage, car sa conversation tourne à l'arrière-plan de Claude Code` : Claude Code refuse de reprendre une conversation qu'une tâche d'arrière-plan tient encore. Touchez `↩️ La ramener maintenant` : aipager arrête cette tâche si elle ne fait rien (il demande d'abord si elle travaille) et reprend la conversation ici. Voir la section suivante.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Une session est passée à l'arrière-plan de Claude Code
+
+`🌙 x1 est passée à l'arrière-plan de Claude Code, et votre prochain message la ramène ici.`
+
+Appuyer sur ← sur une saisie vide dans Claude Code fait passer la conversation de la session dans une tâche d'arrière-plan de Claude Code, et le terminal affiche la vue des agents de Claude Code au lieu de la conversation. aipager s'en aperçoit en quelques secondes et cesse de taper dans ce terminal : tout ce qui y serait tapé maintenant pourrait lancer une autre tâche d'arrière-plan. La tâche continue de travailler, et sa carte, sa réponse et ses demandes d'autorisation arrivent toujours dans la discussion comme celles de la session. Dans la Mini App, la session affiche « à l'arrière-plan ».
+
+Pour la ramener :
+
+- Envoyez-lui un message. Le message attend (👀), aipager arrête la tâche d'arrière-plan (`claude stop <job>`), redémarre la session sur la conversation de la tâche avec les paramètres propres d'aipager, puis envoie le message. Si la tâche travaille encore, la question vous est posée d'abord : `Arrêter et ramener` arrête ce qu'elle fait, `Laisser tourner` la laisse finir (ramenez la session plus tard). Une personne dont le rôle ne permet pas de redémarrer la session reçoit `Votre message pour x1 attend que quelqu'un ramène la session de l'arrière-plan de Claude Code.`
+- Ou touchez `↩️ La ramener maintenant` sous l'avis, `/restart x1`, ou La ramener dans la Mini App. `/stop` pendant que la tâche travaille arrête ce travail et ramène la session.
+
+D'ici là, les commandes qui taperaient dans la session (`/compact`, `/model`, un passage en Mode Demander ou en Mode Automatique, `/now`, Réessayer) répondent `Ramenez d'abord x1 de l'arrière-plan de Claude Code.`, et une réponse à une demande qu'aipager devrait taper reçoit `Pour répondre, ramenez d'abord x1 de l'arrière-plan de Claude Code.` Les réponses qui passent par le hook (la plupart des demandes d'autorisation) fonctionnent toujours.
+
+`/resume`, Reprendre dans la Mini App et `aipager resume` suivent de la même façon une conversation qui a continué ailleurs : c'est la conversation la plus récente qui est reprise, et une tâche d'arrière-plan qui la tient encore est d'abord arrêtée si elle ne fait rien. `aipager session x1 --resume <id>` fait de même dans le terminal ; quand la tâche travaille, il affiche `claude stop <job>` et `claude attach <job>` et quitte avec le code 1 au lieu de lancer quoi que ce soit.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Une demande d'autorisation sans nouvelles depuis 5 minutes
 

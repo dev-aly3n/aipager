@@ -1,6 +1,6 @@
 # Hook olayları
 
-<!-- i18n-source: docs/hooks.md @ 6295e500 -->
+<!-- i18n-source: docs/hooks.md @ a7e34bee -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../hooks.md))
 
@@ -32,8 +32,12 @@ Datagram, Claude Code'un kendi hook JSON'udur, aipager'ın eklediği alanlarla (
 | `session_id`, `transcript_path`, `cwd`, ... | Claude Code'un kendi alanları, geldiği gibi. `session_id`, Claude Code'daki konuşmanın kimliğidir. |
 | `session` | aipager ekler: oturum için aipager'ın kullandığı ad, `claude-<name>`, aipager'ın oturumu başlatırken ayarladığı `CLAUDE_DTACH_SESSION` değişkeninden. aipager'ın başlatmadığı bir Claude Code oturumundan gelen olaylar adsız gelir ve aipager onları yok sayar. |
 | `sl_tokens` | aipager ekler, `MessageDisplay` dışındaki her olayda, oturumun durum satırı dosyası varsa: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added` ve `lines_removed`. |
+| `claude_pid` | aipager ekler, oturumun kendi olaylarında: oturumun `claude` sürecinin PID değeri (Claude Code'un `CLAUDE_PID` değişkeni); aipager o claude sürecini Claude Code'un oturum listesinde bununla bulur. |
+| `bg_job` | aipager ekler, oturum için sayılan bir Claude Code arka plan işinin her olayında (aşağıya bak): işin kimliği. |
 
 Araç olayları ayrıca `tool_name` ve `tool_input` taşır. Bir alt ajanın içindeki her olay `agent_id` taşır (alt ajan olayları ayrıca `agent_type` taşır); ana döngünün kendi olaylarında bunlar yoktur ve aipager, ajanın araç çağrılarını bu sayede o ajanın satırına koyar.
+
+Claude Code'un arka plan işleri de hook'larını çalıştırır. Boş bir giriş satırında ← tuşu, bir oturumun konuşmasını bir arka plan işine taşır (Claude Code'un ajan görünümü); ayrıca Claude Code bir sonraki iş için yedek arka plan süreçlerini hazır tutar. Bunların hook'ları `CLAUDE_JOB_DIR` ayarlıyken çalışır ve Claude Code'un arka plan hizmetini hangi claude başlattıysa onun oturum adını devralır, yani bu ad onlar hakkında hiçbir şey söylemez. Bu yüzden hook bir arka plan işini yalnızca kendi claude süreci konuşmasını o işe taşıyan oturum için sayar: o oturumu işin bağlantı dosyasında (`claude-bgjob-<job>.json`; aipager taşınmayı gördüğünde yazar, bkz. [mimari](architecture.md#file-and-socket-layout)) ya da yoksa Claude Code'un oturum listesinde, aipager'ın PID listesiyle birlikte bulur. Böyle bir işin olayları aipager'a o oturumun olayları olarak, `bg_job` ayarlı halde gider; böylece yanıtı, kartı ve istekleri oturumun sohbetine ulaşır. Diğer her arka plan süreci yabancıdır: hook'u hiçbir şey yazmaz, hiçbir şey göndermez ve hiçbir şey yazdırmaz; yalnızca `PreToolUse` onun araç çağrılarını devraldığı oturum kurallarına göre denetlemeye devam eder ve bir ret yazdırır (o oturumun izin vereceğinden fazlasına asla izin vermez). aipager, arka plandaki hiçbir oturumla eşleştiremediği bir `bg_job` olayını atar ve onun için hiçbir şey oluşturmaz.
 
 ## <a id="event-reference"></a>Olay başvurusu
 
@@ -41,11 +45,11 @@ aipager'ın işleyicileri `aipager/dtach/hook_receiver.py` içinde; hook'un kend
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Bir oturum başladı, devam ettirildi ya da konuşması sıkıştırıldı. aipager'ın henüz izlemediği bir oturum kaydedilir. Sıkıştırmadan sonra kart `📦 name · Konuşma sıkıştırıldı: 82% → 4%` gösterir (bkz. [PreCompact](#precompact--postcompact)). Yeni bir konuşma için hook ayrıca önceki görevin açık görev işaretini kaldırır.
+Bir oturum başladı, devam ettirildi ya da konuşması sıkıştırıldı. aipager'ın henüz izlemediği bir oturum kaydedilir. Sıkıştırmadan sonra kart `📦 name · Konuşma sıkıştırıldı: 82% → 4%` gösterir (bkz. [PreCompact](#precompact--postcompact)). Yeni bir konuşma için hook ayrıca önceki görevin açık görev işaretini kaldırır. Bir arka plan işinin ilk `SessionStart` olayı (kaynak `fork`) aipager'a yalnızca işin konuşma kimliğini bildirir; onunla birlikte taşınan açık görevi kapatmaz. Claude Code arka planından geri getirilen bir oturumun ilk `SessionStart` olayı, bu arada bekletilen mesajları gönderir.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
-Oturum sona erdi. GONE olarak işaretlenir: sabitlenmiş durum satırından kalkar ve sona eren oturumlara geçer; `/resume` onu oradan geri getirebilir. `aipager session <name>` ya da `/new <name>` yenisini başlatır.
+Oturum sona erdi. GONE olarak işaretlenir: sabitlenmiş durum satırından kalkar ve sona eren oturumlara geçer; `/resume` onu oradan geri getirebilir. `aipager session <name>` ya da `/new <name>` yenisini başlatır. Bir arka plan işinin `SessionEnd` olayı (iş durduruldu) oturumu asla sonlandırmaz: `StopFailure` gibi, işin açık bıraktığı görevi bitirir.
 
 ### <a id="userpromptsubmit"></a>`UserPromptSubmit`
 
@@ -102,7 +106,7 @@ Görev bir API hatasıyla bitti. Oturum hazır olur ve varsa yanıt `Stop` gibi 
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-Bir alt ajan başladı ya da bitti. Her birinin çalışma kartında kendi satırı vardır, `🤖 <type> · <activity> · <elapsed>`; kendi araç çağrıları altında katlanmıştır ve durduğunda `✅ 🤖 <type> · N araç · <elapsed>` olarak donar. `SubagentStart`, onu hangi ajanın başlattığını söylemez: aipager onu, bekleyen aynı türden `Agent` çağrısıyla (`PreToolUse`) eşleştirir. Bu tür çağrıların hepsi tek bir ajandan geldiyse, yeni ajan hemen o ajana bağlanır (karttaki satırı `🤖 pipeline-runner › ship-tester` olur ve bir yanıtın altındaki durumda o ajanın altında yer alır); farklı ajanlardan geldiyse, başlatan ajanın kendi `PostToolUse` olayı onun adını verene kadar hiçbir şey bağlanmaz. Bir çağrının açıklaması yalnızca o türden tam olarak bir çağrı beklerken kullanılır. `SubagentStop` olayı hiç gelmeyen bir alt ajan, 30 dakika sessiz kaldığında (`AIPAGER_SUBAGENT_SILENCE`, saniye cinsinden; kimliğiyle hiçbir türden olay yok) kaldırılır. Çalışan bir ajan birkaç saniyede bir araç olayı gönderir, bu yüzden böyle yalnızca durması kaçırılmış bir ajan kaldırılır (yeniden başlatma, kaybolan bir datagram); o ajanın kimliğiyle tek bir olay gelmeden 30 dakika süren tek bir araç çağrısı da onu kaldırır. `AIPAGER_SUBAGENT_TTL` aynı ayarın eski adı olarak kabul edilir. Türü olmayan ve kimliği bilinmeyen `SubagentStop` olayları sık gelir ve yok sayılır.
+Bir alt ajan başladı ya da bitti. Her birinin çalışma kartında kendi satırı vardır, `🤖 <type> · <activity> · <elapsed>`; kendi araç çağrıları altında katlanmıştır (en yenisi katlanan kısmın ardından hep görünür) ve durduğunda `✅ 🤖 <type> · N araç · <elapsed>` olarak donar. `SubagentStart`, onu hangi ajanın başlattığını söylemez: aipager onu, bekleyen aynı türden `Agent` çağrısıyla (`PreToolUse`) eşleştirir. Bu tür çağrıların hepsi tek bir ajandan geldiyse, yeni ajan hemen o ajana bağlanır (karttaki satırı `🤖 pipeline-runner › ship-tester` olur ve bir yanıtın altındaki durumda o ajanın altında yer alır); farklı ajanlardan geldiyse, başlatan ajanın kendi `PostToolUse` olayı onun adını verene kadar hiçbir şey bağlanmaz. Bir çağrının açıklaması yalnızca o türden tam olarak bir çağrı beklerken kullanılır. `SubagentStop` olayı hiç gelmeyen bir alt ajan, 30 dakika sessiz kaldığında (`AIPAGER_SUBAGENT_SILENCE`, saniye cinsinden; kimliğiyle hiçbir türden olay yok) kaldırılır. Çalışan bir ajan birkaç saniyede bir araç olayı gönderir, bu yüzden böyle yalnızca durması kaçırılmış bir ajan kaldırılır (yeniden başlatma, kaybolan bir datagram); o ajanın kimliğiyle tek bir olay gelmeden 30 dakika süren tek bir araç çağrısı da onu kaldırır. `AIPAGER_SUBAGENT_TTL` aynı ayarın eski adı olarak kabul edilir. Türü olmayan ve kimliği bilinmeyen `SubagentStop` olayları sık gelir ve yok sayılır.
 
 Başlattığı bir ajan hâlâ çalışırken duran bir arka plan ajanı da bir `SubagentStop` alır. aipager bunu bir son değil, bir duraklama sayar: ajan çalışıyor olarak kalır (satırı, iş, yanıtların altındaki durum, sabitlenmiş satır). Aynı kimlikle gelen bir sonraki `SubagentStart` onun devam etmesidir ve ikinci bir satır eklemez; kendi yaptığı herhangi bir araç çağrısı da devam sayılır. Kendi ajanlarından hiçbiri artık çalışmıyorken durduğunda biter. Bunların sonuncusu bittikten iki dakika sonra hâlâ devam etmediyse artık çalışıyor sayılmaz, ama asla bitmiş gösterilmez. Çalışan ajanlar, bekleyenler dahil, aipager yeniden başlatıldığında korunur.
 

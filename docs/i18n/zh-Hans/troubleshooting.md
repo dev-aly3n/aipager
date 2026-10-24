@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -141,6 +141,30 @@ aipager resume <label>             # 同样的事，在终端里做
 aipager session <label>            # 或者一个全新的会话，没有历史
 aipager session <label> --continue # 新的 dtach，接着这个文件夹最近的对话
 ```
+
+聊天里的通知会根据 `claude` 留下的退出码说明会话为什么结束（`claude` 退出时，aipager 把它记录在 `claude-exit-<session>.json` 里）：
+
+- `🔴 x1 · 会话崩溃或被结束`：没有记录到退出码（电脑重启了，或者会话的进程被一起结束了）。
+- `🔴 x1 · 会话已关闭`：`claude` 正常结束了（退出码 0）。
+- `🔴 x1 · 会话以错误码 2 退出`：`claude` 以这个代码失败了。
+- `🔴 x1 · 会话被信号 SIGKILL 结束`：有东西强行结束了 `claude`（大于 128 的退出码对应信号）。
+- `🔴 x1 · Claude Code 刚启动就退出了（退出码 1）`：`claude` 启动后 10 秒内就放弃了，通常是因为它自己的参数或设置。用 `aipager session x1` 连接上去看它的消息，或者在终端里手动启动它。
+- `🔴 x1 · Claude Code 刚启动就退出了，因为它的对话正在 Claude Code 后台运行`：Claude Code 拒绝恢复仍被后台任务占着的对话。点 `↩️ 现在带回来`：如果那个任务空闲，aipager 就停止它（如果它在工作，会先询问），然后在这里恢复对话。见下一节。
+
+## <a id="a-session-moved-to-claude-codes-background"></a>会话移到了 Claude Code 后台
+
+`🌙 x1 已转到 Claude Code 后台，你的下一条消息会把它带回这里。`
+
+在 Claude Code 的空输入框里按 ← 会把会话的对话移到一个 Claude Code 后台任务里，终端显示的不再是对话，而是 Claude Code 的代理视图。aipager 会在几秒内发现，并停止向那个终端输入：现在在那里输入的任何东西都可能启动另一个后台任务。这个任务会继续工作，它的卡片、回答和权限请求仍会作为该会话的内容到达聊天。在 Mini App 里，这个会话显示为“在后台”。
+
+把它带回来：
+
+- 给它发一条消息。消息会等着（👀），aipager 停止后台任务（`claude stop <job>`），用 aipager 自己的设置在该任务的对话上重启会话，然后发送消息。如果任务还在工作，会先问你：`停止并带回来` 停止它正在做的事，`让它继续` 让它做完（之后再把会话带回来）。角色不能重启该会话的人会收到 `你发给 x1 的消息会一直等着，直到有人把这个会话从 Claude Code 后台带回来。`
+- 或者点通知下面的 `↩️ 现在带回来`、发送 `/restart x1`，或在 Mini App 里点“带回来”。任务在工作时发送 `/stop` 会停止那项工作，并把会话带回来。
+
+在此之前，需要向会话输入的命令（`/compact`、`/model`、切换到询问模式或自动模式、`/now`、重试）会回复 `请先把 x1 从 Claude Code 后台带回来。`，需要 aipager 输入的请求回答会收到 `要回答这个，请先把 x1 从 Claude Code 后台带回来。`通过 hook 的回答（大多数权限请求）仍然有效。
+
+`/resume`、Mini App 里的“恢复”和 `aipager resume` 也会同样地跟随转到别处的对话：恢复的是最新的对话，仍占着它的后台任务如果空闲，会先被停止。`aipager session x1 --resume <id>` 在终端里也是这样；任务在工作时，它会打印 `claude stop <job>` 和 `claude attach <job>`，并以代码 1 退出，不启动任何东西。
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>一个权限请求 5 分钟没有消息
 

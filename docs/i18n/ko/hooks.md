@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ 6295e500 -->
+<!-- i18n-source: docs/hooks.md @ a7e34bee -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 
@@ -32,8 +32,12 @@ hook은 자기 메모리를 1 GB로 제한해요. 이 한도에 닿은 hook은 �
 | `session_id`, `transcript_path`, `cwd`, ... | Claude Code 자체 필드, 그대로 유지해요. `session_id`는 Claude Code의 대화 ID예요. |
 | `session` | aipager가 추가: aipager가 세션에 붙인 이름 `claude-<name>`, aipager가 세션을 시작할 때 설정하는 변수 `CLAUDE_DTACH_SESSION`에서 와요. aipager가 시작하지 않은 Claude Code 세션의 이벤트에는 이름이 없고, aipager는 그런 이벤트를 무시해요. |
 | `sl_tokens` | aipager가 추가, `MessageDisplay`를 뺀 모든 이벤트에, 그 세션의 상태 줄 파일이 있을 때: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added`, `lines_removed`. |
+| `claude_pid` | aipager가 추가, 세션 자신의 이벤트에: 그 세션 `claude`의 PID(Claude Code의 `CLAUDE_PID`)예요. aipager는 이것으로 Claude Code 세션 목록에서 그 claude를 찾아요. |
+| `bg_job` | aipager가 추가, 그 세션 몫으로 치는 Claude Code 백그라운드 작업의 모든 이벤트에(아래 참고): 그 작업의 ID예요. |
 
 도구 이벤트에는 `tool_name`과 `tool_input`도 있어요. 서브에이전트(subagent) 안에서 일어난 모든 이벤트에는 `agent_id`가 있고(서브에이전트 이벤트에는 `agent_type`도 있어요), 메인 루프 자체의 이벤트에는 없어요. aipager는 이것으로 에이전트의 도구 호출을 그 에이전트 자기 줄에 넣어요.
+
+Claude Code의 백그라운드 작업도 hook을 실행해요. 입력란이 비어 있을 때 ←를 누르면 세션의 대화가 백그라운드 작업으로 옮겨지고(Claude Code의 에이전트 보기), Claude Code는 다음 작업을 위해 여분의 백그라운드 프로세스도 준비해 둬요. 이들의 hook은 `CLAUDE_JOB_DIR`이 설정된 채로 실행되고, Claude Code 백그라운드 서비스를 시작한 claude가 무엇이든 그 세션 이름을 물려받아서, 그 이름으로는 이들에 대해 아무것도 알 수 없어요. 그래서 hook은 백그라운드 작업을, 자기 claude가 대화를 그 작업으로 옮긴 세션의 몫으로만 쳐요. 그 세션은 작업의 연결 파일(`claude-bgjob-<job>.json`, aipager가 옮겨 간 것을 보면 써요. [아키텍처](architecture.md#file-and-socket-layout) 참고)에서 찾고, 없으면 Claude Code 세션 목록과 aipager의 PID 목록을 함께 보고 찾아요. 그런 작업의 이벤트는 `bg_job`이 설정된 채 그 세션의 이벤트로 aipager에 가서, 답변, 카드, 요청이 그 세션의 채팅에 도착해요. 다른 백그라운드 프로세스는 모두 남의 것이에요. 그 hook은 아무것도 쓰지 않고, 보내지 않고, 출력하지 않아요. 다만 `PreToolUse`는 물려받은 세션 규칙으로 그 도구 호출을 계속 검사하고 거부를 출력해요(그 세션이 허용할 것보다 더 허용하는 일은 절대 없어요). aipager는 백그라운드에 있는 세션과 짝지을 수 없는 `bg_job` 이벤트를 버리고, 그것을 위해 아무것도 만들지 않아요.
 
 ## <a id="event-reference"></a>이벤트 레퍼런스
 
@@ -41,11 +45,11 @@ aipager의 처리기는 `aipager/dtach/hook_receiver.py`에 있고, hook 자체�
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-세션이 시작됐거나, 재개됐거나, 대화가 압축됐어요. aipager가 아직 추적하지 않는 세션은 등록돼요. 압축 뒤에는 카드에 `📦 name · 대화 압축됨: 82% → 4%`가 나와요([PreCompact](#precompact--postcompact) 참고). 새 대화라면 hook이 이전 작업의 열림 표시도 지워요.
+세션이 시작됐거나, 재개됐거나, 대화가 압축됐어요. aipager가 아직 추적하지 않는 세션은 등록돼요. 압축 뒤에는 카드에 `📦 name · 대화 압축됨: 82% → 4%`가 나와요([PreCompact](#precompact--postcompact) 참고). 새 대화라면 hook이 이전 작업의 열림 표시도 지워요. 백그라운드 작업의 첫 `SessionStart`(소스 `fork`)는 aipager에 그 작업의 대화 ID만 알려 줘요. 함께 옮겨 간 열린 작업을 끝내지는 않아요. Claude Code 백그라운드에서 다시 가져온 세션의 첫 `SessionStart`는 그동안 보류된 메시지를 보내요.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
-세션이 끝났어요. GONE으로 표시돼요. 고정된 상태 표시줄에서 빠지고, 종료된 세션으로 옮겨지고, `/resume`으로 되돌릴 수 있어요. `aipager session <name>`이나 `/new <name>`은 새 세션을 시작해요.
+세션이 끝났어요. GONE으로 표시돼요. 고정된 상태 표시줄에서 빠지고, 종료된 세션으로 옮겨지고, `/resume`으로 되돌릴 수 있어요. `aipager session <name>`이나 `/new <name>`은 새 세션을 시작해요. 백그라운드 작업의 `SessionEnd`(작업이 중지됨)는 절대 세션을 끝내지 않아요. `StopFailure`처럼, 그 백그라운드 작업이 끝내지 않고 남긴 작업만 닫아요.
 
 ### <a id="userpromptsubmit"></a>`UserPromptSubmit`
 
@@ -102,7 +106,7 @@ API 오류로 작업이 끝났어요. 세션이 준비됨이 되고, 답변이 �
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-서브에이전트가 시작했거나 끝났어요. 서브에이전트마다 작업 카드에 자기 줄 `🤖 <type> · <activity> · <elapsed>`이 있고, 자기 도구 호출은 그 아래에 접혀 있다가, 멈추면 `✅ 🤖 <type> · 도구 N번 사용 · <elapsed>`로 고정돼요. `SubagentStart`는 어느 에이전트가 시작했는지 알려 주지 않아요. 그래서 aipager는 기다리고 있는 같은 유형의 `Agent` 호출(`PreToolUse`)과 짝지어요. 그런 호출이 모두 한 에이전트에서 왔다면 새 에이전트를 바로 그 에이전트에 연결해요(카드 줄이 `🤖 pipeline-runner › ship-tester`가 되고, 답변 아래 상태에서 그 에이전트 아래에 들어가요). 여러 에이전트에서 왔다면 시작한 에이전트 자신의 `PostToolUse`가 이름을 알려 줄 때까지 아무것도 연결하지 않아요. 호출의 설명은 그 유형의 호출이 정확히 하나 기다리고 있을 때만 써요. `SubagentStop`이 끝내 오지 않는 서브에이전트는 30분 동안 조용하면 지워져요(`AIPAGER_SUBAGENT_SILENCE`, 초 단위, 그동안 그 ID가 있는 이벤트가 하나도 없을 때). 일하는 에이전트는 몇 초마다 도구 이벤트를 보내니까, 이것은 멈춤 신호를 놓친 에이전트(재시작, 잃어버린 datagram)만 거둬 가요. 한 번에 30분 동안 실행되면서 그 에이전트 ID로 아무 이벤트도 없는 도구 호출도 에이전트를 거둬 가게 해요. `AIPAGER_SUBAGENT_TTL`은 같은 설정의 예전 이름으로 여전히 받아들여요. 유형이 없고 ID를 모르는 `SubagentStop` 이벤트는 자주 오고, 무시돼요.
+서브에이전트가 시작했거나 끝났어요. 서브에이전트마다 작업 카드에 자기 줄 `🤖 <type> · <activity> · <elapsed>`이 있고, 자기 도구 호출은 그 아래에 접혀 있다가(가장 최근 호출은 접힌 부분 뒤에 항상 보여요), 멈추면 `✅ 🤖 <type> · 도구 N번 사용 · <elapsed>`로 고정돼요. `SubagentStart`는 어느 에이전트가 시작했는지 알려 주지 않아요. 그래서 aipager는 기다리고 있는 같은 유형의 `Agent` 호출(`PreToolUse`)과 짝지어요. 그런 호출이 모두 한 에이전트에서 왔다면 새 에이전트를 바로 그 에이전트에 연결해요(카드 줄이 `🤖 pipeline-runner › ship-tester`가 되고, 답변 아래 상태에서 그 에이전트 아래에 들어가요). 여러 에이전트에서 왔다면 시작한 에이전트 자신의 `PostToolUse`가 이름을 알려 줄 때까지 아무것도 연결하지 않아요. 호출의 설명은 그 유형의 호출이 정확히 하나 기다리고 있을 때만 써요. `SubagentStop`이 끝내 오지 않는 서브에이전트는 30분 동안 조용하면 지워져요(`AIPAGER_SUBAGENT_SILENCE`, 초 단위, 그동안 그 ID가 있는 이벤트가 하나도 없을 때). 일하는 에이전트는 몇 초마다 도구 이벤트를 보내니까, 이것은 멈춤 신호를 놓친 에이전트(재시작, 잃어버린 datagram)만 거둬 가요. 한 번에 30분 동안 실행되면서 그 에이전트 ID로 아무 이벤트도 없는 도구 호출도 에이전트를 거둬 가게 해요. `AIPAGER_SUBAGENT_TTL`은 같은 설정의 예전 이름으로 여전히 받아들여요. 유형이 없고 ID를 모르는 `SubagentStop` 이벤트는 자주 오고, 무시돼요.
 
 자기가 시작한 에이전트가 아직 실행 중인데 멈춘 백그라운드 에이전트도 `SubagentStop`을 받아요. aipager는 이것을 끝이 아니라 잠깐 멈춤으로 봐요. 그 에이전트는 계속 실행 중으로 남아요(자기 줄, 그 일, 답변 아래 상태, 고정된 표시줄). 같은 ID로 오는 다음 `SubagentStart`는 이어서 하는 것이고 두 번째 줄을 만들지 않아요. 그 에이전트가 직접 하는 도구 호출도 이어서 하는 것으로 쳐요. 자기 에이전트가 하나도 실행 중이지 않은 상태로 멈추면 끝나요. 그중 마지막 에이전트가 끝나고 2분이 지나도 이어서 하지 않으면 더 이상 실행 중으로 세지 않지만, 완료로 보여 주지는 않아요. 실행 중인 에이전트는, 기다리는 에이전트까지 포함해, aipager가 재시작해도 남아요.
 

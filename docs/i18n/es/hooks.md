@@ -1,6 +1,6 @@
 # Eventos de hook
 
-<!-- i18n-source: docs/hooks.md @ 6295e500 -->
+<!-- i18n-source: docs/hooks.md @ a7e34bee -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../hooks.md))
 
@@ -32,8 +32,12 @@ El datagrama es el JSON de hook del propio Claude Code con los campos que añade
 | `session_id`, `transcript_path`, `cwd`, ... | Los campos propios de Claude Code, tal como llegan. `session_id` es el ID de la conversación en Claude Code. |
 | `session` | Lo añade aipager: su nombre para la sesión, `claude-<name>`, de la variable `CLAUDE_DTACH_SESSION` que aipager pone al arrancar una sesión. Los eventos de una sesión de Claude Code que aipager no arrancó no llevan nombre y aipager los ignora. |
 | `sl_tokens` | Lo añade aipager, en todos los eventos menos `MessageDisplay`, cuando existe el archivo de la línea de estado de la sesión: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added` y `lines_removed`. |
+| `claude_pid` | Lo añade aipager en los eventos propios de la sesión: el PID de su `claude` (el `CLAUDE_PID` de Claude Code), con el que aipager encuentra ese claude en la lista de sesiones de Claude Code. |
+| `bg_job` | Lo añade aipager en cada evento de una tarea en segundo plano de Claude Code que cuenta para la sesión (mira abajo): el ID de la tarea. |
 
 Los eventos de herramienta también llevan `tool_name` y `tool_input`. Cada evento que ocurre dentro de un subagente lleva `agent_id` (y los eventos de subagente, `agent_type`); los del bucle principal no, y aipager usa eso para poner las herramientas de un agente en la fila de ese agente.
+
+Las tareas en segundo plano de Claude Code también ejecutan sus hooks. ← en una entrada vacía pasa la conversación de una sesión a una tarea en segundo plano (la vista de agentes de Claude Code), y Claude Code además deja listos procesos en segundo plano de reserva para la siguiente tarea. Sus hooks se ejecutan con `CLAUDE_JOB_DIR` definido y heredan el nombre de sesión del claude que haya arrancado el servicio en segundo plano de Claude Code, así que ese nombre no dice nada de ellos. Por eso el hook cuenta una tarea en segundo plano solo para la sesión cuyo propio claude pasó su conversación a esa tarea: encuentra esa sesión en el archivo de enlace de la tarea (`claude-bgjob-<job>.json`, que aipager escribe cuando ve el cambio, mira [arquitectura](architecture.md#file-and-socket-layout)) o, si no, en la lista de sesiones de Claude Code junto con la lista de PID de aipager. Los eventos de esa tarea le llegan a aipager como los de esa sesión, con `bg_job` puesto, así que su respuesta, su tarjeta y sus solicitudes llegan al chat de la sesión. Cualquier otro proceso en segundo plano es ajeno: su hook no escribe nada, no envía nada y no imprime nada, salvo que `PreToolUse` sigue comprobando sus llamadas a herramientas con las reglas de la sesión que heredó e imprime un rechazo (nunca permite más de lo que permitiría esa sesión). aipager descarta un evento `bg_job` que no puede asociar a una sesión en segundo plano, y no crea nada para él.
 
 ## <a id="event-reference"></a>Referencia de eventos
 
@@ -41,11 +45,11 @@ Los manejadores de aipager están en `aipager/dtach/hook_receiver.py`; el trabaj
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Una sesión arrancó, se reanudó o se compactó su conversación. Una sesión que aipager aún no sigue se registra. Después de compactar, la tarjeta dice `📦 name · Conversación compactada: 82% → 4%` (mira [PreCompact](#precompact--postcompact)). Para una conversación nueva, el hook también borra la marca de tarea abierta de la tarea anterior.
+Una sesión arrancó, se reanudó o se compactó su conversación. Una sesión que aipager aún no sigue se registra. Después de compactar, la tarjeta dice `📦 name · Conversación compactada: 82% → 4%` (mira [PreCompact](#precompact--postcompact)). Para una conversación nueva, el hook también borra la marca de tarea abierta de la tarea anterior. El primer `SessionStart` de una tarea en segundo plano (origen `fork`) solo le dice a aipager el ID de la conversación de la tarea; no cierra la tarea abierta que se movió con ella. El primer `SessionStart` de una sesión traída de vuelta del segundo plano de Claude Code envía los mensajes retenidos mientras tanto.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
-La sesión terminó. Se marca como GONE: sale de la barra de estado fijada y pasa a las sesiones terminadas, donde `/resume` puede recuperarla. `aipager session <name>` o `/new <name>` crea una nueva.
+La sesión terminó. Se marca como GONE: sale de la barra de estado fijada y pasa a las sesiones terminadas, donde `/resume` puede recuperarla. `aipager session <name>` o `/new <name>` crea una nueva. El `SessionEnd` de una tarea en segundo plano (la tarea se detuvo) nunca termina la sesión: cierra una tarea que dejó abierta, como hace `StopFailure`.
 
 ### <a id="userpromptsubmit"></a>`UserPromptSubmit`
 
@@ -102,7 +106,7 @@ La tarea terminó con un error de la API. La sesión queda lista y la respuesta,
 
 ### <a id="subagentstart--subagentstop"></a>`SubagentStart` / `SubagentStop`
 
-Un subagente arrancó o terminó. Cada uno tiene su propia fila en la tarjeta de actividad, `🤖 <type> · <activity> · <elapsed>`, con sus propias herramientas plegadas debajo, y al terminar se fija como `✅ 🤖 <type> · N herramientas usadas · <elapsed>`. `SubagentStart` no dice qué agente lo lanzó: aipager lo empareja con la llamada a `Agent` (`PreToolUse`) de su tipo que está esperando. Si todas esas llamadas vienen de un mismo agente, el nuevo agente queda unido a ese agente enseguida (su fila en la tarjeta dice `🤖 pipeline-runner › ship-tester`, y en el estado bajo una respuesta aparece debajo de él); si vienen de agentes distintos, no se une nada hasta que el propio `PostToolUse` del agente que lo lanzó lo nombra. La descripción de una llamada solo se usa cuando hay exactamente una llamada de ese tipo esperando. Un subagente cuyo `SubagentStop` nunca llega se descarta cuando lleva 30 minutos sin dar noticias (`AIPAGER_SUBAGENT_SILENCE`, en segundos; ningún evento de ningún tipo con su ID). Un agente que trabaja envía eventos de herramientas cada pocos segundos, así que esto solo recoge uno cuyo final se perdió (un reinicio, un datagrama perdido); una sola herramienta que dure 30 minutos sin ningún evento con el ID de ese agente también lo recoge. `AIPAGER_SUBAGENT_TTL` se acepta como nombre antiguo del mismo ajuste.
+Un subagente arrancó o terminó. Cada uno tiene su propia fila en la tarjeta de actividad, `🤖 <type> · <activity> · <elapsed>`, con sus propias herramientas plegadas debajo (la más reciente siempre visible después de lo plegado), y al terminar se fija como `✅ 🤖 <type> · N herramientas usadas · <elapsed>`. `SubagentStart` no dice qué agente lo lanzó: aipager lo empareja con la llamada a `Agent` (`PreToolUse`) de su tipo que está esperando. Si todas esas llamadas vienen de un mismo agente, el nuevo agente queda unido a ese agente enseguida (su fila en la tarjeta dice `🤖 pipeline-runner › ship-tester`, y en el estado bajo una respuesta aparece debajo de él); si vienen de agentes distintos, no se une nada hasta que el propio `PostToolUse` del agente que lo lanzó lo nombra. La descripción de una llamada solo se usa cuando hay exactamente una llamada de ese tipo esperando. Un subagente cuyo `SubagentStop` nunca llega se descarta cuando lleva 30 minutos sin dar noticias (`AIPAGER_SUBAGENT_SILENCE`, en segundos; ningún evento de ningún tipo con su ID). Un agente que trabaja envía eventos de herramientas cada pocos segundos, así que esto solo recoge uno cuyo final se perdió (un reinicio, un datagrama perdido); una sola herramienta que dure 30 minutos sin ningún evento con el ID de ese agente también lo recoge. `AIPAGER_SUBAGENT_TTL` se acepta como nombre antiguo del mismo ajuste.
 
 Un agente en segundo plano que para mientras sigue en marcha un agente que él arrancó también recibe un `SubagentStop`. aipager lo toma como una pausa, no como un final: el agente sigue en marcha (su fila, el trabajo, el estado bajo las respuestas, la barra fijada). Su siguiente `SubagentStart`, con el mismo ID, es su continuación y no añade una segunda fila; cualquier llamada a una herramienta hecha por él mismo también cuenta como continuación. Termina cuando para sin ningún agente propio en marcha. Si no ha continuado dos minutos después de que terminara el último de ellos, deja de contarse como en marcha, pero nunca se muestra terminado. Los agentes en marcha, también los que esperan, se conservan tras un reinicio de aipager. A menudo llegan eventos `SubagentStop` sin tipo y con un ID desconocido, y se ignoran.
 

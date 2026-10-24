@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ 6295e500 -->
+<!-- i18n-source: docs/architecture.md @ a7e34bee -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -104,6 +104,9 @@ flowchart LR
 | `/tmp/claude-policy-<name>.json` | 当前任务的权限快照 | `aipager-hook`（取走消息时写入），由 `PreToolUse` 检查读取 |
 | `/tmp/claude-policy-.floor-<uid>.json` | 安全底线：内置列表加上你的 `safety:` 部分，供 hook 的后备路径使用 | aipager |
 | `/tmp/claude-reply-<name>.txt` | 你回复一条较早的消息时，你回复的那条消息 | aipager |
+| `/tmp/claude-bgjob-<job>.json` | 把一个 Claude Code 后台任务和对话移进它的那个会话关联起来（`job`、`session`、该任务的对话 ID、会话的 claude PID、时间，以及该任务自己的 `SessionEnd` 到来后的 `ended`），让这个任务的 hook 算作该会话的（[hook](hooks.md#what-the-daemon-receives)）；权限 0600，会话被带回来或结束时删除 | aipager（写入）、`aipager-hook` 和 `aipager-statusline`（读取） |
+| `/tmp/claude-bgjob-pids.json` | 每个运行中的会话自己的 `claude` 的 PID，供在链接文件出现之前就运行的后台任务 hook 使用（权限 0600） | aipager（写入）、`aipager-hook` 和 `aipager-statusline`（读取） |
+| `/tmp/claude-exit-<name>.json` | `claude` 的退出码以及它启动和结束的时间（`{"code", "start", "end"}`，权限 0600）：启动会话的 shell 在 `claude` 启动前删除它，在 `claude` 退出时写入它，会话的结束通知据此说明原因（[故障排除](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)） | 启动会话的 shell（写入）、aipager（读取） |
 | `/tmp/aipager-files/<chat>/` | 从 Telegram 发来的文件和语音消息，每个聊天一个私有文件夹（`0700`，文件 `0600`） | aipager |
 | `/tmp/aipager.log` | 没有服务时自我重启的输出 | aipager |
 | `~/.claude/aipager-sessions.json` | 会话列表的持久状态 | aipager |
@@ -136,7 +139,7 @@ flowchart LR
 
 ### <a id="isolated-instance-for-testing"></a>隔离实例（用于测试）
 
-把 `AIPAGER_INSTANCE_DIR` 设为一个属于你的绝对路径文件夹，上面每个共享的运行时文件都会移到那里：控制套接字（以及它旁边的回复套接字、限流信号文件和模型切换标记）、`claude-dtach-*` 套接字、`claude-policy-*`、`claude-notes-*`、`claude-status-*` 和 `claude-reply-*` 文件、安全底线文件、`aipager-files` 下载文件夹和自我重启日志。这个实例启动的会话会继承该设置，所以它们的 hook 只与这个实例通信，安全规则也以同样的方式保护被移动的文件。这个实例不会读取源码副本里的 `.env`。
+把 `AIPAGER_INSTANCE_DIR` 设为一个属于你的绝对路径文件夹，上面每个共享的运行时文件都会移到那里：控制套接字（以及它旁边的回复套接字、限流信号文件和模型切换标记）、`claude-dtach-*` 套接字、`claude-policy-*`、`claude-notes-*`、`claude-status-*`、`claude-reply-*`、`claude-bgjob-*` 和 `claude-exit-*` 文件、安全底线文件、`aipager-files` 下载文件夹和自我重启日志。这个实例启动的会话会继承该设置，所以它们的 hook 只与这个实例通信，安全规则也以同样的方式保护被移动的文件。这个实例不会读取源码副本里的 `.env`。
 
 主文件夹下的文件不会移动，所以也要把 `HOME` 指向一个单独的文件夹。当设置了实例文件夹而 `HOME` 却是你真实的主文件夹时、当这个文件夹不是指向你自己文件夹的绝对路径时，或当它太长不能作为套接字路径时，`aipager start` 会拒绝运行。
 
@@ -149,6 +152,10 @@ flowchart LR
 ## <a id="why-dtach"></a>为什么用 dtach
 
 dtach 为每个 Claude Code 会话提供一个真正的 PTY，而不用把它绑在一个必须一直开着的终端上。aipager 用 `dtach -n` 启动会话，用 `dtach -p` 向它输入（消息、Escape、回答对话框的按键）；它从不读取屏幕，因为 hook 和保存的对话已经说明了发生的事情。你可以在任何 shell 里用 `aipager session <name>` 以交互方式连接，直接操作。这个连接会跟随会话经历一次从 Telegram 触发的重启（`/mode` 切换到或离开完全访问模式、`/restart`、重启）：当会话的套接字消失时，它最多等待 15 秒让同一个套接字回来，然后自己重新连接。真正结束的会话会在等待之后把你带回 shell（Ctrl-C 可以提前结束等待）。连接时 dtach 的分离键是关闭的，所以 `Ctrl-\` 会传给 Claude；要离开，关闭终端或 tmux 窗格即可，会话会继续运行。
+
+在 dtach 会话里，aipager 启动的会话运行的是 `dtach -> bash -> claude`，用 `aipager session` 启动的会话运行的是 `dtach -> sh -> claude`：shell 会等待 `claude`，以便记录它的退出码（`claude-exit-<name>.json`），会话的结束通知会读取它。`aipager session` 的参数原样传给 `claude`，从不经过 shell 的解析。
+
+从 Telegram 重启会结束会话的 dtach，再在同一个对话上重新启动它。对话移到了 Claude Code 后台的会话（在空的输入框里按 ←；见 [故障排除](troubleshooting.md#a-session-moved-to-claude-codes-background)）也以同样的方式重启，只是先多一步：aipager 运行 `claude stop <job>`，等到没有任何后台进程占着这个对话，然后结束会话的 dtach，用 aipager 自己的设置在该任务的对话上启动它。会话在 Claude Code 后台期间，aipager 不会向它的 dtach 输入任何东西。
 
 结果是：Claude Code 运行起来就像你在终端里输入一样，但那个终端可以随来随去，而不打扰正在运行的会话。aipager 在每 2 秒一次的扫描中查找 `/tmp/claude-dtach-*.sock` 来发现会话。被发现的会话属于它的名称所对应的聊天；而在同时有私聊和群组的安装上，在终端里启动的会话属于所有者的私聊。
 

@@ -1,6 +1,6 @@
 # Arsitektur
 
-<!-- i18n-source: docs/architecture.md @ 6295e500 -->
+<!-- i18n-source: docs/architecture.md @ a7e34bee -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../architecture.md))
 
@@ -104,6 +104,9 @@ Mulai ulang dari Telegram mengandalkan seluruh jalur ini selesai sebelum penggan
 | `/tmp/claude-policy-<name>.json` | Snapshot izin untuk tugas yang sedang berjalan | `aipager-hook` (menulis saat mengambil pesan), dibaca pemeriksaan `PreToolUse` |
 | `/tmp/claude-policy-.floor-<uid>.json` | Batas bawah keamanan: daftar bawaan ditambah bagian `safety:` milikmu, untuk jalur cadangan hook | aipager |
 | `/tmp/claude-reply-<name>.txt` | Pesan yang kamu balas, kalau itu pesan yang lebih lama | aipager |
+| `/tmp/claude-bgjob-<job>.json` | Menghubungkan tugas latar belakang Claude Code dengan sesi yang percakapannya pindah ke tugas itu (`job`, `session`, ID percakapan tugas itu, PID claude milik sesi, waktunya, dan `ended` setelah `SessionEnd` milik tugas itu sendiri datang), supaya hook tugas itu dihitung untuk sesi tersebut ([hooks](hooks.md#what-the-daemon-receives)); izin 0600, dihapus saat sesi dikembalikan atau berakhir | aipager (menulis), `aipager-hook` dan `aipager-statusline` (membaca) |
+| `/tmp/claude-bgjob-pids.json` | PID dari `claude` milik setiap sesi yang sedang berjalan, untuk hook tugas latar belakang yang berjalan sebelum file tautannya ada (izin 0600) | aipager (menulis), `aipager-hook` dan `aipager-statusline` (membaca) |
+| `/tmp/claude-exit-<name>.json` | Kode keluar `claude` serta kapan ia mulai dan berakhir (`{"code", "start", "end"}`, izin 0600): shell yang menjalankan sesi menghapusnya sebelum `claude` mulai dan menulisnya saat `claude` keluar, dan pemberitahuan akhir sesi menyebut alasannya dari file ini ([pemecahan masalah](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)) | shell yang menjalankan sesi (menulis), aipager (membaca) |
 | `/tmp/aipager-files/<chat>/` | File dan pesan suara yang dikirim dari Telegram, satu folder pribadi untuk setiap chat (`0700`, file `0600`) | aipager |
 | `/tmp/aipager.log` | Keluaran mulai ulang oleh aipager sendiri saat tidak ada layanan | aipager |
 | `~/.claude/aipager-sessions.json` | Keadaan daftar sesi yang tahan lama | aipager |
@@ -136,7 +139,7 @@ Selain itu, aipager membuat folder sesi baru saat kamu memintanya (Folder baru d
 
 ### <a id="isolated-instance-for-testing"></a>Instance terisolasi (untuk pengujian)
 
-Atur `AIPAGER_INSTANCE_DIR` ke folder absolut milikmu, dan setiap file kerja bersama dari daftar di atas pindah ke sana: soket kontrol (dan di sampingnya soket balasan, file sinyal batas, serta penanda penggantian model), soket `claude-dtach-*`, file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, dan `claude-reply-*`, file batas bawah, folder unduhan `aipager-files`, dan log mulai ulang oleh aipager sendiri. Sesi yang dimulai instance itu mewarisi pengaturannya, jadi hook-nya hanya bicara dengan instance itu, dan aturan keamanan melindungi file yang dipindahkan dengan cara yang sama. Instance itu tidak membaca `.env` dari salinan kerja repo.
+Atur `AIPAGER_INSTANCE_DIR` ke folder absolut milikmu, dan setiap file kerja bersama dari daftar di atas pindah ke sana: soket kontrol (dan di sampingnya soket balasan, file sinyal batas, serta penanda penggantian model), soket `claude-dtach-*`, file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, dan `claude-exit-*`, file batas bawah, folder unduhan `aipager-files`, dan log mulai ulang oleh aipager sendiri. Sesi yang dimulai instance itu mewarisi pengaturannya, jadi hook-nya hanya bicara dengan instance itu, dan aturan keamanan melindungi file yang dipindahkan dengan cara yang sama. Instance itu tidak membaca `.env` dari salinan kerja repo.
 
 File di folder home-mu tidak ikut pindah, jadi arahkan juga `HOME` ke folder terpisah. `aipager start` menolak berjalan kalau folder instance diatur sementara `HOME` adalah folder home-mu yang asli, kalau folder itu bukan path absolut ke folder milikmu, atau kalau terlalu panjang untuk path soket.
 
@@ -149,6 +152,10 @@ Kedua pengaturan ini ada supaya tes end-to-end bisa menjalankan aipager kedua te
 ## <a id="why-dtach"></a>Kenapa dtach
 
 dtach memberi setiap sesi Claude Code PTY sungguhan tanpa mengikatnya ke terminal yang harus tetap terbuka. aipager memulai sesi dengan `dtach -n` dan mengetik ke dalamnya dengan `dtach -p` (pesan, Escape, tombol untuk menjawab dialog); aipager tidak pernah membaca layar, karena yang terjadi diketahui dari hook dan riwayat percakapan. Kamu bisa menyambung secara interaktif untuk akses langsung dari shell mana pun dengan `aipager session <name>`. Sambungan seperti itu mengikuti sesinya melewati mulai ulang dari Telegram (`/mode` ke atau dari Akses penuh, `/restart`, Mulai ulang): saat soket sesi hilang, sambungan itu menunggu hingga 15 dtk sampai soket yang sama kembali lalu menyambung lagi sendiri. Sesi yang benar-benar berakhir mengembalikanmu ke shell setelah menunggu (Ctrl-C mengakhiri penantian lebih awal). Sambungan ini berjalan dengan tombol lepas dtach dimatikan, jadi `Ctrl-\` diteruskan ke Claude; untuk keluar, tutup terminal atau panel tmux, dan sesinya tetap berjalan.
+
+Di dalam sesi dtach, sesi yang dimulai aipager menjalankan `dtach -> bash -> claude`, dan sesi yang dimulai dengan `aipager session` menjalankan `dtach -> sh -> claude`: shell menunggu `claude` supaya bisa mencatat kode keluarnya (`claude-exit-<name>.json`), yang dibaca oleh pemberitahuan akhir sesi. Argumen `aipager session` sampai ke `claude` apa adanya, tidak pernah lewat penguraian shell.
+
+Mulai ulang dari Telegram mematikan dtach sesi itu lalu memulainya lagi dengan percakapan yang sama. Sesi yang percakapannya pindah ke latar belakang Claude Code (← di kolom input yang kosong; lihat [pemecahan masalah](troubleshooting.md#a-session-moved-to-claude-codes-background)) dimulai ulang dengan cara yang sama, dengan satu langkah tambahan lebih dulu: aipager menjalankan `claude stop <job>` dan menunggu sampai tidak ada proses latar belakang yang memegang percakapan itu, lalu mematikan dtach sesi dan memulainya dengan percakapan tugas itu dan pengaturan aipager sendiri. Selama sesi ada di latar belakang Claude Code, aipager tidak mengetik apa pun ke dtach-nya.
 
 Hasilnya: Claude Code berjalan sama seperti saat kamu mengetik di terminal, tapi terminal itu bisa datang dan pergi tanpa mengganggu sesi yang sedang berjalan. aipager menemukan sesi dengan memindai `/tmp/claude-dtach-*.sock` di setiap putaran monitor 2 detik. Sesi yang ditemukan menjadi milik chat tempat namanya dibuat, sedangkan sesi yang dimulai di terminal, pada instalasi dengan chat pribadi dan grup, menjadi milik chat pribadi pemilik.
 

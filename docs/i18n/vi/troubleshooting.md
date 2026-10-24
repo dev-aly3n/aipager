@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # giống vậy, từ terminal
 aipager session <label>            # hoặc một phiên mới, không có lịch sử
 aipager session <label> --continue # dtach mới, cuộc trò chuyện gần nhất của thư mục
 ```
+
+Thông báo trong chat cho biết vì sao phiên kết thúc, dựa trên mã thoát mà `claude` để lại (aipager ghi nó vào `claude-exit-<session>.json` khi `claude` thoát):
+
+- `🔴 x1 · Phiên bị crash hoặc đã bị tắt`: không có mã thoát nào được ghi (máy tính đã khởi động lại, hoặc tiến trình của phiên bị tắt cùng lúc).
+- `🔴 x1 · Phiên đã đóng`: `claude` kết thúc bình thường (mã thoát 0).
+- `🔴 x1 · Phiên đã thoát với mã lỗi 2`: `claude` thất bại với mã đó.
+- `🔴 x1 · Phiên bị tắt bởi tín hiệu SIGKILL`: có thứ gì đó đã tắt `claude` (mã thoát trên 128 cho biết tín hiệu).
+- `🔴 x1 · Claude Code đã dừng ngay sau khi khởi động (mã thoát 1)`: `claude` bỏ cuộc trong vòng 10 giây sau khi khởi động, thường là do đối số hoặc cài đặt của chính nó. Kết nối bằng `aipager session x1` để xem thông báo của nó, hoặc tự khởi động nó trong một terminal.
+- `🔴 x1 · Claude Code đã dừng ngay sau khi khởi động vì cuộc trò chuyện của nó đang chạy ở chế độ chạy nền của Claude Code`: Claude Code từ chối tiếp tục một cuộc trò chuyện mà một tác vụ chạy nền vẫn đang giữ. Chạm `↩️ Đưa về ngay`: aipager dừng tác vụ đó nếu nó đang không làm gì (nếu đang làm việc thì hỏi trước) và tiếp tục cuộc trò chuyện ở đây. Xem phần tiếp theo.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Một phiên đã chuyển sang chế độ chạy nền của Claude Code
+
+`🌙 x1 đã chuyển sang chế độ chạy nền của Claude Code, và tin nhắn tiếp theo của bạn sẽ đưa phiên này về lại đây.`
+
+Nhấn ← khi ô nhập của Claude Code trống sẽ chuyển cuộc trò chuyện của phiên sang một tác vụ chạy nền của Claude Code, và terminal hiện chế độ xem agent của Claude Code thay cho cuộc trò chuyện. aipager nhận ra trong vài giây và thôi gõ vào terminal đó: bất cứ thứ gì gõ vào đó bây giờ đều có thể khởi động một tác vụ chạy nền khác. Tác vụ vẫn tiếp tục làm việc, và thẻ, câu trả lời và các yêu cầu cấp quyền của nó vẫn tới chat như của phiên. Trong Mini App, phiên hiện “đang chạy nền”.
+
+Để đưa nó về lại:
+
+- Gửi cho nó một tin nhắn. Tin nhắn chờ (👀), aipager dừng tác vụ chạy nền (`claude stop <job>`), khởi động lại phiên trên cuộc trò chuyện của tác vụ với cài đặt riêng của aipager, rồi gửi tin nhắn. Nếu tác vụ vẫn đang làm việc, bạn được hỏi trước: `Dừng và đưa về` dừng việc nó đang làm, `Cứ để vậy` để nó làm xong (đưa phiên về lại sau). Người có vai trò không được khởi động lại phiên sẽ nhận `Tin nhắn bạn gửi x1 sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code.`
+- Hoặc chạm `↩️ Đưa về ngay` dưới thông báo, gửi `/restart x1`, hoặc chạm “Đưa về” trong Mini App. `/stop` khi tác vụ đang làm việc sẽ dừng việc đó và đưa phiên về lại.
+
+Cho tới lúc đó, các lệnh sẽ gõ vào phiên (`/compact`, `/model`, việc đổi sang Chế độ Hỏi hoặc Chế độ Auto, `/now`, “Thử lại”) trả lời `Đưa x1 về lại từ chế độ chạy nền của Claude Code trước.`, và một câu trả lời cho yêu cầu mà aipager sẽ phải gõ nhận `Để trả lời, đưa x1 về lại từ chế độ chạy nền của Claude Code trước.` Các câu trả lời đi qua hook (phần lớn yêu cầu cấp quyền) vẫn hoạt động.
+
+`/resume`, “Tiếp tục” trong Mini App và `aipager resume` cũng đi theo một cuộc trò chuyện đã chuyển đi theo cùng cách: cuộc trò chuyện mới nhất được tiếp tục, và một tác vụ chạy nền vẫn giữ nó sẽ bị dừng trước nếu đang không làm gì. `aipager session x1 --resume <id>` làm điều tương tự trong terminal; khi tác vụ đang làm việc, nó in `claude stop <job>` và `claude attach <job>` rồi thoát với mã 1 thay vì khởi động bất cứ thứ gì.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Một yêu cầu cấp quyền không có tin gì trong 5 phút
 

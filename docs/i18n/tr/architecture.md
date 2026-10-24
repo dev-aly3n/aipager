@@ -1,6 +1,6 @@
 # Mimari
 
-<!-- i18n-source: docs/architecture.md @ 6295e500 -->
+<!-- i18n-source: docs/architecture.md @ a7e34bee -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../architecture.md))
 
@@ -104,6 +104,9 @@ Telegram'dan yeniden başlatma, yerine gelen sürecin sokete bağlanmasından ö
 | `/tmp/claude-policy-<name>.json` | Süren görevin izin anlık görüntüsü | `aipager-hook` (bir mesajı aldığında yazar), `PreToolUse` kontrolü okur |
 | `/tmp/claude-policy-.floor-<uid>.json` | Güvenliğin alt sınırı: yerleşik liste artı senin `safety:` bölümün, hook'un yedek yolları için | aipager |
 | `/tmp/claude-reply-<name>.txt` | Daha eski bir mesajı yanıtladığında, yanıtladığın mesaj | aipager |
+| `/tmp/claude-bgjob-<job>.json` | Bir Claude Code arka plan işini, konuşması o işe taşınan oturuma bağlar (`job`, `session`, işin konuşma kimliği, oturumun claude PID değeri, zaman ve işin kendi `SessionEnd` olayı geldiğinde `ended`), böylece o işin hook'ları oturum için sayılır ([hooks](hooks.md#what-the-daemon-receives)); izinler 0600, oturum geri getirildiğinde ya da sona erdiğinde silinir | aipager (yazar), `aipager-hook` ve `aipager-statusline` (okur) |
+| `/tmp/claude-bgjob-pids.json` | Çalışan her oturumun kendi `claude` sürecinin PID değeri; bağlantı dosyası oluşmadan önce çalışan arka plan işi hook'ları için (izinler 0600) | aipager (yazar), `aipager-hook` ve `aipager-statusline` (okur) |
+| `/tmp/claude-exit-<name>.json` | `claude` sürecinin çıkış kodu ve ne zaman başlayıp bittiği (`{"code", "start", "end"}`, izinler 0600): oturumu başlatan shell, `claude` başlamadan önce dosyayı siler ve `claude` çıkınca yazar; oturumun sona erme bildirimi nedeni buradan söyler ([sorun giderme](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)) | oturumu başlatan shell (yazar), aipager (okur) |
 | `/tmp/aipager-files/<chat>/` | Telegram'dan gönderilen dosyalar ve sesli mesajlar; her sohbet için ayrı ve özel bir klasör (`0700`, dosyalar `0600`) | aipager |
 | `/tmp/aipager.log` | Hizmet yokken aipager'ın kendini yeniden başlatmasının çıktısı | aipager |
 | `~/.claude/aipager-sessions.json` | Oturum listesinin kalıcı durumu | aipager |
@@ -136,7 +139,7 @@ Bunun dışında aipager, sen istediğinde yeni bir oturum klasörü oluşturur 
 
 ### <a id="isolated-instance-for-testing"></a>Yalıtılmış örnek (testler için)
 
-`AIPAGER_INSTANCE_DIR` değerini sana ait mutlak bir klasöre ayarla; yukarıdaki listedeki her paylaşılan çalışma dosyası oraya taşınır: kontrol soketi (ve yanında yanıt soketleri, sınır sinyal dosyaları ve model değişikliği işareti), `claude-dtach-*` soketleri, `claude-policy-*`, `claude-notes-*`, `claude-status-*` ve `claude-reply-*` dosyaları, alt sınır dosyası, `aipager-files` indirme klasörü ve aipager'ın kendini yeniden başlatma günlüğü. Bu örneğin başlattığı oturumlar ayarı devralır, bu yüzden hook'ları yalnızca bu örnekle konuşur ve güvenlik kuralları taşınan dosyaları da aynı şekilde korur. Örnek, repo çalışma kopyasının `.env` dosyasını okumaz.
+`AIPAGER_INSTANCE_DIR` değerini sana ait mutlak bir klasöre ayarla; yukarıdaki listedeki her paylaşılan çalışma dosyası oraya taşınır: kontrol soketi (ve yanında yanıt soketleri, sınır sinyal dosyaları ve model değişikliği işareti), `claude-dtach-*` soketleri, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` ve `claude-exit-*` dosyaları, alt sınır dosyası, `aipager-files` indirme klasörü ve aipager'ın kendini yeniden başlatma günlüğü. Bu örneğin başlattığı oturumlar ayarı devralır, bu yüzden hook'ları yalnızca bu örnekle konuşur ve güvenlik kuralları taşınan dosyaları da aynı şekilde korur. Örnek, repo çalışma kopyasının `.env` dosyasını okumaz.
 
 Ev klasöründeki dosyalar taşınmaz, bu yüzden `HOME` değerini de ayrı bir klasöre yönlendir. Örnek klasörü ayarlıyken `HOME` gerçek ev klasörünse, klasör sana ait bir klasörün mutlak yolu değilse ya da soket yolu için çok uzunsa `aipager start` çalışmayı reddeder.
 
@@ -149,6 +152,10 @@ Ev klasöründeki dosyalar taşınmaz, bu yüzden `HOME` değerini de ayrı bir 
 ## <a id="why-dtach"></a>Neden dtach
 
 dtach her Claude Code oturumuna, açık kalması gereken bir terminale bağlamadan gerçek bir PTY verir. aipager oturumu `dtach -n` ile başlatır ve ona `dtach -p` ile yazar (mesajlar, Escape, bir iletişim kutusunu yanıtlamak için tuşlar); ekranı asla okumaz, çünkü olup biteni hook'lar ve konuşma geçmişi söyler. Doğrudan erişim için herhangi bir shell'den `aipager session <name>` ile etkileşimli olarak bağlanabilirsin. Böyle bir bağlantı, Telegram'dan yapılan bir yeniden başlatma boyunca oturumu izler (Tam erişim moduna geçen ya da ondan çıkan `/mode`, `/restart`, Yeniden başlat): oturumun soketi kaybolunca aynı soketin geri gelmesini 15 sn'ye kadar bekler ve kendiliğinden yeniden bağlanır. Gerçekten sona eren bir oturum, beklemenin ardından seni shell'e geri bırakır (Ctrl-C beklemeyi daha erken bitirir). Bağlantı, dtach'ın ayırma tuşu kapalıyken çalışır, bu yüzden `Ctrl-\` Claude'a gider; çıkmak için terminali ya da tmux bölmesini kapat, oturum çalışmaya devam eder.
+
+dtach oturumunun içinde, aipager'ın başlattığı bir oturum `dtach -> bash -> claude`, `aipager session` ile başlatılan bir oturum ise `dtach -> sh -> claude` çalıştırır: shell, çıkış kodunu kaydedebilmek için `claude` sürecini bekler (`claude-exit-<name>.json`); oturumun sona erme bildirimi bu kodu okur. `aipager session` argümanları `claude` programına olduğu gibi ulaşır, asla shell'in ayrıştırmasından geçmez.
+
+Telegram'dan yeniden başlatma, oturumun dtach sürecini sonlandırır ve aynı konuşmayla yeniden başlatır. Konuşması Claude Code arka planına taşınan bir oturum (boş bir giriş satırında ←; bkz. [sorun giderme](troubleshooting.md#a-session-moved-to-claude-codes-background)) aynı şekilde yeniden başlatılır, ama önce bir adım daha vardır: aipager `claude stop <job>` çalıştırır ve konuşmayı hiçbir arka plan süreci tutmayana kadar bekler, sonra oturumun dtach sürecini sonlandırır ve onu işin konuşmasıyla, aipager'ın kendi ayarlarıyla başlatır. Bir oturum Claude Code arka planındayken aipager onun dtach sürecine hiçbir şey yazmaz.
 
 Sonuç: Claude Code, terminalde yazıyormuşsun gibi çalışır, ama o terminal süren oturumu bozmadan gelip gidebilir. aipager oturumları, her 2 saniyelik monitör taramasında `/tmp/claude-dtach-*.sock` dosyalarına bakarak bulur. Bulunan bir oturum, adının oluşturulduğu sohbete aittir; terminalde başlatılan bir oturum ise özel sohbeti ve grubu olan bir kurulumda sahibin özel sohbetine aittir.
 

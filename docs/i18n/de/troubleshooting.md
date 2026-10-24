@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # dasselbe aus dem Terminal
 aipager session <label>            # oder eine neue Sitzung, ohne Verlauf
 aipager session <label> --continue # neues dtach, die letzte Unterhaltung des Ordners
 ```
+
+Die Meldung im Chat sagt, warum die Sitzung endete, anhand des Exit-Codes, den `claude` hinterlassen hat (aipager hält ihn in `claude-exit-<session>.json` fest, wenn `claude` sich beendet):
+
+- `🔴 x1 · Sitzung abgestürzt oder beendet`: Es wurde kein Exit-Code festgehalten (der Computer wurde neu gestartet, oder der Prozess der Sitzung wurde gleich mit beendet).
+- `🔴 x1 · Sitzung beendet`: `claude` hat sich normal beendet (Exit-Code 0).
+- `🔴 x1 · Sitzung mit Fehlercode 2 beendet`: `claude` ist mit diesem Code gescheitert.
+- `🔴 x1 · Sitzung durch Signal SIGKILL beendet`: Etwas hat `claude` beendet (Exit-Codes über 128 nennen das Signal).
+- `🔴 x1 · Claude Code wurde direkt nach dem Start beendet (Exit-Code 1)`: `claude` hat innerhalb von 10 Sekunden nach dem Start aufgegeben, meist wegen seiner eigenen Argumente oder Einrichtung. Verbinde dich mit `aipager session x1`, um seine Meldung zu sehen, oder starte es von Hand in einem Terminal.
+- `🔴 x1 · Claude Code wurde direkt nach dem Start beendet, weil das Gespräch im Hintergrund von Claude Code läuft`: Claude Code weigert sich, eine Unterhaltung fortzusetzen, die ein Hintergrund-Job noch hält. Tippe auf `↩️ Jetzt zurückholen`: aipager stoppt diesen Job, wenn er nichts tut (arbeitet er, fragt es vorher), und setzt die Unterhaltung hier fort. Siehe den nächsten Abschnitt.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Eine Sitzung ist in den Hintergrund von Claude Code gewechselt
+
+`🌙 x1 ist in den Hintergrund von Claude Code gewechselt, und deine nächste Nachricht holt die Sitzung hierher zurück.`
+
+Die Taste ← in einer leeren Eingabezeile von Claude Code verschiebt die Unterhaltung der Sitzung in einen Hintergrund-Job von Claude Code, und das Terminal zeigt statt der Unterhaltung die Agent-Ansicht von Claude Code. aipager merkt das innerhalb weniger Sekunden und tippt nichts mehr in dieses Terminal: Alles, was dort jetzt getippt wird, könnte einen weiteren Hintergrund-Job starten. Der Job arbeitet weiter, und seine Karte, seine Antwort und seine Berechtigungsanfragen erreichen den Chat weiterhin als die der Sitzung. In der Mini App steht bei der Sitzung „im Hintergrund“.
+
+So holst du sie zurück:
+
+- Schick ihr eine Nachricht. Die Nachricht wartet (👀), aipager stoppt den Hintergrund-Job (`claude stop <job>`), startet die Sitzung mit der Unterhaltung des Jobs und den eigenen Einstellungen von aipager neu und schickt dann die Nachricht. Arbeitet der Job noch, wirst du vorher gefragt: `Stoppen und zurückholen` stoppt, was er gerade tut, `Weiterlaufen lassen` lässt ihn fertig werden (hol die Sitzung später zurück). Wer eine Rolle hat, die die Sitzung nicht neu starten darf, bekommt `Deine Nachricht an x1 wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt.`
+- Oder tippe unter der Meldung auf `↩️ Jetzt zurückholen`, schick `/restart x1` oder tippe in der Mini App auf „Zurückholen“. `/stop`, während der Job arbeitet, stoppt diese Arbeit und holt die Sitzung zurück.
+
+Bis dahin antworten Befehle, die in die Sitzung tippen würden (`/compact`, `/model`, ein Wechsel in den Fragen- oder Auto-Modus, `/now`, „Erneut versuchen“), mit `Hol x1 zuerst aus dem Hintergrund von Claude Code zurück.`, und eine Antwort auf eine Anfrage, die aipager tippen müsste, bekommt `Hol x1 aus dem Hintergrund von Claude Code zurück, um das zu beantworten.` Antworten, die über den Hook gehen (die meisten Berechtigungsanfragen), funktionieren weiterhin.
+
+Einer weitergezogenen Unterhaltung folgen `/resume`, „Fortsetzen“ in der Mini App und `aipager resume` genauso: Die neueste Unterhaltung wird fortgesetzt, und ein Hintergrund-Job, der sie noch hält, wird vorher gestoppt, wenn er nichts tut. `aipager session x1 --resume <id>` macht dasselbe im Terminal; arbeitet der Job, gibt es `claude stop <job>` und `claude attach <job>` aus und beendet sich mit Code 1, statt etwas zu starten.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Eine Berechtigungsanfrage seit 5 Minuten ohne Neuigkeiten
 

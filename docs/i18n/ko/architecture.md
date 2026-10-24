@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ 6295e500 -->
+<!-- i18n-source: docs/architecture.md @ a7e34bee -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -104,6 +104,9 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `/tmp/claude-policy-<name>.json` | 현재 작업의 권한 스냅숏 | `aipager-hook` (메시지를 가져갈 때 씀), `PreToolUse` 검사가 읽어요 |
 | `/tmp/claude-policy-.floor-<uid>.json` | 안전 기준선: 기본 목록과 내 `safety:` 부분, hook의 대체 경로용 | aipager |
 | `/tmp/claude-reply-<name>.txt` | 예전 메시지에 답장할 때, 내가 답장한 그 메시지 | aipager |
+| `/tmp/claude-bgjob-<job>.json` | Claude Code 백그라운드 작업을, 대화가 그리로 옮겨 간 세션과 연결해요(`job`, `session`, 작업의 대화 ID, 세션의 claude PID, 시각, 그리고 작업 자신의 `SessionEnd`가 오면 `ended`). 그래서 그 작업의 hook이 그 세션 몫으로 쳐져요([hook](hooks.md#what-the-daemon-receives)). 권한 0600, 세션을 다시 가져오거나 세션이 끝나면 지워져요 | aipager (씀), `aipager-hook`과 `aipager-statusline` (읽음) |
+| `/tmp/claude-bgjob-pids.json` | 실행 중인 각 세션의 자기 `claude` PID. 연결 파일이 생기기 전에 실행되는 백그라운드 작업의 hook을 위한 것이에요(권한 0600) | aipager (씀), `aipager-hook`과 `aipager-statusline` (읽음) |
+| `/tmp/claude-exit-<name>.json` | `claude`의 종료 코드와 시작·종료 시각(`{"code", "start", "end"}`, 권한 0600). 세션을 띄우는 shell이 `claude` 시작 전에 지우고 `claude`가 끝나면 쓰며, 세션 종료 알림이 여기서 이유를 읽어 알려 줘요([문제 해결](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)) | 세션을 띄우는 shell (씀), aipager (읽음) |
 | `/tmp/aipager-files/<chat>/` | Telegram에서 보낸 파일과 음성 메시지, 채팅마다 비공개 폴더 하나(`0700`, 파일은 `0600`) | aipager |
 | `/tmp/aipager.log` | 서비스가 없을 때 자체 재시작의 출력 | aipager |
 | `~/.claude/aipager-sessions.json` | 세션 목록의 저장된 상태 | aipager |
@@ -136,7 +139,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 
 ### <a id="isolated-instance-for-testing"></a>격리된 인스턴스 (테스트용)
 
-`AIPAGER_INSTANCE_DIR`을 내 소유의 절대 경로 폴더로 설정하면, 위에 나온 공유 런타임 파일이 모두 그리로 옮겨 가요. 제어 소켓(그리고 그 옆의 응답 소켓, 속도 제한 신호 파일, 모델 변경 표시), `claude-dtach-*` 소켓, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*` 파일, 안전 기준선 파일, `aipager-files` 다운로드 폴더, 자체 재시작 로그예요. 이 인스턴스가 시작한 세션은 이 설정을 물려받아서, 그 hook은 이 인스턴스하고만 통신하고, 안전 규칙도 옮겨진 파일을 같은 방식으로 지켜요. 이 인스턴스는 소스 복사본의 `.env`를 읽지 않아요.
+`AIPAGER_INSTANCE_DIR`을 내 소유의 절대 경로 폴더로 설정하면, 위에 나온 공유 런타임 파일이 모두 그리로 옮겨 가요. 제어 소켓(그리고 그 옆의 응답 소켓, 속도 제한 신호 파일, 모델 변경 표시), `claude-dtach-*` 소켓, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, `claude-exit-*` 파일, 안전 기준선 파일, `aipager-files` 다운로드 폴더, 자체 재시작 로그예요. 이 인스턴스가 시작한 세션은 이 설정을 물려받아서, 그 hook은 이 인스턴스하고만 통신하고, 안전 규칙도 옮겨진 파일을 같은 방식으로 지켜요. 이 인스턴스는 소스 복사본의 `.env`를 읽지 않아요.
 
 홈 폴더 아래의 파일은 옮겨지지 않으니 `HOME`도 별도 폴더로 지정하세요. 인스턴스 폴더를 설정했는데 `HOME`이 내 실제 홈 폴더일 때, 이 폴더가 내 폴더를 가리키는 절대 경로가 아닐 때, 또는 소켓 경로로 쓰기에 너무 길 때 `aipager start`는 실행을 거부해요.
 
@@ -149,6 +152,10 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 ## <a id="why-dtach"></a>왜 dtach인가요
 
 dtach는 Claude Code 세션마다 진짜 PTY를 주면서도, 계속 열어 둬야 하는 터미널에 묶어 두지 않아요. aipager는 `dtach -n`으로 세션을 시작하고 `dtach -p`로 입력해요(메시지, Escape, 대화 상자에 답하는 키). 화면은 절대 읽지 않아요. hook과 저장된 대화가 이미 무슨 일이 있었는지 알려 주니까요. 어떤 shell에서든 `aipager session <name>`으로 대화형으로 연결해서 직접 쓸 수 있어요. 이 연결은 Telegram에서 시작한 세션 재시작(`/mode`로 전체 권한 모드로 바꾸거나 빠져나올 때, `/restart`, 재시작)을 따라가요. 세션의 소켓이 사라지면 같은 소켓이 돌아오기를 최대 15초 기다렸다가 스스로 다시 연결해요. 정말로 끝난 세션은 기다린 뒤 shell로 돌려보내요(Ctrl-C로 기다림을 일찍 끝낼 수 있어요). 연결 중에는 dtach의 분리 키가 꺼져 있어서 `Ctrl-\`가 Claude에게 전달돼요. 나가려면 터미널이나 tmux 창을 닫으면 되고, 세션은 계속 실행돼요.
+
+dtach 세션 안에서, aipager가 시작한 세션은 `dtach -> bash -> claude`로, `aipager session`으로 시작한 세션은 `dtach -> sh -> claude`로 실행돼요. shell이 `claude`를 기다렸다가 그 종료 코드를 기록하고(`claude-exit-<name>.json`), 세션 종료 알림이 그것을 읽어요. `aipager session`의 인수는 shell의 해석을 거치지 않고 그대로 `claude`에 전달돼요.
+
+Telegram에서 재시작하면 세션의 dtach를 종료하고 같은 대화로 다시 시작해요. 대화가 Claude Code 백그라운드로 옮겨 간 세션(입력란이 비어 있을 때 ←, [문제 해결](troubleshooting.md#a-session-moved-to-claude-codes-background) 참고)도 같은 방식으로 재시작하지만, 그 전에 한 단계가 더 있어요. aipager가 `claude stop <job>`을 실행하고 대화를 붙잡은 백그라운드 프로세스가 없어질 때까지 기다린 다음, 세션의 dtach를 종료하고 aipager 자체 설정으로 작업의 대화에서 다시 시작해요. 세션이 Claude Code 백그라운드에 있는 동안 aipager는 그 dtach에 아무것도 입력하지 않아요.
 
 결과적으로 Claude Code는 내가 터미널에서 입력할 때처럼 실행되지만, 그 터미널은 실행 중인 세션을 방해하지 않고 왔다 갔다 할 수 있어요. aipager는 2초마다 하는 검사에서 `/tmp/claude-dtach-*.sock`을 찾아 세션을 발견해요. 발견된 세션은 이름에 해당하는 채팅에 속하고, 개인 채팅과 그룹이 둘 다 있는 설치에서 터미널로 시작한 세션은 소유자의 개인 채팅에 속해요.
 

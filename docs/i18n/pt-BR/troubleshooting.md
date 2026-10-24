@@ -1,6 +1,6 @@
 # Solução de problemas
 
-<!-- i18n-source: docs/troubleshooting.md @ fc5d6810 -->
+<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../troubleshooting.md))
 
@@ -141,6 +141,30 @@ aipager resume <label>             # o mesmo, pelo terminal
 aipager session <label>            # ou uma sessão nova, sem histórico
 aipager session <label> --continue # dtach novo, a última conversa da pasta
 ```
+
+O aviso no chat diz por que a sessão terminou, a partir do código de saída que o `claude` deixou (o aipager registra esse código em `claude-exit-<session>.json` quando o `claude` sai):
+
+- `🔴 x1 · A sessão caiu ou foi encerrada`: nenhum código de saída foi registrado (o computador reiniciou, ou o processo da sessão foi encerrado junto).
+- `🔴 x1 · Sessão encerrada`: o `claude` terminou normalmente (código de saída 0).
+- `🔴 x1 · Sessão encerrada com o código de erro 2`: o `claude` falhou com esse código.
+- `🔴 x1 · Sessão encerrada pelo sinal SIGKILL`: alguma coisa encerrou o `claude` à força (códigos de saída acima de 128 indicam o sinal).
+- `🔴 x1 · O Claude Code parou logo depois de iniciar (código de saída 1)`: o `claude` desistiu nos primeiros 10 segundos depois de iniciar, quase sempre por causa dos próprios argumentos ou da configuração dele. Conecte-se com `aipager session x1` para ver a mensagem dele, ou inicie-o à mão num terminal.
+- `🔴 x1 · O Claude Code parou logo depois de iniciar porque a conversa está rodando no segundo plano do Claude Code`: o Claude Code se recusa a continuar uma conversa que uma tarefa em segundo plano ainda segura. Toque em `↩️ Trazer de volta agora`: o aipager para essa tarefa se ela não estiver fazendo nada (se estiver trabalhando, ele pergunta antes) e continua a conversa aqui. Veja a próxima seção.
+
+## <a id="a-session-moved-to-claude-codes-background"></a>Uma sessão foi para o segundo plano do Claude Code
+
+`🌙 x1 foi para o segundo plano do Claude Code, e sua próxima mensagem traz a sessão de volta para cá.`
+
+Apertar ← num campo de entrada vazio no Claude Code leva a conversa da sessão para uma tarefa em segundo plano do Claude Code, e o terminal mostra a visão de agentes do Claude Code no lugar da conversa. O aipager percebe isso em poucos segundos e para de digitar nesse terminal: qualquer coisa digitada lá agora poderia iniciar outra tarefa em segundo plano. A tarefa continua trabalhando, e o cartão, a resposta e os pedidos de permissão dela continuam chegando ao chat como os da sessão. No Mini App, a sessão aparece como “em segundo plano”.
+
+Para trazê-la de volta:
+
+- Mande uma mensagem para ela. A mensagem espera (👀), o aipager para a tarefa em segundo plano (`claude stop <job>`), reinicia a sessão na conversa da tarefa com as configurações próprias do aipager e depois manda a mensagem. Se a tarefa ainda estiver trabalhando, você recebe uma pergunta antes: `Parar e trazer de volta` para o que ela está fazendo, `Deixar assim` deixa ela terminar (traga a sessão de volta depois). Quem tem uma função que não pode reiniciar a sessão recebe `Sua mensagem para x1 espera até alguém trazer a sessão de volta do segundo plano do Claude Code.`
+- Ou toque em `↩️ Trazer de volta agora` embaixo do aviso, mande `/restart x1`, ou toque em Trazer de volta no Mini App. `/stop` enquanto a tarefa trabalha para esse trabalho e traz a sessão de volta.
+
+Até lá, os comandos que digitariam na sessão (`/compact`, `/model`, uma troca para o Modo Perguntar ou o Modo Automático, `/now`, Tentar de novo) respondem `Primeiro traga x1 de volta do segundo plano do Claude Code.`, e a resposta a um pedido que o aipager teria que digitar recebe `Para responder, traga x1 de volta do segundo plano do Claude Code.` As respostas que passam pelo hook (a maioria dos pedidos de permissão) continuam funcionando.
+
+`/resume`, o Continuar do Mini App e `aipager resume` seguem do mesmo jeito uma conversa que passou para outra: a conversa mais recente é continuada, e uma tarefa em segundo plano que ainda a segure é parada antes se não estiver fazendo nada. `aipager session x1 --resume <id>` faz o mesmo no terminal; quando a tarefa está trabalhando, ele imprime `claude stop <job>` e `claude attach <job>` e sai com o código 1 em vez de iniciar qualquer coisa.
 
 ## <a id="a-permission-prompt-with-no-news-for-5-minutes"></a>Um pedido de permissão sem notícias por 5 minutos
 

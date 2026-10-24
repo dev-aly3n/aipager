@@ -1,6 +1,6 @@
 # Architektur
 
-<!-- i18n-source: docs/architecture.md @ 6295e500 -->
+<!-- i18n-source: docs/architecture.md @ a7e34bee -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../architecture.md))
 
@@ -104,6 +104,9 @@ Der aus Telegram ausgelöste Neustart verlässt sich darauf, dass dieser ganze A
 | `/tmp/claude-policy-<name>.json` | Der maßgebliche Stand der Berechtigungen für die laufende Aufgabe | `aipager-hook` (schreibt ihn beim Abholen), gelesen von der Prüfung bei `PreToolUse` |
 | `/tmp/claude-policy-.floor-<uid>.json` | Die Sicherheitsuntergrenze, die eingebaute Liste plus dein Abschnitt `safety:`, für die Rückfallebenen des Hooks | aipager |
 | `/tmp/claude-reply-<name>.txt` | Die Nachricht, auf die du geantwortet hast, wenn du auf eine ältere Nachricht antwortest | aipager |
+| `/tmp/claude-bgjob-<job>.json` | Verknüpft einen Hintergrund-Job von Claude Code mit der Sitzung, deren Unterhaltung in ihn gewechselt ist (`job`, `session`, die Gesprächs-ID des Jobs, die claude-PID der Sitzung, der Zeitpunkt und `ended`, sobald das eigene `SessionEnd` des Jobs kam), damit die Hooks dieses Jobs für die Sitzung zählen ([Hooks](hooks.md#what-the-daemon-receives)); Rechte 0600, entfernt, wenn die Sitzung zurückgeholt wird oder endet | aipager (schreibt), `aipager-hook` und `aipager-statusline` (lesen) |
+| `/tmp/claude-bgjob-pids.json` | Die PID des eigenen `claude` jeder laufenden Sitzung, für die Hooks eines Hintergrund-Jobs, die laufen, bevor seine Verknüpfungsdatei existiert (Rechte 0600) | aipager (schreibt), `aipager-hook` und `aipager-statusline` (lesen) |
+| `/tmp/claude-exit-<name>.json` | Der Exit-Code von `claude` und wann es gestartet ist und wann es endete (`{"code", "start", "end"}`, Rechte 0600): Die Start-Shell der Sitzung löscht die Datei, bevor `claude` startet, und schreibt sie, wenn `claude` sich beendet, und die Meldung zum Ende der Sitzung nennt daraus den Grund ([Fehlerbehebung](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)) | die Start-Shell der Sitzung (schreibt), aipager (liest) |
 | `/tmp/aipager-files/<chat>/` | Dateien und Sprachnachrichten, die aus Telegram geschickt wurden, ein privater Ordner pro Chat (`0700`, Dateien `0600`) | aipager |
 | `/tmp/aipager.log` | Die Ausgabe eines Neustarts durch aipager selbst, wenn kein Dienst da ist | aipager |
 | `~/.claude/aipager-sessions.json` | Der dauerhafte Zustand der Sitzungsliste | aipager |
@@ -136,7 +139,7 @@ Außerdem legt aipager einen neuen Sitzungsordner an, wenn du einen anforderst (
 
 ### <a id="isolated-instance-for-testing"></a>Eine isolierte Instanz (zum Testen)
 
-Setz `AIPAGER_INSTANCE_DIR` auf einen absoluten Ordner, der dir gehört, und jede oben genannte gemeinsame Laufzeitdatei zieht dort hinein: der Steuer-Socket (und daneben die Antwort-Sockets, die Signaldateien der Limits und die Markierung für den Modellwechsel), die Sockets `claude-dtach-*`, die Dateien `claude-policy-*`, `claude-notes-*`, `claude-status-*` und `claude-reply-*`, die Datei der Untergrenze, der Download-Ordner `aipager-files` und das Log des Neustarts durch aipager selbst. Sitzungen, die die Instanz startet, erben die Einstellung, ihre Hooks sprechen also nur mit dieser Instanz, und die Sicherheitsregeln schützen die verschobenen Dateien genauso. Die Instanz liest nicht die `.env` einer Arbeitskopie des Repos.
+Setz `AIPAGER_INSTANCE_DIR` auf einen absoluten Ordner, der dir gehört, und jede oben genannte gemeinsame Laufzeitdatei zieht dort hinein: der Steuer-Socket (und daneben die Antwort-Sockets, die Signaldateien der Limits und die Markierung für den Modellwechsel), die Sockets `claude-dtach-*`, die Dateien `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` und `claude-exit-*`, die Datei der Untergrenze, der Download-Ordner `aipager-files` und das Log des Neustarts durch aipager selbst. Sitzungen, die die Instanz startet, erben die Einstellung, ihre Hooks sprechen also nur mit dieser Instanz, und die Sicherheitsregeln schützen die verschobenen Dateien genauso. Die Instanz liest nicht die `.env` einer Arbeitskopie des Repos.
 
 Die Dateien in deinem Home-Ordner ziehen nicht um, lass also auch `HOME` auf einen eigenen Ordner zeigen. `aipager start` verweigert den Start, wenn der Instanzordner gesetzt ist und `HOME` dein echter Home-Ordner ist, wenn der Ordner kein absoluter Pfad zu einem Ordner ist, der dir gehört, oder wenn er für einen Socket-Pfad zu lang ist.
 
@@ -149,6 +152,10 @@ Beide Einstellungen gibt es, damit die End-to-End-Tests neben deinem echten aipa
 ## <a id="why-dtach"></a>Warum dtach
 
 dtach gibt jeder Claude-Code-Sitzung ein echtes PTY, ohne es an ein Terminal zu binden, das offen bleiben muss. aipager startet eine Sitzung mit `dtach -n` und tippt mit `dtach -p` hinein (Nachrichten, Escape, die Tasten, die einen Dialog beantworten); den Bildschirm liest es nie, weil die Hooks und die gespeicherte Unterhaltung sagen, was passiert. Du kannst dich aus jeder Shell mit `aipager session <name>` interaktiv verbinden, für den direkten Zugriff. Diese Verbindung folgt der Sitzung durch einen Neustart aus Telegram (`/mode` in den oder aus dem Vollzugriff-Modus, `/restart`, „Neu starten“): Wenn der Socket der Sitzung verschwindet, wartet sie bis zu 15 s, dass derselbe Socket zurückkommt, und verbindet sich selbst wieder. Eine Sitzung, die wirklich beendet ist, kehrt nach dem Warten zur Shell zurück (Ctrl-C beendet das Warten früher). Die Verbindung läuft mit abgeschalteter Trenntaste von dtach, `Ctrl-\` geht also an Claude; um sie zu verlassen, schließ das Terminal oder den tmux-Bereich, und die Sitzung läuft weiter.
+
+In der dtach-Sitzung läuft bei einer Sitzung, die aipager startet, `dtach -> bash -> claude`, und bei einer mit `aipager session` gestarteten `dtach -> sh -> claude`: Die Shell wartet auf `claude`, damit sie seinen Exit-Code festhalten kann (`claude-exit-<name>.json`), den die Meldung zum Ende der Sitzung liest. Die Argumente von `aipager session` erreichen `claude` unverändert, nie über die Auswertung durch die Shell.
+
+Ein Neustart aus Telegram beendet das dtach der Sitzung und startet es mit derselben Unterhaltung neu. Eine Sitzung, deren Unterhaltung in den Hintergrund von Claude Code gewechselt ist (← in einer leeren Eingabezeile; siehe [Fehlerbehebung](troubleshooting.md#a-session-moved-to-claude-codes-background)), wird genauso neu gestartet, mit einem Schritt vorher: aipager führt `claude stop <job>` aus und wartet, bis kein Hintergrundprozess die Unterhaltung mehr hält, beendet dann das dtach der Sitzung und startet es mit der Unterhaltung des Jobs und den eigenen Einstellungen von aipager. Solange eine Sitzung im Hintergrund von Claude Code ist, tippt aipager nichts in ihr dtach.
 
 Das Ergebnis: Claude Code läuft, als würdest du in einem Terminal tippen, aber dieses Terminal kann kommen und gehen, ohne die laufende Sitzung zu stören. aipager findet Sitzungen, indem es bei jedem Durchlauf des Monitors alle 2 s `/tmp/claude-dtach-*.sock` durchsucht. Eine gefundene Sitzung gehört zu dem Chat, für den ihr Name gemacht wurde, und eine im Terminal gestartete Sitzung gehört bei einer Installation mit privatem Chat und Gruppe zum privaten Chat des Besitzers.
 

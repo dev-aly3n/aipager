@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ 6295e500 -->
+<!-- i18n-source: docs/architecture.md @ a7e34bee -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -104,6 +104,9 @@ Việc tự khởi động lại từ Telegram dựa vào việc toàn bộ trì
 | `/tmp/claude-policy-<name>.json` | Bản chụp quyền chuẩn cho việc đang chạy | `aipager-hook` (ghi lúc nhận tin nhắn), được bước kiểm tra `PreToolUse` đọc |
 | `/tmp/claude-policy-.floor-<uid>.json` | Mức an toàn tối thiểu: danh sách có sẵn cộng với phần `safety:` của bạn, cho các đường dự phòng của hook | aipager |
 | `/tmp/claude-reply-<name>.txt` | Tin nhắn bạn đã trả lời, khi bạn trả lời một tin nhắn cũ hơn | aipager |
+| `/tmp/claude-bgjob-<job>.json` | Liên kết một tác vụ chạy nền của Claude Code với phiên có cuộc trò chuyện đã chuyển sang nó (`job`, `session`, ID cuộc trò chuyện của tác vụ, PID claude của phiên, thời điểm, và `ended` khi `SessionEnd` của chính tác vụ tới), để hook của tác vụ đó được tính cho phiên ([hook](hooks.md#what-the-daemon-receives)); quyền 0600, bị xóa khi phiên được đưa về lại hoặc kết thúc | aipager (ghi), `aipager-hook` và `aipager-statusline` (đọc) |
+| `/tmp/claude-bgjob-pids.json` | PID của chính `claude` của mỗi phiên đang chạy, cho hook của một tác vụ chạy nền chạy trước khi file liên kết của nó tồn tại (quyền 0600) | aipager (ghi), `aipager-hook` và `aipager-statusline` (đọc) |
+| `/tmp/claude-exit-<name>.json` | Mã thoát của `claude` và thời điểm nó bắt đầu, kết thúc (`{"code", "start", "end"}`, quyền 0600): shell khởi chạy phiên xóa file trước khi `claude` bắt đầu và ghi nó khi `claude` thoát, và thông báo kết thúc phiên dựa vào nó để nói lý do ([xử lý sự cố](troubleshooting.md#a-session-dropped-off-the-pinned-status-bar-it-is-gone)) | shell khởi chạy phiên (ghi), aipager (đọc) |
 | `/tmp/aipager-files/<chat>/` | File và tin nhắn thoại gửi từ Telegram, mỗi chat một thư mục riêng (`0700`, file `0600`) | aipager |
 | `/tmp/aipager.log` | Đầu ra của việc tự khởi động lại khi không có dịch vụ | aipager |
 | `~/.claude/aipager-sessions.json` | Trạng thái lâu dài của danh sách phiên | aipager |
@@ -136,7 +139,7 @@ Ngoài những file này, aipager tạo một thư mục phiên mới khi bạn 
 
 ### <a id="isolated-instance-for-testing"></a>Bản chạy tách biệt (để thử nghiệm)
 
-Đặt `AIPAGER_INSTANCE_DIR` thành một thư mục tuyệt đối thuộc về bạn, và mọi file dùng chung ở trên sẽ chuyển vào đó: socket điều khiển (cùng các socket trả lời, file tín hiệu giới hạn tốc độ và dấu đổi mô hình nằm cạnh nó), các socket `claude-dtach-*`, các file `claude-policy-*`, `claude-notes-*`, `claude-status-*` và `claude-reply-*`, file mức an toàn tối thiểu, thư mục tải về `aipager-files` và log tự khởi động lại. Các phiên mà bản chạy này khởi động sẽ thừa hưởng cài đặt, nên hook của chúng chỉ nói chuyện với bản chạy đó, và các quy tắc an toàn bảo vệ các file đã chuyển theo cùng cách. Bản chạy này không đọc `.env` của một bản sao mã nguồn.
+Đặt `AIPAGER_INSTANCE_DIR` thành một thư mục tuyệt đối thuộc về bạn, và mọi file dùng chung ở trên sẽ chuyển vào đó: socket điều khiển (cùng các socket trả lời, file tín hiệu giới hạn tốc độ và dấu đổi mô hình nằm cạnh nó), các socket `claude-dtach-*`, các file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` và `claude-exit-*`, file mức an toàn tối thiểu, thư mục tải về `aipager-files` và log tự khởi động lại. Các phiên mà bản chạy này khởi động sẽ thừa hưởng cài đặt, nên hook của chúng chỉ nói chuyện với bản chạy đó, và các quy tắc an toàn bảo vệ các file đã chuyển theo cùng cách. Bản chạy này không đọc `.env` của một bản sao mã nguồn.
 
 Các file trong thư mục home của bạn không chuyển theo, nên hãy trỏ cả `HOME` tới một thư mục riêng. `aipager start` từ chối chạy khi thư mục bản chạy được đặt mà `HOME` lại là thư mục home thật của bạn, khi thư mục đó không phải đường dẫn tuyệt đối tới một thư mục thuộc về bạn, hoặc khi nó quá dài để làm đường dẫn socket.
 
@@ -149,6 +152,10 @@ Cả hai cài đặt tồn tại để các test end-to-end có thể chạy m�
 ## <a id="why-dtach"></a>Vì sao dùng dtach
 
 dtach cho mỗi phiên Claude Code một PTY thật mà không gắn nó vào một terminal phải luôn mở. aipager bắt đầu một phiên bằng `dtach -n` và gõ vào nó bằng `dtach -p` (tin nhắn, Escape, các phím để trả lời một hộp thoại); nó không bao giờ đọc màn hình, vì hook và cuộc trò chuyện đã lưu cho biết chuyện gì xảy ra. Bạn có thể kết nối vào để dùng trực tiếp từ bất kỳ shell nào bằng `aipager session <name>`. Kết nối đó đi theo phiên qua một lần khởi động lại từ Telegram (`/mode` sang hoặc từ Chế độ Toàn quyền, `/restart`, “Khởi động lại”): khi socket của phiên biến mất, nó chờ tối đa 15 giây cho cùng socket đó quay lại rồi tự kết nối lại. Một phiên đã thực sự kết thúc sẽ trả bạn về shell sau khi chờ (Ctrl-C để thôi chờ sớm hơn). Kết nối chạy với phím tách của dtach bị tắt, nên `Ctrl-\` đi tới Claude; để thoát, đóng terminal hoặc ô tmux, và phiên vẫn tiếp tục chạy.
+
+Bên trong phiên dtach, một phiên do aipager khởi động chạy `dtach -> bash -> claude`, còn một phiên bắt đầu bằng `aipager session` chạy `dtach -> sh -> claude`: shell chờ `claude` để có thể ghi lại mã thoát của nó (`claude-exit-<name>.json`), mà thông báo kết thúc phiên sẽ đọc. Các đối số của `aipager session` tới `claude` nguyên vẹn, không bao giờ đi qua bước phân tích của shell.
+
+Một lần khởi động lại từ Telegram sẽ tắt dtach của phiên và khởi động lại nó trên cùng cuộc trò chuyện. Một phiên có cuộc trò chuyện đã chuyển sang chế độ chạy nền của Claude Code (← khi ô nhập trống; xem [xử lý sự cố](troubleshooting.md#a-session-moved-to-claude-codes-background)) được khởi động lại theo cùng cách, sau thêm một bước trước: aipager chạy `claude stop <job>` và chờ tới khi không còn tiến trình chạy nền nào giữ cuộc trò chuyện, rồi tắt dtach của phiên và khởi động nó trên cuộc trò chuyện của tác vụ với cài đặt riêng của aipager. Khi một phiên đang ở chế độ chạy nền của Claude Code, aipager không gõ gì vào dtach của nó.
 
 Kết quả: Claude Code chạy như thể bạn đang gõ trong terminal, nhưng terminal đó có thể đến rồi đi mà không làm phiền phiên đang chạy. aipager tìm ra các phiên bằng cách quét `/tmp/claude-dtach-*.sock` ở mỗi vòng quét 2 giây. Một phiên được tìm thấy thuộc về chat mà tên của nó được tạo cho, còn một phiên bắt đầu trong terminal thì, trên bản cài có cả chat riêng lẫn nhóm, thuộc về chat riêng của chủ sở hữu.
 
