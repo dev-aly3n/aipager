@@ -94,6 +94,11 @@ EXACT_CAPS: dict[str, Cap] = {
     "resume-auto": PROMPT,
     "resume-full": MANAGE,       # Full access, like every other way into it
     "resume-cancel": PROMPT,
+    # ---- a session in a Claude Code background job (session_parity):
+    # each relaunches it, like Restart, and re-checks Restart's rule ---
+    "bgback": PROMPT,            # the park notice's "Bring it back now"
+    "bgforce": PROMPT,           # the busy question's "Stop and bring back"
+    "bgleave": PROMPT,           # the busy question's "Leave it"
     # ---- /mode's card (perms_confirm / perms_stop_switch: see below) --
     "perms_confirm": PROMPT,
     "perms_stop_switch": PROMPT,

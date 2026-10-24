@@ -150,9 +150,26 @@
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Du stehst nicht auf der Liste der erlaubten Personen dieses Bots. Bitte den Besitzer des Bots, deine Telegram-ID ({user_id}) mit {command} hinzuzufügen."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Dieser Bot ist nicht für dich eingerichtet. Bitte den Besitzer des Bots, deine Telegram-ID ({user_id}) mit {command} hinzuzufügen."}
 {"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Hol <b>{session}</b> aus dem Hintergrund von Claude Code zurück, um das zu beantworten."}
+{"k": "bg.back", "src": "061be6c6", "v": "↩️ <b>{session}</b> ist aus dem Hintergrund von Claude Code zurück."}
+{"k": "bg.btn_bring_back", "src": "af762d34", "v": "↩️ Jetzt zurückholen"}
+{"k": "bg.btn_leave", "src": "e7c7e7b3", "v": "Weiterlaufen lassen"}
+{"k": "bg.btn_stop_and_bring", "src": "c283f239", "v": "Stoppen und zurückholen"}
+{"k": "bg.busy_question", "src": "d137687d", "v": "<b>{session}</b> arbeitet noch im Hintergrund von Claude Code: diese Arbeit stoppen und das Gespräch hierher zurückholen?"}
+{"k": "bg.err.no_claude", "src": "4d12bc6b", "v": "der Befehl claude konnte nicht ausgeführt werden"}
+{"k": "bg.err.still_running", "src": "5914ed5a", "v": "der Job im Hintergrund läuft noch"}
+{"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop wurde mit Exit-Code {code} beendet"}
+{"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop hat nicht rechtzeitig geantwortet"}
+{"k": "bg.failed", "src": "00860287", "v": "<b>{session}</b> konnte nicht aus dem Hintergrund von Claude Code zurückgeholt werden: {error}"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Deine Nachricht an <b>{session}</b> wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt."}
+{"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> arbeitet im Hintergrund von Claude Code weiter."}
+{"k": "bg.no_conversation", "src": "42ccba55", "v": "<b>{session}</b> konnte nicht zurückgeholt werden, weil Claude Code kein gespeichertes Gespräch dafür hat."}
+{"k": "bg.park_notice", "src": "92f21b2f", "v": "🌙 <b>{session}</b> ist in den Hintergrund von Claude Code gewechselt, und deine nächste Nachricht holt die Sitzung hierher zurück."}
 {"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Hol <b>{session}</b> zuerst aus dem Hintergrund von Claude Code zurück."}
 {"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Hol {session} aus dem Hintergrund von Claude Code zurück, um das zu beantworten."}
+{"k": "bg.toast_bringing_back", "src": "2c4f2966", "v": "{session} wird zurückgeholt…"}
+{"k": "bg.toast_failed", "src": "ae1048bb", "v": "{session} konnte nicht aus dem Hintergrund von Claude Code zurückgeholt werden: {error}"}
+{"k": "bg.toast_no_conversation", "src": "5cdeb54e", "v": "{session} konnte nicht zurückgeholt werden, weil Claude Code kein gespeichertes Gespräch dafür hat."}
+{"k": "bg.toast_not_parked", "src": "ec56a8ac", "v": "{session} ist nicht im Hintergrund von Claude Code."}
 {"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Hol {session} zuerst aus dem Hintergrund von Claude Code zurück."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager verbindet diesen Bot mit Sitzungen von Claude Code auf dem Computer seines Besitzers. Hier kannst du verfolgen, was Claude gerade tut, seine Fragen und Berechtigungsanfragen beantworten und ihm neue Nachrichten schicken. Nur Personen, die der Besitzer hinzugefügt hat, können ihn nutzen."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Steuere Sitzungen von Claude Code über Telegram."}
@@ -232,6 +249,10 @@
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} noch bei der Arbeit"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram hat diese Gruppe umgestellt. aipager ist mit umgezogen, du musst nichts tun."}
+{"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "Das Gespräch läuft noch im Hintergrund-Job {job} von Claude Code: stoppe ihn mit {stop_command} oder öffne ihn mit {attach_command} und versuch es dann noch einmal."}
+{"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Der Hintergrund-Job {job} von Claude Code konnte nicht gestoppt werden: {error}"}
+{"k": "cli.session.continued", "src": "ae69418c", "v": "Das Gespräch ist zu {session_id} umgezogen, deshalb geht diese Sitzung dort weiter."}
+{"k": "cli.session.stopped_bg", "src": "a1bda078", "v": "Der Hintergrund-Job {job} von Claude Code hatte das Gespräch und wurde gestoppt, damit es hier fortgesetzt wird."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "Dashboard der Mini App öffnen"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "Was du tun kannst"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Sprache der Nachrichten von aipager"}

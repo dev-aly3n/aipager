@@ -161,6 +161,7 @@ def test_a_client_parked_on_the_conversations_job_is_found(cfg, proc, mon):
     registry, monitor, notify, sess = mon
     sess.claude_session_id = JOB_SID
     reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+    proc.alive.add(CLIENT)
     found = claude_jobs.find_client(sess, claude_jobs.read_registry())
     assert found is not None and found["pid"] == CLIENT
 
@@ -169,8 +170,25 @@ def test_the_entry_holding_the_conversation_is_found(cfg, proc, mon):
     registry, monitor, notify, sess = mon
     reg(cfg, CLIENT, kind="interactive", sessionId=SID)
     reg(cfg, WORKER, kind="bg", sessionId=SID, jobId=JOB)
+    proc.alive.update({CLIENT, WORKER})
     found = claude_jobs.find_client(sess, claude_jobs.read_registry())
     assert found is not None and found["pid"] == CLIENT
+
+
+@pytest.mark.parametrize("level", ["parked_job", "session_id"])
+def test_a_dead_clients_file_is_no_client(cfg, proc, mon, level):
+    """By id alone only a live process counts: the file Claude Code left
+    behind for a killed client (the one a bring-back replaced) is parked
+    on the very job the session's new id starts with."""
+    registry, monitor, notify, sess = mon
+    if level == "parked_job":
+        sess.claude_session_id = JOB_SID
+        reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+    else:
+        reg(cfg, CLIENT, kind="interactive", sessionId=SID)
+    assert claude_jobs.find_client(sess, claude_jobs.read_registry()) is None
+    proc.alive.add(CLIENT)
+    assert claude_jobs.find_client(sess, claude_jobs.read_registry())["pid"] == CLIENT
 
 
 @pytest.mark.parametrize("level", ["ancestry", "parked_job", "session_id"])
@@ -188,6 +206,7 @@ def test_two_candidates_on_one_level_are_no_answer(cfg, proc, mon, level):
     else:
         reg(cfg, CLIENT, kind="interactive", sessionId=SID)
         reg(cfg, CLIENT + 1, kind="interactive", sessionId=SID)
+    proc.alive.update({CLIENT, CLIENT + 1})   # two real candidates
     assert claude_jobs.find_client(sess, claude_jobs.read_registry()) is None
     assert sess.claude_pid == 0
 

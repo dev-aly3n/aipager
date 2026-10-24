@@ -150,9 +150,26 @@
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 이 봇의 허용 목록에 없어요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
 {"k": "bg.answer_refused", "src": "ce9faf0f", "v": "답하려면 먼저 <b>{session}</b> 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
+{"k": "bg.back", "src": "061be6c6", "v": "↩️ <b>{session}</b> 세션이 Claude Code 백그라운드에서 돌아왔어요."}
+{"k": "bg.btn_bring_back", "src": "af762d34", "v": "↩️ 지금 다시 가져오기"}
+{"k": "bg.btn_leave", "src": "e7c7e7b3", "v": "그대로 두기"}
+{"k": "bg.btn_stop_and_bring", "src": "c283f239", "v": "멈추고 다시 가져오기"}
+{"k": "bg.busy_question", "src": "d137687d", "v": "<b>{session}</b> 세션이 아직 Claude Code 백그라운드에서 작업 중인데, 그 작업을 멈추고 대화를 여기로 다시 가져올까요?"}
+{"k": "bg.err.no_claude", "src": "4d12bc6b", "v": "claude 명령을 실행할 수 없었어요"}
+{"k": "bg.err.still_running", "src": "5914ed5a", "v": "백그라운드 작업이 아직 실행 중이에요"}
+{"k": "bg.err.stop_exit", "src": "43459cfa", "v": "중지 명령 claude stop이 종료 코드 {code}(으)로 끝났어요"}
+{"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "중지 명령 claude stop이 제때 응답하지 않았어요"}
+{"k": "bg.failed", "src": "00860287", "v": "<b>{session}</b> 세션을 Claude Code 백그라운드에서 다시 가져오지 못했어요: {error}"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "<b>{session}</b> 세션에 보낸 메시지는 누군가 이 세션을 Claude Code 백그라운드에서 다시 가져올 때까지 기다려요."}
+{"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> 세션은 Claude Code 백그라운드에서 계속 작업해요."}
+{"k": "bg.no_conversation", "src": "42ccba55", "v": "Claude Code에 저장된 대화가 없어서 <b>{session}</b> 세션을 다시 가져오지 못했어요."}
+{"k": "bg.park_notice", "src": "92f21b2f", "v": "🌙 <b>{session}</b> 세션이 Claude Code 백그라운드로 옮겨졌고, 다음 메시지를 보내면 다시 여기로 가져와요."}
 {"k": "bg.refused_parked", "src": "4dc23fb4", "v": "먼저 <b>{session}</b> 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
 {"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "답하려면 먼저 {session} 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
+{"k": "bg.toast_bringing_back", "src": "2c4f2966", "v": "{session} 세션을 다시 가져오는 중…"}
+{"k": "bg.toast_failed", "src": "ae1048bb", "v": "{session} 세션을 Claude Code 백그라운드에서 다시 가져오지 못했어요: {error}"}
+{"k": "bg.toast_no_conversation", "src": "5cdeb54e", "v": "Claude Code에 저장된 대화가 없어서 {session} 세션을 다시 가져오지 못했어요."}
+{"k": "bg.toast_not_parked", "src": "ec56a8ac", "v": "{session} 세션은 Claude Code 백그라운드에 있지 않아요."}
 {"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "먼저 {session} 세션을 Claude Code 백그라운드에서 다시 가져오세요."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager는 이 봇을 소유자 컴퓨터의 Claude Code 세션에 연결해요. 여기서 Claude가 하는 일을 보고, Claude의 질문과 권한 요청에 답하고, 새 메시지를 보낼 수 있어요. 소유자가 추가한 사람만 쓸 수 있어요."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Telegram에서 Claude Code 세션을 제어해요."}
@@ -232,6 +249,10 @@
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} 아직 작업 중"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram이 이 그룹을 업그레이드했어요. aipager도 함께 옮겨 왔으니 따로 할 일은 없어요."}
+{"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "대화가 아직 Claude Code 백그라운드 작업 {job}에서 진행 중이에요: {stop_command}(으)로 중지하거나 {attach_command}(으)로 연 다음 다시 시도하세요."}
+{"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Claude Code 백그라운드 작업 {job}을(를) 중지하지 못했어요: {error}"}
+{"k": "cli.session.continued", "src": "ae69418c", "v": "대화가 {session_id}(으)로 옮겨져서 이 세션은 거기서 이어져요."}
+{"k": "cli.session.stopped_bg", "src": "a1bda078", "v": "여기서 대화를 재개하려고, 대화를 붙잡고 있던 Claude Code 백그라운드 작업 {job}을(를) 중지했어요."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "Mini App 대시보드 열기"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "할 수 있는 일"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "aipager 메시지 언어"}

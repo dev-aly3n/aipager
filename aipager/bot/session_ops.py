@@ -116,6 +116,9 @@ class StopOutcome:
     dropped: int = 0
     reason: str = ""     # "stale" when the tap came from an earlier turn
     by: str = ""         # who stopped it, in a group (roadmap 8.91c)
+    #: A parked session's forced bring-back that failed: its error
+    #: ``(code, params)`` (``reason`` is the bring-back's).
+    bg_err: tuple = ()
 
 
 CARD_STOPPED = Msg("card.stopped", "⚠️ <b>{session}</b> · Stopped",
@@ -202,35 +205,34 @@ RESUME_LAST_RESPONSE = Msg("sess.resume_last_response",
 
 # Claude Code background jobs: a session whose conversation moved into a
 # background job (``←`` in Claude Code) is parked, and nothing is typed into
-# it until someone brings it back (aipager/claude_jobs.py).
-BG_HELD_NOTICE = Msg(
-    "bg.held_notice",
-    "Your message to <b>{session}</b> waits until someone brings it back from "
-    "Claude Code's background.",
-    note="HTML. Reply to a message held because the session's conversation moved into "
-         "a Claude Code background job; sent once per person",
-    eg={"session": "x1"})
-BG_REFUSED_PARKED = Msg(
-    "bg.refused_parked", "Bring <b>{session}</b> back from Claude Code's background first.",
-    note="HTML. A command (compact, model, mode, /now, Retry) refused because the "
-         "session's conversation is in a Claude Code background job",
-    eg={"session": "x1"})
-BG_TOAST_REFUSED_PARKED = Msg(
-    "bg.toast_refused_parked", "Bring {session} back from Claude Code's background first.",
-    note="Pop-up or plain line: the same refusal as bg.refused_parked",
-    eg={"session": "x1"})
-BG_ANSWER_REFUSED = Msg(
-    "bg.answer_refused",
-    "Bring <b>{session}</b> back from Claude Code's background to answer this.",
-    note="HTML. A prompt answer aipager would type was not typed: the session's "
-         "conversation is in a Claude Code background job",
-    eg={"session": "x1"})
-BG_TOAST_ANSWER_REFUSED = Msg(
-    "bg.toast_answer_refused",
-    "Bring {session} back from Claude Code's background to answer this.",
-    note="Pop-up: a tap on a prompt's button typed nothing, because the session's "
-         "conversation is in a Claude Code background job",
-    eg={"session": "x1"})
+# it until someone brings it back (aipager/claude_jobs.py). The words live in
+# aipager/bg_text.py (session_parity and the command line use them too).
+from aipager.bg_text import (  # noqa: E402,F401 - re-exported
+    BG_ANSWER_REFUSED,
+    BG_BACK,
+    BG_BTN_BRING_BACK,
+    BG_BTN_LEAVE,
+    BG_BTN_STOP_AND_BRING,
+    BG_BUSY_QUESTION,
+    BG_FAILED,
+    BG_FAILURES,
+    BG_HELD_NOTICE,
+    BG_LEFT,
+    BG_NO_CONVERSATION,
+    BG_PARK_NOTICE,
+    BG_REFUSED_PARKED,
+    BG_TOAST_ANSWER_REFUSED,
+    BG_TOAST_BRINGING_BACK,
+    BG_TOAST_FAILED,
+    BG_TOAST_NO_CONVERSATION,
+    BG_TOAST_NOT_PARKED,
+    BG_TOAST_REFUSED_PARKED,
+    bg_error,
+    bg_outcome_html,
+    bg_outcome_text,
+    stop_refused_html,
+    stop_refused_text,
+)
 
 CARD_DENIED_TERMINAL = Msg(
     "card.denied_terminal", "🚫 <b>{session}</b> · Denied in the terminal",
@@ -287,7 +289,10 @@ class ResumeOutcome:
     """Result of :meth:`SessionOpsMixin._do_resume_core`.
 
     ``reason`` is one of ``"not_gone"``, ``"no_transcript"``,
-    ``"launch_failed"``, ``"resumed"``. Never ``"not_found"`` — the
+    ``"launch_failed"``, ``"resumed"``, and when a Claude Code background
+    job holds the conversation ``"bg_busy"`` (it is working: nothing was
+    done), ``"bg_stop_failed"`` (``bg_err`` says why) or
+    ``"bg_no_conversation"``. Never ``"not_found"`` — the
     caller resolves the session before calling the core, and handles a
     missing session itself (see the core's own docstring).
     """
@@ -295,6 +300,9 @@ class ResumeOutcome:
     ok: bool
     reason: str
     err: str = ""
+    #: ``(code, params)`` of ``aipager.bg_text.BG_ERRORS`` for
+    #: ``bg_stop_failed``; empty otherwise.
+    bg_err: tuple = ()
 
 
 @dataclass
@@ -303,7 +311,11 @@ class RestartOutcome:
     thin callers :meth:`_perms_switch_core` / :meth:`_restart_session_core`).
 
     ``reason`` is one of ``"not_live"``, ``"already_restarting"``,
-    ``"still_stopping"``, ``"launch_failed"``, ``"done"``. Never
+    ``"still_stopping"``, ``"launch_failed"``, ``"done"``; for a Claude
+    Code background job (:meth:`SessionOpsMixin._bring_back_core`)
+    ``"not_parked"``, ``"bg_busy"``, ``"bg_stop_failed"`` (``bg_err``
+    says why), ``"bg_no_conversation"``; ``"parked"`` for an in-place
+    mode switch refused while parked. Never
     ``"not_found"`` — like the other cores in this module, the caller
     resolves the session before calling in.
     """
@@ -315,6 +327,9 @@ class RestartOutcome:
     err: str = ""
     #: True for an in-place Ask<->Auto switch (Shift+Tab, no restart).
     in_place: bool = False
+    #: ``(code, params)`` of ``aipager.bg_text.BG_ERRORS`` for
+    #: ``bg_stop_failed``; empty otherwise.
+    bg_err: tuple = ()
 
 
 @dataclass
@@ -1788,6 +1803,11 @@ class SessionOpsMixin:
             # "is not busy" for however long the background agent kept
             # running afterward.
             return StopOutcome(ok=False, label=sess.label)
+        if sess.parked_job:
+            # The work runs in a Claude Code background job, and nothing
+            # may be typed into the parked client: Stop means "end this
+            # work", so the job is stopped and the session brought back.
+            return await self._stop_parked(sess, by=by)
 
         # 0. Read Claude's queue BEFORE the Escapes below: the first one
         # makes Claude Code pull it into the input box and write
@@ -1879,6 +1899,38 @@ class SessionOpsMixin:
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
         return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by)
 
+    async def _stop_parked(self, sess: TrackedSession, *, by: str = "") -> StopOutcome:
+        """Stop for a session parked on a Claude Code background job: a
+        forced bring-back (``claude stop`` ends the job's turn), then the
+        card settles as Stopped. Held messages go to the session that
+        comes back. A failed bring-back changes nothing and says why."""
+        outcome = await self._bring_back_core(sess, force=True)
+        if not outcome.ok:
+            return StopOutcome(ok=False, label=sess.label, reason=outcome.reason, by=by,
+                               bg_err=outcome.bg_err)
+        async with sess.animate_lock:
+            self._cancel_lazy_card(sess)
+            sess.close_turn()
+        self._stop_animation(sess)
+        await self._settle_card_text(sess, _stopped_card_text(sess.label, by,
+                                                              i18n.for_sess(sess)))
+        sess.busy_msg_id = None
+        sess.turn_sender_id = None
+        sess.close_all_prompts()
+        sess.pending_permission = None
+        sess.active_subagents.clear()
+        sess.job_interim_seen = False
+        sess.job_continuation_active = False
+        sess.job_grace_until = 0.0
+        sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
+        sess.user_stopped_at = time.monotonic()
+        sess.last_idle_at = time.monotonic()
+        self.registry.mark_dirty()
+        log.info("[%s] Stopped by user (background job stopped, session brought back)",
+                 sess.label)
+        return StopOutcome(ok=True, label=sess.label, by=by)
+
     async def _stop_session(self, sess: TrackedSession,
                             update: Update | None = None,
                             query=None) -> StopOutcome:
@@ -1906,6 +1958,8 @@ class SessionOpsMixin:
             calling_chat_id(update if update is not None else query), person)
         outcome = await self._stop_session_core(sess, by=by)
         if not outcome.ok:
+            if outcome.reason in BG_FAILURES:
+                await self._say_stop_refused(sess, outcome, update, query)
             return outcome
 
         # Acknowledge, in the words every Stop uses.
@@ -1942,6 +1996,22 @@ class SessionOpsMixin:
                               sess.label, exc_info=True)
 
         return outcome
+
+    async def _say_stop_refused(self, sess: TrackedSession, outcome: StopOutcome,
+                                update, query) -> None:
+        """Why a Stop of a parked session did not happen: a pop-up for a
+        tap, a reply for a command. Best-effort."""
+        try:
+            if query is not None:
+                tr = i18n.for_person(update if update is not None
+                                     else SimpleNamespace(callback_query=query))
+                await self._safe_answer(query, stop_refused_text(tr, outcome))
+            elif update is not None and getattr(update, "message", None) is not None:
+                tr = i18n.for_update(update)
+                await reply_text(update.message, stop_refused_html(tr, outcome),
+                                 parse_mode="HTML")
+        except Exception:
+            log.debug("[%s] stop refusal notice failed", sess.label, exc_info=True)
 
     async def _tell_peer_sender(self, sess: TrackedSession, peer_from,
                                 reason: str) -> None:
@@ -1986,14 +2056,28 @@ class SessionOpsMixin:
         Best-effort throughout; never raises into the notify path.
         """
         from aipager.bot.transport import resolve_chat_id
-        # 1. Interrupt Claude's turn.
-        try:
-            await inject.send_keys(sess.name, "Escape")
-            await _sleep(0.15)
-            await inject.send_keys(sess.name, "Escape")
-        except Exception:
-            log.debug("[%s] safety halt interrupt failed", sess.label,
-                      exc_info=True)
+        # 1. Interrupt Claude's turn. A session parked on a Claude Code
+        # background job runs the turn in the job, and nothing may be typed
+        # into the parked client: the job is stopped and the session
+        # brought back instead (its held messages are dropped below).
+        if sess.parked_job:
+            try:
+                outcome = await self._bring_back_core(sess, force=True,
+                                                      release_held=False)
+                if not outcome.ok:
+                    log.warning("[%s] safety halt: background job not stopped (%s)",
+                                sess.label, outcome.reason)
+            except Exception:
+                log.warning("[%s] safety halt bring-back failed", sess.label,
+                            exc_info=True)
+        else:
+            try:
+                await inject.send_keys(sess.name, "Escape")
+                await _sleep(0.15)
+                await inject.send_keys(sess.name, "Escape")
+            except Exception:
+                log.debug("[%s] safety halt interrupt failed", sess.label,
+                          exc_info=True)
         # 2. Cancel the spinner (the piece whose absence wedged "thinking"),
         # and a self-woken turn's deferred card with it (roadmap 8.32) —
         # same reasoning, and the same card lock, as `_stop_session_core`.
@@ -2146,6 +2230,7 @@ class SessionOpsMixin:
         self, sess: TrackedSession, *,
         mode_override: str | None = None,
         driver_user_id: int | None = None,
+        force: bool = False,
     ) -> ResumeOutcome:
         """Resume an already-resolved GONE session.
 
@@ -2159,6 +2244,12 @@ class SessionOpsMixin:
         (mirroring :meth:`create_session`'s own precedent) rather than
         via :meth:`aipager.bot.auth.AuthMixin._mark_driver`, which needs
         an ``Update`` the Mini App does not have.
+
+        Before the launch, where the conversation moved is followed and a
+        Claude Code background job holding it is dealt with
+        (:meth:`_resume_target`): an idle one is stopped, a busy one gives
+        ``bg_busy`` unless *force*, a failed stop ``bg_stop_failed``; both
+        leave the session as it was.
         """
         if sess.status != Status.GONE:
             return ResumeOutcome(ok=False, reason="not_gone")
@@ -2173,8 +2264,23 @@ class SessionOpsMixin:
         # Defensive: clear the id BEFORE launch so a repeat-failure doesn't
         # rope us into an infinite resume loop (claude --resume against a
         # deleted transcript dies → socket disappears → /resume retries).
+        # Cleared before the background check too: a second resume while
+        # it runs finds nothing to resume, as during the launch.
         sess.claude_session_id = ""
         self.registry.mark_dirty()
+        sess.resuming_until = time.monotonic() + RESUME_GUARD_SECONDS
+        target, refusal = await self._resume_target(resume_id, force=force)
+        if refusal is not None:
+            sess.resuming_until = 0.0
+            sess.claude_session_id = resume_id
+            self.registry.mark_dirty()
+            reason, err = refusal
+            english = ""
+            if err:
+                from aipager import bg_text
+                english = bg_text.error_text(i18n.get("en"), err[0], err[1])
+            return ResumeOutcome(ok=False, reason=reason, err=english, bg_err=tuple(err))
+        resume_id = target
 
         # Use the session's actual (possibly scope-disambiguated) name so
         # resume reattaches the right socket, not a flat claude-<label>.
@@ -2259,7 +2365,8 @@ class SessionOpsMixin:
                           update: Update | None = None,
                           query=None,
                           mode_override: str | None = None,
-                          sess: TrackedSession | None = None) -> None:
+                          sess: TrackedSession | None = None,
+                          force: bool = False) -> None:
         """Shared resume logic for /resume <name> and picker callbacks.
 
         ``reply_fn`` is the async-callable used to send the result back
@@ -2316,10 +2423,29 @@ class SessionOpsMixin:
         # leaving GONE clears it (state.transition, roadmap 8.34), and it
         # is still the right "where you left off" for the recap below.
         snapshot = sess.last_assistant_preview
-        outcome = await self._do_resume_core(
-            sess, mode_override=mode_override,
-            driver_user_id=driver_user_id,
-        )
+        if force:
+            outcome = await self._do_resume_core(
+                sess, mode_override=mode_override,
+                driver_user_id=driver_user_id, force=True,
+            )
+        else:
+            outcome = await self._do_resume_core(
+                sess, mode_override=mode_override,
+                driver_user_id=driver_user_id,
+            )
+
+        if outcome.reason in BG_FAILURES:
+            # A Claude Code background job holds the conversation: busy,
+            # the question with its two buttons; otherwise why it failed.
+            text = bg_outcome_html(tr, outcome, label)
+            if outcome.reason == "bg_busy":
+                from aipager.bot import session_parity
+                kb = session_parity.bg_busy_keyboard(
+                    self, calling_chat_id(update or query) or 0, sess, tr)
+                await reply_fn(text, reply_markup=kb, parse_mode="HTML")
+            else:
+                await reply_fn(text, parse_mode="HTML")
+            return
 
         if outcome.reason == "not_gone":
             # The command is code, kept whole (nothing invisible inside it).
@@ -2483,7 +2609,7 @@ class SessionOpsMixin:
 
     async def _kill_and_relaunch_core(
         self, sess: TrackedSession, *, target_mode: str,
-        interrupt_first: bool,
+        interrupt_first: bool, force: bool = False,
     ) -> RestartOutcome:
         """Kill (or interrupt) a live session, poll for its dtach socket
         to disappear, then relaunch it in place with a possibly-different
@@ -2505,29 +2631,51 @@ class SessionOpsMixin:
         menu, a direct API probe, a second tap or a race with the session
         monitor must never be able to kick off a second kill/relaunch
         while one is already in flight. Every caller says so in words.
+
+        A session parked on a Claude Code background job is brought back
+        instead (:meth:`_bring_back_core`, keeping *target_mode*), before
+        anything is killed or typed: its conversation lives in the job,
+        and a Ctrl-C typed into the parked client could start a stray
+        job. *force* stops a busy job (otherwise ``bg_busy``); for a
+        session that is not parked it is the same answer to a live
+        background holder of its conversation (:meth:`_resume_target`).
         """
         label = sess.label
         if sess.status not in (Status.BUSY, Status.INTERACTIVE, Status.IDLE):
             return RestartOutcome(ok=False, reason="not_live", label=label)
+        if sess.parked_job:
+            return await self._bring_back_core(sess, force=force,
+                                               target_mode=target_mode)
         if sess.relaunch_in_flight:
             return RestartOutcome(ok=False, reason="already_restarting", label=label)
         sess.relaunch_in_flight = True
         try:
             return await self._kill_and_relaunch_in_flight(
                 sess, target_mode=target_mode,
-                interrupt_first=interrupt_first)
+                interrupt_first=interrupt_first, force=force)
         finally:
             sess.relaunch_in_flight = False
 
     async def _kill_and_relaunch_in_flight(
         self, sess: TrackedSession, *, target_mode: str,
-        interrupt_first: bool,
+        interrupt_first: bool, resume_id: str | None = None,
+        force: bool = False,
     ) -> RestartOutcome:
         """The body of :meth:`_kill_and_relaunch_core`, run while its
-        ``relaunch_in_flight`` is held."""
+        ``relaunch_in_flight`` is held.
+
+        *resume_id*: the conversation to relaunch with instead of
+        ``claude_session_id`` (the bring-back's, which has already dealt
+        with its background job); ``claude_session_id`` is that id
+        afterwards. Without it, the session's own conversation is checked
+        first (:meth:`_resume_target`): where it moved (``continued-in``)
+        is followed, and a live background holder is stopped when idle,
+        or refuses with ``bg_busy`` unless *force*."""
         label = sess.label
         session_name = sess.name
-        resume_id = sess.claude_session_id
+        own_conversation = resume_id is None
+        if own_conversation:
+            resume_id = sess.claude_session_id
         cwd = sess.cwd or None
         sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
 
@@ -2539,6 +2687,17 @@ class SessionOpsMixin:
         # be hushing its own old process's late SessionEnd.
         earlier_window = sess.restarting_until
         sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
+
+        if own_conversation and resume_id:
+            # R1/R2: where the conversation moved, and whether a Claude
+            # Code background job holds it (it would refuse the resume).
+            target, refusal = await self._resume_target(resume_id, force=force)
+            if refusal is not None:
+                sess.restarting_until = earlier_window
+                return self._bg_refused_restart(sess, refusal, target_mode)
+            resume_id = target
+            # The stop above may have taken seconds: the window runs from now.
+            sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
 
         # The turn being killed will never earn a card (roadmap 8.32):
         # stand its deferral down before the kill, because the monitor
@@ -2610,6 +2769,241 @@ class SessionOpsMixin:
             ok=True, reason="done", label=label, mode=target_mode,
         )
 
+    # ── Claude Code background jobs: bring a parked session back ──
+
+    def _bring_back_refusal(self, sess: TrackedSession, user_id, chat_id):
+        """Why *user_id*, acting from *chat_id*, may not bring *sess* back
+        from Claude Code's background, or None: exactly Restart's check
+        (a bring-back relaunches the session). ``"prompt"`` (may not
+        prompt here), ``"foreign"`` (another chat's session) or the
+        members' root refusal (``member_root.relaunch_refusal``)."""
+        from aipager import member_root
+        from aipager.state import session_foreign_to
+        if not self._can_prompt_user(user_id, chat_id):
+            return "prompt"
+        if session_foreign_to(sess, chat_id):
+            return "foreign"
+        refusal = member_root.relaunch_refusal(self, user_id, chat_id, sess.cwd)
+        return refusal or None
+
+    async def _stop_bg_job(self, job: str, session_ids) -> tuple:
+        """``claude stop <job>``, then wait (bounded) until no live
+        background process holds any of *session_ids*. ``()`` when that
+        worked, else the error ``(code, params)`` (``aipager.bg_text``)."""
+        from aipager import claude_jobs
+        run = await claude_jobs.run_claude(["stop", job], claude_jobs.STOP_TIMEOUT)
+        code, params = claude_jobs.stop_error(run)
+        if code:
+            log.warning("claude stop %s failed: %s (rc=%s)", job, code, run.rc)
+            return code, params
+        ids = [i for i in dict.fromkeys(session_ids) if i]
+        polls = int(claude_jobs.HOLDER_WAIT / claude_jobs.HOLDER_POLL)
+        for n in range(polls + 1):
+            if not any(claude_jobs.live_holder(i) is not None for i in ids):
+                return ()
+            if n < polls:
+                await _sleep(claude_jobs.HOLDER_POLL)
+        log.warning("background job %s still holds its conversation after claude stop",
+                    job)
+        return "still_running", {}
+
+    async def _resume_target(self, session_id: str, *, force: bool) -> tuple:
+        """R1 and R2 before *session_id* is resumed: ``(id, refusal)``.
+
+        *id* is where the conversation went (``continued-in`` followed,
+        ``claude_jobs.follow_continued``). *refusal* is None when it may be
+        launched: nothing holds it, or the Claude Code background job that
+        held it was idle (or *force*) and has been stopped. Otherwise it is
+        ``("bg_busy", ())`` (the job is working, or its state cannot be
+        read; nothing was done) or ``("bg_stop_failed", (code, params))``.
+        An unreadable registry launches as before. Never raises."""
+        from aipager import claude_jobs
+        try:
+            entries = claude_jobs.read_registry()
+            target = claude_jobs.follow_continued(session_id, entries)
+            holder = (claude_jobs.live_holder(target, entries)
+                      if entries is not None else None)
+        except Exception:
+            log.warning("resume target of %s not checked", session_id, exc_info=True)
+            return session_id, None
+        if target != session_id:
+            log.info("resuming %s instead of %s, where its conversation moved",
+                     target, session_id)
+        if holder is None:
+            return target, None
+        job = holder.get("jobId") or ""
+        if not claude_jobs.valid_job(job):
+            return target, ("bg_stop_failed", ("still_running", {}))
+        try:
+            state = await claude_jobs.job_state(job, entries)
+        except Exception:
+            log.warning("state of background job %s unknown", job, exc_info=True)
+            state = claude_jobs.UNKNOWN
+        if state in (claude_jobs.BUSY, claude_jobs.UNKNOWN) and not force:
+            log.info("conversation %s is held by busy background job %s", target, job)
+            return target, ("bg_busy", ())
+        if state != claude_jobs.GONE:
+            err = await self._stop_bg_job(job, [target])
+            if err:
+                return target, ("bg_stop_failed", err)
+        log.info("stopped background job %s, which held conversation %s", job, target)
+        return target, None
+
+    @staticmethod
+    def _bg_refused_restart(sess: TrackedSession, refusal: tuple,
+                            mode: str) -> RestartOutcome:
+        reason, err = refusal
+        english = ""
+        if err:
+            from aipager import bg_text
+            english = bg_text.error_text(i18n.get("en"), err[0], err[1])
+        return RestartOutcome(ok=False, reason=reason, label=sess.label, mode=mode,
+                              err=english, bg_err=tuple(err))
+
+    @staticmethod
+    def _bring_back_conversation(sess: TrackedSession, job: str, entries) -> str:
+        """The conversation a bring-back resumes (B2.1): the job's, when
+        its transcript exists; else the parked client's own (a fork that
+        never ran a prompt), when its transcript exists; ``""`` when
+        neither does. The session's own id stands in for the client's
+        when the registry cannot name the client."""
+        from aipager import claude_jobs
+        entry = claude_jobs.job_entry(job, entries)
+        client = claude_jobs.find_client(sess, entries) if entries else None
+        candidates = [
+            entry.get("sessionId") if entry else "",
+            sess.parked_job_session_id,
+            client.get("sessionId") if client else "",
+            sess.claude_session_id,
+        ]
+        for sid in dict.fromkeys(c for c in candidates if c):
+            if claude_jobs.find_transcript(sid) is not None:
+                return sid
+        return ""
+
+    def _clear_park(self, sess: TrackedSession) -> None:
+        """Forget *sess*'s park after a bring-back: the link file and its
+        pid-map entry go (before the fields: the cleanup reads them), the
+        fields are cleared, and the relaunched claude is found afresh."""
+        from aipager.state import _drop_bg_files
+        _drop_bg_files(sess.name, sess)
+        sess.parked_job = ""
+        sess.parked_job_session_id = ""
+        sess.parked_since = 0.0
+        sess.park_told.clear()
+        sess.claude_pid = 0
+        sess.claude_pid_start = 0
+        self.registry.mark_dirty()
+
+    async def _bring_back_core(
+        self, sess: TrackedSession, *, force: bool = False,
+        release_held: bool = True, target_mode: str | None = None,
+    ) -> RestartOutcome:
+        """Bring a session parked on a Claude Code background job back into
+        its own terminal: the one core the park notice's button, Restart,
+        a restart-type mode switch, Stop, a safety halt and the message
+        gate use.
+
+        1. The conversation (:meth:`_bring_back_conversation`), followed
+           where it moved; none gives ``bg_no_conversation`` and nothing
+           is touched (never an empty session in its place).
+        2. The job's state: busy, or unknown, and not *force* gives
+           ``bg_busy`` with nothing touched.
+        3. Under the restart window (opened first, so the job's
+           SessionEnd and the parked client's exit are expected),
+           ``claude stop <job>`` (skipped for a job that is gone), then a
+           bounded wait until no process holds the conversation. A failure
+           gives ``bg_stop_failed`` and leaves everything as it was.
+        4. and 5. The parked client is killed and the conversation
+           relaunched with aipager's own flags
+           (:meth:`_kill_and_relaunch_in_flight`), in *target_mode* (else
+           the session's own mode).
+        6. The park is forgotten, ``bg.back`` is sent once, and with
+           *release_held* the held messages go out from the relaunched
+           claude's first SessionStart (``bg_release``; the monitor's
+           backstop sends it ``claude_jobs.RELEASE_BACKSTOP`` seconds later
+           when no SessionStart came).
+
+        ``not_parked`` for a session that is not parked;
+        ``already_restarting`` while a relaunch is in flight."""
+        label = sess.label
+        mode = target_mode or sess.perm_mode
+        if not sess.parked_job:
+            return RestartOutcome(ok=False, reason="not_parked", label=label, mode=mode)
+        if sess.status == Status.GONE:
+            return RestartOutcome(ok=False, reason="not_live", label=label, mode=mode)
+        if sess.relaunch_in_flight:
+            return RestartOutcome(ok=False, reason="already_restarting", label=label,
+                                  mode=mode)
+        sess.relaunch_in_flight = True
+        try:
+            return await self._bring_back_in_flight(
+                sess, force=force, release_held=release_held, mode=mode)
+        finally:
+            sess.relaunch_in_flight = False
+
+    async def _bring_back_in_flight(self, sess: TrackedSession, *, force: bool,
+                                    release_held: bool, mode: str) -> RestartOutcome:
+        from aipager import claude_jobs
+        label = sess.label
+        job = sess.parked_job
+        entries = claude_jobs.read_registry()
+        resume_id = self._bring_back_conversation(sess, job, entries)
+        if not resume_id:
+            log.info("[%s] bring-back from job %s: no saved conversation", label, job)
+            return RestartOutcome(ok=False, reason="bg_no_conversation", label=label,
+                                  mode=mode)
+        followed = claude_jobs.follow_continued(resume_id, entries)
+        if followed != resume_id and claude_jobs.find_transcript(followed) is not None:
+            # Only to a saved conversation: the client's own id was chosen
+            # because the job's has none, and a hop to the job's (its
+            # holder is alive until the stop) would resume nothing.
+            resume_id = followed
+        state = await claude_jobs.job_state(job, entries)
+        if state in (claude_jobs.BUSY, claude_jobs.UNKNOWN) and not force:
+            log.info("[%s] bring-back from job %s refused: the job is %s",
+                     label, job, state)
+            return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
+        # B3: from here on the job's SessionEnd and the client's exit are
+        # expected. Covers the stop and the wait too.
+        earlier_window = sess.restarting_until
+        sess.restarting_until = (time.monotonic() + _PERMS_RESTART_QUIET
+                                 + claude_jobs.STOP_TIMEOUT + claude_jobs.HOLDER_WAIT)
+        if state != claude_jobs.GONE:
+            err = await self._stop_bg_job(
+                job, [resume_id, sess.parked_job_session_id])
+            if err:
+                sess.restarting_until = earlier_window
+                return self._bg_refused_restart(sess, ("bg_stop_failed", err), mode)
+        outcome = await self._kill_and_relaunch_in_flight(
+            sess, target_mode=mode, interrupt_first=False, resume_id=resume_id)
+        if not outcome.ok:
+            sess.restarting_until = earlier_window
+            return outcome
+        self._clear_park(sess)
+        path = claude_jobs.find_transcript(resume_id)
+        if path is not None:
+            sess.transcript_path = str(path)
+        if release_held:
+            sess.bg_release_pending = True
+            sess.bg_released_at = time.monotonic()
+        log.info("[%s] brought back from background job %s (conversation %s, forced=%s)",
+                 label, job, resume_id, force)
+        await self._say_brought_back(sess)
+        return outcome
+
+    async def _say_brought_back(self, sess: TrackedSession) -> None:
+        """``bg.back`` in the session's chat. Best-effort."""
+        if not self._app:
+            return
+        from aipager.bot.transport import resolve_chat_id
+        try:
+            await send_text(self._app.bot, chat_id=resolve_chat_id(sess),
+                            text=i18n.for_sess(sess).html(BG_BACK, session=sess.label),
+                            parse_mode="HTML")
+        except Exception:
+            log.debug("[%s] brought-back notice failed", sess.label, exc_info=True)
+
     async def _perms_switch_core(
         self, sess: TrackedSession, target_mode: str,
     ) -> RestartOutcome:
@@ -2633,7 +3027,8 @@ class SessionOpsMixin:
             interrupt_first=interrupt_first,
         )
 
-    async def _restart_session_core(self, sess: TrackedSession) -> RestartOutcome:
+    async def _restart_session_core(self, sess: TrackedSession, *,
+                                    force: bool = False) -> RestartOutcome:
         """Kill and relaunch a live session with its OWN current
         ``perm_mode`` unchanged — a restart is not a mode switch.
 
@@ -2642,7 +3037,15 @@ class SessionOpsMixin:
         to give a MODE SWITCH one soft chance. A user-invoked restart
         means "stop it and bring it back" — the same hard-kill
         semantics Kill already applies.
+
+        A session parked on a Claude Code background job is brought back
+        (:meth:`_bring_back_core`); *force* also stops a busy job (the busy
+        question's "Stop and bring back").
         """
+        if force:
+            return await self._kill_and_relaunch_core(
+                sess, target_mode=sess.perm_mode, interrupt_first=False, force=True,
+            )
         return await self._kill_and_relaunch_core(
             sess, target_mode=sess.perm_mode, interrupt_first=False,
         )

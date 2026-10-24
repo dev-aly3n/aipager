@@ -42,6 +42,9 @@ def wired(mk_bot, monkeypatch):
     bot._send_busy_and_animate = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
     bot._build_reply_context = MagicMock(return_value="")
+    # These senders may not Restart the session: a held message only waits
+    # (a sender who may brings it back: tests/test_bg_buttons.py).
+    bot._bring_back_refusal = MagicMock(return_value="prompt")
     sess = bot.registry.get_or_create(NAME)
     sess.label = "x"
     sess.claude_session_id = SID
@@ -124,6 +127,7 @@ def test_the_gate_looks_for_the_park_itself(wired, mk_update, run_async, tmp_pat
     (cfg / "sessions" / "4100.json").write_text(json.dumps(
         {"pid": 4100, "kind": "interactive", "sessionId": SID, "parkedJobId": JOB}))
     monkeypatch.setattr(claude_jobs, "config_dir", lambda: cfg)
+    monkeypatch.setattr(claude_jobs, "_pid_alive", lambda pid: pid == 4100)
     monitor = SessionMonitor(bot.registry, AsyncMock())
     bot.parked_check = monitor.check_parked
     assert sess.parked_job == ""
@@ -199,14 +203,14 @@ def test_a_restart_keeps_what_the_parked_session_held(wired, mk_update, run_asyn
     assert sess.parked_job == JOB
 
 
-def test_the_park_event_is_inert_until_the_notice_exists(wired, run_async):
-    """``bg_parked`` (the monitor saw a park) sends nothing yet and never
-    reaches the status branches (an IDLE session would take it for a
-    turn's end)."""
+def test_the_park_event_never_reaches_the_status_branches(wired, run_async):
+    """``bg_parked`` (the monitor saw a park) posts the park notice and
+    nothing else: it never reaches the status branches (an IDLE session
+    would take it for a turn's end and drain the queue)."""
     bot, sess, injected = wired
     sess.parked_job = JOB
     sess.queue_prompt("held", 51)
     run_async(bot.notify(sess, "bg_parked", {"job": JOB}))
-    assert bot._app.bot.send_message.await_count == 0
+    assert bot._app.bot.send_message.await_count == 1
     assert injected == [] and len(sess.pending_queue) == 1
     assert sess.status == Status.IDLE

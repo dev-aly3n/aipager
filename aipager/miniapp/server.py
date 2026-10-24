@@ -2186,6 +2186,14 @@ class MiniAppServer:
             return web.json_response({
                 "error": "launch_failed", "detail": say(tr, outcome.err),
             }, status=400)
+        from aipager import bg_text
+        if outcome.reason in bg_text.BG_FAILURES:
+            # A Claude Code background job holds the conversation: never
+            # a 200 (bg_busy, bg_stop_failed).
+            return web.json_response({
+                "error": outcome.reason,
+                "detail": bg_text.bg_outcome_text(tr, outcome, label) or "",
+            }, status=409)
 
         await self._mirror_session_resumed(
             scope_chat_id, label, in_auto=full_refused)
@@ -2288,6 +2296,13 @@ class MiniAppServer:
             return web.json_response({
                 "error": "launch_failed", "detail": say(tr, outcome.err),
             }, status=400)
+        from aipager import bg_text
+        if outcome.reason in bg_text.BG_FAILURES or outcome.reason == "not_parked":
+            # A Claude Code background job in the way: never a 200.
+            return web.json_response({
+                "error": outcome.reason,
+                "detail": bg_text.bg_outcome_text(tr, outcome, outcome.label) or "",
+            }, status=409)
         return None
 
     def _outside_root_response(self, request, sess, scope_chat_id, user_id):

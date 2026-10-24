@@ -150,9 +150,26 @@
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 شما اجازهٔ استفاده از این ربات را ندارید. از مالک ربات بخواهید شناسهٔ Telegram شما ({user_id}) را با {command} اضافه کند."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 این ربات برای گفتگو با شما تنظیم نشده. از مالک ربات بخواهید شناسهٔ Telegram شما ({user_id}) را با {command} اضافه کند."}
 {"k": "bg.answer_refused", "src": "ce9faf0f", "v": "برای جواب دادن به این، اول <b>{session}</b> را از پس‌زمینهٔ Claude Code برگردانید."}
+{"k": "bg.back", "src": "061be6c6", "v": "↩️ <b>{session}</b> از پس‌زمینهٔ Claude Code برگشت."}
+{"k": "bg.btn_bring_back", "src": "af762d34", "v": "↩️ همین حالا برگردان"}
+{"k": "bg.btn_leave", "src": "e7c7e7b3", "v": "بماند"}
+{"k": "bg.btn_stop_and_bring", "src": "c283f239", "v": "توقف و برگرداندن"}
+{"k": "bg.busy_question", "src": "d137687d", "v": "<b>{session}</b> هنوز در پس‌زمینهٔ Claude Code در حال کار است: آن کار متوقف شود و گفتگو به اینجا برگردد؟"}
+{"k": "bg.err.no_claude", "src": "4d12bc6b", "v": "دستور claude اجرا نشد"}
+{"k": "bg.err.still_running", "src": "5914ed5a", "v": "کار پس‌زمینه هنوز در حال اجراست"}
+{"k": "bg.err.stop_exit", "src": "43459cfa", "v": "دستور توقف claude stop با کد خروج {code} تمام شد"}
+{"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "دستور توقف claude stop به‌موقع جواب نداد"}
+{"k": "bg.failed", "src": "00860287", "v": "برگرداندن <b>{session}</b> از پس‌زمینهٔ Claude Code نشد: {error}"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "پیام شما به <b>{session}</b> منتظر می‌ماند تا کسی سشن را از پس‌زمینهٔ Claude Code برگرداند."}
+{"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> در پس‌زمینهٔ Claude Code به کارش ادامه می‌دهد."}
+{"k": "bg.no_conversation", "src": "42ccba55", "v": "<b>{session}</b> برنگشت، چون Claude Code هیچ گفتگوی ذخیره‌شده‌ای برای آن ندارد."}
+{"k": "bg.park_notice", "src": "92f21b2f", "v": "🌙 <b>{session}</b> به پس‌زمینهٔ Claude Code رفت و پیام بعدی شما آن را به اینجا برمی‌گرداند."}
 {"k": "bg.refused_parked", "src": "4dc23fb4", "v": "اول <b>{session}</b> را از پس‌زمینهٔ Claude Code برگردانید."}
 {"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "برای جواب دادن به این، اول {session} را از پس‌زمینهٔ Claude Code برگردانید."}
+{"k": "bg.toast_bringing_back", "src": "2c4f2966", "v": "در حال برگرداندن {session}…"}
+{"k": "bg.toast_failed", "src": "ae1048bb", "v": "برگرداندن {session} از پس‌زمینهٔ Claude Code نشد: {error}"}
+{"k": "bg.toast_no_conversation", "src": "5cdeb54e", "v": "{session} برنگشت، چون Claude Code هیچ گفتگوی ذخیره‌شده‌ای برای آن ندارد."}
+{"k": "bg.toast_not_parked", "src": "ec56a8ac", "v": "{session} در پس‌زمینهٔ Claude Code نیست."}
 {"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "اول {session} را از پس‌زمینهٔ Claude Code برگردانید."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager این ربات را به سشن‌های Claude Code روی کامپیوتر مالکش وصل می‌کند. از همین‌جا می‌بینید Claude مشغول چه کاری است، به سؤال‌ها و درخواست‌های اجازه‌اش جواب می‌دهید و پیام جدید برایش می‌فرستید. فقط کسانی که مالک اضافه کرده باشد می‌توانند از آن استفاده کنند."}
 {"k": "botdesc.short", "src": "483b3675", "v": "سشن‌های Claude Code را از Telegram کنترل کنید."}
@@ -232,6 +249,10 @@
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} هنوز در حال کار"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram این گروه را آپگرید کرد. aipager هم همراهش آمد؛ لازم نیست کاری بکنید."}
+{"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "گفتگو هنوز در کار پس‌زمینهٔ {job} در Claude Code در حال کار است: با {stop_command} متوقفش کنید یا با {attach_command} بازش کنید و دوباره امتحان کنید."}
+{"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "کار پس‌زمینهٔ {job} در Claude Code متوقف نشد: {error}"}
+{"k": "cli.session.continued", "src": "ae69418c", "v": "گفتگو به {session_id} منتقل شد، پس این سشن همان‌جا ادامه پیدا می‌کند."}
+{"k": "cli.session.stopped_bg", "src": "a1bda078", "v": "کار پس‌زمینهٔ {job} در Claude Code که گفتگو دستش بود متوقف شد تا اینجا ادامه پیدا کند."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "باز کردن داشبورد Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "چه کارهایی از دستتان برمی‌آید"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "زبان پیام‌های aipager"}

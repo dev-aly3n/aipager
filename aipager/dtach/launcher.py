@@ -341,6 +341,69 @@ def _claude_version(claude_bin: str | None) -> str | None:
     return resolved.chosen.version
 
 
+def _resume_arg(claude_args: list[str]) -> tuple[int, str, str] | None:
+    """Where *claude_args* name a conversation to resume: ``(index,
+    prefix, id)`` for ``--resume X``, ``-r X`` (the id at *index*, no
+    prefix) or ``--resume=X`` (the whole argument at *index*, prefix
+    ``--resume=``). None when there is none: also for a bare ``--resume``
+    (Claude Code's own picker) and after ``--``."""
+    for i, arg in enumerate(claude_args):
+        if arg == "--":
+            return None
+        if arg in ("--resume", "-r"):
+            if i + 1 < len(claude_args) and not claude_args[i + 1].startswith("-"):
+                return i + 1, "", claude_args[i + 1]
+            return None
+        if arg.startswith("--resume="):
+            return i, "--resume=", arg[len("--resume="):]
+    return None
+
+
+def prepare_resume(session_id: str) -> tuple[str | None, int]:
+    """R3 before a conversation is resumed from the command line: follow
+    where it moved and deal with a Claude Code background job holding it
+    (``claude_jobs.prepare_resume_sync``), saying what was done.
+
+    Returns ``(id, 0)`` to resume *id*, or ``(None, 1)`` when a busy job
+    holds it (the message names ``claude stop`` and ``claude attach``) or
+    the job could not be stopped."""
+    from aipager import bg_text, claude_jobs, i18n
+    en = i18n.get("en")
+    plan = claude_jobs.prepare_resume_sync(session_id)
+    if plan.moved:
+        console.print(f"  {en.text(bg_text.CLI_CONTINUED, session_id=plan.session_id)}",
+                      markup=False, highlight=False)
+    if plan.action == "busy":
+        friendly_error(en.text(bg_text.CLI_BG_BUSY, job=plan.job,
+                               stop_command=f"claude stop {plan.job}",
+                               attach_command=f"claude attach {plan.job}"))
+        return None, 1
+    if plan.action == "stop_failed":
+        friendly_error(en.text(bg_text.CLI_BG_STOP_FAILED, job=plan.job or "?",
+                               error=bg_text.error_text(en, plan.error, plan.params)))
+        return None, 1
+    if plan.action == "stopped":
+        console.print(f"  {en.text(bg_text.CLI_STOPPED_BG, job=plan.job)}",
+                      markup=False, highlight=False)
+    return plan.session_id, 0
+
+
+def _prepare_resume_args(claude_args: list[str]) -> tuple[list[str] | None, int]:
+    """:func:`prepare_resume` for the conversation *claude_args* resume, if
+    any: a copy of the args naming the id to resume (the user's own list is
+    never changed), or ``(None, 1)``."""
+    found = _resume_arg(claude_args)
+    if found is None:
+        return claude_args, 0
+    index, prefix, asked = found
+    target, rc = prepare_resume(asked)
+    if target is None:
+        return None, rc
+    out = list(claude_args)
+    out[index] = f"{prefix}{target}"
+    return out, 0
+
+
 def launch(name: str, claude_args: list[str] | None = None,
           *, claude_bin: str | None = None) -> int:
     """Create or reattach a Claude Code session inside dtach.
@@ -422,6 +485,13 @@ def launch(name: str, claude_args: list[str] | None = None,
                 "  Try `aipager session <name>` again, or run `claude --version`.",
             )
         return 0
+
+    # A conversation to resume (``--resume X``, ``--resume=X``, ``-r X``):
+    # where it moved, and a Claude Code background job holding it (R3).
+    # Only for a new session: a reattach above resumes nothing.
+    claude_args, rc = _prepare_resume_args(claude_args)
+    if claude_args is None:
+        return rc
 
     # Stale-socket cleanup: a socket file exists but nothing's listening.
     if sock_path.exists():

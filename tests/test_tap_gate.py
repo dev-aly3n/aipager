@@ -158,6 +158,14 @@ def test_every_verb_a_dispatcher_compares_is_in_the_table(module):
         "aipager/bot/tap_gate.py with the capability it needs.")
 
 
+def test_the_background_job_verbs_are_in_the_table():
+    """The park notice's and the busy question's buttons: PROMPT, like
+    Restart, and the table decides them itself (never the default)."""
+    for verb in ("bgback", "bgforce", "bgleave"):
+        assert tap_gate.EXACT_CAPS.get(verb) is PROMPT, verb
+        assert verb in session_parity._SESSION_ACTIONS, verb
+
+
 def test_the_scan_sees_the_dispatchers_verbs():
     """The scan itself works: it finds verbs we know are compared."""
     assert {"stop", "retry", "allow_always", "perms_confirm",
@@ -263,6 +271,9 @@ def test_an_unknown_verb_needs_prompt(ns, verb):
     ("claude-x", "menu", VIEW), ("claude-x", "diff", VIEW),
     ("claude-x", "menu-close", VIEW), ("claude-x", "kill-cancel", PROMPT),
     ("claude-x", "restart-cancel", PROMPT), ("claude-x", "delete-cancel", PROMPT),
+    # A session in a Claude Code background job: each relaunches it.
+    ("claude-x", "bgback", PROMPT), ("claude-x", "bgforce", PROMPT),
+    ("claude-x", "bgleave", PROMPT),
 ])
 def test_table_entries(ns, verb, cap):
     assert tap_gate.required_capability(ns, verb) is cap

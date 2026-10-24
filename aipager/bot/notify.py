@@ -2298,6 +2298,30 @@ class NotifyMixin:
             return
         await self._drain_next_queued(sess)
 
+    async def _notify_parked(self, sess: TrackedSession, job: str) -> None:
+        """The park notice (P6): once per job, persisted
+        (``park_notified_job``), so neither the next tick nor a daemon
+        restart repeats it; with its "Bring it back now" button."""
+        if not job or sess.parked_job != job or sess.park_notified_job == job:
+            return
+        if not self._app:
+            return
+        from aipager.bg_text import BG_PARK_NOTICE
+        from aipager.bot import session_parity
+        from aipager.bot.transport import resolve_chat_id, resolve_chat_id_int
+        sess.park_notified_job = job  # claimed before the send's await
+        self.registry.mark_dirty()
+        log.info("[%s] parked on background job %s: notice sent", sess.label, job)
+        tr = i18n.for_sess(sess)
+        try:
+            await send_text(
+                self._app.bot, chat_id=resolve_chat_id(sess),
+                text=tr.html(BG_PARK_NOTICE, session=sess.label), parse_mode="HTML",
+                reply_markup=session_parity.bg_park_keyboard(
+                    self, resolve_chat_id_int(sess) or 0, sess, tr))
+        except Exception:
+            log.warning("[%s] park notice failed", sess.label, exc_info=True)
+
     async def _drain_next_queued(self, sess: TrackedSession) -> None:
         """Pop and inject the next queued prompt, one at a time.
 
@@ -2526,12 +2550,22 @@ class NotifyMixin:
             return
 
         # ── a session moved into a Claude Code background job ──
-        # The monitor saw the park. Its notice and button come with the
-        # bring-back (later); until then only the log says so, and the
-        # event never reaches the status branches below.
+        # The monitor saw the park: one notice per job, with "Bring it
+        # back now" (P6). Never reaches the status branches below.
         if event == "bg_parked":
-            log.info("[%s] parked on background job %s", sess.label,
-                     context.get("job") or "?")
+            await self._notify_parked(sess, context.get("job") or "")
+            return
+        # ── a session brought back from a background job ──
+        # Its relaunched claude's first SessionStart (or the monitor's
+        # backstop): the messages held for the park may go out now.
+        if event == "bg_release":
+            if (not sess.bg_release_pending or sess.parked_job
+                    or sess.relaunch_in_flight):
+                return
+            sess.bg_release_pending = False
+            log.info("[%s] back from the background: releasing %d held message(s)",
+                     sess.label, len(sess.pending_queue))
+            await self._drain_next_queued(sess)
             return
 
         # ── the mode a hook reported, while a mode switch waits on it ──

@@ -772,3 +772,19 @@ def test_every_session_picker_verb_is_a_short_literal():
             suffix = "9" * 20 if keyed else ""
             assert len(f"_:sx:{_WORST_CASE_INDEX}:{verb.value}{suffix}".encode()) <= 64
     assert calls >= 5, "the scan no longer finds the pickers"
+
+
+# ---- the Claude Code background-job buttons (bgback / bgforce / bgleave) ----
+
+def test_the_background_job_buttons_are_built_through_session_cb():
+    """The park notice's and the busy question's buttons embed their
+    session only through ``session_cb`` (so the guard above covers them),
+    and the longest of their verbs still leaves the short form far inside
+    the cap."""
+    from aipager.bot import session_parity
+    src = (AIPAGER_ROOT / "bot" / "session_parity.py").read_text()
+    for verb in ("bgback", "bgforce", "bgleave"):
+        assert f'session_cb(bot, chat_id, sess, "{verb}")' in src, verb
+    # `_:sx:<idx>:<verb>` with a five-digit index
+    assert len(f"_:sx:99999:{max(('bgback', 'bgforce', 'bgleave'), key=len)}") <= 64
+    assert {"bgback", "bgforce", "bgleave"} <= session_parity._SESSION_ACTIONS

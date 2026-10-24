@@ -51,9 +51,12 @@ from aipager.bot import (
     report_flow,
     session_parity,
 )
+from aipager.bot import session_ops as session_ops_mod
 from aipager.bot.session_ops import (
+    BG_BUSY_QUESTION,
     BG_HELD_NOTICE,
     BG_REFUSED_PARKED,
+    bg_outcome_html,
     MODEL_DEFAULT_SAVED,
     MODEL_UNCONFIRMED,
     await_model_change,
@@ -903,8 +906,60 @@ class CommandHandlersMixin:
         if for_dialog:
             await self._tell_held_for_dialog(update, sess)
         if for_park:
-            await self._tell_held_for_park(update, sess)
+            await self._after_park_hold(update, sess)
         return True
+
+    async def _after_park_hold(self, update: Update, sess) -> None:
+        """A message was held for a Claude Code background-job park (P5).
+        From someone who may Restart the session, it brings the session
+        back by itself (a spawned, unforced bring-back: the message goes
+        out after it, ``bg_release``); while one is already running it
+        only waits. Anyone else is told once per park why it waits."""
+        person = calling_user_id(update)
+        if self._bring_back_refusal(sess, person, calling_chat_id(update)) is not None:
+            await self._tell_held_for_park(update, sess)
+            return
+        if sess.relaunch_in_flight:
+            log.info("[%s] held for a bring-back already running", sess.label)
+            return
+        session_ops_mod._spawn(self._auto_bring_back(update, sess))
+
+    async def _auto_bring_back(self, update: Update, sess) -> None:
+        """The gate's bring-back (:meth:`_after_park_hold`), and what it
+        tells the sender: the busy question once per person per park (its
+        buttons stop the job or leave it), or why it failed. Never raises."""
+        try:
+            outcome = await self._bring_back_core(sess)
+        except Exception:
+            log.exception("[%s] automatic bring-back failed", sess.label)
+            return
+        if outcome.ok or outcome.reason == "already_restarting":
+            return
+        if outcome.reason == "not_parked":
+            # The park ended meanwhile: what was held may go now.
+            await self._drain_next_queued(sess)
+            return
+        chat_id = calling_chat_id(update)
+        if chat_id is None or not self._app:
+            return
+        tr = i18n.for_update(update)
+        kb = None
+        if outcome.reason == "bg_busy":
+            marker = ("busy", calling_user_id(update) or 0)
+            if marker in sess.park_told:
+                return
+            sess.park_told.add(marker)  # claimed before the send's await
+            text = tr.html(BG_BUSY_QUESTION, session=sess.label)
+            kb = session_parity.bg_busy_keyboard(self, chat_id, sess, tr)
+        else:
+            text = (bg_outcome_html(tr, outcome, sess.label)
+                    or session_parity._restart_outcome_text(outcome, tr=tr))
+        try:
+            await send_text(self._app.bot, chat_id=chat_id, text=text,
+                            parse_mode="HTML", reply_markup=kb,
+                            reply_to_message_id=update.message.message_id)
+        except Exception:
+            log.debug("[%s] bring-back reply failed", sess.label, exc_info=True)
 
     async def _tell_held_for_park(self, update: Update, sess) -> None:
         """Tell the sender of a message held for a Claude Code background

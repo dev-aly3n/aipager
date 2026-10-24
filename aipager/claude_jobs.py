@@ -293,6 +293,8 @@ def find_client(sess, entries: list[dict] | None) -> dict | None:
        session's conversation id (the job's own id, adopted from its hooks);
     4. an entry holding the session's conversation id.
 
+    Levels 3 and 4 take only entries whose process is alive.
+
     Two candidates on one level are no answer. The pid found is kept on
     the session (``claude_pid``)."""
     if not entries:
@@ -313,11 +315,16 @@ def find_client(sess, entries: list[dict] | None) -> dict | None:
                 [e for e in interactive if _descends(e["pid"], masters)])
     sid = sess.claude_session_id
     if not decided and valid_session_id(sid):
+        # By id alone, only a live process counts: Claude Code leaves the
+        # file of a killed claude behind (it checks the pid itself), and
+        # after a bring-back the old client's stale entry is parked on the
+        # very job the session's new id starts with.
+        alive = [e for e in interactive if _pid_alive(e["pid"])]
         decided, found = _unique(
-            [e for e in interactive if e.get("parkedJobId") == sid[:8]])
+            [e for e in alive if e.get("parkedJobId") == sid[:8]])
         if not decided:
             decided, found = _unique(
-                [e for e in interactive if e.get("sessionId") == sid])
+                [e for e in alive if e.get("sessionId") == sid])
     if found is not None:
         if sess.claude_pid != found["pid"]:
             sess.claude_pid = found["pid"]
@@ -591,3 +598,105 @@ async def job_state(job: str, entries: list[dict] | None = None) -> str:
     if listed == UNKNOWN and entries is not None:
         return GONE  # the registry is readable and has no entry for it
     return listed
+
+
+def job_state_sync(job: str, entries: list[dict] | None = None) -> str:
+    """:func:`job_state` for the command line (no event loop)."""
+    if entries is None:
+        entries = read_registry()
+    entry = job_entry(job, entries)
+    if entry is not None:
+        return _state_of(entry.get("status") or "")
+    listed = _agents_state(job, run_claude_sync(["agents", "--json"], AGENTS_TIMEOUT))
+    if listed == UNKNOWN and entries is not None:
+        return GONE
+    return listed
+
+
+# -- resuming from the command line (R3) --------------------------------------
+
+#: How often a stopped job's process is looked for again.
+HOLDER_POLL = 0.25
+#: The command line's wait between two looks (a test makes it instant).
+_sync_sleep = time.sleep
+
+
+def stop_error(run: ClaudeRun) -> tuple[str, dict]:
+    """Why ``claude stop`` failed, as ``(code, params)`` (an error code
+    the callers turn into words), or ``("", {})`` when it worked."""
+    if run.error == "timeout":
+        return "stop_timeout", {}
+    if run.error:
+        return "no_claude", {}
+    if run.rc != 0:
+        return "stop_exit", {"code": run.rc}
+    return "", {}
+
+
+@dataclass
+class ResumePlan:
+    """What :func:`prepare_resume_sync` found and did for one resume.
+
+    ``session_id`` is the conversation to resume; ``moved`` is True when
+    it is not the one asked for (``continued-in`` was followed).
+    ``action`` is ``""`` (nothing held it), ``"stopped"`` (an idle
+    background job held it and was stopped), ``"busy"`` (a busy job holds
+    it: nothing was done) or ``"stop_failed"`` (``error``/``params`` say
+    why). ``job`` names the holding job."""
+
+    session_id: str
+    moved: bool = False
+    action: str = ""
+    job: str = ""
+    error: str = ""
+    params: dict | None = None
+
+
+def prepare_resume_sync(session_id: str) -> ResumePlan:
+    """Before the command line resumes conversation *session_id*: follow
+    ``continued-in`` (R1), then look for a live background holder of the
+    conversation (R2). An idle one is stopped (``claude stop <job>``) and
+    waited for, a busy one is left alone. Unreadable Claude files change
+    nothing: the id is resumed as asked. Never raises."""
+    try:
+        return _prepare_resume_sync(session_id)
+    except Exception:  # noqa: BLE001 - the command line resumes as before
+        log.warning("resume preparation failed", exc_info=True)
+        return ResumePlan(session_id)
+
+
+def _prepare_resume_sync(session_id: str) -> ResumePlan:
+    if not valid_session_id(session_id):
+        return ResumePlan(session_id)
+    entries = read_registry()
+    target = follow_continued(session_id, entries)
+    plan = ResumePlan(target, moved=target != session_id)
+    if entries is None:
+        return plan
+    holder = live_holder(target, entries)
+    if holder is None:
+        return plan
+    job = holder.get("jobId") or ""
+    if not valid_job(job):
+        plan.action, plan.error, plan.params = "stop_failed", "still_running", {}
+        return plan
+    plan.job = job
+    state = job_state_sync(job, entries)
+    if state in (BUSY, UNKNOWN):
+        plan.action = "busy"
+        return plan
+    if state != GONE:
+        code, params = stop_error(run_claude_sync(["stop", job], STOP_TIMEOUT))
+        if code:
+            plan.action, plan.error, plan.params = "stop_failed", code, params
+            return plan
+    for _ in range(int(HOLDER_WAIT / HOLDER_POLL)):
+        if live_holder(target) is None:
+            break
+        _sync_sleep(HOLDER_POLL)
+    else:
+        plan.action, plan.error, plan.params = "stop_failed", "still_running", {}
+        return plan
+    plan.action = "stopped"
+    log.info("stopped background job %s, which held conversation %s", job, target)
+    return plan

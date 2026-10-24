@@ -1011,6 +1011,17 @@ class SessionMonitor:
             except Exception:
                 log.warning("Failed to notify bg_parked for %s", name,
                             exc_info=True)
+        if (sess.bg_release_pending and sess.status != Status.GONE
+                and not sess.parked_job
+                and time.monotonic() - sess.bg_released_at
+                >= claude_jobs.RELEASE_BACKSTOP):
+            # A bring-back's held messages, when the relaunched claude's
+            # first SessionStart never said it was up.
+            try:
+                await self.notify_fn(sess, "bg_release", {})
+            except Exception:
+                log.warning("Failed to notify bg_release for %s", name,
+                            exc_info=True)
 
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.

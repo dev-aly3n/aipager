@@ -150,9 +150,26 @@
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Kamu tidak diizinkan memakai bot ini. Minta pemilik bot menambahkan ID Telegram-mu ({user_id}) dengan {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bot ini belum diatur untuk bicara denganmu. Minta pemilik bot menambahkan ID Telegram-mu ({user_id}) lewat {command}."}
 {"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Untuk menjawab, kembalikan dulu <b>{session}</b> dari latar belakang Claude Code."}
+{"k": "bg.back", "src": "061be6c6", "v": "↩️ <b>{session}</b> sudah kembali dari latar belakang Claude Code."}
+{"k": "bg.btn_bring_back", "src": "af762d34", "v": "↩️ Kembalikan sekarang"}
+{"k": "bg.btn_leave", "src": "e7c7e7b3", "v": "Biarkan saja"}
+{"k": "bg.btn_stop_and_bring", "src": "c283f239", "v": "Hentikan dan kembalikan"}
+{"k": "bg.busy_question", "src": "d137687d", "v": "<b>{session}</b> masih bekerja di latar belakang Claude Code: hentikan pekerjaan itu dan kembalikan percakapannya ke sini?"}
+{"k": "bg.err.no_claude", "src": "4d12bc6b", "v": "perintah claude tidak bisa dijalankan"}
+{"k": "bg.err.still_running", "src": "5914ed5a", "v": "tugas latar belakang masih berjalan"}
+{"k": "bg.err.stop_exit", "src": "43459cfa", "v": "claude stop berakhir dengan kode keluar {code}"}
+{"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "claude stop tidak menjawab tepat waktu"}
+{"k": "bg.failed", "src": "00860287", "v": "Tidak bisa mengembalikan <b>{session}</b> dari latar belakang Claude Code: {error}"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Pesanmu untuk <b>{session}</b> menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code."}
+{"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> tetap bekerja di latar belakang Claude Code."}
+{"k": "bg.no_conversation", "src": "42ccba55", "v": "Tidak bisa mengembalikan <b>{session}</b> karena Claude Code tidak punya percakapan tersimpan untuknya."}
+{"k": "bg.park_notice", "src": "92f21b2f", "v": "🌙 <b>{session}</b> pindah ke latar belakang Claude Code, dan pesanmu berikutnya akan mengembalikannya ke sini."}
 {"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Kembalikan dulu <b>{session}</b> dari latar belakang Claude Code."}
 {"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Untuk menjawab, kembalikan dulu {session} dari latar belakang Claude Code."}
+{"k": "bg.toast_bringing_back", "src": "2c4f2966", "v": "Mengembalikan {session}…"}
+{"k": "bg.toast_failed", "src": "ae1048bb", "v": "Tidak bisa mengembalikan {session} dari latar belakang Claude Code: {error}"}
+{"k": "bg.toast_no_conversation", "src": "5cdeb54e", "v": "Tidak bisa mengembalikan {session} karena Claude Code tidak punya percakapan tersimpan untuknya."}
+{"k": "bg.toast_not_parked", "src": "ec56a8ac", "v": "{session} tidak sedang di latar belakang Claude Code."}
 {"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Kembalikan dulu {session} dari latar belakang Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager menghubungkan bot ini ke sesi Claude Code di komputer pemiliknya. Dari sini kamu bisa melihat apa yang sedang dikerjakan Claude, menjawab pertanyaan dan permintaan izinnya, dan mengirim pesan baru kepadanya. Hanya orang yang sudah ditambahkan pemilik yang bisa memakainya."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Kendalikan sesi Claude Code dari Telegram."}
@@ -232,6 +249,10 @@
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} masih bekerja"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram meng-upgrade grup ini. aipager ikut pindah; kamu tidak perlu melakukan apa pun."}
+{"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "Percakapan masih berjalan di tugas latar belakang Claude Code {job}: hentikan dengan {stop_command} atau buka dengan {attach_command}, lalu coba lagi."}
+{"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Tidak bisa menghentikan tugas latar belakang Claude Code {job}: {error}"}
+{"k": "cli.session.continued", "src": "ae69418c", "v": "Percakapan pindah ke {session_id}, jadi sesi ini berlanjut di sana."}
+{"k": "cli.session.stopped_bg", "src": "a1bda078", "v": "Tugas latar belakang Claude Code {job}, yang memegang percakapan ini, dihentikan supaya bisa melanjutkannya di sini."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "Buka dasbor Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "Apa yang bisa kamu lakukan"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Bahasa pesan aipager"}

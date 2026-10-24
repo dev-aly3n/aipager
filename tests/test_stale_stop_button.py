@@ -453,14 +453,45 @@ def _call_graph():
     return graph
 
 
+#: Calls the walk does not follow, each with why it interrupts no work.
+#: - ``_auto_bring_back``: the message gate's bring-back of a session
+#:   parked on a Claude Code background job (any message path reaches it,
+#:   so every button that resends a message would otherwise "reach"
+#:   kill_session). It is never forced: a busy job is asked about first,
+#:   and what it kills is the parked client, which holds no work
+#:   (tests/test_bg_buttons.py, tests/test_bring_back_core.py).
+_NOT_DESTRUCTIVE = frozenset({"_auto_bring_back"})
+
+
 def _closure(graph, start, seen=None):
     seen = seen if seen is not None else set()
     if start in seen:
         return seen
     seen.add(start)
+    if start in _NOT_DESTRUCTIVE:
+        return seen
     for callee in graph.get(start, ()):
         _closure(graph, callee, seen)
     return seen
+
+
+def test_only_the_gates_bring_back_is_skipped():
+    """The walk skips exactly one call: anything added here hides every
+    button path through it, so it is a deliberate, reviewed change."""
+    assert _NOT_DESTRUCTIVE == frozenset({"_auto_bring_back"})
+
+
+def test_the_message_gates_bring_back_is_unforced():
+    """What lets ``_NOT_DESTRUCTIVE`` skip the gate's bring-back: it calls
+    the core without ``force`` (a busy job is asked about, never stopped)."""
+    import aipager
+
+    src = (pathlib.Path(aipager.__file__).parent / "bot" / "handlers.py").read_text()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.AsyncFunctionDef) and n.name == "_auto_bring_back")
+    calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr == "_bring_back_core"]
+    assert len(calls) == 1 and calls[0].keywords == [], ast.unparse(calls[0])
 
 
 def _verb_of(test):

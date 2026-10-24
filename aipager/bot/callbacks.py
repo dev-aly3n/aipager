@@ -33,6 +33,7 @@ from telegram.ext import (
 
 from aipager.bot.mode_labels import mode_label
 from aipager.bot.sibling_text import shown
+from aipager import bg_text
 from aipager.bot import (
     appearance,
     card_owner,
@@ -839,9 +840,14 @@ class CallbackDispatchMixin:
         outcome = await self._stop_session_core(sess, by=self._actor_label(
             getattr(tapper, "id", None), chat, tapper))
         # The count stays visible (tester-iter1-001 of /stop).
-        await self._safe_answer(query, _stopped_line(outcome, html=False, tr=person)
-                                if outcome.ok
-                                else person.text(NOT_WORKING, session=sess.label))
+        if outcome.ok:
+            answer = _stopped_line(outcome, html=False, tr=person)
+        elif outcome.reason in bg_text.BG_FAILURES:
+            # A parked session whose background job could not be stopped.
+            answer = bg_text.stop_refused_text(person, outcome)
+        else:
+            answer = person.text(NOT_WORKING, session=sess.label)
+        await self._safe_answer(query, answer)
         return True, outcome
 
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

@@ -51,6 +51,7 @@ from telegram.ext import ContextTypes
 from aipager.bot import mode_labels
 from aipager import i18n, perm_modes
 from aipager.bot import card_owner, group_intake, held_message, language_menu, settings_menu
+from aipager import bg_text as _ops
 from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Plural, Safe
 from aipager.bot.transport import (
@@ -100,6 +101,10 @@ _SESSION_ACTIONS = frozenset({
     # Gone-session counterpart to "restart" — the ⋮ menu offers exactly
     # one of the two, never both, since each fails where the other works.
     "resume", "resume-ask", "resume-auto", "resume-full", "resume-cancel",
+    # A session in a Claude Code background job: the park notice's "Bring
+    # it back now", and the busy question's "Stop and bring back" and
+    # "Leave it".
+    "bgback", "bgforce", "bgleave",
 })
 
 _DIFF_INLINE_THRESHOLD = 3500  # chars — entrypoints.md's "~3500" cutoff
@@ -136,6 +141,14 @@ _RESTART_REASON_TEXT = {
     "launch_failed": Msg("sess.restart_reason.launch_failed", "Restart failed for [{label}]: {err}",
                          note="A restart that could not start it again; {err} is why "
                               "(English)", eg={"label": "x1", "err": "dtach not installed"}),
+    # A session in, or a conversation held by, a Claude Code background
+    # job (session_ops._bring_back_core). These take {session} and
+    # {error}, not {label}.
+    "bg_busy": _ops.BG_BUSY_QUESTION,
+    "bg_stop_failed": _ops.BG_FAILED,
+    "bg_no_conversation": _ops.BG_NO_CONVERSATION,
+    "not_parked": _ops.BG_TOAST_NOT_PARKED,
+    "parked": _ops.BG_REFUSED_PARKED,
 }
 RESTART_FAILED = Msg("sess.restart_failed", "Restart failed for [{label}].",
                      note="A restart that failed for another reason", eg={"label": "x1"})
@@ -782,10 +795,97 @@ def _restart_outcome_text(outcome, by: str = "", tr=None) -> str:
             return tr.html(RESTARTED_BY, session=outcome.label, person=Command(by))
         return tr.html(RESTARTED, session=outcome.label)
     msg = _RESTART_REASON_TEXT.get(outcome.reason, RESTART_FAILED)
+    if "{session}" in msg:
+        params = {"session": outcome.label}
+        if "{error}" in msg:
+            params["error"] = _ops.bg_error(tr, outcome)
+        return tr.html(msg, **params)
     params = {"label": outcome.label}
     if "{err}" in msg:
         params["err"] = outcome.err
     return tr.html(msg, **params)
+
+
+# ---- Claude Code background jobs -----------------------------------------
+
+def bg_park_keyboard(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+                     tr=None) -> InlineKeyboardMarkup:
+    """The park notice's one button: "Bring it back now" (``bgback``)."""
+    tr = tr or i18n.for_chat(chat_id)
+    return InlineKeyboardMarkup([[InlineKeyboardButton(
+        tr.text(_ops.BG_BTN_BRING_BACK),
+        callback_data=session_cb(bot, chat_id, sess, "bgback"))]])
+
+
+def bg_busy_keyboard(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+                     tr=None) -> InlineKeyboardMarkup:
+    """The busy question's buttons: "Stop and bring back" (``bgforce``)
+    and "Leave it" (``bgleave``)."""
+    tr = tr or i18n.for_chat(chat_id)
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(tr.text(_ops.BG_BTN_STOP_AND_BRING),
+                             callback_data=session_cb(bot, chat_id, sess, "bgforce")),
+        InlineKeyboardButton(tr.text(_ops.BG_BTN_LEAVE),
+                             callback_data=session_cb(bot, chat_id, sess, "bgleave")),
+    ]])
+
+
+async def _drop_keyboard(query) -> None:
+    """The tapped card keeps its text and loses its buttons. Best-effort."""
+    from aipager.bot.transport import edit_markup
+    try:
+        await edit_markup(query, reply_markup=None)
+    except Exception:
+        log.debug("dropping a background-job card's buttons failed", exc_info=True)
+
+
+async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: TrackedSession,
+                         action: str, chat_id, user_id, shared, person) -> None:
+    """``bgback`` (bring it back; asks when the job is busy), ``bgforce``
+    (stop the job and bring it back) and ``bgleave`` (leave it running).
+    Each is re-checked like Restart at tap time
+    (``_bring_back_refusal``). For an ended session whose conversation a
+    background job holds, the first two resume it (R2)."""
+    refusal = bot._bring_back_refusal(sess, user_id, chat_id)
+    if refusal == "prompt":
+        await bot._safe_answer(query, person.text(TOAST_CANT_RESTART))
+        return
+    if refusal == "foreign":
+        await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
+        return
+    if refusal:
+        from aipager.bot.sibling_text import shown as shown_text
+        await bot._safe_answer(query, shown_text(person, refusal), show_alert=True)
+        return
+    if action == "bgleave":
+        await _edit(query, shared.html(_ops.BG_LEFT, session=sess.label), None)
+        return
+    force = action == "bgforce"
+    if sess.status == Status.GONE:
+        async def _reply(text, **kw):
+            await _edit(query, text, kw.pop("reply_markup", None))
+
+        await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
+                                                  session=sess.label))
+        await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
+                             query=query, sess=sess, force=force)
+        return
+    if not sess.parked_job:
+        await bot._safe_answer(query, person.text(_ops.BG_TOAST_NOT_PARKED,
+                                                  session=sess.label))
+        await _drop_keyboard(query)
+        return
+    await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
+                                              session=sess.label))
+    outcome = await bot._bring_back_core(sess, force=force)
+    if outcome.ok:
+        await _drop_keyboard(query)     # the core said "is back" in the chat
+        return
+    if outcome.reason == "bg_busy":
+        await _edit(query, shared.html(_ops.BG_BUSY_QUESTION, session=sess.label),
+                    bg_busy_keyboard(bot, chat_id or 0, sess, shared))
+        return
+    await _edit(query, _restart_outcome_text(outcome, tr=shared), None)
 
 
 # ---- rename ------------------------------------------------------------
@@ -1767,12 +1867,21 @@ async def handle_callback(
             return True
         await bot._safe_answer(query, person.text(TOAST_RESTARTING, session=sess.label))
         outcome = await bot._restart_session_core(sess)
+        # A busy Claude Code background job in the way: the question,
+        # with its buttons, in place of the confirm.
+        kb = (bg_busy_keyboard(bot, chat_id or 0, sess, shared)
+              if outcome.reason == "bg_busy" else None)
         await _edit(query, _restart_outcome_text(
             outcome, bot._actor_label(user_id, chat_id, getattr(query, "from_user", None)),
-            tr=shared), None)
+            tr=shared), kb)
         # Only now: the card keeps its buttons for the whole restart, and
         # until it shows the result they stay the requester's (8.91c).
         card_owner.release(bot, chat_id, _tapped_id(query))
+        return True
+
+    if action in ("bgback", "bgforce", "bgleave"):
+        await _handle_bg_tap(bot, update, query, sess, action, chat_id, user_id,
+                             shared, person)
         return True
 
     if action == "restart-confirm":

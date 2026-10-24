@@ -150,9 +150,26 @@
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Você não está entre as pessoas permitidas deste bot. Peça ao dono do bot para adicionar seu ID do Telegram ({user_id}) com {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Este bot não está configurado para falar com você. Peça ao dono do bot para adicionar seu ID do Telegram ({user_id}) com {command}."}
 {"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Para responder, traga <b>{session}</b> de volta do segundo plano do Claude Code."}
+{"k": "bg.back", "src": "061be6c6", "v": "↩️ <b>{session}</b> voltou do segundo plano do Claude Code."}
+{"k": "bg.btn_bring_back", "src": "af762d34", "v": "↩️ Trazer de volta agora"}
+{"k": "bg.btn_leave", "src": "e7c7e7b3", "v": "Deixar assim"}
+{"k": "bg.btn_stop_and_bring", "src": "c283f239", "v": "Parar e trazer de volta"}
+{"k": "bg.busy_question", "src": "d137687d", "v": "<b>{session}</b> ainda está trabalhando no segundo plano do Claude Code: parar esse trabalho e trazer a conversa de volta para cá?"}
+{"k": "bg.err.no_claude", "src": "4d12bc6b", "v": "não foi possível executar o comando claude"}
+{"k": "bg.err.still_running", "src": "5914ed5a", "v": "a tarefa em segundo plano ainda está rodando"}
+{"k": "bg.err.stop_exit", "src": "43459cfa", "v": "o claude stop terminou com o código de saída {code}"}
+{"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "o claude stop não respondeu a tempo"}
+{"k": "bg.failed", "src": "00860287", "v": "Não foi possível trazer <b>{session}</b> de volta do segundo plano do Claude Code: {error}"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Sua mensagem para <b>{session}</b> espera até alguém trazer a sessão de volta do segundo plano do Claude Code."}
+{"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> continua trabalhando no segundo plano do Claude Code."}
+{"k": "bg.no_conversation", "src": "42ccba55", "v": "Não foi possível trazer <b>{session}</b> de volta porque o Claude Code não tem nenhuma conversa salva para ela."}
+{"k": "bg.park_notice", "src": "92f21b2f", "v": "🌙 <b>{session}</b> foi para o segundo plano do Claude Code, e sua próxima mensagem traz a sessão de volta para cá."}
 {"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Primeiro traga <b>{session}</b> de volta do segundo plano do Claude Code."}
 {"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Para responder, traga {session} de volta do segundo plano do Claude Code."}
+{"k": "bg.toast_bringing_back", "src": "2c4f2966", "v": "Trazendo {session} de volta…"}
+{"k": "bg.toast_failed", "src": "ae1048bb", "v": "Não foi possível trazer {session} de volta do segundo plano do Claude Code: {error}"}
+{"k": "bg.toast_no_conversation", "src": "5cdeb54e", "v": "Não foi possível trazer {session} de volta porque o Claude Code não tem nenhuma conversa salva para ela."}
+{"k": "bg.toast_not_parked", "src": "ec56a8ac", "v": "{session} não está no segundo plano do Claude Code."}
 {"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Primeiro traga {session} de volta do segundo plano do Claude Code."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "O aipager conecta este bot às sessões do Claude Code no computador do dono. Daqui você pode ver o que o Claude está fazendo, responder às perguntas e aos pedidos de permissão dele e mandar mensagens novas. Só as pessoas que o dono adicionou podem usá-lo."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Controle sessões do Claude Code pelo Telegram."}
@@ -232,6 +249,10 @@
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} ainda em andamento"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "O Telegram atualizou este grupo. O aipager foi junto; você não precisa fazer nada."}
+{"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "A conversa ainda está trabalhando na tarefa em segundo plano {job} do Claude Code: pare a tarefa com {stop_command} ou abra com {attach_command} e tente de novo."}
+{"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Não foi possível parar a tarefa em segundo plano {job} do Claude Code: {error}"}
+{"k": "cli.session.continued", "src": "ae69418c", "v": "A conversa passou para {session_id}, então esta sessão continua lá."}
+{"k": "cli.session.stopped_bg", "src": "a1bda078", "v": "A tarefa em segundo plano {job} do Claude Code, que estava com a conversa, foi parada para retomá-la aqui."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "Abrir o painel do Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "O que você pode fazer"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Idioma das mensagens do aipager"}

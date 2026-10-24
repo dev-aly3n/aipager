@@ -179,6 +179,13 @@ def _resume_one(label: str, *, force_full: bool = False) -> int:
             f"  Start a fresh one with: aipager session {label}",
         )
         return 1
+    # Where the conversation moved, and a Claude Code background job
+    # holding it (R3): an idle one is stopped, a busy one refuses.
+    from aipager.dtach.launcher import prepare_resume
+    target, rc = prepare_resume(resume_id)
+    if target is None:
+        return rc
+    resume_id = target
     # The persisted mode unless `!` forces Full access.
     mode = perm_modes.FULL if force_full else perm_modes.mode_from_saved(sd)
     ok, err = _asyncio.run(dtach_inject.launch_session(

@@ -150,9 +150,26 @@
 {"k": "auth.refuse.team", "src": "720c0169", "v": "🚫 Bạn không có trong danh sách được cho phép dùng bot này. Hãy nhờ chủ bot thêm ID Telegram của bạn ({user_id}) bằng {command}."}
 {"k": "auth.refuse.unknown_dm", "src": "d08aa656", "v": "🚫 Bot này chưa được thiết lập để nói chuyện với bạn. Hãy nhờ chủ bot thêm ID Telegram của bạn ({user_id}) qua {command}."}
 {"k": "bg.answer_refused", "src": "ce9faf0f", "v": "Để trả lời, đưa <b>{session}</b> về lại từ chế độ chạy nền của Claude Code trước."}
+{"k": "bg.back", "src": "061be6c6", "v": "↩️ <b>{session}</b> đã về lại từ chế độ chạy nền của Claude Code."}
+{"k": "bg.btn_bring_back", "src": "af762d34", "v": "↩️ Đưa về ngay"}
+{"k": "bg.btn_leave", "src": "e7c7e7b3", "v": "Cứ để vậy"}
+{"k": "bg.btn_stop_and_bring", "src": "c283f239", "v": "Dừng và đưa về"}
+{"k": "bg.busy_question", "src": "d137687d", "v": "<b>{session}</b> vẫn đang làm việc trong chế độ chạy nền của Claude Code: dừng việc đó và đưa cuộc trò chuyện về lại đây nhé?"}
+{"k": "bg.err.no_claude", "src": "4d12bc6b", "v": "không thể chạy lệnh claude"}
+{"k": "bg.err.still_running", "src": "5914ed5a", "v": "tác vụ chạy nền vẫn đang chạy"}
+{"k": "bg.err.stop_exit", "src": "43459cfa", "v": "lệnh dừng claude stop đã kết thúc với mã thoát {code}"}
+{"k": "bg.err.stop_timeout", "src": "fc33b6ae", "v": "lệnh dừng claude stop không trả lời kịp thời"}
+{"k": "bg.failed", "src": "00860287", "v": "Không thể đưa <b>{session}</b> về lại từ chế độ chạy nền của Claude Code: {error}"}
 {"k": "bg.held_notice", "src": "8311ad6a", "v": "Tin nhắn bạn gửi <b>{session}</b> sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code."}
+{"k": "bg.left", "src": "ad53343e", "v": "<b>{session}</b> vẫn tiếp tục làm việc trong chế độ chạy nền của Claude Code."}
+{"k": "bg.no_conversation", "src": "42ccba55", "v": "Không thể đưa <b>{session}</b> về lại vì Claude Code không có cuộc trò chuyện nào được lưu cho phiên này."}
+{"k": "bg.park_notice", "src": "92f21b2f", "v": "🌙 <b>{session}</b> đã chuyển sang chế độ chạy nền của Claude Code, và tin nhắn tiếp theo của bạn sẽ đưa phiên này về lại đây."}
 {"k": "bg.refused_parked", "src": "4dc23fb4", "v": "Đưa <b>{session}</b> về lại từ chế độ chạy nền của Claude Code trước."}
 {"k": "bg.toast_answer_refused", "src": "ff6e9987", "v": "Để trả lời, đưa {session} về lại từ chế độ chạy nền của Claude Code trước."}
+{"k": "bg.toast_bringing_back", "src": "2c4f2966", "v": "Đang đưa {session} về lại…"}
+{"k": "bg.toast_failed", "src": "ae1048bb", "v": "Không thể đưa {session} về lại từ chế độ chạy nền của Claude Code: {error}"}
+{"k": "bg.toast_no_conversation", "src": "5cdeb54e", "v": "Không thể đưa {session} về lại vì Claude Code không có cuộc trò chuyện nào được lưu cho phiên này."}
+{"k": "bg.toast_not_parked", "src": "ec56a8ac", "v": "{session} không ở trong chế độ chạy nền của Claude Code."}
 {"k": "bg.toast_refused_parked", "src": "b38738f6", "v": "Đưa {session} về lại từ chế độ chạy nền của Claude Code trước."}
 {"k": "botdesc.description", "src": "8ea2e350", "v": "aipager kết nối bot này với các phiên Claude Code trên máy tính của chủ sở hữu. Từ đây bạn có thể xem Claude đang làm gì, trả lời câu hỏi và yêu cầu cấp quyền của nó, và gửi tin nhắn mới cho nó. Chỉ những người được chủ sở hữu thêm vào mới dùng được."}
 {"k": "botdesc.short", "src": "483b3675", "v": "Điều khiển các phiên Claude Code từ Telegram."}
@@ -232,6 +249,10 @@
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
 {"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} vẫn đang làm việc"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram đã nâng cấp nhóm này. aipager đã chuyển theo, bạn không cần làm gì."}
+{"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "Cuộc trò chuyện vẫn đang chạy trong tác vụ chạy nền {job} của Claude Code: hãy dừng nó bằng {stop_command} hoặc mở nó bằng {attach_command}, rồi thử lại."}
+{"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Không thể dừng tác vụ chạy nền {job} của Claude Code: {error}"}
+{"k": "cli.session.continued", "src": "ae69418c", "v": "Cuộc trò chuyện đã chuyển sang {session_id}, nên phiên này sẽ tiếp tục ở đó."}
+{"k": "cli.session.stopped_bg", "src": "a1bda078", "v": "Đã dừng tác vụ chạy nền {job} của Claude Code đang giữ cuộc trò chuyện, để tiếp tục nó ở đây."}
 {"k": "cmd.app", "src": "486dfc4e", "v": "Mở bảng điều khiển Mini App"}
 {"k": "cmd.help", "src": "fb2dbad1", "v": "Bạn có thể làm gì"}
 {"k": "cmd.language", "src": "9dc3a234", "v": "Ngôn ngữ tin nhắn của aipager"}
