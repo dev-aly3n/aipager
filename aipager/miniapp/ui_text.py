@@ -93,6 +93,10 @@ STATE_GONE = Msg("ui.state.gone", "finished",
                  note="Mini App: a session's state, ended (short)")
 STATE_UNKNOWN = Msg("ui.state.unknown", "unknown",
                     note="Mini App: a session's state, not reported yet (short)")
+STATE_BACKGROUND = Msg("ui.state.background", "in the background",
+                       note="Mini App: a session's state (short): its conversation moved into "
+                            "a Claude Code background job, nothing is typed into it until it "
+                            "is brought back")
 TILE_NO_FOLDER = Msg("ui.tile.no_folder", "no folder",
                      note="Mini App grid: a session without a folder (short)")
 TILE_ARIA = Msg("ui.tile.aria", "{session}, {state}, context {pct}%, {model}, {cost}",
@@ -124,6 +128,10 @@ PULSE_RESTING = Plural("ui.pulse.resting", one="{n} resting", other="{n} resting
                        note="Mini App grid summary: sessions idle")
 PULSE_UNKNOWN = Plural("ui.pulse.unknown", one="{n} unknown", other="{n} unknown",
                        note="Mini App grid summary: sessions whose state is not known yet")
+PULSE_BACKGROUND = Plural("ui.pulse.background", one="{n} in the background",
+                          other="{n} in the background",
+                          note="Mini App grid summary: sessions whose conversation is in a "
+                               "Claude Code background job")
 PULSE_FINISHED = Plural("ui.pulse.finished", one="{n} finished", other="{n} finished",
                         note="Mini App grid summary: ended sessions")
 PULSE_QUIET = Msg("ui.pulse.all_quiet", "All quiet",
@@ -162,6 +170,9 @@ STATE_LINE_RESTING = Msg("ui.state_line.resting", "Resting",
                          note="Mini App session page: the state line, idle")
 STATE_LINE_FINISHED = Msg("ui.state_line.finished", "Finished",
                           note="Mini App session page: the state line, ended")
+STATE_LINE_BACKGROUND = Msg("ui.state_line.background", "In Claude Code's background",
+                            note="Mini App session page: the state line; the session's "
+                                 "conversation moved into a Claude Code background job")
 STATE_LINE_UNKNOWN = Msg("ui.state_line.unknown", "Not reported yet",
                          note="Mini App session page: the state is not known yet")
 KIND_WORD_PERMISSION = Msg("ui.kind_word.permission", "permission",
@@ -281,6 +292,15 @@ BTN_COMPACT = Msg("ui.btn.action.compact", "Compact now",
                   note="Mini App session menu: shrink Claude's context (/compact)")
 BTN_RESTART = Msg("ui.btn.action.restart", "Restart", note="Mini App session menu")
 BTN_RENAME = Msg("ui.btn.action.rename", "Rename", note="Mini App session menu")
+BTN_BRINGBACK = Msg("ui.btn.action.bringback", "Bring it back",
+                    note="Mini App session menu: bring the session back from Claude Code's "
+                         "background into its own terminal")
+BTN_BG_FORCE = Msg("ui.btn.bg_force", "Stop and bring back",
+                   note="Mini App: a button under app.err.bg_busy: stop the background work "
+                        "and bring the conversation back")
+BTN_BG_LEAVE = Msg("ui.btn.bg_leave", "Leave it",
+                   note="Mini App: a button under app.err.bg_busy: leave the background work "
+                        "running")
 BTN_TO_ASK = Msg("ui.btn.switch_to_ask", "Switch to Ask mode",
                  note="Mini App session menu: Ask is the permission mode (as in /mode)")
 BTN_TO_AUTO = Msg("ui.btn.switch_to_auto", "Switch to Auto mode",
@@ -298,6 +318,9 @@ DONE_MODE_SENT = Msg("ui.done.mode_sent", "Switch sent. Claude Code confirms it 
                      note="Mini App: an Ask/Auto switch was sent to the session (no restart); "
                           "Claude Code confirms it with its next step")
 DONE_RESTART = Msg("ui.done.restart", "Restarted.", note="Mini App: a short confirmation")
+DONE_BRINGBACK = Msg("ui.done.bringback", "Back from Claude Code's background.",
+                     note="Mini App: a short confirmation; the session was brought back from "
+                          "a Claude Code background job")
 DONE_ALREADY_GONE = Msg("ui.done.already_gone", "Already gone.",
                         note="Mini App: the session had ended already (short)")
 DONE_KILL = Msg("ui.done.kill", "Killed.", note="Mini App: the session's process was ended")

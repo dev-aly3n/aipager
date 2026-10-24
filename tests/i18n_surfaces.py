@@ -98,6 +98,20 @@ AGENTS_TREE_NEW_SURFACES = frozenset({"card.helpers"})
 APPEARANCE_SURFACES = frozenset({"settings.root", "settings.sections"})
 #: The surface it added (the Appearance page and each choice's page).
 APPEARANCE_NEW_SURFACES = frozenset({"settings.appearance"})
+#: The Mini App surfaces Claude Code background jobs (2026-10-24) added to,
+#: and only by appending: Bring it back's refusals and the background
+#: refusals of Restart and Resume (details), a background session's reasons
+#: (payload texts), and "is back" after a finished session was brought back
+#: (mirrors). All three are already among THREE_MODES_SURFACES, so the base
+#: comparisons exempt them; :func:`only_appended` says the rest is as it was.
+BG_JOBS_SURFACES = frozenset({"miniapp.details", "miniapp.mirrors",
+                              "miniapp.payload_texts"})
+
+
+def only_appended(before: list, after: list) -> bool:
+    """Whether *after* (a surface's texts) is *before* with texts added at
+    its end, and nothing else changed."""
+    return len(after) > len(before) and after[:len(before)] == before
 
 
 def without_card_divider(value):
@@ -142,6 +156,16 @@ def with_keyboard_app_removed(value):
 #: Settings tab (every Settings screen's texts in a new order), its head
 #: offers Check for updates whenever no job runs (in place of Check again),
 #: and it names the running version. See :func:`updates_card_change_only`.
+#: The Mini App page screens Claude Code background jobs (2026-10-24) added:
+#: a session in the background, its menu, a busy job's question in the
+#: app, Leave it, Stop and bring back, a failure, the grid's count, and
+#: old1's page again (where the screens after them start). New screens
+#: only: no screen recorded before changed.
+BG_JOBS_PAGE_SCREENS = frozenset({
+    "detail.background", "detail.background.menu", "detail.background.busy",
+    "detail.background.left", "detail.background.forced", "detail.background.failed",
+    "grid.background", "detail.gone.again",
+})
 UPDATES_CARD_PAGE_SCREENS = frozenset({
     "settings", "settings.app_language", "settings.app_language_failed", "settings.saved",
     "settings.save_failed", "updates.checking", "updates.claude", "updates.claude_start",
@@ -2484,6 +2508,12 @@ def _miniapp_mirrors(env):
     _ma_call(env, srv, "POST", f"/api/sessions/{LABEL}/resume")
     _ma_sess(srv, "x3", status=Status.GONE)
     _ma_call(env, srv, "DELETE", "/api/sessions/x3")
+    # A finished session whose conversation a Claude Code background job
+    # held, brought back from the app: "is back" (claude-background-sessions).
+    env.mp.setattr("aipager.session_monitor.SessionMonitor._held_conversation",
+                   staticmethod(lambda sess: "held"))
+    _ma_sess(srv, "x6", status=Status.GONE)
+    _ma_call(env, srv, "POST", "/api/sessions/x6/bringback")
     return _sent(srv)
 
 
@@ -2569,6 +2599,21 @@ def _miniapp_details(env):
     # No folder yet: nothing in this chat has run anywhere.
     srv3 = _miniapp(env, project_dir="")
     out.append(_detail_of(env, srv3, "POST", "/api/sessions", {"name": "n1", "cwd": "/tmp"}))
+    # A Claude Code background job in the way (claude-background-sessions).
+    bg_cases = (("bg_busy", ()), ("bg_stop_failed", ("stop_timeout", {})),
+                ("bg_stop_failed", ("stop_exit", {"code": 1})),
+                ("bg_stop_failed", ("still_running", {})),
+                ("bg_stop_failed", ("no_claude", {})), ("bg_no_conversation", ()),
+                ("not_parked", ()))
+    for reason, err in bg_cases:
+        bot._bring_back_core = _ok(ok=False, reason=reason, label=LABEL, err="", bg_err=err)
+        out.append(_detail_of(env, srv, "POST", f"/api/sessions/{LABEL}/bringback"))
+    for reason, err in bg_cases[:3]:
+        bot._restart_session_core = _ok(ok=False, reason=reason, label=LABEL, err="",
+                                        bg_err=err)
+        out.append(_detail_of(env, srv, "POST", f"/api/sessions/{LABEL}/restart"))
+        bot._do_resume_core = _ok(ok=False, reason=reason, err="", bg_err=err)
+        out.append(_detail_of(env, srv, "POST", f"/api/sessions/{LABEL}/resume"))
     return out
 
 
@@ -2597,6 +2642,7 @@ def _miniapp_payload_texts(env):
     for label in (LABEL, "x2", "x3", "x4"):
         _status, data = _ma_call(env, srv, "GET", f"/api/sessions/{label}")
         out += reasons(data)
+    may_prompt = srv.bot._can_prompt_user
     srv.bot._can_prompt_user = lambda user_id, chat_id: False
     for label in (LABEL, "x4"):
         _status, data = _ma_call(env, srv, "GET", f"/api/sessions/{label}")
@@ -2610,6 +2656,13 @@ def _miniapp_payload_texts(env):
             out.append(entry["title"])
             for option in entry["options"]:
                 out += [option["label"], option["help"]]
+    # In Claude Code's background, with no turn running here
+    # (claude-background-sessions).
+    srv.bot._can_prompt_user = may_prompt
+    _ma_sess(srv, "x5", status=Status.IDLE, last_hook_at=NOW - 30, parked_job="ab12cd34",
+             parked_since=WALL - 90)
+    _status, data = _ma_call(env, srv, "GET", "/api/sessions/x5")
+    out += reasons(data)
     return out
 
 

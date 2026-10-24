@@ -387,8 +387,8 @@ const MIXED = [
   row("old3", "gone", { model: "", cost_usd: 0, project: "", last_active_seconds_ago: 4000 }),
 ];
 
-const ALL_ACTIONS = ["stop", "clearqueue", "compact", "resume", "rename", "kill", "perms",
-                     "restart", "delete"];
+const ALL_ACTIONS = ["bringback", "stop", "clearqueue", "compact", "resume", "rename", "kill",
+                     "perms", "restart", "delete"];
 function actions(avail, reasons) {
   const out = {};
   ALL_ACTIONS.forEach((k) => {
@@ -462,6 +462,15 @@ const DETAILS = {
     actions: actions(["compact", "rename", "kill", "perms", "restart"]),
   }),
   foxtrot: detail("foxtrot", "unknown"),
+  // Its conversation moved into a Claude Code background job.
+  golf: detail("golf", "background", {
+    model: "Opus 4.6", context_pct: 30, cwd: "/home/op/proj", last_active_seconds_ago: 90,
+    parked: true, parked_seconds_ago: 90,
+    facts: facts([["model", "Model", "Opus 4.6"], ["context", "Context", "30%"],
+                  ["last_active", "Last active", "1m ago"], ["cwd", "Directory", "/home/op/proj"]]),
+    actions: actions(["bringback", "rename", "kill", "restart"],
+                     { stop: "This session isn't busy right now - nothing to stop." }),
+  }),
   old1: detail("old1", "gone", {
     last_active_seconds_ago: 90000, cwd: "/home/op/proj",
     facts: facts([["last_active", "Last active", "1d ago"], ["cwd", "Directory", "/home/op/proj"]]),
@@ -922,6 +931,43 @@ step("detail.gone.delete_refused", async () => {
   R["DELETE /api/sessions/old1"] = { status: 409, body: { error: "conflict" } };
   clearNotice(); el("detail-menu-btn").click(); menuItem("delete").click();
   el("confirm-ok").click(); await wait();
+});
+// A session in Claude Code's background (claude-background-sessions): its
+// state, its menu, a busy job's question in the app, Leave it, brought
+// back, a failure; then the grid's count, and back where the steps were.
+step("detail.background", async () => { await open("golf"); });
+step("detail.background.menu", async () => { el("detail-menu-btn").click(); await wait(); });
+step("detail.background.busy", async () => {
+  el("overlay").click();
+  R["POST /api/sessions/golf/bringback"] = { status: 409, body: { error: "bg_busy",
+    can_force: true, detail: sv("golf is still working in Claude Code's background: stop " +
+                                "that work and bring the conversation back here?") } };
+  clearNotice(); el("detail-quick").click(); await wait();
+});
+step("detail.background.left", async () => { el("confirm-cancel").click(); await wait(); });
+step("detail.background.forced", async () => {
+  clearNotice(); el("detail-quick").click(); await wait();
+  R["POST /api/sessions/golf/bringback"] = { status: 200,
+    body: { status: "brought_back", label: "golf" } };
+  el("confirm-ok").click(); await wait();
+});
+step("detail.background.failed", async () => {
+  R["POST /api/sessions/golf/bringback"] = { status: 409, body: { error: "bg_stop_failed",
+    detail: sv("Could not bring golf back from Claude Code's background: claude stop " +
+               "did not answer in time") } };
+  clearNotice(); el("detail-quick").click(); await wait();
+});
+step("grid.background", async () => {
+  clearNotice();
+  R["GET /api/sessions"] = { status: 200, body: grid([row("golf", "background"),
+    row("echo", "idle"), row("old1", "gone")]) };
+  api.showGrid(); api.pollTick(); await wait();
+});
+// Where the steps before were: the mixed grid, old1's page.
+step("detail.gone.again", async () => {
+  R["GET /api/sessions"] = { status: 200, body: grid(MIXED) };
+  api.pollTick(); await wait();
+  await open("old1");
 });
 
 // Settings and Updates.

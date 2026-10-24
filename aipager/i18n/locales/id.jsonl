@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Sesi ini sudah tidak menunggu jawabanmu."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Permintaan ini tidak bisa dikirim ke chat."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "Pilih Mode Tanya, Auto, atau Akses penuh."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} masih bekerja di latar belakang Claude Code: hentikan pekerjaan itu dan kembalikan percakapannya ke sini?"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code tidak punya percakapan tersimpan untuk mengembalikan {session}."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "Tidak bisa mengembalikan {session} dari latar belakang Claude Code: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "Sesi masih berjalan. Ketuk “Akhiri” dulu untuk menghentikannya."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "Mode Akses penuh khusus admin."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Tidak bisa diakhiri - programnya masih berjalan. Coba lagi."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "Tidak sampai ke terminal sesi - mode tidak berubah."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Sesi bernama {session} sudah ada di chat ini."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Sesi ini sedang tidak mengerjakan apa pun - tidak ada yang perlu dihentikan."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} tidak sedang di latar belakang Claude Code."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Permintaan ini tidak bisa dikirim ulang. Jawab di terminal."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "Sesi ini sedang tidak berjalan."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} masih dalam proses berhenti - mode tidak berubah. Coba lagi sebentar lagi."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude sedang menanyakan sesuatu kepadamu."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Buka {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude ingin memakai alat."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Kembalikan"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Kosongkan antrean"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Ringkas sekarang"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Hapus"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Lanjutkan"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Hentikan"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Jawab di chat"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "Hentikan dan kembalikan"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "Biarkan saja"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "Batal"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Cek pembaruan"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Memeriksa…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff terlalu besar untuk ditampilkan."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff tidak tersedia."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Sudah tidak ada."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "Sudah kembali dari latar belakang Claude Code."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Dikosongkan."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Meringkas percakapan…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Dihapus."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Belum ada yang tercatat sampai sesi ini berakhir."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Belum ada apa-apa. Nanti muncul di sini setelah Claude menjawab."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Semua siap"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"other": "{n} di latar belakang"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "{n} sudah berakhir"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "{n} menunggu jawabanmu"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "{n} siap"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Nama baru"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Sesi baru"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Bagian"}
+{"k": "ui.state.background", "src": "c784901b", "v": "di latar belakang"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "sedang bekerja"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "sudah berakhir"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "siap"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "tidak diketahui"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "menunggu jawabanmu"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "Di latar belakang Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "Sudah berakhir"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Menunggu jawabanmu"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Menunggu jawabanmu ({kind})"}

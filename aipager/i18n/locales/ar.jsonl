@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "هذه الجلسة لم تعد بانتظار ردك."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "تعذّر إرسال هذا الطلب إلى الدردشة."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "يُرجى اختيار وضع «اسأل» أو التلقائي أو الوصول الكامل."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "لا تزال {session} تعمل في خلفية Claude Code: هل يتم إيقاف هذا العمل وإعادة المحادثة إلى هنا؟"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "لا يملك Claude Code محادثة محفوظة لإعادة {session} بها."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "تعذّرت إعادة {session} من خلفية Claude Code: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "الجلسة لا تزال تعمل. يمكنك إيقافها أولًا عبر «إنهاء»."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "وضع الوصول الكامل للمشرفين فقط."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "تعذّر الإنهاء - البرنامج لا يزال يعمل. يمكنك المحاولة مرة أخرى."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "تعذر الوصول إلى طرفية الجلسة - لم يتغير الوضع."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "توجد بالفعل جلسة باسم {session} في هذه الدردشة."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "هذه الجلسة لا تعمل على شيء الآن - لا شيء لإيقافه."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} ليست في خلفية Claude Code."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "لا يمكن إعادة إرسال هذا الطلب. يمكنك الرد عليه في الطرفية."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "هذه الجلسة لا تعمل الآن."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} لا تزال قيد الإيقاف - لم يتغير الوضع. يمكنك المحاولة بعد قليل."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude يسألك عن شيء."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "فتح {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude يريد استخدام أداة."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "إعادتها"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "مسح قائمة الانتظار"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "تلخيص الآن"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "حذف"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "استئناف"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "إيقاف"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "الرد في الدردشة"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "إيقاف وإعادة"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "تركها تعمل"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "إلغاء"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "التحقق من التحديثات"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "يجري التحقق…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "التغييرات أكبر من أن تُعرض."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "التغييرات غير متاحة."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "أُغلقت من قبل."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "عادت من خلفية Claude Code."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "تم المسح."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "يجري تلخيص المحادثة…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "تم الحذف."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "لم يُسجَّل شيء حتى انتهت هذه الجلسة."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "لا شيء بعد. يظهر هنا حين يرد Claude."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "الكل جاهز"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"few": "في الخلفية: {n}", "many": "في الخلفية: {n}", "one": "في الخلفية: {n}", "other": "في الخلفية: {n}", "two": "في الخلفية: {n}", "zero": "في الخلفية: {n}"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"few": "انتهت: {n}", "many": "انتهت: {n}", "one": "انتهت: {n}", "other": "انتهت: {n}", "two": "انتهت: {n}", "zero": "انتهت: {n}"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"few": "بانتظارك: {n}", "many": "بانتظارك: {n}", "one": "بانتظارك: {n}", "other": "بانتظارك: {n}", "two": "بانتظارك: {n}", "zero": "بانتظارك: {n}"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"few": "جاهزة: {n}", "many": "جاهزة: {n}", "one": "جاهزة: {n}", "other": "جاهزة: {n}", "two": "جاهزة: {n}", "zero": "جاهزة: {n}"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "الاسم الجديد"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "جلسة جديدة"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "الأقسام"}
+{"k": "ui.state.background", "src": "c784901b", "v": "في الخلفية"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "تعمل"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "انتهت"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "جاهزة"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "غير معروفة"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "بانتظارك"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "في خلفية Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "انتهت"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "بانتظارك"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "بانتظارك ({kind})"}

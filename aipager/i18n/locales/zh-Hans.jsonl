@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "这个会话已不再等你回复。"}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "无法把这个请求发到聊天中。"}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "请选择询问、自动或完全访问模式。"}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} 还在 Claude Code 后台工作：要停止这项工作，把对话带回这里吗？"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code 没有保存的对话，无法把 {session} 带回来。"}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "没能把 {session} 从 Claude Code 后台带回来：{error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "会话仍在运行。请先点“结束”停止它。"}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "完全访问模式仅限管理员。"}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "无法结束：程序仍在运行。请重试。"}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "无法连接到会话的终端 - 模式未更改。"}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "这个聊天中已有名为 {session} 的会话。"}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "这个会话现在没有在处理任何事，没有可停止的内容。"}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} 不在 Claude Code 后台。"}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "这个请求无法重新发送。请在终端中回答。"}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "这个会话现在没有运行。"}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} 仍在停止中，模式未更改。请稍后再试。"}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude 在问你一个问题。"}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "打开 {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude 想使用一个工具。"}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "带回来"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "清空队列"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "立即压缩"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "删除"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "恢复"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "停止"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "在聊天中回答"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "停止并带回来"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "让它继续"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "取消"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "检查更新"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "正在检查…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "改动太大，无法显示。"}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "无法查看改动。"}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "之前已经关闭了。"}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "已从 Claude Code 后台回来了。"}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "已清空。"}
 {"k": "ui.done.compact", "src": "399fec37", "v": "正在压缩对话…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "已删除。"}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "这个会话结束前没有记录到任何内容。"}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "还没有内容。Claude 回复后会显示在这里。"}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "全部就绪"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"other": "{n} 个在后台"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "{n} 个已结束"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "{n} 个在等你回复"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "{n} 个就绪"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "新名称"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "新建会话"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "分区"}
+{"k": "ui.state.background", "src": "c784901b", "v": "在后台"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "工作中"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "已结束"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "就绪"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "未知"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "等你回复"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "在 Claude Code 后台"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "已结束"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "等你回复"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "等你回复（{kind}）"}

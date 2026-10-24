@@ -53,6 +53,8 @@ if TYPE_CHECKING:
 # "blocked on a human" is always "waiting" — the Status enum's own
 # "interactive" member name never appears in a stage-2 response body.
 _WAITING_STATUS = "waiting"
+# A live session parked on a Claude Code background job.
+_BACKGROUND_STATUS = "background"
 
 # Shared verbatim between session_actions()'s client-facing reason and
 # server.py's Resume 409 body (design.md file-by-file plan), so the
@@ -139,6 +141,11 @@ NO_CONTEXT_REASON = Msg("app.reason.no_context",
                         "Nothing to compact - context is already empty.",
                         note="Compact (as in /compact) has nothing to shrink")
 
+# Stop on a session parked on a Claude Code background job stops that job's
+# work and brings the conversation back; with no turn running there is
+# nothing to stop. Shared verbatim with the stop route's 409 (server.py).
+NOT_BUSY_REASON = Msg("app.err.not_busy", "This session isn't busy right now - nothing to stop.")
+
 # The session page's facts: their labels, keyed by the fact's id.
 _FACT_LABELS = {
     "model": Msg("app.fact.model", "Model", note="Mini App session page: a fact's label"),
@@ -173,7 +180,14 @@ def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]
     ``pending_permission`` is therefore only consulted here to *enrich*
     ``waiting_kind``/``waiting_summary``, never to gate ``"waiting"``
     itself.
+
+    A live session whose conversation moved into a Claude Code background
+    job (``parked_job``) is ``"background"``, whatever its own status: its
+    terminal shows Claude Code's agent view, and nothing may be typed
+    there until it is brought back.
     """
+    if sess.parked_job and sess.status != Status.GONE:
+        return _BACKGROUND_STATUS, None, None
     if sess.status != Status.INTERACTIVE:
         return sess.status.name.lower(), None, None
 
@@ -186,7 +200,7 @@ def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]
 # graveyard — the failure observed live, 14 dead sessions padding the view).
 # Computed server-side rather than in JavaScript so it is a pure function
 # pytest can exercise directly; the client renders the order it is given.
-_STATUS_RANK = {"waiting": 0, "busy": 1, "idle": 2, "unknown": 3, "gone": 4}
+_STATUS_RANK = {"waiting": 0, "busy": 1, "idle": 2, "background": 2, "unknown": 3, "gone": 4}
 _UNKNOWN_RANK = _STATUS_RANK["unknown"]
 
 
@@ -215,6 +229,7 @@ def grid_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
     Computed here, not client-side, so the numbers the operator reads are
     covered by the same tests as the rows themselves.
     """
+    # A session in Claude Code's background is live: its claude still runs.
     live = [r for r in rows if r.get("status") != "gone"]
     return {
         "total": len(rows),
@@ -270,18 +285,21 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
         "cost_usd": stats["cost_usd"],
         "last_active_seconds_ago": last_active,
         "project": os.path.basename(sess.cwd) if sess.cwd else "",
+        "parked": status == _BACKGROUND_STATUS,
     }
 
 
 # Canonical, stable emission order (design.md): the server always builds
 # the ``actions`` dict by walking this tuple, so key order in the JSON
 # response never depends on set/dict iteration order. The client's own
-# ACTION_ORDER (static/_app.py) is the same nine keys in the same order —
-# the first five are the "session control" menu group, the last four are
+# ACTION_ORDER (static/_app.py) is the same ten keys in the same order —
+# the first six are the "session control" menu group, the last four are
 # "destructive/disruptive" (confirm-modal) — so filtering this tuple by
 # presence is exactly what produces the client's grouped rendering.
+# ``bringback`` (a session parked on a Claude Code background job) comes
+# first: it is the one thing such a session is waiting for.
 _CANONICAL_ACTION_ORDER = (
-    "stop", "clearqueue", "compact", "resume", "rename",
+    "bringback", "stop", "clearqueue", "compact", "resume", "rename",
     "kill", "perms", "restart", "delete",
 )
 
@@ -297,13 +315,17 @@ _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
     "waiting": frozenset({"stop", "clearqueue", "rename", "perms", "restart"}),
     "idle": frozenset({"kill", "compact", "rename", "perms", "restart"}),
     "gone": frozenset({"resume", "rename", "delete"}),
+    # Parked on a Claude Code background job: nothing is typed into it, so
+    # no compact, mode switch or queue clear. Stop stops the job's work and
+    # brings the conversation back; Restart brings it back too.
+    "background": frozenset({"bringback", "stop", "rename", "kill", "restart"}),
 }
 
 
 def session_actions(
     status: str, *, resumable: bool, can_act: bool,
     is_admin: bool = False, queue_depth: int = 0,
-    context_pct: int = 0, tr=None,
+    context_pct: int = 0, turn_running: bool = True, tr=None,
 ) -> dict[str, dict[str, Any]]:
     """The status→button matrix (design.md), computed server-side so
     every refusal rule — status match, resumability, permission, admin,
@@ -333,6 +355,9 @@ def session_actions(
       only, when ``queue_depth >= QUEUE_CAP`` (:data:`QUEUE_FULL_REASON`).
       An IDLE compact sends immediately rather than queueing, so it has no
       queue-depth rule at all.
+    - ``stop`` on a ``background`` session: unavailable when no turn is
+      running (``turn_running`` False, :data:`NOT_BUSY_REASON`): the
+      stop route would only answer "nothing to stop".
     - ``perms``: the menu's mode slot. Which modes it offers, and which
       of them this caller may pick, is :func:`mode_options` (Full access
       needs an admin; Ask and Auto do not), so the slot itself has no
@@ -359,6 +384,8 @@ def session_actions(
             actions[key] = {"available": False, "reason": say(tr, NO_CONTEXT_REASON)}
         elif key == "compact" and status == "busy" and queue_depth >= QUEUE_CAP:
             actions[key] = {"available": False, "reason": say(tr, QUEUE_FULL_REASON)}
+        elif key == "stop" and status == _BACKGROUND_STATUS and not turn_running:
+            actions[key] = {"available": False, "reason": say(tr, NOT_BUSY_REASON)}
         else:
             actions[key] = {"available": True, "reason": None}
     return actions
@@ -461,6 +488,10 @@ def session_detail(
         # for an older session. See last_message() for where it comes from.
         "last_message": preview_lines(last_message(sess)),
         "timeline": build_timeline(sess, now),
+        # Parked on a Claude Code background job, and since when (seconds,
+        # from the wall clock the park was recorded with; None otherwise).
+        "parked": status == _BACKGROUND_STATUS,
+        "parked_seconds_ago": _parked_age(sess) if status == _BACKGROUND_STATUS else None,
     }
     detail["modes"] = mode_options(sess, can_act=can_act, is_admin=is_admin, tr=tr)
     if status != "gone":
@@ -474,9 +505,17 @@ def session_detail(
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
         is_admin=is_admin, queue_depth=queue_depth,
-        context_pct=detail["context_pct"], tr=tr,
+        context_pct=detail["context_pct"], turn_running=sess.can_be_stopped(), tr=tr,
     )
     return detail
+
+
+def _parked_age(sess: "TrackedSession") -> int | None:
+    """Whole seconds since *sess* was parked, or None when not known."""
+    since = getattr(sess, "parked_since", 0.0) or 0.0
+    if since <= 0:
+        return None
+    return max(0, int(time.time() - since))
 
 
 def mode_options(sess: "TrackedSession", *, can_act: bool, is_admin: bool,
@@ -697,6 +736,7 @@ __all__ = [
     "MODEL_SWITCH_PROMPT_OPEN_REASON",
     "MODEL_SWITCH_UNCONFIRMED",
     "MODEL_SWITCH_UNKNOWN_REASON",
+    "NOT_BUSY_REASON",
     "NO_PERMISSION_REASON",
     "NO_TRANSCRIPT_REASON",
     "PERMS_ADMIN_REQUIRED_REASON",

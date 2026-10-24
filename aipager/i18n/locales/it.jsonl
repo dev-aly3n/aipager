@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Questa sessione non aspetta più la tua risposta."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Non è stato possibile inviare la richiesta nella chat."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "Scegli la modalità Chiedi, Automatico o Completo."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} sta ancora lavorando nel background di Claude Code: fermare quel lavoro e riportare qui la conversazione?"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code non ha nessuna conversazione salvata con cui riportare qui {session}."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "Non è stato possibile riportare qui {session} dal background di Claude Code: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "La sessione è ancora in esecuzione. Prima fermala con «Termina»."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "La modalità «Completo» è solo per gli admin."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Non è stato possibile terminarla: il programma è ancora in esecuzione. Riprova."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "Non è stato possibile raggiungere il terminale della sessione: la modalità non è cambiata."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Esiste già una sessione chiamata {session} in questa chat."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Questa sessione ora non sta lavorando: non c'è niente da fermare."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} non è nel background di Claude Code."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Questa richiesta non si può reinviare. Rispondi nel terminale."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "La sessione non è in esecuzione."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} si sta ancora fermando: la modalità non è cambiata. Riprova tra un momento."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude ti sta chiedendo qualcosa."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Apri {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude vuole usare uno strumento."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Riportala qui"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Svuota la coda"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Compatta ora"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Elimina"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Riprendi"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Ferma"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Rispondi nella chat"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "Ferma e riporta qui"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "Lasciala andare"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "Annulla"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Cerca aggiornamenti"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Controllo in corso…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Il diff è troppo grande per essere mostrato."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff non disponibile."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Era già terminata."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "Tornata dal background di Claude Code."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Coda svuotata."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Compattazione in corso…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Eliminata."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Non è arrivato nulla prima che questa sessione finisse."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Ancora niente. Arriva quando Claude risponde."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Tutto tranquillo"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"many": "{n} in background", "one": "{n} in background", "other": "{n} in background"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"many": "{n} terminate", "one": "{n} terminata", "other": "{n} terminate"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"many": "{n} hanno bisogno di te", "one": "{n} ha bisogno di te", "other": "{n} hanno bisogno di te"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"many": "{n} pronte", "one": "{n} pronta", "other": "{n} pronte"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Nuovo nome"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Nuova sessione"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Sezioni"}
+{"k": "ui.state.background", "src": "c784901b", "v": "in background"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "al lavoro"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "terminata"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "pronta"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "sconosciuto"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "ha bisogno di te"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "Nel background di Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "Terminata"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Ha bisogno di te"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Ha bisogno di te ({kind})"}

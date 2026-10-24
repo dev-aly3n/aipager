@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Cette session n'attend plus votre réponse."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Impossible d'envoyer la demande dans la discussion."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "Choisissez Mode Demander, Automatique ou Accès complet."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} travaille encore à l'arrière-plan de Claude Code : arrêter ce travail et ramener la conversation ici ?"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code n'a aucune conversation enregistrée pour ramener {session}."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "Impossible de ramener {session} de l'arrière-plan de Claude Code : {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "La session tourne encore. Utilisez Terminer pour l'arrêter d'abord."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "Le Mode Accès complet est réservé aux admins."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Impossible de terminer : le programme tourne encore. Réessayez."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "Impossible de joindre le terminal de la session : le mode n'a pas changé."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Une session nommée {session} existe déjà dans cette discussion."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Cette session ne travaille pas en ce moment : rien à arrêter."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} n'est pas à l'arrière-plan de Claude Code."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Cette demande ne peut pas être renvoyée. Répondez-y dans le terminal."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "La session ne tourne pas."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} est encore en train de s'arrêter : le mode n'a pas changé. Réessayez dans un instant."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude vous pose une question."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Ouvrir {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude veut utiliser un outil."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "La ramener"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Vider la file d'attente"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Compacter maintenant"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Supprimer"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Reprendre"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Arrêter"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Répondre dans la discussion"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "Arrêter et ramener"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "Laisser tourner"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "Annuler"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Rechercher des mises à jour"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Vérification…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Le diff est trop volumineux pour être affiché."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Le diff n'est pas disponible."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Elle était déjà terminée."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "Revenue de l'arrière-plan de Claude Code."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "File d'attente vidée."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Compactage…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Supprimée."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Rien n'a été enregistré avant la fin de cette session."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Rien pour l'instant. Ça arrive dès que Claude répond."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Tout est calme"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"many": "{n} à l'arrière-plan", "one": "{n} à l'arrière-plan", "other": "{n} à l'arrière-plan"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"many": "{n} terminées", "one": "{n} terminée", "other": "{n} terminées"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"many": "{n} ont besoin de vous", "one": "{n} a besoin de vous", "other": "{n} ont besoin de vous"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"many": "{n} prêtes", "one": "{n} prête", "other": "{n} prêtes"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Nouveau nom"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Nouvelle session"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Sections"}
+{"k": "ui.state.background", "src": "c784901b", "v": "à l'arrière-plan"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "au travail"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "terminée"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "prête"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "inconnu"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "a besoin de vous"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "À l'arrière-plan de Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "Terminée"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "A besoin de vous"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "A besoin de vous ({kind})"}

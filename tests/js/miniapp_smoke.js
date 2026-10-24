@@ -430,7 +430,27 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
   detail_quick_stop: detailFor("busy", false),
   detail_quick_resume: detailFor("gone", true),
   detail_unchanged: fullDetailFor("busy", { isAdmin: true }),
+  bg_quick_bringback: backgroundDetail(),
+  bg_busy_asks_in_app: backgroundDetail(),
+  bg_busy_leave_it: backgroundDetail(),
+  bg_restart_busy_asks: backgroundDetail(),
+  bg_menu: backgroundDetail(),
 });
+
+// A session whose conversation moved into a Claude Code background job
+// (sessions.session_actions for "background", nothing running here).
+function backgroundDetail() {
+  return Object.assign(detailFor("background", false), {
+    parked: true, parked_seconds_ago: 90,
+    actions: {
+      bringback: { available: true, reason: null },
+      stop: { available: false, reason: "This session isn't busy right now - nothing to stop." },
+      rename: { available: true, reason: null },
+      kill: { available: true, reason: null },
+      restart: { available: true, reason: null },
+    },
+  });
+}
 
 const SCHEMA = [
   { section: "length", field: "answer_length", title: "Answer length",
@@ -3493,6 +3513,117 @@ function driveDetailUnchanged() {
     }, 10);
   }, 10);
 }
+
+// A busy Claude Code background job: the page asks in the app (the
+// question as its title, "Stop and bring back" / "Leave it"), never a
+// chat card; the confirm re-sends the same action with {"force": true}.
+const BG_BUSY_DETAIL = "dev is still working in Claude Code's background: stop that work " +
+  "and bring the conversation back here?";
+
+function bgBusyOverride(path) {
+  POST_STATUS_OVERRIDE = { path: path, method: "POST", status: 409,
+    body: { error: "bg_busy", detail: BG_BUSY_DETAIL, can_force: true } };
+}
+
+function bgQuestionShown() {
+  if (byId["confirm-modal"].hidden) fail("no in-app question for a busy job");
+  if (byId["confirm-title"].textContent !== BG_BUSY_DETAIL)
+    fail("question reads " + JSON.stringify(byId["confirm-title"].textContent));
+  if (byId["confirm-ok"].textContent !== "Stop and bring back")
+    fail("confirm reads " + JSON.stringify(byId["confirm-ok"].textContent));
+  if (byId["confirm-cancel"].textContent !== "Leave it")
+    fail("cancel reads " + JSON.stringify(byId["confirm-cancel"].textContent));
+  if (!byId["confirm-body"].hidden) fail("the question has an empty body showing");
+}
+
+function postsTo(path, from) {
+  return fetchCalls.slice(from).filter(f => f.method === "POST" && f.url === path);
+}
+
+function driveBgBusyAsks(leave) {
+  const path = "/api/sessions/dev/bringback";
+  bgBusyOverride(path);
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const before = fetchCalls.length;
+    byId["detail-quick"].click();
+    setTimeoutReal(() => {
+      const first = postsTo(path, before);
+      if (first.length !== 1 || first[0].body) fail("first ask sent " + JSON.stringify(first));
+      bgQuestionShown();
+      POST_STATUS_OVERRIDE = null;
+      const mid = fetchCalls.length;
+      if (leave) {
+        byId["confirm-cancel"].click();
+        setTimeoutReal(() => {
+          if (postsTo(path, mid).length) fail("Leave it sent " + JSON.stringify(postsTo(path, mid)));
+          if (!byId["confirm-modal"].hidden || !byId["overlay"].hidden) fail("the question stayed open");
+          console.log("ok: Leave it closes the question and sends nothing");
+          process.exit(0);
+        }, 10);
+        return;
+      }
+      byId["confirm-ok"].click();
+      setTimeoutReal(() => {
+        const again = postsTo(path, mid);
+        if (again.length !== 1 || JSON.parse(again[0].body || "{}").force !== true)
+          fail("Stop and bring back sent " + JSON.stringify(again));
+        console.log("ok: a busy job asks in the app, then one POST with force");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveBgRestartBusyAsks() {
+  const path = "/api/sessions/dev/restart";
+  bgBusyOverride(path);
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    byId["detail-menu-btn"].click();
+    const item = menuItems(byId["action-menu"]).find(i => i.className.indexOf("act-restart") !== -1);
+    if (!item) fail("no Restart in the background menu");
+    item.click();
+    const before = fetchCalls.length;
+    byId["confirm-ok"].click();     // the restart confirm
+    setTimeoutReal(() => {
+      if (postsTo(path, before).length !== 1) fail("restart not sent");
+      bgQuestionShown();
+      POST_STATUS_OVERRIDE = null;
+      const mid = fetchCalls.length;
+      byId["confirm-ok"].click();
+      setTimeoutReal(() => {
+        const again = postsTo(path, mid);
+        if (again.length !== 1 || JSON.parse(again[0].body || "{}").force !== true)
+          fail("restart again sent " + JSON.stringify(again));
+        console.log("ok: a busy job's restart asks in the app, then restart with force");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveBgMenu() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    byId["detail-menu-btn"].click();
+    const items = menuItems(byId["action-menu"]).map(n => n.className.split(" ")
+      .filter(c => c.indexOf("act-") === 0)[0]);
+    if (JSON.stringify(items) !== JSON.stringify(
+        ["act-bringback", "act-stop", "act-rename", "act-kill", "act-restart"]))
+      fail("background menu: " + JSON.stringify(items));
+    console.log("ok: background menu -> bringback, stop, rename, kill, restart");
+    process.exit(0);
+  }, 10);
+}
+
+Object.assign(DRIVERS, {
+  bg_quick_bringback: () => driveDetailQuick("bringback", "Bring it back"),
+  bg_busy_asks_in_app: () => driveBgBusyAsks(false),
+  bg_busy_leave_it: () => driveBgBusyAsks(true),
+  bg_restart_busy_asks: driveBgRestartBusyAsks,
+  bg_menu: driveBgMenu,
+});
 
 Object.assign(DRIVERS, {
   detail_activity: driveDetailActivity,

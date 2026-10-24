@@ -405,7 +405,7 @@ APP_JS = r"""
   // Keyed by the status id: the word is shown, the id decides.
   var STATE_WORDS = {
     busy: "ui.state.busy", idle: "ui.state.idle", waiting: "ui.state.waiting",
-    gone: "ui.state.gone", unknown: "ui.state.unknown"
+    gone: "ui.state.gone", unknown: "ui.state.unknown", background: "ui.state.background"
   };
 
   function stateWord(status) {
@@ -677,7 +677,7 @@ APP_JS = r"""
   // "1 needs you, 2 working" over "$4.21 spent · 2 finished".
   function renderPulse(sessions, totals) {
     var host = document.getElementById("grid-totals");
-    var count = { waiting: 0, busy: 0, idle: 0, other: 0 };
+    var count = { waiting: 0, busy: 0, idle: 0, background: 0, other: 0 };
     sessions.forEach(function (s) {
       if (s.status === "gone") { return; }
       if (count[s.status] !== undefined && s.status !== "other") { count[s.status] += 1; } else { count.other += 1; }
@@ -686,6 +686,7 @@ APP_JS = r"""
     if (count.waiting) { clauses.push(["pulse-need", tn("ui.pulse.need", count.waiting)]); }
     if (count.busy) { clauses.push(["pulse-work", tn("ui.pulse.working", count.busy)]); }
     if (count.idle) { clauses.push(["pulse-rest", tn("ui.pulse.resting", count.idle)]); }
+    if (count.background) { clauses.push(["pulse-rest", tn("ui.pulse.background", count.background)]); }
     if (count.other) { clauses.push(["pulse-rest", tn("ui.pulse.unknown", count.other)]); }
     if (!clauses.length) {
       clauses.push(["pulse-rest", sessions.length ? t("ui.pulse.all_quiet") : ""]);
@@ -1011,6 +1012,7 @@ APP_JS = r"""
       return age ? t("ui.state_line.resting_since", { age: age }) : t("ui.state_line.resting");
     }
     if (d.status === "gone") { return t("ui.state_line.finished"); }
+    if (d.status === "background") { return t("ui.state_line.background"); }
     return t("ui.state_line.unknown");
   }
 
@@ -1040,12 +1042,13 @@ APP_JS = r"""
     paintRing(d.status, pctOf(d));
   }
 
-  // Stop while Claude works or waits, Resume once finished: the menu's
-  // own request, no confirmation.
+  // Bring it back from Claude Code's background, Stop while Claude works
+  // or waits, Resume once finished: the menu's own request, no confirmation.
   function renderQuick(data) {
     var btn = document.getElementById("detail-quick");
     var a = data.actions || {};
-    var key = (a.stop && a.stop.available) ? "stop"
+    var key = (a.bringback && a.bringback.available) ? "bringback"
+      : (a.stop && a.stop.available) ? "stop"
       : (a.resume && a.resume.available) ? "resume" : "";
     btn.hidden = !key;
     if (!key) { return; }
@@ -1637,25 +1640,25 @@ APP_JS = r"""
     stop: "ui.btn.action.stop", kill: "ui.btn.action.kill", resume: "ui.btn.action.resume",
     delete: "ui.btn.action.delete", clearqueue: "ui.btn.action.clearqueue",
     compact: "ui.btn.action.compact", restart: "ui.btn.action.restart",
-    rename: "ui.btn.action.rename"
+    rename: "ui.btn.action.rename", bringback: "ui.btn.action.bringback"
     // perms: one item per mode the session is not in (data.modes).
   };
   // Path segment per action; Delete is the DELETE verb on the resource.
   var ACTION_PATHS = {
     stop: "stop", kill: "kill", resume: "resume", delete: "",
     clearqueue: "clearqueue", compact: "compact", perms: "perms",
-    restart: "restart", rename: "rename"
+    restart: "restart", rename: "rename", bringback: "bringback"
   };
   var ACTION_METHODS = {
     stop: "POST", kill: "POST", resume: "POST", delete: "DELETE",
     clearqueue: "POST", compact: "POST", perms: "POST", restart: "POST",
-    rename: "POST"
+    rename: "POST", bringback: "POST"
   };
   var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };
-  // Mirrors sessions._CANONICAL_ACTION_ORDER: five control items, then
+  // Mirrors sessions._CANONICAL_ACTION_ORDER: six control items, then
   // four confirm-modal ones; the divider falls between the groups.
   var ACTION_ORDER = [
-    "stop", "clearqueue", "compact", "resume", "rename",
+    "bringback", "stop", "clearqueue", "compact", "resume", "rename",
     "kill", "perms", "restart", "delete"
   ];
 
@@ -1730,12 +1733,23 @@ APP_JS = r"""
   // Delete and Rename navigate, so they are handled separately.
   var ACTION_SUCCESS_NOTICE = {
     stop: "ui.done.stop", resume: "ui.done.resume", clearqueue: "ui.done.clearqueue",
-    compact: "ui.done.compact", perms: "ui.done.perms", restart: "ui.done.restart"
+    compact: "ui.done.compact", perms: "ui.done.perms", restart: "ui.done.restart",
+    bringback: "ui.done.bringback"
   };
 
-  function runDetailAction(label, action, mode) {
+  // A Claude Code background job still working on the conversation: ask
+  // here, in the app, and ask again with `force` (never a chat card).
+  function askBackgroundBusy(label, action, detail) {
+    openConfirm({
+      title: plain(detail), body: "",
+      confirmLabel: t("ui.btn.bg_force"), cancelLabel: t("ui.btn.bg_leave"),
+      onConfirm: function () { runDetailAction(label, action, null, true); }
+    });
+  }
+
+  function runDetailAction(label, action, mode, force) {
     var method = ACTION_METHODS[action];
-    var body = action === "perms" ? { mode: mode } : null;
+    var body = action === "perms" ? { mode: mode } : (force ? { force: true } : null);
     postSessionAction(label, ACTION_PATHS[action], method, body).then(function (r) {
       if (action === "kill" || action === "delete") {
         if (r.status === 200 || (r.status === 404 && action === "kill")) {
@@ -1748,7 +1762,12 @@ APP_JS = r"""
         showNotice(plain((r.data && r.data.detail) || t("ui.action.failed")), "err");
         return;
       }
-      // stop / resume / clearqueue / compact / perms / restart
+      // stop / resume / clearqueue / compact / perms / restart / bringback
+      if (r.status === 409 && r.data && r.data.error === "bg_busy" && r.data.can_force &&
+          !force) {
+        askBackgroundBusy(label, action, r.data.detail || "");
+        return;
+      }
       if (r.status === 200) {
         // A resume that came back in Auto (Full access needs an admin)
         // says so; an Ask/Auto switch is sent, not yet confirmed.
@@ -1907,7 +1926,9 @@ APP_JS = r"""
       ? { label: opts.label, action: opts.action, mode: opts.mode || null } : null;
     confirmRun = opts.onConfirm || null;
     document.getElementById("confirm-title").textContent = opts.title;
-    document.getElementById("confirm-body").textContent = opts.body;
+    var bodyEl = document.getElementById("confirm-body");
+    bodyEl.textContent = opts.body;
+    bodyEl.hidden = !opts.body;   // a question alone has no body
     var ok = document.getElementById("confirm-ok");
     ok.textContent = opts.confirmLabel;
     ok.className = "modal-btn is-danger";
@@ -1974,6 +1995,7 @@ APP_JS = r"""
     document.getElementById("confirm-title").textContent =
       t("ui.confirm.rename", { session: label });
     document.getElementById("confirm-body").textContent = t("ui.confirm.rename_body");
+    document.getElementById("confirm-body").hidden = false;
     var ok = document.getElementById("confirm-ok");
     ok.textContent = t("ui.btn.save");
     ok.className = "modal-btn";   // rename isn't destructive - no red.

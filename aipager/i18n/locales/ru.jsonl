@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Эта сессия больше не ждёт твоего ответа."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Не удалось отправить запрос в чат."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "Выбери режим «Спрашивать», Авто или «Полный доступ»."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} ещё работает в фоновом режиме Claude Code: остановить эту работу и вернуть разговор сюда?"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "У Claude Code нет сохранённого разговора, чтобы вернуть {session}."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "Не удалось вернуть {session} из фонового режима Claude Code: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "Сессия ещё работает. Сначала останови её кнопкой «Завершить»."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "Режим «Полный доступ» только для админов."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Не удалось завершить: программа ещё работает. Попробуй ещё раз."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "Нет связи с терминалом сессии: режим не изменился."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Сессия с именем {session} уже есть в этом чате."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Эта сессия сейчас ничего не делает: остановить нечего."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} не в фоновом режиме Claude Code."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Этот запрос нельзя отправить заново. Ответь на него в терминале."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "Сессия не запущена."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} ещё останавливается: режим не изменился. Попробуй чуть позже."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude тебя о чём-то спрашивает."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Открыть {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude хочет использовать инструмент."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Вернуть"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Очистить очередь"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Сжать сейчас"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Удалить"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Продолжить"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Остановить"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Ответить в чате"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "Остановить и вернуть"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "Оставить как есть"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "Отмена"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Проверить обновления"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Проверяю…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff слишком большой, чтобы показать."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff недоступен."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Уже была завершена."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "Вернулась из фонового режима Claude Code."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Очередь очищена."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Сжимаю переписку…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Удалено."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "До завершения этой сессии ничего не пришло."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Пока ничего нет. Появится, когда Claude ответит."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Всё спокойно"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"few": "{n} в фоновом режиме", "many": "{n} в фоновом режиме", "one": "{n} в фоновом режиме", "other": "{n} в фоновом режиме"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"few": "{n} завершены", "many": "{n} завершено", "one": "{n} завершена", "other": "{n} завершены"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"few": "{n} ждут тебя", "many": "{n} ждут тебя", "one": "{n} ждёт тебя", "other": "{n} ждут тебя"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"few": "{n} готовы", "many": "{n} готовы", "one": "{n} готова", "other": "{n} готовы"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Новое имя"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Новая сессия"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Разделы"}
+{"k": "ui.state.background", "src": "c784901b", "v": "в фоновом режиме"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "работает"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "завершена"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "готова"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "неизвестно"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "ждёт тебя"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "В фоновом режиме Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "Завершена"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Ждёт тебя"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Ждёт тебя ({kind})"}

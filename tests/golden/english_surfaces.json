@@ -408,7 +408,20 @@
   "A session named x5 already exists in this chat.",
   "Full access mode requires admin.",
   "Switching to Full access mode requires admin.",
-  "No directory is available yet - start a session from chat first, then this picker will offer its project."
+  "No directory is available yet - start a session from chat first, then this picker will offer its project.",
+  "x1 is still working in Claude Code's background: stop that work and bring the conversation back here?",
+  "Could not bring x1 back from Claude Code's background: claude stop did not answer in time",
+  "Could not bring x1 back from Claude Code's background: claude stop ended with exit code 1",
+  "Could not bring x1 back from Claude Code's background: the background job is still running",
+  "Could not bring x1 back from Claude Code's background: the claude command could not be run",
+  "Claude Code has no saved conversation to bring x1 back with.",
+  "x1 is not in Claude Code's background.",
+  "x1 is still working in Claude Code's background: stop that work and bring the conversation back here?",
+  "x1 is still working in Claude Code's background: stop that work and bring the conversation back here?",
+  "Could not bring x1 back from Claude Code's background: claude stop did not answer in time",
+  "Could not bring x1 back from Claude Code's background: claude stop did not answer in time",
+  "Could not bring x1 back from Claude Code's background: claude stop ended with exit code 1",
+  "Could not bring x1 back from Claude Code's background: claude stop ended with exit code 1"
  ],
  "miniapp.mirrors": [
   "\ud83d\ude80 n1 created from the Mini App \u00b7 \ud83d\udcac Ask mode",
@@ -440,7 +453,8 @@
   "\u270f\ufe0f [x1] renamed to [x2] from the Mini App",
   "\ud83d\udc80 Killed [x1] from the Mini App",
   "\u267b\ufe0f Resumed [x1] from the Mini App",
-  "\ud83d\uddd1\ufe0f Deleted [x3] from the Mini App"
+  "\ud83d\uddd1\ufe0f Deleted [x3] from the Mini App",
+  "\u21a9\ufe0f <b>x6</b> is back from Claude Code's background."
  ],
  "miniapp.payload_texts": [
   "Model",
@@ -652,7 +666,18 @@
   "Normal",
   "Ordinary technical writing.",
   "Advanced",
-  "Assumes expertise; no hand-holding."
+  "Assumes expertise; no hand-holding.",
+  "Model",
+  "Opus 4.6",
+  "Context",
+  "45%",
+  "Cost",
+  "$1.50",
+  "Last active",
+  "30s ago",
+  "Mode",
+  "\ud83d\udcac Ask mode",
+  "This session isn't busy right now - nothing to stop."
  ],
  "modecard.card": [
   "\u270d\ufe0f <b>x1</b> is in \ud83d\udcac Ask mode.",

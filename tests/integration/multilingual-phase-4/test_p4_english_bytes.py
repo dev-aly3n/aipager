@@ -77,6 +77,10 @@ def test_english_status_is_todays(env, golden, name):
 #: The scenarios whose body /settings → 🎨 Appearance (2026-10-15) gave an
 #: "appearance" entry (the Mini App's Appearance group), and nothing else.
 APPEARANCE_BODIES = {"get_preferences"}
+#: The scenarios whose body Claude Code background jobs (2026-10-24) gave
+#: "parked" and "parked_seconds_ago" (a session whose conversation moved
+#: into a background job), and nothing else: none of them is parked.
+BG_JOB_BODIES = {"get_detail_busy", "get_detail_idle", "get_detail_viewer"}
 
 
 @pytest.mark.parametrize("name", sorted(_scenarios.SCENARIOS))
@@ -88,6 +92,10 @@ def test_english_body_is_todays(env, golden, name):
         body = dict(body)
         appearance = body.pop("appearance")
         assert [g["field"] for g in appearance["schema"]] == ["stop", "prompt", "app", "settings"]
+    if name in BG_JOB_BODIES:
+        body = dict(body)
+        assert body.pop("parked") is False
+        assert body.pop("parked_seconds_ago", None) is None
     assert body == golden[name]["body"]
 
 

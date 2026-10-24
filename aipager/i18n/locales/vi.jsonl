@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Phiên này không còn chờ bạn trả lời nữa."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "Không gửi được yêu cầu này vào chat."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "Hãy chọn Chế độ Hỏi, Auto hoặc Toàn quyền."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} vẫn đang làm việc trong chế độ chạy nền của Claude Code: dừng việc đó và đưa cuộc trò chuyện về lại đây nhé?"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code không có cuộc trò chuyện nào được lưu để đưa {session} về lại."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "Không thể đưa {session} về lại từ chế độ chạy nền của Claude Code: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "Phiên vẫn đang chạy. Hãy chạm “Kết thúc” để dừng nó trước."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "Chế độ Toàn quyền chỉ dành cho quản trị viên."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Không kết thúc được - chương trình vẫn đang chạy. Hãy thử lại."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "Không tới được terminal của phiên - chế độ không đổi."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Trong chat này đã có một phiên tên {session}."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Phiên này hiện không làm gì - không có gì để dừng."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} không ở trong chế độ chạy nền của Claude Code."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Không thể gửi lại yêu cầu này. Hãy trả lời trong terminal."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "Phiên này hiện không chạy."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} vẫn đang dừng - chế độ không đổi. Thử lại sau giây lát."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude đang hỏi bạn điều gì đó."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Mở {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude muốn dùng một công cụ."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Đưa về"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Xóa hàng đợi"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Thu gọn ngay"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Xóa"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Tiếp tục"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Dừng"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Trả lời trong chat"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "Dừng và đưa về"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "Cứ để vậy"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "Hủy"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Kiểm tra cập nhật"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Đang kiểm tra…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff quá lớn để hiển thị."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Không xem được diff."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Đã đóng từ trước."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "Đã về lại từ chế độ chạy nền của Claude Code."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Đã xóa."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Đang thu gọn cuộc trò chuyện…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Đã xóa."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Chưa ghi lại được gì cho đến khi phiên này kết thúc."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Chưa có gì. Nội dung sẽ hiện ở đây khi Claude trả lời."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Tất cả sẵn sàng"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"other": "{n} đang chạy nền"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "{n} đã kết thúc"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "{n} đang chờ bạn"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "{n} sẵn sàng"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Tên mới"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Phiên mới"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Mục"}
+{"k": "ui.state.background", "src": "c784901b", "v": "đang chạy nền"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "đang làm việc"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "đã kết thúc"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "sẵn sàng"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "không rõ"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "đang chờ bạn"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "Trong chế độ chạy nền của Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "Đã kết thúc"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Đang chờ bạn"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Đang chờ bạn ({kind})"}

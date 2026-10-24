@@ -186,6 +186,74 @@ def _parked_response(tr, label: str):
         status=409)
 
 
+def _bg_refusal_response(tr, outcome, label: str):
+    """409 for an outcome a Claude Code background job refused (``bg_busy``,
+    ``bg_stop_failed``, ``bg_no_conversation``) or a bring-back of a
+    session that is not parked (``not_parked``), with ``detail`` in the
+    viewer's language; None for any other reason. ``bg_busy`` carries
+    ``can_force``: the page asks, and asks again with ``force``."""
+    from aiohttp import web
+
+    from aipager import bg_text
+    reason = getattr(outcome, "reason", None)
+    if reason == "bg_busy":
+        return web.json_response({"error": "bg_busy", "detail": tr.text(_BG_BUSY, session=label),
+                                  "can_force": True}, status=409)
+    if reason == "bg_stop_failed":
+        return web.json_response({
+            "error": "bg_stop_failed",
+            "detail": tr.text(_BG_STOP_FAILED, session=label,
+                              error=bg_text.bg_error(tr, outcome)),
+        }, status=409)
+    if reason == "bg_no_conversation":
+        return web.json_response({
+            "error": "bg_no_conversation",
+            "detail": tr.text(_BG_NO_CONVERSATION, session=label),
+        }, status=409)
+    if reason == "not_parked":
+        return _not_parked_response(tr, label)
+    return None
+
+
+def _not_parked_response(tr, label: str):
+    """409: Bring it back for a session that is not in Claude Code's
+    background."""
+    from aiohttp import web
+    return web.json_response({
+        "error": "not_parked", "detail": tr.text(_BG_NOT_PARKED, session=label),
+    }, status=409)
+
+
+async def _force_flag(request) -> bool | None:
+    """The optional ``{"force": bool}`` body of bringback, restart and
+    resume: False when there is no body, or it is not a JSON object (the
+    page sent none before); None (a 400) when ``force`` is there and is
+    not a boolean."""
+    try:
+        body = await request.json()
+    except Exception:
+        return False
+    if not isinstance(body, dict) or "force" not in body:
+        return False
+    force = body["force"]
+    return force if isinstance(force, bool) else None
+
+
+def _route_name(request) -> str:
+    """``POST /api/sessions/{label}/bringback``: the route as the logs name
+    it, from the matched resource (the label stays a placeholder)."""
+    try:
+        path = request.match_info.route.resource.canonical
+    except Exception:
+        path = request.path
+    return f"{request.method} {path}"
+
+
+def _bad_force():
+    from aiohttp import web
+    return web.json_response({"error": "bad_request"}, status=400)
+
+
 def _model_refusals() -> dict:
     """A model switch's refusal code -> its sentence (sessions.py's)."""
     from aipager.miniapp import sessions
@@ -209,7 +277,6 @@ _BAD_MODE = Msg("app.err.bad_mode", "Pick Ask, Auto or Full access mode.",
                 note="The permission mode sent was not one of the three (as in /mode)")
 _NAME_TAKEN = Msg("app.err.name_taken", "A session named {session} already exists in this chat.",
                   eg={"session": "x1"})
-_NOT_BUSY = Msg("app.err.not_busy", "This session isn't busy right now - nothing to stop.")
 _NOT_RESENDABLE = Msg("app.err.not_resendable",
                       "This prompt can't be re-sent. Answer it in the terminal.",
                       note="Answer in chat: this prompt can only be answered where it runs")
@@ -246,6 +313,30 @@ _CHAT_DM = Msg("app.chat.dm", "DM", note="Mini App chat switcher: a private chat
                                           "name (short)")
 _CHAT_GROUP = Msg("app.chat.group", "Group",
                   note="Mini App chat switcher: a group with no name (short)")
+
+# A session whose conversation moved into a Claude Code background job
+# (``bringback``, and ``restart``/``resume`` when a job holds the
+# conversation). Plain text: the page shows ``detail`` as it is.
+_BG_BUSY = Msg("app.err.bg_busy",
+               "{session} is still working in Claude Code's background: stop that work and "
+               "bring the conversation back here?", eg={"session": "x1"},
+               note="Mini App: asked before stopping a busy Claude Code background job that "
+                    "holds the session's conversation; the page's two buttons follow "
+                    "(Stop and bring back, Leave it)")
+_BG_STOP_FAILED = Msg("app.err.bg_stop_failed",
+                      "Could not bring {session} back from Claude Code's background: {error}",
+                      eg={"session": "x1", "error": "claude stop did not answer in time"},
+                      note="Mini App: bringing the session back failed; {error} is one of "
+                           "bg.err.*")
+_BG_NO_CONVERSATION = Msg("app.err.bg_no_conversation",
+                          "Claude Code has no saved conversation to bring {session} back with.",
+                          eg={"session": "x1"},
+                          note="Mini App: nothing to resume when bringing the session back "
+                               "from Claude Code's background")
+_BG_NOT_PARKED = Msg("app.err.not_parked", "{session} is not in Claude Code's background.",
+                     eg={"session": "x1"},
+                     note="Mini App: Bring it back asked for a session that is not in a "
+                          "Claude Code background job")
 
 
 # The header the page names the chosen chat in, on every API call (roadmap
@@ -443,6 +534,8 @@ class MiniAppServer:
         # Authorization).
         app.router.add_post("/api/sessions/{label}/stop", self._handle_session_stop)
         app.router.add_post("/api/sessions/{label}/kill", self._handle_session_kill)
+        app.router.add_post("/api/sessions/{label}/bringback",
+                            self._handle_session_bringback)
         app.router.add_post(
             "/api/sessions/{label}/resume", self._handle_session_resume,
         )
@@ -2011,9 +2104,15 @@ class MiniAppServer:
         outcome = await self.bot._stop_session_core(
             sess, by=self.bot._actor_label(user_id, scope_chat_id))
         if not outcome.ok:
+            from aipager.miniapp.sessions import NOT_BUSY_REASON
+            tr = self._viewer_tr(request, user_id)
+            # A parked session's Stop is a forced bring-back: its failure
+            # says why, never "nothing to stop".
+            refused = _bg_refusal_response(tr, outcome, outcome.label)
+            if refused is not None:
+                return refused
             return web.json_response({
-                "error": "not_busy",
-                "detail": self._viewer_tr(request, user_id).text(_NOT_BUSY),
+                "error": "not_busy", "detail": tr.text(NOT_BUSY_REASON),
             }, status=409)
 
         await self._mirror_session_stopped(
@@ -2155,6 +2254,9 @@ class MiniAppServer:
                 "caller cannot prompt this session",
             )
             return web.json_response({"error": "forbidden"}, status=403)
+        force = await _force_flag(request)
+        if force is None:
+            return _bad_force()
         if not self._allow_write(user_id):
             log.info("miniapp: session resume rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
@@ -2169,8 +2271,12 @@ class MiniAppServer:
         refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
         if refused is not None:
             return refused
-        outcome = await self.bot._do_resume_core(
-            sess, mode_override=override, driver_user_id=user_id)
+        if force:
+            outcome = await self.bot._do_resume_core(
+                sess, mode_override=override, driver_user_id=user_id, force=True)
+        else:
+            outcome = await self.bot._do_resume_core(
+                sess, mode_override=override, driver_user_id=user_id)
         tr = self._viewer_tr(request, user_id)
         if outcome.reason == "not_gone":
             return web.json_response({
@@ -2186,14 +2292,11 @@ class MiniAppServer:
             return web.json_response({
                 "error": "launch_failed", "detail": say(tr, outcome.err),
             }, status=400)
-        from aipager import bg_text
-        if outcome.reason in bg_text.BG_FAILURES:
+        refused = _bg_refusal_response(tr, outcome, label)
+        if refused is not None:
             # A Claude Code background job holds the conversation: never
-            # a 200 (bg_busy, bg_stop_failed).
-            return web.json_response({
-                "error": outcome.reason,
-                "detail": bg_text.bg_outcome_text(tr, outcome, label) or "",
-            }, status=409)
+            # a 200 (bg_busy asks, can_force).
+            return refused
 
         await self._mirror_session_resumed(
             scope_chat_id, label, in_auto=full_refused)
@@ -2296,14 +2399,8 @@ class MiniAppServer:
             return web.json_response({
                 "error": "launch_failed", "detail": say(tr, outcome.err),
             }, status=400)
-        from aipager import bg_text
-        if outcome.reason in bg_text.BG_FAILURES or outcome.reason == "not_parked":
-            # A Claude Code background job in the way: never a 200.
-            return web.json_response({
-                "error": outcome.reason,
-                "detail": bg_text.bg_outcome_text(tr, outcome, outcome.label) or "",
-            }, status=409)
-        return None
+        # A Claude Code background job in the way: never a 200.
+        return _bg_refusal_response(tr, outcome, outcome.label)
 
     def _outside_root_response(self, request, sess, scope_chat_id, user_id):
         """403 when a role without can_manage asks to resume, restart or
@@ -2503,6 +2600,9 @@ class MiniAppServer:
                 "caller cannot prompt this session",
             )
             return web.json_response({"error": "forbidden"}, status=403)
+        force = await _force_flag(request)
+        if force is None:
+            return _bad_force()
         if not self._allow_write(user_id):
             log.info("miniapp: session restart rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
@@ -2510,7 +2610,13 @@ class MiniAppServer:
         if refused is not None:
             return refused
 
-        outcome = await self.bot._restart_session_core(sess)
+        # A parked session's restart is a bring-back (session_ops B1),
+        # which says so in the chat itself (bg.back): no second line.
+        was_parked = bool(sess.parked_job)
+        if force:
+            outcome = await self.bot._restart_session_core(sess, force=True)
+        else:
+            outcome = await self.bot._restart_session_core(sess)
         tr = self._viewer_tr(request, user_id)
         resp = self._restart_outcome_response(
             outcome,
@@ -2520,8 +2626,98 @@ class MiniAppServer:
         if resp is not None:
             return resp
 
-        await self._mirror_session_restarted(scope_chat_id, outcome.label)
+        if not was_parked:
+            await self._mirror_session_restarted(scope_chat_id, outcome.label)
         return web.json_response({"status": "restarted", "label": outcome.label})
+
+    async def _handle_session_bringback(self, request):
+        """``POST /api/sessions/{label}/bringback {"force": bool}``: bring a
+        session parked on a Claude Code background job back into its own
+        terminal (``_bring_back_core``), or, for a finished session whose
+        conversation a live background job holds, resume it there (the
+        R2 resume: an idle job is stopped first). ``force`` also stops a
+        busy job; without it a busy job answers 409 ``bg_busy`` with
+        ``can_force``, and the page asks. Who may: Restart's check
+        (``_bring_back_refusal``)."""
+        from aiohttp import web
+
+        from aipager.state import Status
+
+        result = await self._resolve_own_scope_session(request, _route_name(request))
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        refusal = self.bot._bring_back_refusal(sess, user_id, scope_chat_id)
+        if refusal in ("prompt", "foreign"):
+            log.info("miniapp: session bringback rejected (403) — %s", refusal)
+            return web.json_response({"error": "forbidden"}, status=403)
+        force = await _force_flag(request)
+        if force is None:
+            return _bad_force()
+        if not self._allow_write(user_id):
+            log.info("miniapp: session bringback rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        refused = self._outside_root_response(request, sess, scope_chat_id, user_id)
+        if refused is not None:
+            return refused
+
+        tr = self._viewer_tr(request, user_id)
+        label = sess.label
+        if sess.status == Status.GONE:
+            return await self._bring_back_ended(request, sess, scope_chat_id, user_id,
+                                                force, tr)
+        outcome = await self.bot._bring_back_core(sess, force=force)
+        refused = _bg_refusal_response(tr, outcome, outcome.label or label)
+        if refused is not None:
+            return refused
+        resp = self._restart_outcome_response(
+            outcome,
+            still_stopping_detail=tr.text(_RESTART_STILL_STOPPING, session=outcome.label),
+            tr=tr,
+        )
+        if resp is not None:
+            return resp
+        # _bring_back_core said bg.back in the session's chat itself (the
+        # mirror): that chat is this scope's, so nothing more is posted.
+        return web.json_response({"status": "brought_back", "label": outcome.label})
+
+    async def _bring_back_ended(self, request, sess, scope_chat_id, user_id, force, tr):
+        """Bring it back for a finished session: only when a live Claude
+        Code background job holds its conversation (else ``not_parked``),
+        then the resume path, which stops that job first (R2)."""
+        from aiohttp import web
+
+        from aipager.miniapp.sessions import NO_TRANSCRIPT_REASON
+        from aipager.session_monitor import SessionMonitor
+        label = sess.label
+        if not SessionMonitor._held_conversation(sess):
+            return _not_parked_response(tr, label)
+        override, _full_refused = self.bot._resume_full_gate(
+            sess, None, user_id, scope_chat_id)
+        if force:
+            outcome = await self.bot._do_resume_core(
+                sess, mode_override=override, driver_user_id=user_id, force=True)
+        else:
+            outcome = await self.bot._do_resume_core(
+                sess, mode_override=override, driver_user_id=user_id)
+        refused = _bg_refusal_response(tr, outcome, label)
+        if refused is not None:
+            return refused
+        if outcome.reason == "not_gone":
+            return web.json_response({
+                "error": "not_gone", "detail": tr.text(_ALREADY_RUNNING),
+            }, status=409)
+        if outcome.reason == "no_transcript":
+            return web.json_response({
+                "error": "no_transcript", "detail": say(tr, NO_TRANSCRIPT_REASON),
+            }, status=409)
+        if outcome.reason == "launch_failed":
+            return web.json_response({
+                "error": "launch_failed", "detail": say(tr, outcome.err),
+            }, status=400)
+        await self._mirror_session_brought_back(scope_chat_id, label)
+        return web.json_response({"status": "brought_back", "label": label})
 
     async def _handle_session_model(self, request):
         """``POST /api/sessions/{label}/model {"model": ...}``.
@@ -2775,6 +2971,20 @@ class MiniAppServer:
             )
         except Exception:
             log.debug("miniapp: session-resumed mirror failed", exc_info=True)
+
+    async def _mirror_session_brought_back(self, scope_chat_id, label) -> None:
+        """``bg.back`` in the chat, for a finished session the app brought
+        back from Claude Code's background through the resume path (a
+        parked session's bring-back core says it itself)."""
+        from aipager.bg_text import BG_BACK
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=_chat_tr(scope_chat_id).html(BG_BACK, session=label),
+                parse_mode="HTML",
+            )
+        except Exception:
+            log.debug("miniapp: session-brought-back mirror failed", exc_info=True)
 
     async def _mirror_session_deleted(self, scope_chat_id, label) -> None:
         try:

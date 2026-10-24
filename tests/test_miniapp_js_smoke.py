@@ -705,7 +705,7 @@ def test_the_action_menu_icons_are_inline_svg_symbols():
     order = re.search(r"var ACTION_ORDER = \[([^\]]*)\]", INDEX_HTML)
     assert order, "ACTION_ORDER not found"
     keys = re.findall(r'"(\w+)"', order.group(1))
-    assert len(keys) == 9, keys
+    assert len(keys) == 10, keys
     symbols = set(re.findall(r'<symbol id="i-([\w-]+)"', INDEX_HTML))
     missing = [k for k in keys if k not in symbols]
     assert not missing, f"actions with no icon: {missing}"
@@ -1835,6 +1835,13 @@ def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):
     ("detail_quick_stop", "ok: quick stop -> one POST /api/sessions/dev/stop"),
     ("detail_quick_resume", "ok: quick resume -> one POST /api/sessions/dev/resume"),
     ("detail_unchanged", "ok: an unchanged detail poll touches nothing"),
+    # A session in Claude Code's background (claude-background-sessions).
+    ("bg_quick_bringback", "ok: quick bringback -> one POST /api/sessions/dev/bringback"),
+    ("bg_menu", "ok: background menu -> bringback, stop, rename, kill, restart"),
+    ("bg_busy_asks_in_app", "ok: a busy job asks in the app, then one POST with force"),
+    ("bg_busy_leave_it", "ok: Leave it closes the question and sends nothing"),
+    ("bg_restart_busy_asks",
+     "ok: a busy job's restart asks in the app, then restart with force"),
 ])
 def test_session_page_scenarios(node_bin, tmp_path, scenario, expected):
     from aipager.miniapp.static import INDEX_HTML
@@ -1858,9 +1865,33 @@ _DETAIL_MUTANTS = [
         "      prev.innerHTML = String(data.last_message)",
         "detail_activity", id="reply-escaped"),
     pytest.param(
-        '    var key = (a.stop && a.stop.available) ? "stop"',
-        '    var key = (a.stop) ? "kill"',
+        '      : (a.stop && a.stop.available) ? "stop"',
+        '      : (a.stop) ? "kill"',
         "detail_quick_stop", id="quick-is-stop"),
+    pytest.param(
+        '    var key = (a.bringback && a.bringback.available) ? "bringback"',
+        '    var key = (a.bringback && a.bringback.available) ? "restart"',
+        "bg_quick_bringback", id="quick-is-bringback"),
+    pytest.param(
+        '      if (r.status === 409 && r.data && r.data.error === "bg_busy" && r.data.can_force &&',
+        '      if (false &&',
+        "bg_busy_asks_in_app", id="bg-busy-asks"),
+    pytest.param(
+        '      onConfirm: function () { runDetailAction(label, action, null, true); }',
+        '      onConfirm: function () { runDetailAction(label, action, null, false); }',
+        "bg_busy_asks_in_app", id="bg-busy-forces"),
+    pytest.param(
+        '      onConfirm: function () { runDetailAction(label, action, null, true); }',
+        '      onConfirm: function () { runDetailAction(label, "bringback", null, true); }',
+        "bg_restart_busy_asks", id="bg-busy-same-action"),
+    pytest.param(
+        '    bodyEl.hidden = !opts.body;   // a question alone has no body',
+        '',
+        "bg_busy_asks_in_app", id="bg-question-no-body"),
+    pytest.param(
+        '      confirmLabel: t("ui.btn.bg_force"), cancelLabel: t("ui.btn.bg_leave"),',
+        '      confirmLabel: t("ui.btn.bg_force"),',
+        "bg_busy_leave_it", id="bg-leave-it-label"),
     pytest.param(
         '    if (detailChanged("facts", data.facts)) { renderFacts(data.facts || []); }',
         "    renderFacts(data.facts || []);",

@@ -124,6 +124,9 @@ MIRRORS = [
     # Ask/Auto switch sent in place, the line its confirmation edits.
     ("_mirror_session_mode_sent",
      (TrackedSession(name="claude-dev", label="dev"), SCOPE_CHAT, "dev", "auto")),
+    # A sixteenth, with Claude Code background jobs (2026-10-24): a finished
+    # session brought back from Claude Code's background.
+    ("_mirror_session_brought_back", (SCOPE_CHAT, "dev")),
 ]
 
 _KWARGS = {"_mirror_session_preference_change": {"reset": False}}

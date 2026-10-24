@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "Bu oturum artık yanıtını beklemiyor."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "İstek sohbete gönderilemedi."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "Sor, Otomatik ya da Tam erişim modunu seç."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} hâlâ Claude Code arka planında çalışıyor: bu işi durdurup sohbeti buraya geri getireyim mi?"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code'da {session} oturumunu geri getirecek kayıtlı bir sohbet yok."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "{session} Claude Code arka planından geri getirilemedi: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "Oturum hâlâ çalışıyor. Önce “Sonlandır” ile durdur."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "Tam erişim modu yalnızca yöneticiler için."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "Sonlandırılamadı: program hâlâ çalışıyor. Tekrar dene."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "Oturumun terminaline ulaşılamadı: mod değişmedi."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "Bu sohbette {session} adında bir oturum zaten var."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "Bu oturum şu an bir şey yapmıyor: durdurulacak bir şey yok."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} Claude Code arka planında değil."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "Bu istek yeniden gönderilemez. Terminalde yanıtla."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "Oturum çalışmıyor."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} hâlâ durduruluyor: mod değişmedi. Birazdan tekrar dene."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude sana bir şey soruyor."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "{session} oturumunu aç"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude bir araç kullanmak istiyor."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Geri getir"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Kuyruğu temizle"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Şimdi sıkıştır"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Sil"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "Devam ettir"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "Durdur"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "Sohbette yanıtla"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "Durdur ve geri getir"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "Bırak çalışsın"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "İptal"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "Güncellemeleri kontrol et"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "Kontrol ediliyor…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff gösterilemeyecek kadar büyük."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff yok."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Zaten sona ermişti."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "Claude Code arka planından geri döndü."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Kuyruk temizlendi."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Konuşma sıkıştırılıyor…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Silindi."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Bu oturum bitmeden önce hiçbir şey gelmedi."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Henüz bir şey yok. Claude yanıt verince gelir."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Her şey sakin"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"one": "{n} arka planda", "other": "{n} arka planda"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"one": "{n} bitti", "other": "{n} bitti"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"one": "{n} seni bekliyor", "other": "{n} seni bekliyor"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"one": "{n} hazır", "other": "{n} hazır"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "Yeni ad"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "Yeni oturum"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "Bölümler"}
+{"k": "ui.state.background", "src": "c784901b", "v": "arka planda"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "çalışıyor"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "bitti"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "hazır"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "bilinmiyor"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "seni bekliyor"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "Claude Code arka planında"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "Bitti"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "Seni bekliyor"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Seni bekliyor ({kind})"}

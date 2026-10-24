@@ -44,12 +44,16 @@
 {"k": "app.err.answer_not_waiting", "src": "2e4f8c10", "v": "این سشن دیگر منتظر شما نیست."}
 {"k": "app.err.answer_send_failed", "src": "d9cf2cea", "v": "این درخواست به چت فرستاده نشد."}
 {"k": "app.err.bad_mode", "src": "b0920696", "v": "مود پرسش، خودکار یا دسترسی کامل را انتخاب کنید."}
+{"k": "app.err.bg_busy", "src": "48df0bc7", "v": "{session} هنوز در پس‌زمینهٔ Claude Code در حال کار است: آن کار متوقف شود و گفتگو به اینجا برگردد؟"}
+{"k": "app.err.bg_no_conversation", "src": "b995e81a", "v": "Claude Code هیچ گفتگوی ذخیره‌شده‌ای برای برگرداندن {session} ندارد."}
+{"k": "app.err.bg_stop_failed", "src": "ae1048bb", "v": "برگرداندن {session} از پس‌زمینهٔ Claude Code نشد: {error}"}
 {"k": "app.err.delete_running", "src": "71f25b50", "v": "سشن هنوز باز است. اول با «بستن» متوقفش کنید."}
 {"k": "app.err.full_needs_admin", "src": "1a9bee51", "v": "مود دسترسی کامل فقط برای ادمین است."}
 {"k": "app.err.kill_still_running", "src": "b36a0a5c", "v": "بسته نشد - برنامه‌اش هنوز در حال اجراست. دوباره امتحان کنید."}
 {"k": "app.err.mode_send_failed", "src": "887b8615", "v": "به ترمینال سشن نرسید - مود عوض نشد."}
 {"k": "app.err.name_taken", "src": "9ab9e08f", "v": "در این چت از قبل سشنی به اسم {session} هست."}
 {"k": "app.err.not_busy", "src": "bbafa529", "v": "این سشن الان کاری انجام نمی‌دهد - چیزی برای توقف نیست."}
+{"k": "app.err.not_parked", "src": "ec56a8ac", "v": "{session} در پس‌زمینهٔ Claude Code نیست."}
 {"k": "app.err.not_resendable", "src": "82303f6c", "v": "این درخواست را نمی‌شود دوباره فرستاد. در ترمینال جوابش را بدهید."}
 {"k": "app.err.not_running", "src": "af9ca5bc", "v": "این سشن الان اجرا نمی‌شود."}
 {"k": "app.err.perms_still_stopping", "src": "f5988eb7", "v": "{session} هنوز در حال توقف است - مود عوض نشد. چند لحظه بعد دوباره امتحان کنید."}
@@ -1050,6 +1054,7 @@
 {"k": "ui.beacon.asking", "src": "a9aba81f", "v": "Claude از شما چیزی می‌پرسد."}
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "باز کردن {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude می‌خواهد از یک ابزار استفاده کند."}
+{"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "برگرداندن"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "پاک کردن صف"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "الان کامپکت کن"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "حذف"}
@@ -1059,6 +1064,8 @@
 {"k": "ui.btn.action.resume", "src": "b3bd0b5a", "v": "ادامه"}
 {"k": "ui.btn.action.stop", "src": "9e253470", "v": "توقف"}
 {"k": "ui.btn.answer_in_chat", "src": "794027eb", "v": "جواب در چت"}
+{"k": "ui.btn.bg_force", "src": "c283f239", "v": "توقف و برگرداندن"}
+{"k": "ui.btn.bg_leave", "src": "e7c7e7b3", "v": "بماند"}
 {"k": "ui.btn.cancel", "src": "77dfd213", "v": "لغو"}
 {"k": "ui.btn.check_updates", "src": "736b9062", "v": "چک کردن آپدیت"}
 {"k": "ui.btn.checking", "src": "820d6004", "v": "در حال چک کردن…"}
@@ -1136,6 +1143,7 @@
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "diff بزرگ‌تر از آن است که نشان داده شود."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "diff در دسترس نیست."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "از قبل بسته شده بود."}
+{"k": "ui.done.bringback", "src": "726d142e", "v": "از پس‌زمینهٔ Claude Code برگشت."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "پاک شد."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "در حال کامپکت…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "حذف شد."}
@@ -1219,6 +1227,7 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "تا وقتی این سشن بسته شد، چیزی ثبت نشد."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "هنوز چیزی نیامده. وقتی Claude جواب بدهد، اینجا می‌آید."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "همه آماده"}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"one": "{n} در پس‌زمینه", "other": "{n} در پس‌زمینه"}}
 {"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"one": "{n} بسته‌شده", "other": "{n} بسته‌شده"}}
 {"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"one": "{n} منتظر شما", "other": "{n} منتظر شما"}}
 {"k": "ui.pulse.resting", "src": "644f3b40", "v": {"one": "{n} آماده", "other": "{n} آماده"}}
@@ -1337,11 +1346,13 @@
 {"k": "ui.shell.new_name_aria", "src": "9e627c7b", "v": "اسم جدید"}
 {"k": "ui.shell.new_session_aria", "src": "5c881d23", "v": "سشن جدید"}
 {"k": "ui.shell.sections_aria", "src": "7ff5a6da", "v": "بخش‌ها"}
+{"k": "ui.state.background", "src": "c784901b", "v": "در پس‌زمینه"}
 {"k": "ui.state.busy", "src": "8178ea20", "v": "در حال کار"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "بسته‌شده"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "آماده"}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "نامعلوم"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "منتظر شما"}
+{"k": "ui.state_line.background", "src": "cc817ef1", "v": "در پس‌زمینهٔ Claude Code"}
 {"k": "ui.state_line.finished", "src": "355bcc57", "v": "بسته‌شده"}
 {"k": "ui.state_line.needs_you", "src": "0d9d0df1", "v": "منتظر شما"}
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "منتظر شما ({kind})"}
