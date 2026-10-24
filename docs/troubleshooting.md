@@ -361,21 +361,32 @@ within a couple of seconds and stops typing into that terminal: anything
 typed there now could start another background job. The job keeps
 working, and its card, answer and permission prompts still reach the
 chat as the session's. In the Mini App the session reads "in the
-background".
+background", or "needs you" while its job waits on a permission prompt
+you can answer from the chat.
 
 To bring it back:
 
 - Send it a message. The message waits (👀), aipager stops the
   background job (`claude stop <job>`), restarts the session on the job's
   conversation with aipager's own settings, and then sends the message.
-  While the job is still working you are asked first: `Stop and bring
-  back` stops what it is doing, `Leave it` lets it finish (bring it back
-  later). Someone whose role cannot restart the session gets `Your
+  While the job is still working, or the turn that moved with ← is
+  still running, you are asked first: `Stop and bring back` stops what
+  it is doing, `Leave it` lets it finish (bring it back later). In the
+  first seconds after ← a new job can look idle just before it goes on
+  with that turn, so a message sent then waits a moment before aipager
+  decides. Someone whose role cannot restart the session gets `Your
   message to x1 waits until someone brings it back from Claude Code's
   background.`
 - Or tap `↩️ Bring it back now` under the notice, `/restart x1`, or
   Bring it back in the Mini App. `/stop` while the job works stops that
-  work and brings the session back.
+  work and brings the session back. A button left from an earlier move
+  into the background answers `x1 is not in Claude Code's background.`
+  and does nothing.
+
+When a safety rule halts the session's work while it is in the
+background, aipager stops the background job. If it cannot, the halt's
+notice says that the blocked work may still be running there; stop the
+job with `claude stop <job>` in a terminal.
 
 Until then, commands that would type into the session (`/compact`,
 `/model`, an Ask or Auto mode switch, `/now`, Retry) answer `Bring x1
