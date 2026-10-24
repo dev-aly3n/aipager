@@ -211,6 +211,66 @@ def test_what_is_no_holder(world, run_async, monkeypatch, case):
     assert _resumed_ids(world) == [JS]
 
 
+# ---- rev-iter3-001: a resume onto a conversation whose job wrote no transcript ----
+
+def _parks_in_the_gap(world):
+    """The relaunched claude has not written its registry file: what the
+    scan's check decides from the transcript alone."""
+    from unittest.mock import AsyncMock
+
+    from aipager.session_monitor import SessionMonitor
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    return monitor.check_parked(world.sess)
+
+
+def test_an_idle_holder_without_a_transcript_resumes_the_saved_conversation(
+        world, run_async):
+    """X moved into the idle job's JS, which never ran a prompt (no
+    transcript): the job is stopped, X comes back (claude cannot resume
+    JS), and X's old ``continued-in`` parks nothing."""
+    sess = _not_parked(world)
+    world.drop_transcript(JS)
+    out = run_async(world.bot._do_resume_core(sess))
+    assert out.ok
+    assert world.runs()[0] == ["stop", JOB]
+    assert _resumed_ids(world) == [X]
+    assert _parks_in_the_gap(world) is False
+    assert sess.parked_job == ""
+
+
+def test_a_gone_job_without_a_transcript_parks_nothing_after_the_resume(world,
+                                                                        run_async):
+    sess = _not_parked(world)
+    world.drop_transcript(JS)
+    world.unreg(WORKER)
+    world.alive.discard(WORKER)
+    assert run_async(world.bot._do_resume_core(sess)).ok
+    assert world.runs() == [] and _resumed_ids(world) == [X]
+    assert _parks_in_the_gap(world) is False
+
+
+def test_a_restart_onto_a_moved_conversation_parks_nothing_after_it(world,
+                                                                    run_async):
+    """Restart of a live session whose conversation still ends moved into
+    a job that is gone: the relaunched X is not parked on it."""
+    sess = _not_parked(world, gone=False)
+    world.drop_transcript(JS)
+    world.unreg(WORKER)
+    world.alive.discard(WORKER)
+    assert run_async(world.bot._restart_session_core(sess)).ok
+    assert _resumed_ids(world) == [X]
+    assert _parks_in_the_gap(world) is False
+
+
+def test_a_resume_with_nothing_moved_forgets_an_old_note(world, run_async):
+    sess = _not_parked(world)
+    world.unreg(WORKER)
+    world.transcript(X, {"type": "user"})
+    sess.note_moved_handled(X, JOB)
+    assert run_async(world.bot._do_resume_core(sess)).ok
+    assert (sess.moved_handled_sid, sess.moved_handled_job) == ("", "")
+
+
 def test_the_chat_resume_asks_with_the_two_buttons(world, run_async, mk_update):
     """``/resume x`` with a busy job holding the conversation: the busy
     question, with "Stop and bring back" and "Leave it"."""

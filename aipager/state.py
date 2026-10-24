@@ -909,6 +909,17 @@ class TrackedSession:
     # copy was resumed on purpose). Persisted with the park.
     parked_source: str = ""
     parked_from_session_id: str = ""
+    # A move into the background already dealt with: aipager launched
+    # conversation ``moved_handled_sid`` on purpose (a bring-back, a
+    # resume, a restart) while its last record still said
+    # ``continued-in`` to job ``moved_handled_job`` (an idle job that wrote
+    # no transcript, so its conversation could not be resumed). The
+    # transcript fallback never parks on that record again; it forgets it
+    # once that transcript ends otherwise. Persisted: a daemon restart in
+    # the gap before the relaunched claude's registry entry appears must
+    # not park the session either.
+    moved_handled_sid: str = ""
+    moved_handled_job: str = ""
     # How many parks of this session ended (``forget_park``): the terminal
     # guard tells one park from the next by it. Transient.
     park_epoch: int = 0
@@ -2706,6 +2717,13 @@ class TrackedSession:
         self.bg_release_armed_at = 0.0
         self.bg_start_seen = False
 
+    def note_moved_handled(self, sid: str, job: str) -> None:
+        """Conversation *sid* was launched on purpose while its last record
+        may still say ``continued-in`` to job *job* (see
+        ``moved_handled_sid``); empty strings forget it."""
+        self.moved_handled_sid = sid
+        self.moved_handled_job = job
+
     def claim_bg_release(self) -> bool:
         """True exactly once per armed release: checks and clears it with
         no await in between, so the bring-back, the SessionStart and the
@@ -3610,6 +3628,13 @@ def _restore_parked(sess: TrackedSession, sd: dict) -> None:
     # A bring-back whose held messages had not gone out yet: the monitor's
     # backstop releases them once (its clock starts again at zero).
     sess.bg_release_pending = sd.get("bg_release_pending") is True
+    # A move already handled (a restart in the gap before the relaunched
+    # claude's registry entry must not park it again).
+    handled_sid = sd.get("moved_handled_sid")
+    handled_job = sd.get("moved_handled_job")
+    if (isinstance(handled_sid, str) and 0 < len(handled_sid) <= 64
+            and isinstance(handled_job, str) and bg_jobs._JOB_ID.match(handled_job)):
+        sess.note_moved_handled(handled_sid, handled_job)
 
 
 def _drop_bg_files(name: str, sess: TrackedSession | None) -> None:
@@ -4529,6 +4554,7 @@ class SessionRegistry:
         "parked_job", "parked_job_session_id", "parked_since",
         "parked_source", "parked_from_session_id",
         "park_notified_job", "bg_release_pending",
+        "moved_handled_sid", "moved_handled_job",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as

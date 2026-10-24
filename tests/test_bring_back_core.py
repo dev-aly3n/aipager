@@ -556,6 +556,131 @@ def test_a_reused_pid_of_the_old_client_parks_nothing(world, run_async, monkeypa
     assert sess.parked_job == ""
 
 
+# ---- rev-iter3-001: a move already handled never parks the session again ------------
+
+def _fresh_tick(world, monitor):
+    """One scan's parked check of the session, with a registry read made now."""
+    monitor._tick_read_at = time.monotonic()
+    monitor._tick_registry = claude_jobs.read_registry()
+    return monitor._check_parked_tick(NAME, world.sess)
+
+
+def _idle_job_brought_back(world, run_async, monkeypatch):
+    """The idle-job case (live-check-1 finding 4): the fork wrote no
+    transcript, so the client's own conversation X comes back, and X still
+    ends with ``continued-in`` to the job just stopped. The old client is
+    dead and the relaunched claude has not written its registry file."""
+    world.drop_transcript(JS)
+    typed = _drainable(world.bot, monkeypatch)
+    world.sess.queue_prompt("held", 31)
+    assert run_async(world.bot._bring_back_core(world.sess)).ok
+    assert [launch["resume_id"] for launch in world.launches()] == [X]
+    world.alive.discard(CLIENT)          # killed, its file left behind
+    return typed
+
+
+def test_an_idle_jobs_bring_back_is_not_parked_again_by_its_own_transcript(
+        world, run_async, monkeypatch):
+    """The reviewer's probe: in the gap before the relaunched claude's
+    registry entry, X's old ``continued-in`` parks nothing, sends no second
+    notice, and the SessionStart releases the held message at once."""
+    sess = world.sess
+    typed = _idle_job_brought_back(world, run_async, monkeypatch)
+    notify = AsyncMock()
+    monitor = SessionMonitor(world.bot.registry, notify)
+    run_async(_fresh_tick(world, monitor))
+    assert sess.parked_job == ""
+    assert [c.args[1] for c in notify.await_args_list] == []
+    assert monitor.check_parked(sess) is False, "the gate's check too"
+    recv = hr.HookReceiver(world.bot.registry, world.bot.notify)
+    run_async(_session_start(recv, sid=X))
+    assert len(typed) == 1 and typed[0].endswith("held"), "released at once"
+    assert sess.bg_release_pending is False
+
+
+def test_the_handled_move_survives_a_daemon_restart(world, run_async, monkeypatch,
+                                                   tmp_state_file):
+    """A deploy restart in that gap: the reloaded session is not parked on
+    the stopped job either."""
+    from aipager.state import SessionRegistry
+    _idle_job_brought_back(world, run_async, monkeypatch)
+    world.sess.restarting_until = 0.0
+    world.bot.registry.save()
+    fresh = SessionRegistry()
+    fresh.load()
+    again = fresh.get(NAME)
+    assert (again.moved_handled_sid, again.moved_handled_job) == (X, JOB)
+    notify = AsyncMock()
+    monitor = SessionMonitor(fresh, notify)
+    monitor._tick_read_at = time.monotonic()
+    monitor._tick_registry = claude_jobs.read_registry()
+    run_async(monitor._check_parked_tick(NAME, again))
+    assert again.parked_job == ""
+    assert [c.args[1] for c in notify.await_args_list] == []
+
+
+@pytest.mark.parametrize("sid, job", [
+    ("", JOB), (X, ""), (X, "bad/job"), (123, JOB), ("a" * 65, JOB)])
+def test_a_handled_move_that_cannot_be_used_restores_as_none(tmp_state_file, sid, job):
+    from aipager.state import SessionRegistry
+    reg = SessionRegistry()
+    sess = reg.get_or_create(NAME)
+    sess.moved_handled_sid, sess.moved_handled_job = sid, job
+    reg.save()
+    fresh = SessionRegistry()
+    fresh.load()
+    again = fresh.get(NAME)
+    assert (again.moved_handled_sid, again.moved_handled_job) == ("", "")
+
+
+def test_a_new_move_to_another_job_still_parks(world, run_async, monkeypatch):
+    """A real new ``←`` later in the same conversation: a ``continued-in``
+    to another job's conversation parks on that job."""
+    sess = world.sess
+    _idle_job_brought_back(world, run_async, monkeypatch)
+    world.transcript(X, {"type": "user"},
+                     {"type": "continued-in", "continuedInSessionId": JS},
+                     {"type": "user"},
+                     {"type": "continued-in", "continuedInSessionId": NEW_ID})
+    notify = AsyncMock()
+    monitor = SessionMonitor(world.bot.registry, notify)
+    run_async(_fresh_tick(world, monitor))
+    assert sess.parked_job == NEW_ID[:8]
+    assert [c.args[1] for c in notify.await_args_list] == ["bg_parked"]
+
+
+def test_the_note_is_forgotten_once_the_conversation_goes_on(world, run_async,
+                                                             monkeypatch):
+    """A prompt typed in X after the bring-back (X no longer ends moved)
+    forgets the note: X moved into that same job id again parks."""
+    sess = world.sess
+    _idle_job_brought_back(world, run_async, monkeypatch)
+    world.transcript(X, {"type": "user"},
+                     {"type": "continued-in", "continuedInSessionId": JS},
+                     {"type": "user"})
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    run_async(_fresh_tick(world, monitor))
+    assert sess.parked_job == ""
+    assert (sess.moved_handled_sid, sess.moved_handled_job) == ("", "")
+    world.transcript(X, {"type": "user"},
+                     {"type": "continued-in", "continuedInSessionId": JS},
+                     {"type": "user"},
+                     {"type": "continued-in", "continuedInSessionId": JS})
+    run_async(_fresh_tick(world, monitor))
+    assert sess.parked_job == JOB
+
+
+def test_a_note_for_another_conversation_parks_as_ever(world, run_async):
+    """Only the conversation that was launched on purpose is spared."""
+    sess = world.sess
+    sess.parked_job = ""
+    sess.note_moved_handled(NEW_ID, JOB)
+    world.alive.discard(CLIENT)
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    assert monitor.check_parked(sess) is True
+    assert sess.parked_job == JOB
+
+
 # ---- T3.8: concurrency and the restart window (B3) ----------------------------------
 
 def test_a_bring_back_in_flight_refuses_a_second(world, run_async):

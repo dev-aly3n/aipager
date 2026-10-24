@@ -2338,6 +2338,9 @@ class SessionOpsMixin:
                 english = bg_text.error_text(i18n.get("en"), err[0], err[1])
             return ResumeOutcome(ok=False, reason=reason, err=english, bg_err=tuple(err))
         resume_id = target
+        # Its last record may still say it moved into a job that is gone
+        # now (it wrote no transcript): noted once the launch worked.
+        stale_job = await self._stale_move(resume_id)
 
         # Use the session's actual (possibly scope-disambiguated) name so
         # resume reattaches the right socket, not a flat claude-<label>.
@@ -2373,6 +2376,7 @@ class SessionOpsMixin:
 
             # Resume succeeded — recover state.
             sess.gone_at = None
+            sess.note_moved_handled(resume_id if stale_job else "", stale_job)
             # A resumed claude starts with an empty input queue: a target the
             # old process had queued but never absorbed must not start a
             # phantom turn later (review rev-iter2-001).
@@ -2740,6 +2744,7 @@ class SessionOpsMixin:
         own_conversation = resume_id is None
         if own_conversation:
             resume_id = sess.claude_session_id
+        stale_job = ""
         cwd = sess.cwd or None
         sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
 
@@ -2760,6 +2765,9 @@ class SessionOpsMixin:
                 sess.restarting_until = earlier_window
                 return self._bg_refused_restart(sess, refusal, target_mode)
             resume_id = target
+            # Its last record may still say it moved into a job that is
+            # gone now: noted once the relaunch worked.
+            stale_job = await self._stale_move(resume_id)
             # The stop above may have taken seconds: the window runs from now.
             sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
 
@@ -2816,6 +2824,9 @@ class SessionOpsMixin:
         sess.reset_mode_tracking()
         sess.mode_launch_unchecked = True
         sess.claude_session_id = resume_id  # restore — launch_session may clear
+        if own_conversation:
+            # A bring-back notes its own (at :meth:`_clear_park`).
+            sess.note_moved_handled(resume_id if stale_job else "", stale_job)
         sess.cwd = cwd or sess.cwd
         sess.gone_at = None
         # The relaunched claude starts with an empty input queue: a
@@ -2896,21 +2907,29 @@ class SessionOpsMixin:
             target = claude_jobs.follow_continued(session_id, entries)
             holder = (claude_jobs.live_holder(target, entries)
                       if entries is not None else None)
-            return entries, target, holder
+            # A hop to a live holder's conversation with no transcript (an
+            # idle job that never ran a prompt): that holder is dealt with
+            # below, but the conversation launched is the last one saved
+            # (hops through saved transcripts only), never one claude
+            # cannot resume.
+            saved = (target if target == session_id
+                     or claude_jobs.find_transcript(target) is not None
+                     else claude_jobs.follow_continued(session_id, []))
+            return entries, target, holder, saved
 
         try:
-            entries, target, holder = await claude_jobs.off_loop(look)
+            entries, target, holder, saved = await claude_jobs.off_loop(look)
         except Exception:
             log.warning("resume target of %s not checked", session_id, exc_info=True)
             return session_id, None
         if target != session_id:
             log.info("resuming %s instead of %s, where its conversation moved",
-                     target, session_id)
+                     saved, session_id)
         if holder is None:
-            return target, None
+            return saved, None
         job = holder.get("jobId") or ""
         if not claude_jobs.valid_job(job):
-            return target, ("bg_stop_failed", ("still_running", {}))
+            return saved, ("bg_stop_failed", ("still_running", {}))
         if force and force_job and not job.startswith(force_job):
             # A "Stop and bring back" shown for an earlier job: another job
             # holds the conversation now, and it was never asked about.
@@ -2924,13 +2943,13 @@ class SessionOpsMixin:
             state = claude_jobs.UNKNOWN
         if state in (claude_jobs.BUSY, claude_jobs.UNKNOWN) and not force:
             log.info("conversation %s is held by busy background job %s", target, job)
-            return target, ("bg_busy", ())
+            return saved, ("bg_busy", ())
         if state != claude_jobs.GONE:
             err = await self._stop_bg_job(job, [target])
             if err:
-                return target, ("bg_stop_failed", err)
+                return saved, ("bg_stop_failed", err)
         log.info("stopped background job %s, which held conversation %s", job, target)
-        return target, None
+        return saved, None
 
     @staticmethod
     def _bg_refused_restart(sess: TrackedSession, refusal: tuple,
@@ -2969,16 +2988,47 @@ class SessionOpsMixin:
 
         return await claude_jobs.off_loop(first_saved)
 
-    def _clear_park(self, sess: TrackedSession) -> None:
+    def _clear_park(self, sess: TrackedSession, resume_id: str, job: str) -> None:
         """Forget *sess*'s park after a bring-back: the link file and its
         pid-map entry go (before the fields: the cleanup reads them), the
         fields are cleared. The old client's pid was forgotten before the
         launch (:meth:`_bring_back_in_flight`): the pid the relaunched
-        claude's own SessionStart recorded meanwhile is kept."""
+        claude's own SessionStart recorded meanwhile is kept.
+
+        The move into job *job* is noted as handled for conversation
+        *resume_id* (``TrackedSession.moved_handled_sid``): for an idle job
+        that wrote no transcript, *resume_id* is the client's own
+        conversation, whose last record still says ``continued-in`` to that
+        job, and until the relaunched claude writes its registry entry the
+        transcript fallback would park the session on it again."""
         from aipager.state import _drop_bg_files
         _drop_bg_files(sess.name, sess)
         sess.forget_park()
+        sess.note_moved_handled(resume_id, job)
         self.registry.mark_dirty()
+
+    @staticmethod
+    async def _stale_move(resume_id: str) -> str:
+        """The job conversation *resume_id* says it moved into (its last
+        record is ``continued-in`` to an id that starts with it), when
+        *resume_id* is about to be launched on purpose: that record is
+        stale from then on (``TrackedSession.moved_handled_sid``). ``""``
+        when it does not end moved. Read off the event loop; never
+        raises."""
+        from aipager import claude_jobs
+        if not resume_id:
+            return ""
+
+        def look() -> str:
+            path = claude_jobs.find_transcript(resume_id)
+            target = claude_jobs.transcript_continued_in(path) if path is not None else ""
+            return target[:8] if target and claude_jobs.valid_job(target[:8]) else ""
+
+        try:
+            return await claude_jobs.off_loop(look)
+        except Exception:
+            log.debug("transcript of %s not read", resume_id, exc_info=True)
+            return ""
 
     async def _bring_back_core(
         self, sess: TrackedSession, *, force: bool = False,
@@ -3160,7 +3210,7 @@ class SessionOpsMixin:
             disarm()
             sess.restarting_until = earlier_window
             return outcome
-        self._clear_park(sess)
+        self._clear_park(sess, resume_id, job)
         path = await claude_jobs.off_loop(claude_jobs.find_transcript, resume_id)
         if path is not None:
             sess.transcript_path = str(path)

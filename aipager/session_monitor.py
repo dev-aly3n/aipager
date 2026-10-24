@@ -979,9 +979,32 @@ class SessionMonitor:
         from_sid = sess.claude_session_id
         path = claude_jobs.find_transcript(from_sid, cache_misses=True)
         target = claude_jobs.transcript_continued_in(path) if path is not None else ""
+        if self._move_handled(sess, from_sid, path, target):
+            return bool(sess.parked_job)
         if target and claude_jobs.valid_job(target[:8]):
             self._park(sess, target[:8], target, source="transcript", from_sid=from_sid)
         return bool(sess.parked_job)
+
+    def _move_handled(self, sess: TrackedSession, from_sid: str, path,
+                      target: str) -> bool:
+        """Whether *target*, the ``continued-in`` that conversation
+        *from_sid*'s transcript ends with, is the move aipager already dealt
+        with by launching that conversation on purpose
+        (``TrackedSession.moved_handled_sid``): the relaunched claude has not
+        written its registry entry yet, and the job named there was stopped.
+        That record parks nothing. The note is forgotten once that
+        transcript ends otherwise (a prompt was typed, or it moved again):
+        a later ``←`` parks as ever."""
+        if not sess.moved_handled_sid or from_sid != sess.moved_handled_sid:
+            return False
+        if target and sess.moved_handled_job and target.startswith(sess.moved_handled_job):
+            log.debug("[%s] transcript still ends moved into job %s, already handled",
+                      sess.label, sess.moved_handled_job)
+            return True
+        if path is not None:
+            sess.note_moved_handled("", "")
+            self.registry.mark_dirty()
+        return False
 
     @staticmethod
     def _job_session_id(sess: TrackedSession, job: str, entries, client) -> str:
