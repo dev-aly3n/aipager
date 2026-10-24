@@ -805,6 +805,22 @@ def test_the_backstop_releases_once_when_no_session_start_came(world, run_async,
     assert len(typed) == 1, "neither a second backstop nor a late SessionStart"
 
 
+def test_the_backstop_waits_while_the_session_is_busy(world, run_async, monkeypatch):
+    """The nit of review 2: a turn runs (typed in the terminal, say, after a
+    daemon restart): the backstop releases nothing until the session is
+    IDLE again."""
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.queue_prompt("held", 31)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    world.bot.registry.transition(NAME, Status.BUSY)
+    _backstop(world, run_async)
+    assert typed == [] and sess.bg_release_pending is True
+    world.bot.registry.transition(NAME, Status.IDLE)
+    _backstop(world, run_async)
+    assert len(typed) == 1 and sess.bg_release_pending is False
+
+
 def test_the_release_is_armed_before_the_launch(world, run_async):
     """And the old client's pid is forgotten there, before the new claude
     can report its own."""
