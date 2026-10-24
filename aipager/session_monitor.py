@@ -932,7 +932,13 @@ class SessionMonitor:
             return bool(sess.parked_job)
 
     def _check_parked(self, sess: TrackedSession, entries, read_at: float) -> bool:
-        if sess.status == Status.GONE or sess.is_restarting():
+        # Only while the relaunch itself runs (the old client is being
+        # stopped and killed): the restart's quiet window after it hushes
+        # the old process's late SessionEnd, and must not hide a new ←
+        # of the relaunched claude. The old client's entry, left behind
+        # by a kill, is never its client (find_client takes live
+        # processes only).
+        if sess.status == Status.GONE or sess.relaunch_in_flight:
             return bool(sess.parked_job)
         if read_at < sess.park_changed_at:
             # The park changed after this read started (the message gate or
@@ -1067,7 +1073,7 @@ class SessionMonitor:
         """The scan's parked check of one session, and the ``bg_parked``
         event of a park noticed since the last scan (by this check or by
         the message gate or the receiver in between)."""
-        if sess.status != Status.GONE and not sess.is_restarting():
+        if sess.status != Status.GONE and not sess.relaunch_in_flight:
             # The scan's registry read: only this call uses it. Read on
             # the loop, once per scan (the files parse once per change),
             # and the transcript fallback's misses are cached: the scan

@@ -217,11 +217,9 @@ JOB2 = "ef90ab12"
 JS2 = "ef90ab12-0000-4000-8000-000000000007"
 WORKER2 = 4201
 
-QUIET_WINDOW = (
-    "qa finding tester-iter2-002: for about 10 s after a bring-back (its restart "
-    "quiet window) the parked check answers False, so a fresh park of the "
-    "relaunched claude is not seen by the message gate and the message is typed "
-    "into the parked client (S1, Fact 9)")
+# qa finding tester-iter2-002 (fixed): for about 10 s after a bring-back (its
+# restart quiet window) the parked check must still see a fresh park of the
+# relaunched claude, or the message is typed into the parked client (S1, Fact 9).
 
 
 def _brought_back_then_parked_again(stack, mk_update):
@@ -236,14 +234,12 @@ def _brought_back_then_parked_again(stack, mk_update):
     stack.claude.reg(WORKER2, kind="bg", jobId=JOB2, sessionId=JS2, status="idle")
 
 
-@pytest.mark.xfail(strict=True, reason=QUIET_WINDOW)
 def test_a_fresh_park_right_after_a_bring_back_is_seen_by_the_gate(stack, mk_update):
     _brought_back_then_parked_again(stack, mk_update)
     stack.message(mk_update, "two", msg_id=42)
     assert [t.rsplit("\n", 1)[-1] for t in stack.typed] == ["one"]
 
 
-@pytest.mark.xfail(strict=True, reason=QUIET_WINDOW)
 def test_a_fresh_park_right_after_a_bring_back_is_noticed_by_the_tick(stack, mk_update):
     _brought_back_then_parked_again(stack, mk_update)
     stack.tick()

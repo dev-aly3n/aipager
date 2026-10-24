@@ -135,7 +135,9 @@ def _dtach_pids(session: str) -> list[int]:
 
 
 def _pid_alive(pid: int) -> bool:
-    """True while *pid* exists (signal 0 checks without delivering)."""
+    """True while *pid* exists (signal 0 checks without delivering) and,
+    where ``/proc`` tells, is not a zombie: a killed claude its parent has
+    not reaped yet still answers signal 0."""
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -144,7 +146,21 @@ def _pid_alive(pid: int) -> bool:
         return True
     except (OSError, ValueError, OverflowError):
         return False
-    return True
+    return _proc_state(pid) not in ("Z", "X")
+
+
+def _proc_state(pid: int) -> str:
+    """The state letter in ``/proc/<pid>/stat`` (``Z`` for a zombie), or
+    ``""`` when it cannot be read (off Linux, gone)."""
+    try:
+        with open(f"/proc/{int(pid)}/stat", "rb") as f:
+            raw = f.read(4096)
+    except (OSError, ValueError):
+        return ""
+    # The name in brackets may hold spaces and brackets: the state is the
+    # first field after the last ")".
+    rest = raw[raw.rfind(b")") + 1:].split()
+    return rest[0].decode("ascii", "replace") if rest else ""
 
 
 def _pid_tagged(pid: int, session: str) -> bool:
@@ -373,6 +389,17 @@ def _start_matches(entry: dict, pid: int) -> bool:
     return actual == recorded
 
 
+def _start_differs(entry: dict, pid: int) -> bool:
+    """Whether *pid* is known to be another process than the one *entry*
+    was written for: both start times are readable and differ (the pid
+    was reused). Unreadable is no proof either way."""
+    recorded = entry.get("procStart")
+    if recorded is None:
+        return False
+    actual = _proc_start(pid)
+    return actual is not None and actual != recorded
+
+
 def find_client(sess, entries: list[dict] | None) -> dict | None:
     """The registry entry of *sess*'s own claude (an ``interactive`` one),
     or None. Tried in order, the first level with an answer wins:
@@ -387,7 +414,9 @@ def find_client(sess, entries: list[dict] | None) -> dict | None:
        session's conversation id (the job's own id, adopted from its hooks);
     4. an entry holding the session's conversation id.
 
-    Levels 3 and 4 take only entries whose process is alive.
+    Levels 3 and 4 take only entries whose process is alive (not a
+    zombie) and, where both start times are readable, the one the entry
+    was written for.
 
     Two candidates on one level are no answer. The pid found is kept on
     the session (``claude_pid``)."""
@@ -414,7 +443,8 @@ def find_client(sess, entries: list[dict] | None) -> dict | None:
         # file of a killed claude behind (it checks the pid itself), and
         # after a bring-back the old client's stale entry is parked on the
         # very job the session's new id starts with.
-        alive = [e for e in interactive if _pid_alive(e["pid"])]
+        alive = [e for e in interactive
+                 if _pid_alive(e["pid"]) and not _start_differs(e, e["pid"])]
         decided, found = _unique(
             [e for e in alive if e.get("parkedJobId") == sid[:8]])
         if not decided:

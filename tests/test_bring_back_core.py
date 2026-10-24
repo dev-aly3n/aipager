@@ -498,6 +498,64 @@ def test_the_old_clients_file_does_not_park_the_session_again(world, run_async):
     assert sess.parked_job == ""
 
 
+# ---- tester-iter2-002: the restart's quiet window hides no new park -----------------
+
+NEW_PID = 4300
+JOB2 = "ef90ab12"
+
+
+def test_a_new_park_inside_the_restart_window_is_seen(world, run_async):
+    """The bring-back's quiet window (``restarting_until``) is still open
+    when the relaunched claude moves to the background again: the check
+    sees it (only a relaunch in flight is skipped)."""
+    sess = world.sess
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert sess.is_restarting(), "precondition: the quiet window still runs"
+    world.alive.discard(CLIENT)
+    world.alive.add(NEW_PID)
+    sess.claude_pid = NEW_PID
+    world.reg(NEW_PID, kind="interactive", sessionId=JS, parkedJobId=JOB2)
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    assert monitor.check_parked(sess) is True
+    assert sess.parked_job == JOB2
+
+
+def test_a_relaunch_in_flight_is_not_checked(world, run_async):
+    """While the relaunch itself runs the old client is being stopped and
+    killed: nothing read then changes the park."""
+    sess = world.sess
+    sess.parked_job = ""
+    sess.relaunch_in_flight = True
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    assert monitor.check_parked(sess) is False
+    assert sess.parked_job == ""
+
+
+def test_the_old_clients_file_inside_the_restart_window_parks_nothing(world, run_async):
+    """The old client's registry file, left behind by the kill, is parked
+    on the job the session's new id starts with: inside the quiet window
+    too, a dead process is never the client."""
+    sess = world.sess
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    assert sess.is_restarting(), "precondition: the quiet window still runs"
+    world.alive.discard(CLIENT)          # killed, its file left behind
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    assert monitor.check_parked(sess) is False
+    assert sess.parked_job == ""
+
+
+def test_a_reused_pid_of_the_old_client_parks_nothing(world, run_async, monkeypatch):
+    """The old client's pid now runs another process (its start time is
+    not the entry's): not the client either."""
+    sess = world.sess
+    world.reg(CLIENT, kind="interactive", sessionId=X, parkedJobId=JOB, procStart=111)
+    assert run_async(world.bot._bring_back_core(sess)).ok
+    monkeypatch.setattr(claude_jobs, "_proc_start", lambda pid: 222)
+    monitor = SessionMonitor(world.bot.registry, AsyncMock())
+    assert monitor.check_parked(sess) is False
+    assert sess.parked_job == ""
+
+
 # ---- T3.8: concurrency and the restart window (B3) ----------------------------------
 
 def test_a_bring_back_in_flight_refuses_a_second(world, run_async):

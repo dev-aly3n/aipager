@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 from types import SimpleNamespace
 
@@ -356,3 +357,28 @@ def test_the_command_line_says_unknown_for_a_partial_registry(cfg, monkeypatch):
     monkeypatch.setattr(claude_jobs, "_subprocess_run",
                         lambda *a, **k: SimpleNamespace(returncode=1, stdout=b"", stderr=b""))
     assert claude_jobs.job_state_sync("aaaaaaaa") == "unknown"
+
+
+# ---- a zombie is not alive (fix iteration 2) ------------------------------------------
+
+def test_a_zombie_is_not_alive():
+    """A killed process its parent has not reaped yet still answers signal
+    0: ``_pid_alive`` reads its state and says no."""
+    import subprocess
+    import sys
+    import time as _time
+    if not sys.platform.startswith("linux"):
+        pytest.skip("/proc only")
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    try:
+        deadline = _time.monotonic() + 10
+        while claude_jobs._proc_state(child.pid) != "Z":
+            assert _time.monotonic() < deadline, "the child never became a zombie"
+            _time.sleep(0.01)
+        assert claude_jobs._pid_alive(child.pid) is False
+    finally:
+        child.wait()
+
+
+def test_a_running_process_is_alive():
+    assert claude_jobs._pid_alive(os.getpid()) is True
