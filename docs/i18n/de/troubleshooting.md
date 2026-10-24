@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ Die Meldung im Chat sagt, warum die Sitzung endete, anhand des Exit-Codes, den `
 
 `🌙 x1 ist in den Hintergrund von Claude Code gewechselt, und deine nächste Nachricht holt die Sitzung hierher zurück.`
 
-Die Taste ← in einer leeren Eingabezeile von Claude Code verschiebt die Unterhaltung der Sitzung in einen Hintergrund-Job von Claude Code, und das Terminal zeigt statt der Unterhaltung die Agent-Ansicht von Claude Code. aipager merkt das innerhalb weniger Sekunden und tippt nichts mehr in dieses Terminal: Alles, was dort jetzt getippt wird, könnte einen weiteren Hintergrund-Job starten. Der Job arbeitet weiter, und seine Karte, seine Antwort und seine Berechtigungsanfragen erreichen den Chat weiterhin als die der Sitzung. In der Mini App steht bei der Sitzung „im Hintergrund“.
+Die Taste ← in einer leeren Eingabezeile von Claude Code verschiebt die Unterhaltung der Sitzung in einen Hintergrund-Job von Claude Code, und das Terminal zeigt statt der Unterhaltung die Agent-Ansicht von Claude Code. aipager merkt das innerhalb weniger Sekunden und tippt nichts mehr in dieses Terminal: Alles, was dort jetzt getippt wird, könnte einen weiteren Hintergrund-Job starten. Der Job arbeitet weiter, und seine Karte, seine Antwort und seine Berechtigungsanfragen erreichen den Chat weiterhin als die der Sitzung. In der Mini App steht bei der Sitzung „im Hintergrund“, oder „braucht dich“, solange ihr Job auf eine Berechtigungsanfrage wartet, die du aus dem Chat beantworten kannst.
 
 So holst du sie zurück:
 
-- Schick ihr eine Nachricht. Die Nachricht wartet (👀), aipager stoppt den Hintergrund-Job (`claude stop <job>`), startet die Sitzung mit der Unterhaltung des Jobs und den eigenen Einstellungen von aipager neu und schickt dann die Nachricht. Arbeitet der Job noch, wirst du vorher gefragt: `Stoppen und zurückholen` stoppt, was er gerade tut, `Weiterlaufen lassen` lässt ihn fertig werden (hol die Sitzung später zurück). Wer eine Rolle hat, die die Sitzung nicht neu starten darf, bekommt `Deine Nachricht an x1 wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt.`
-- Oder tippe unter der Meldung auf `↩️ Jetzt zurückholen`, schick `/restart x1` oder tippe in der Mini App auf „Zurückholen“. `/stop`, während der Job arbeitet, stoppt diese Arbeit und holt die Sitzung zurück.
+- Schick ihr eine Nachricht. Die Nachricht wartet (👀), aipager stoppt den Hintergrund-Job (`claude stop <job>`), startet die Sitzung mit der Unterhaltung des Jobs und den eigenen Einstellungen von aipager neu und schickt dann die Nachricht. Arbeitet der Job noch oder läuft die Aufgabe noch, die mit ← gewechselt ist, wirst du vorher gefragt: `Stoppen und zurückholen` stoppt, was er gerade tut, `Weiterlaufen lassen` lässt ihn fertig werden (hol die Sitzung später zurück). In den ersten Sekunden nach ← kann ein neuer Job so aussehen, als täte er nichts, kurz bevor er mit dieser Aufgabe weitermacht; eine Nachricht, die dann kommt, wartet deshalb einen Moment, bevor aipager entscheidet. Wer eine Rolle hat, die die Sitzung nicht neu starten darf, bekommt `Deine Nachricht an x1 wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt.`
+- Oder tippe unter der Meldung auf `↩️ Jetzt zurückholen`, schick `/restart x1` oder tippe in der Mini App auf „Zurückholen“. `/stop`, während der Job arbeitet, stoppt diese Arbeit und holt die Sitzung zurück. Ein Button, der von einem früheren Wechsel in den Hintergrund übrig ist, antwortet `x1 ist nicht im Hintergrund von Claude Code.` und tut nichts.
+
+Hält eine Sicherheitsregel die Arbeit der Sitzung an, während sie im Hintergrund ist, stoppt aipager den Hintergrund-Job. Gelingt das nicht, sagt die Meldung zum Anhalten, dass die blockierte Arbeit dort womöglich noch läuft; stoppe den Job dann mit `claude stop <job>` in einem Terminal.
 
 Bis dahin antworten Befehle, die in die Sitzung tippen würden (`/compact`, `/model`, ein Wechsel in den Fragen- oder Auto-Modus, `/now`, „Erneut versuchen“), mit `Hol x1 zuerst aus dem Hintergrund von Claude Code zurück.`, und eine Antwort auf eine Anfrage, die aipager tippen müsste, bekommt `Hol x1 aus dem Hintergrund von Claude Code zurück, um das zu beantworten.` Antworten, die über den Hook gehen (die meisten Berechtigungsanfragen), funktionieren weiterhin.
 

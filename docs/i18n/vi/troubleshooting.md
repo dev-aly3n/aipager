@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ Thông báo trong chat cho biết vì sao phiên kết thúc, dựa trên mã th
 
 `🌙 x1 đã chuyển sang chế độ chạy nền của Claude Code, và tin nhắn tiếp theo của bạn sẽ đưa phiên này về lại đây.`
 
-Nhấn ← khi ô nhập của Claude Code trống sẽ chuyển cuộc trò chuyện của phiên sang một tác vụ chạy nền của Claude Code, và terminal hiện chế độ xem agent của Claude Code thay cho cuộc trò chuyện. aipager nhận ra trong vài giây và thôi gõ vào terminal đó: bất cứ thứ gì gõ vào đó bây giờ đều có thể khởi động một tác vụ chạy nền khác. Tác vụ vẫn tiếp tục làm việc, và thẻ, câu trả lời và các yêu cầu cấp quyền của nó vẫn tới chat như của phiên. Trong Mini App, phiên hiện “đang chạy nền”.
+Nhấn ← khi ô nhập của Claude Code trống sẽ chuyển cuộc trò chuyện của phiên sang một tác vụ chạy nền của Claude Code, và terminal hiện chế độ xem agent của Claude Code thay cho cuộc trò chuyện. aipager nhận ra trong vài giây và thôi gõ vào terminal đó: bất cứ thứ gì gõ vào đó bây giờ đều có thể khởi động một tác vụ chạy nền khác. Tác vụ vẫn tiếp tục làm việc, và thẻ, câu trả lời và các yêu cầu cấp quyền của nó vẫn tới chat như của phiên. Trong Mini App, phiên hiện “đang chạy nền”, hoặc “đang chờ bạn” khi tác vụ của nó đang chờ một yêu cầu cấp quyền mà bạn có thể trả lời từ chat.
 
 Để đưa nó về lại:
 
-- Gửi cho nó một tin nhắn. Tin nhắn chờ (👀), aipager dừng tác vụ chạy nền (`claude stop <job>`), khởi động lại phiên trên cuộc trò chuyện của tác vụ với cài đặt riêng của aipager, rồi gửi tin nhắn. Nếu tác vụ vẫn đang làm việc, bạn được hỏi trước: `Dừng và đưa về` dừng việc nó đang làm, `Cứ để vậy` để nó làm xong (đưa phiên về lại sau). Người có vai trò không được khởi động lại phiên sẽ nhận `Tin nhắn bạn gửi x1 sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code.`
-- Hoặc chạm `↩️ Đưa về ngay` dưới thông báo, gửi `/restart x1`, hoặc chạm “Đưa về” trong Mini App. `/stop` khi tác vụ đang làm việc sẽ dừng việc đó và đưa phiên về lại.
+- Gửi cho nó một tin nhắn. Tin nhắn chờ (👀), aipager dừng tác vụ chạy nền (`claude stop <job>`), khởi động lại phiên trên cuộc trò chuyện của tác vụ với cài đặt riêng của aipager, rồi gửi tin nhắn. Nếu tác vụ vẫn đang làm việc, hoặc việc đã chuyển đi cùng ← vẫn đang chạy, bạn được hỏi trước: `Dừng và đưa về` dừng việc nó đang làm, `Cứ để vậy` để nó làm xong (đưa phiên về lại sau). Trong vài giây đầu sau ←, một tác vụ chạy nền mới có thể trông như đang không làm gì ngay trước khi nó tiếp tục việc đó, nên một tin nhắn gửi vào lúc ấy sẽ chờ một chút trước khi aipager quyết định. Người có vai trò không được khởi động lại phiên sẽ nhận `Tin nhắn bạn gửi x1 sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code.`
+- Hoặc chạm `↩️ Đưa về ngay` dưới thông báo, gửi `/restart x1`, hoặc chạm “Đưa về” trong Mini App. `/stop` khi tác vụ đang làm việc sẽ dừng việc đó và đưa phiên về lại. Một nút còn lại từ lần chuyển sang chạy nền trước sẽ trả lời `x1 không ở trong chế độ chạy nền của Claude Code.` và không làm gì.
+
+Khi một quy tắc an toàn dừng việc của phiên trong lúc phiên đang ở chế độ chạy nền, aipager dừng tác vụ chạy nền. Nếu không dừng được, thông báo dừng sẽ nói rằng việc bị chặn có thể vẫn đang chạy ở đó; hãy dừng tác vụ bằng `claude stop <job>` trong một terminal.
 
 Cho tới lúc đó, các lệnh sẽ gõ vào phiên (`/compact`, `/model`, việc đổi sang Chế độ Hỏi hoặc Chế độ Auto, `/now`, “Thử lại”) trả lời `Đưa x1 về lại từ chế độ chạy nền của Claude Code trước.`, và một câu trả lời cho yêu cầu mà aipager sẽ phải gõ nhận `Để trả lời, đưa x1 về lại từ chế độ chạy nền của Claude Code trước.` Các câu trả lời đi qua hook (phần lớn yêu cầu cấp quyền) vẫn hoạt động.
 

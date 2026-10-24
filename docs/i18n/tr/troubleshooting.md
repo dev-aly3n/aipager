@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ Sohbetteki bildirim, oturumun neden sona erdiğini `claude` sürecinin bıraktı
 
 `🌙 x1 Claude Code arka planına geçti ve bir sonraki mesajın onu buraya geri getirir.`
 
-Claude Code'da boş bir giriş satırında ← tuşuna basmak, oturumun konuşmasını bir Claude Code arka plan işine taşır ve terminal konuşma yerine Claude Code'un ajan görünümünü gösterir. aipager bunu birkaç saniye içinde fark eder ve o terminale yazmayı bırakır: orada şimdi yazılan her şey başka bir arka plan işi başlatabilir. İş çalışmaya devam eder; kartı, yanıtı ve izin istekleri sohbete hâlâ oturumunkiler olarak ulaşır. Mini App'te oturumun durumu “arka planda” olarak görünür.
+Claude Code'da boş bir giriş satırında ← tuşuna basmak, oturumun konuşmasını bir Claude Code arka plan işine taşır ve terminal konuşma yerine Claude Code'un ajan görünümünü gösterir. aipager bunu birkaç saniye içinde fark eder ve o terminale yazmayı bırakır: orada şimdi yazılan her şey başka bir arka plan işi başlatabilir. İş çalışmaya devam eder; kartı, yanıtı ve izin istekleri sohbete hâlâ oturumunkiler olarak ulaşır. Mini App'te oturumun durumu “arka planda” olarak, işi sohbetten yanıtlayabileceğin bir izin isteğini beklerken de “seni bekliyor” olarak görünür.
 
 Geri getirmek için:
 
-- Ona bir mesaj gönder. Mesaj bekler (👀), aipager arka plan işini durdurur (`claude stop <job>`), oturumu işin konuşmasıyla ve aipager'ın kendi ayarlarıyla yeniden başlatır, sonra mesajı gönderir. İş hâlâ çalışıyorsa önce sana sorulur: `Durdur ve geri getir` yaptığı işi durdurur, `Bırak çalışsın` bitirmesine izin verir (oturumu sonra geri getir). Rolü oturumu yeniden başlatamayan biri şu yanıtı alır: `x1 oturumuna gönderdiğin mesaj, biri oturumu Claude Code arka planından geri getirene kadar bekliyor.`
-- Ya da bildirimin altındaki `↩️ Şimdi geri getir` düğmesine dokun, `/restart x1` gönder ya da Mini App'te Geri getir seçeneğine dokun. İş çalışırken `/stop` o çalışmayı durdurur ve oturumu geri getirir.
+- Ona bir mesaj gönder. Mesaj bekler (👀), aipager arka plan işini durdurur (`claude stop <job>`), oturumu işin konuşmasıyla ve aipager'ın kendi ayarlarıyla yeniden başlatır, sonra mesajı gönderir. İş hâlâ çalışıyorsa ya da ← ile birlikte taşınan görev hâlâ sürüyorsa önce sana sorulur: `Durdur ve geri getir` yaptığı işi durdurur, `Bırak çalışsın` bitirmesine izin verir (oturumu sonra geri getir). ← tuşundan sonraki ilk saniyelerde yeni bir arka plan işi, o göreve devam etmeden hemen önce hiçbir şey yapmıyor gibi görünebilir; bu yüzden o sırada gönderilen bir mesaj, aipager karar vermeden önce biraz bekler. Rolü oturumu yeniden başlatamayan biri şu yanıtı alır: `x1 oturumuna gönderdiğin mesaj, biri oturumu Claude Code arka planından geri getirene kadar bekliyor.`
+- Ya da bildirimin altındaki `↩️ Şimdi geri getir` düğmesine dokun, `/restart x1` gönder ya da Mini App'te Geri getir seçeneğine dokun. İş çalışırken `/stop` o çalışmayı durdurur ve oturumu geri getirir. Arka plana daha önceki bir geçişten kalan bir düğme `x1 Claude Code arka planında değil.` yanıtını verir ve hiçbir şey yapmaz.
+
+Oturum arka plandayken bir güvenlik kuralı oturumun çalışmasını durdurursa aipager arka plan işini durdurur. Durduramazsa durdurma bildirimi, engellenen çalışmanın orada hâlâ sürüyor olabileceğini söyler; o zaman işi bir terminalde `claude stop <job>` ile durdur.
 
 O zamana kadar oturuma yazması gereken komutlar (`/compact`, `/model`, Sor ya da Otomatik moda geçiş, `/now`, Yeniden dene) şu yanıtı verir: `Önce x1 oturumunu Claude Code arka planından geri getir.` aipager'ın yazması gereken bir isteğe verilen yanıt da şunu alır: `Yanıtlamak için x1 oturumunu Claude Code arka planından geri getir.` Hook üzerinden giden yanıtlar (izin isteklerinin çoğu) çalışmaya devam eder.
 

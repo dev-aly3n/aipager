@@ -1,6 +1,6 @@
 # Risoluzione dei problemi
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ L'avviso nella chat dice perché la sessione è terminata, in base al codice di 
 
 `🌙 x1 è passata nel background di Claude Code, e il tuo prossimo messaggio la riporta qui.`
 
-Premere ← su un campo di input vuoto in Claude Code sposta la conversazione della sessione in un job in background di Claude Code, e il terminale mostra la vista degli agenti di Claude Code al posto della conversazione. aipager se ne accorge entro un paio di secondi e smette di scrivere in quel terminale: qualsiasi cosa scritta lì adesso potrebbe avviare un altro job in background. Il job continua a lavorare, e la sua scheda, la sua risposta e le sue richieste di permesso arrivano ancora alla chat come quelle della sessione. Nella Mini App la sessione mostra «in background».
+Premere ← su un campo di input vuoto in Claude Code sposta la conversazione della sessione in un job in background di Claude Code, e il terminale mostra la vista degli agenti di Claude Code al posto della conversazione. aipager se ne accorge entro un paio di secondi e smette di scrivere in quel terminale: qualsiasi cosa scritta lì adesso potrebbe avviare un altro job in background. Il job continua a lavorare, e la sua scheda, la sua risposta e le sue richieste di permesso arrivano ancora alla chat come quelle della sessione. Nella Mini App la sessione mostra «in background», oppure «ha bisogno di te» mentre il suo job aspetta una richiesta di permesso a cui puoi rispondere dalla chat.
 
 Per riportarla qui:
 
-- Mandale un messaggio. Il messaggio aspetta (👀), aipager ferma il job in background (`claude stop <job>`), riavvia la sessione sulla conversazione del job con le impostazioni di aipager e poi invia il messaggio. Se il job sta ancora lavorando, prima ti viene chiesto: `Ferma e riporta qui` ferma quello che sta facendo, `Lasciala andare` lo lascia finire (riportala qui più tardi). Chi ha un ruolo che non può riavviare la sessione riceve `Il tuo messaggio per x1 aspetta finché qualcuno non riporta qui la sessione dal background di Claude Code.`
-- Oppure tocca `↩️ Riportala qui ora` sotto l'avviso, `/restart x1`, o «Riportala qui» nella Mini App. `/stop` mentre il job lavora ferma quel lavoro e riporta qui la sessione.
+- Mandale un messaggio. Il messaggio aspetta (👀), aipager ferma il job in background (`claude stop <job>`), riavvia la sessione sulla conversazione del job con le impostazioni di aipager e poi invia il messaggio. Se il job sta ancora lavorando, o se l'attività spostata con ← è ancora in corso, prima ti viene chiesto: `Ferma e riporta qui` ferma quello che sta facendo, `Lasciala andare` lo lascia finire (riportala qui più tardi). Nei primi secondi dopo ← un job nuovo può sembrare fermo poco prima di riprendere quell'attività, quindi un messaggio inviato in quel momento aspetta un attimo prima che aipager decida. Chi ha un ruolo che non può riavviare la sessione riceve `Il tuo messaggio per x1 aspetta finché qualcuno non riporta qui la sessione dal background di Claude Code.`
+- Oppure tocca `↩️ Riportala qui ora` sotto l'avviso, `/restart x1`, o «Riportala qui» nella Mini App. `/stop` mentre il job lavora ferma quel lavoro e riporta qui la sessione. Un pulsante rimasto da un passaggio precedente nel background risponde `x1 non è nel background di Claude Code.` e non fa nulla.
+
+Quando una regola di sicurezza ferma il lavoro della sessione mentre è nel background, aipager ferma il job in background. Se non ci riesce, l'avviso del blocco dice che il lavoro bloccato potrebbe essere ancora in esecuzione lì; ferma il job con `claude stop <job>` in un terminale.
 
 Fino ad allora, i comandi che scriverebbero nella sessione (`/compact`, `/model`, un passaggio alla modalità «Chiedi» o «Automatico», `/now`, «Riprova») rispondono `Prima riporta qui x1 dal background di Claude Code.`, e la risposta a una richiesta che aipager dovrebbe scrivere riceve `Per rispondere, riporta qui x1 dal background di Claude Code.` Le risposte che passano dall'hook (la maggior parte delle richieste di permesso) funzionano ancora.
 

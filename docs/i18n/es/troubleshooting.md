@@ -1,6 +1,6 @@
 # Solución de problemas
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ El aviso en el chat dice por qué terminó la sesión, a partir del código de s
 
 `🌙 x1 pasó al segundo plano de Claude Code, y tu próximo mensaje la trae de vuelta aquí.`
 
-Pulsar ← en una entrada vacía de Claude Code pasa la conversación de la sesión a una tarea en segundo plano de Claude Code, y la terminal muestra la vista de agentes de Claude Code en lugar de la conversación. aipager lo nota en un par de segundos y deja de escribir en esa terminal: cualquier cosa que se escriba ahí ahora podría arrancar otra tarea en segundo plano. La tarea sigue trabajando, y su tarjeta, su respuesta y sus solicitudes de permiso siguen llegando al chat como las de la sesión. En la Mini App la sesión dice «en segundo plano».
+Pulsar ← en una entrada vacía de Claude Code pasa la conversación de la sesión a una tarea en segundo plano de Claude Code, y la terminal muestra la vista de agentes de Claude Code en lugar de la conversación. aipager lo nota en un par de segundos y deja de escribir en esa terminal: cualquier cosa que se escriba ahí ahora podría arrancar otra tarea en segundo plano. La tarea sigue trabajando, y su tarjeta, su respuesta y sus solicitudes de permiso siguen llegando al chat como las de la sesión. En la Mini App la sesión dice «en segundo plano», o «te necesita» mientras su tarea espera una solicitud de permiso que puedes responder desde el chat.
 
 Para traerla de vuelta:
 
-- Envíale un mensaje. El mensaje espera (👀), aipager detiene la tarea en segundo plano (`claude stop <job>`), reinicia la sesión con la conversación de la tarea y los ajustes propios de aipager, y luego envía el mensaje. Si la tarea todavía está trabajando, primero se te pregunta: `Detener y traer de vuelta` detiene lo que está haciendo, `Dejarla así` la deja terminar (tráela de vuelta después). Alguien cuyo rol no puede reiniciar la sesión recibe `Tu mensaje para x1 espera hasta que alguien traiga la sesión de vuelta del segundo plano de Claude Code.`
-- O toca `↩️ Traerla de vuelta ahora` bajo el aviso, `/restart x1`, o Traerla de vuelta en la Mini App. `/stop` mientras la tarea trabaja detiene ese trabajo y trae la sesión de vuelta.
+- Envíale un mensaje. El mensaje espera (👀), aipager detiene la tarea en segundo plano (`claude stop <job>`), reinicia la sesión con la conversación de la tarea y los ajustes propios de aipager, y luego envía el mensaje. Si la tarea todavía está trabajando, o si el trabajo que se movió con ← sigue en marcha, primero se te pregunta: `Detener y traer de vuelta` detiene lo que está haciendo, `Dejarla así` la deja terminar (tráela de vuelta después). En los primeros segundos después de ← una tarea en segundo plano nueva puede parecer quieta justo antes de seguir con ese trabajo, así que un mensaje enviado entonces espera un momento antes de que aipager decida. Alguien cuyo rol no puede reiniciar la sesión recibe `Tu mensaje para x1 espera hasta que alguien traiga la sesión de vuelta del segundo plano de Claude Code.`
+- O toca `↩️ Traerla de vuelta ahora` bajo el aviso, `/restart x1`, o Traerla de vuelta en la Mini App. `/stop` mientras la tarea trabaja detiene ese trabajo y trae la sesión de vuelta. Un botón que quedó de un paso anterior al segundo plano responde `x1 no está en el segundo plano de Claude Code.` y no hace nada.
+
+Cuando una regla de seguridad detiene el trabajo de la sesión mientras está en segundo plano, aipager detiene la tarea en segundo plano. Si no puede, el aviso de la detención dice que el trabajo bloqueado puede seguir en marcha ahí; detén la tarea con `claude stop <job>` en una terminal.
 
 Hasta entonces, los comandos que escribirían en la sesión (`/compact`, `/model`, un cambio a Modo Preguntar o Modo Automático, `/now`, Reintentar) responden `Primero trae x1 de vuelta del segundo plano de Claude Code.`, y la respuesta a una solicitud que aipager tendría que escribir recibe `Para responder, trae x1 de vuelta del segundo plano de Claude Code.` Las respuestas que pasan por el hook (la mayoría de las solicitudes de permiso) siguen funcionando.
 

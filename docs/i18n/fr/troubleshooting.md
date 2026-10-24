@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ L'avis dans la discussion dit pourquoi la session s'est terminée, d'après le c
 
 `🌙 x1 est passée à l'arrière-plan de Claude Code, et votre prochain message la ramène ici.`
 
-Appuyer sur ← sur une saisie vide dans Claude Code fait passer la conversation de la session dans une tâche d'arrière-plan de Claude Code, et le terminal affiche la vue des agents de Claude Code au lieu de la conversation. aipager s'en aperçoit en quelques secondes et cesse de taper dans ce terminal : tout ce qui y serait tapé maintenant pourrait lancer une autre tâche d'arrière-plan. La tâche continue de travailler, et sa carte, sa réponse et ses demandes d'autorisation arrivent toujours dans la discussion comme celles de la session. Dans la Mini App, la session affiche « à l'arrière-plan ».
+Appuyer sur ← sur une saisie vide dans Claude Code fait passer la conversation de la session dans une tâche d'arrière-plan de Claude Code, et le terminal affiche la vue des agents de Claude Code au lieu de la conversation. aipager s'en aperçoit en quelques secondes et cesse de taper dans ce terminal : tout ce qui y serait tapé maintenant pourrait lancer une autre tâche d'arrière-plan. La tâche continue de travailler, et sa carte, sa réponse et ses demandes d'autorisation arrivent toujours dans la discussion comme celles de la session. Dans la Mini App, la session affiche « à l'arrière-plan », ou « a besoin de vous » pendant que sa tâche attend une demande d'autorisation à laquelle vous pouvez répondre depuis la discussion.
 
 Pour la ramener :
 
-- Envoyez-lui un message. Le message attend (👀), aipager arrête la tâche d'arrière-plan (`claude stop <job>`), redémarre la session sur la conversation de la tâche avec les paramètres propres d'aipager, puis envoie le message. Si la tâche travaille encore, la question vous est posée d'abord : `Arrêter et ramener` arrête ce qu'elle fait, `Laisser tourner` la laisse finir (ramenez la session plus tard). Une personne dont le rôle ne permet pas de redémarrer la session reçoit `Votre message pour x1 attend que quelqu'un ramène la session de l'arrière-plan de Claude Code.`
-- Ou touchez `↩️ La ramener maintenant` sous l'avis, `/restart x1`, ou La ramener dans la Mini App. `/stop` pendant que la tâche travaille arrête ce travail et ramène la session.
+- Envoyez-lui un message. Le message attend (👀), aipager arrête la tâche d'arrière-plan (`claude stop <job>`), redémarre la session sur la conversation de la tâche avec les paramètres propres d'aipager, puis envoie le message. Si la tâche travaille encore, ou si le travail passé avec ← tourne encore, la question vous est posée d'abord : `Arrêter et ramener` arrête ce qu'elle fait, `Laisser tourner` la laisse finir (ramenez la session plus tard). Dans les premières secondes après ←, une nouvelle tâche d'arrière-plan peut sembler ne rien faire juste avant de reprendre ce travail : un message envoyé à ce moment attend donc un instant avant qu'aipager décide. Une personne dont le rôle ne permet pas de redémarrer la session reçoit `Votre message pour x1 attend que quelqu'un ramène la session de l'arrière-plan de Claude Code.`
+- Ou touchez `↩️ La ramener maintenant` sous l'avis, `/restart x1`, ou La ramener dans la Mini App. `/stop` pendant que la tâche travaille arrête ce travail et ramène la session. Un bouton resté d'un passage précédent à l'arrière-plan répond `x1 n'est pas à l'arrière-plan de Claude Code.` et ne fait rien.
+
+Quand une règle de sécurité arrête le travail de la session pendant qu'elle est à l'arrière-plan, aipager arrête la tâche d'arrière-plan. S'il n'y arrive pas, l'avis de l'arrêt dit que le travail bloqué tourne peut-être encore là-bas ; arrêtez alors la tâche avec `claude stop <job>` dans un terminal.
 
 D'ici là, les commandes qui taperaient dans la session (`/compact`, `/model`, un passage en Mode Demander ou en Mode Automatique, `/now`, Réessayer) répondent `Ramenez d'abord x1 de l'arrière-plan de Claude Code.`, et une réponse à une demande qu'aipager devrait taper reçoit `Pour répondre, ramenez d'abord x1 de l'arrière-plan de Claude Code.` Les réponses qui passent par le hook (la plupart des demandes d'autorisation) fonctionnent toujours.
 

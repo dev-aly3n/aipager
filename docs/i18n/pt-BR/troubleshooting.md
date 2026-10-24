@@ -1,6 +1,6 @@
 # Solução de problemas
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ O aviso no chat diz por que a sessão terminou, a partir do código de saída qu
 
 `🌙 x1 foi para o segundo plano do Claude Code, e sua próxima mensagem traz a sessão de volta para cá.`
 
-Apertar ← num campo de entrada vazio no Claude Code leva a conversa da sessão para uma tarefa em segundo plano do Claude Code, e o terminal mostra a visão de agentes do Claude Code no lugar da conversa. O aipager percebe isso em poucos segundos e para de digitar nesse terminal: qualquer coisa digitada lá agora poderia iniciar outra tarefa em segundo plano. A tarefa continua trabalhando, e o cartão, a resposta e os pedidos de permissão dela continuam chegando ao chat como os da sessão. No Mini App, a sessão aparece como “em segundo plano”.
+Apertar ← num campo de entrada vazio no Claude Code leva a conversa da sessão para uma tarefa em segundo plano do Claude Code, e o terminal mostra a visão de agentes do Claude Code no lugar da conversa. O aipager percebe isso em poucos segundos e para de digitar nesse terminal: qualquer coisa digitada lá agora poderia iniciar outra tarefa em segundo plano. A tarefa continua trabalhando, e o cartão, a resposta e os pedidos de permissão dela continuam chegando ao chat como os da sessão. No Mini App, a sessão aparece como “em segundo plano”, ou “precisa de você” enquanto a tarefa dela espera um pedido de permissão que você pode responder pelo chat.
 
 Para trazê-la de volta:
 
-- Mande uma mensagem para ela. A mensagem espera (👀), o aipager para a tarefa em segundo plano (`claude stop <job>`), reinicia a sessão na conversa da tarefa com as configurações próprias do aipager e depois manda a mensagem. Se a tarefa ainda estiver trabalhando, você recebe uma pergunta antes: `Parar e trazer de volta` para o que ela está fazendo, `Deixar assim` deixa ela terminar (traga a sessão de volta depois). Quem tem uma função que não pode reiniciar a sessão recebe `Sua mensagem para x1 espera até alguém trazer a sessão de volta do segundo plano do Claude Code.`
-- Ou toque em `↩️ Trazer de volta agora` embaixo do aviso, mande `/restart x1`, ou toque em Trazer de volta no Mini App. `/stop` enquanto a tarefa trabalha para esse trabalho e traz a sessão de volta.
+- Mande uma mensagem para ela. A mensagem espera (👀), o aipager para a tarefa em segundo plano (`claude stop <job>`), reinicia a sessão na conversa da tarefa com as configurações próprias do aipager e depois manda a mensagem. Se a tarefa ainda estiver trabalhando, ou se o trabalho que foi junto com o ← ainda estiver rodando, você recebe uma pergunta antes: `Parar e trazer de volta` para o que ela está fazendo, `Deixar assim` deixa ela terminar (traga a sessão de volta depois). Nos primeiros segundos depois do ←, uma tarefa em segundo plano nova pode parecer parada logo antes de seguir com esse trabalho, então uma mensagem mandada nessa hora espera um instante antes de o aipager decidir. Quem tem uma função que não pode reiniciar a sessão recebe `Sua mensagem para x1 espera até alguém trazer a sessão de volta do segundo plano do Claude Code.`
+- Ou toque em `↩️ Trazer de volta agora` embaixo do aviso, mande `/restart x1`, ou toque em Trazer de volta no Mini App. `/stop` enquanto a tarefa trabalha para esse trabalho e traz a sessão de volta. Um botão que sobrou de uma ida anterior para o segundo plano responde `x1 não está no segundo plano do Claude Code.` e não faz nada.
+
+Quando uma regra de segurança para o trabalho da sessão enquanto ela está em segundo plano, o aipager para a tarefa em segundo plano. Se não conseguir, o aviso da parada diz que o trabalho bloqueado ainda pode estar rodando lá; pare a tarefa com `claude stop <job>` num terminal.
 
 Até lá, os comandos que digitariam na sessão (`/compact`, `/model`, uma troca para o Modo Perguntar ou o Modo Automático, `/now`, Tentar de novo) respondem `Primeiro traga x1 de volta do segundo plano do Claude Code.`, e a resposta a um pedido que o aipager teria que digitar recebe `Para responder, traga x1 de volta do segundo plano do Claude Code.` As respostas que passam pelo hook (a maioria dos pedidos de permissão) continuam funcionando.
 

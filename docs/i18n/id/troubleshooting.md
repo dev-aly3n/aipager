@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ a7e34bee -->
+<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -155,12 +155,14 @@ Pemberitahuan di chat menyebut kenapa sesi berakhir, berdasarkan kode keluar yan
 
 `🌙 x1 pindah ke latar belakang Claude Code, dan pesanmu berikutnya akan mengembalikannya ke sini.`
 
-Menekan ← di kolom input yang kosong di Claude Code memindahkan percakapan sesi ke tugas latar belakang Claude Code, dan terminal menampilkan tampilan agen Claude Code, bukan percakapannya. aipager menyadarinya dalam beberapa detik dan berhenti mengetik ke terminal itu: apa pun yang diketik di sana sekarang bisa memulai tugas latar belakang lain. Tugas itu tetap bekerja, dan kartu, jawaban, serta permintaan izinnya tetap sampai ke chat sebagai milik sesi itu. Di Mini App, sesi itu bertuliskan “di latar belakang”.
+Menekan ← di kolom input yang kosong di Claude Code memindahkan percakapan sesi ke tugas latar belakang Claude Code, dan terminal menampilkan tampilan agen Claude Code, bukan percakapannya. aipager menyadarinya dalam beberapa detik dan berhenti mengetik ke terminal itu: apa pun yang diketik di sana sekarang bisa memulai tugas latar belakang lain. Tugas itu tetap bekerja, dan kartu, jawaban, serta permintaan izinnya tetap sampai ke chat sebagai milik sesi itu. Di Mini App, sesi itu bertuliskan “di latar belakang”, atau “menunggu jawabanmu” selama tugasnya menunggu permintaan izin yang bisa kamu jawab dari chat.
 
 Untuk mengembalikannya:
 
-- Kirim pesan ke sesi itu. Pesannya menunggu (👀), aipager menghentikan tugas latar belakang (`claude stop <job>`), memulai ulang sesi dengan percakapan tugas itu dan pengaturan aipager sendiri, lalu mengirim pesannya. Kalau tugas itu masih bekerja, kamu ditanya dulu: `Hentikan dan kembalikan` menghentikan yang sedang dikerjakannya, `Biarkan saja` membiarkannya selesai (kembalikan sesinya nanti). Orang yang perannya tidak boleh memulai ulang sesi itu mendapat `Pesanmu untuk x1 menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code.`
-- Atau ketuk `↩️ Kembalikan sekarang` di bawah pemberitahuan itu, `/restart x1`, atau Kembalikan di Mini App. `/stop` saat tugas itu bekerja menghentikan pekerjaan itu dan mengembalikan sesinya.
+- Kirim pesan ke sesi itu. Pesannya menunggu (👀), aipager menghentikan tugas latar belakang (`claude stop <job>`), memulai ulang sesi dengan percakapan tugas itu dan pengaturan aipager sendiri, lalu mengirim pesannya. Kalau tugas itu masih bekerja, atau pekerjaan yang ikut pindah dengan ← masih berjalan, kamu ditanya dulu: `Hentikan dan kembalikan` menghentikan yang sedang dikerjakannya, `Biarkan saja` membiarkannya selesai (kembalikan sesinya nanti). Dalam beberapa detik pertama setelah ←, tugas latar belakang yang baru bisa tampak diam sesaat sebelum melanjutkan pekerjaan itu, jadi pesan yang dikirim saat itu menunggu sebentar sebelum aipager memutuskan. Orang yang perannya tidak boleh memulai ulang sesi itu mendapat `Pesanmu untuk x1 menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code.`
+- Atau ketuk `↩️ Kembalikan sekarang` di bawah pemberitahuan itu, `/restart x1`, atau Kembalikan di Mini App. `/stop` saat tugas itu bekerja menghentikan pekerjaan itu dan mengembalikan sesinya. Tombol yang tersisa dari perpindahan ke latar belakang sebelumnya menjawab `x1 tidak sedang di latar belakang Claude Code.` dan tidak melakukan apa-apa.
+
+Saat aturan keamanan menghentikan pekerjaan sesi selagi sesi itu ada di latar belakang, aipager menghentikan tugas latar belakangnya. Kalau tidak bisa, pemberitahuan penghentian itu menyebut bahwa pekerjaan yang diblokir mungkin masih berjalan di sana; hentikan tugas itu dengan `claude stop <job>` di terminal.
 
 Sampai saat itu, perintah yang akan mengetik ke sesi (`/compact`, `/model`, pergantian ke Mode Tanya atau Mode Auto, `/now`, Coba lagi) menjawab `Kembalikan dulu x1 dari latar belakang Claude Code.`, dan jawaban untuk permintaan yang harus diketik aipager mendapat `Untuk menjawab, kembalikan dulu x1 dari latar belakang Claude Code.` Jawaban yang lewat hook (sebagian besar permintaan izin) tetap berfungsi.
 
