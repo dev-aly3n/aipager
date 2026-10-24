@@ -957,7 +957,7 @@ def test_a_turn_ends_drain_sends_nothing_while_a_halt_blocks_the_release(
     typed = _drainable(world.bot, monkeypatch)
     sess.queue_prompt("held", 31)
     assert run_async(world.bot._bring_back_core(sess)).ok
-    sess.bg_release_blocked = True
+    sess.bg_release_blocks = 1
     run_async(world.bot._drain_next_queued(sess))
     assert typed == [] and sess.bg_release_pending is True
     assert [q[0] for q in sess.pending_queue] == ["held"]
@@ -1586,6 +1586,40 @@ def test_a_halt_that_waits_out_a_releasing_bring_back_lets_nothing_out(world, ru
     assert typed == []
     assert sess.pending_queue == [] and sess.bg_release_pending is False
     assert sess.bg_release_blocked is False
+
+
+def test_two_halts_at_once_each_keep_the_release_blocked(world, run_async, monkeypatch):
+    """Review 3 nit 2: two safety halts wait out the same bring-back; the
+    first one's wait ends first, and the second still blocks any release
+    until its own ends."""
+    import contextlib
+    sess = world.sess
+    sess.relaunch_in_flight = True       # a bring-back runs throughout
+    inner = world._sleep
+
+    async def sleep(seconds):            # each poll lets the other halt run
+        await inner(seconds)
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(session_ops, "_sleep", sleep)
+
+    async def scenario():
+        first = asyncio.ensure_future(world.bot._halt_bring_back(sess))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        second = asyncio.ensure_future(world.bot._halt_bring_back(sess))
+        await asyncio.sleep(0)
+        assert sess.bg_release_blocks == 2
+        await first                      # its wait ran out first
+        sess.arm_bg_release()            # the bring-back's release, armed again
+        seen = (sess.bg_release_blocked, sess.claim_bg_release())
+        second.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await second
+        return seen
+
+    assert run_async(scenario()) == (True, False)
+    assert sess.bg_release_blocks == 0 and sess.bg_release_blocked is False
 
 
 def test_a_failed_bring_back_keeps_an_earlier_release_pending(world, run_async):

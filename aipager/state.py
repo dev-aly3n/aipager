@@ -954,10 +954,12 @@ class TrackedSession:
     bg_release_armed_at: float = 0.0
     bg_start_seen: bool = False
     bg_released_at: float = 0.0
-    # A safety halt is waiting out a bring-back already in flight: nothing
-    # held may be released meanwhile (the halt drops the held messages,
-    # and disarms the release when its wait is over). Transient.
-    bg_release_blocked: bool = False
+    # How many safety halts are waiting out a bring-back already in flight:
+    # nothing held may be released while any is (the halt drops the held
+    # messages, and disarms the release when its wait is over). A count,
+    # so one halt's end does not unblock another still waiting
+    # (``bg_release_blocked``). Transient.
+    bg_release_blocks: int = 0
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute
@@ -2716,6 +2718,12 @@ class TrackedSession:
         self.bg_release_pending = False
         self.bg_release_armed_at = 0.0
         self.bg_start_seen = False
+
+    @property
+    def bg_release_blocked(self) -> bool:
+        """Whether a safety halt is waiting out a bring-back
+        (``bg_release_blocks``)."""
+        return self.bg_release_blocks > 0
 
     def note_moved_handled(self, sid: str, job: str) -> None:
         """Conversation *sid* was launched on purpose while its last record

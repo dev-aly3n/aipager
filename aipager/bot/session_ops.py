@@ -2167,8 +2167,10 @@ class SessionOpsMixin:
         Nothing held is released while it waits (``bg_release_blocked``):
         the other bring-back may have armed its release and its relaunched
         claude may come up meanwhile, but the halt drops the held messages,
-        so the release is disarmed when the wait is over."""
-        sess.bg_release_blocked = True
+        so the release is disarmed when the wait is over. Two halts at
+        once each hold their own block (a count): the first one's end
+        leaves the second still blocking."""
+        sess.bg_release_blocks += 1
         try:
             outcome = await self._bring_back_core(sess, force=True, release_held=False)
             if outcome.reason != "already_restarting":
@@ -2185,7 +2187,7 @@ class SessionOpsMixin:
             return await self._bring_back_core(sess, force=True, release_held=False)
         finally:
             sess.disarm_bg_release()
-            sess.bg_release_blocked = False
+            sess.bg_release_blocks = max(0, sess.bg_release_blocks - 1)
 
     async def _kill_session_core(self, session_name: str, label: str) -> KillOutcome:
         """Kill a session by its (already-resolved) dtach session name.
