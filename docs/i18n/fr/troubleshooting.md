@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
+<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -160,9 +160,9 @@ Appuyer sur ← sur une saisie vide dans Claude Code fait passer la conversation
 Pour la ramener :
 
 - Envoyez-lui un message. Le message attend (👀), aipager arrête la tâche d'arrière-plan (`claude stop <job>`), redémarre la session sur la conversation de la tâche avec les paramètres propres d'aipager, puis envoie le message. Si la tâche travaille encore, ou si le travail passé avec ← tourne encore, la question vous est posée d'abord : `Arrêter et ramener` arrête ce qu'elle fait, `Laisser tourner` la laisse finir (ramenez la session plus tard). Dans les premières secondes après ←, une nouvelle tâche d'arrière-plan peut sembler ne rien faire juste avant de reprendre ce travail : un message envoyé à ce moment attend donc un instant avant qu'aipager décide. Une personne dont le rôle ne permet pas de redémarrer la session reçoit `Votre message pour x1 attend que quelqu'un ramène la session de l'arrière-plan de Claude Code.`
-- Ou touchez `↩️ La ramener maintenant` sous l'avis, `/restart x1`, ou La ramener dans la Mini App. `/stop` pendant que la tâche travaille arrête ce travail et ramène la session. Un bouton resté d'un passage précédent à l'arrière-plan répond `x1 n'est pas à l'arrière-plan de Claude Code.` et ne fait rien.
+- Ou touchez `↩️ La ramener maintenant` sous l'avis, `/restart x1`, ou La ramener dans la Mini App. `/stop` pendant que la tâche travaille arrête ce travail et ramène la session. Un bouton resté d'un passage précédent à l'arrière-plan répond `x1 n'est pas à l'arrière-plan de Claude Code.` et ne fait rien. Quand un changement de mode qui redémarre la session (pour passer en Mode Accès complet ou pour le quitter) tombe sur une tâche qui travaille, `Arrêter et ramener` ramène la session dans le mode que vous avez demandé.
 
-Quand une règle de sécurité arrête le travail de la session pendant qu'elle est à l'arrière-plan, aipager arrête la tâche d'arrière-plan. S'il n'y arrive pas, l'avis de l'arrêt dit que le travail bloqué tourne peut-être encore là-bas ; arrêtez alors la tâche avec `claude stop <job>` dans un terminal.
+Quand une règle de sécurité arrête le travail de la session pendant qu'elle est à l'arrière-plan, aipager arrête la tâche d'arrière-plan. S'il n'y arrive pas, l'avis de l'arrêt dit que le travail bloqué tourne peut-être encore là-bas, et sa première ligne ne se termine pas par `(arrêtée)` ; arrêtez alors la tâche avec `claude stop <job>` dans un terminal.
 
 D'ici là, les commandes qui taperaient dans la session (`/compact`, `/model`, un passage en Mode Demander ou en Mode Automatique, `/now`, Réessayer) répondent `Ramenez d'abord x1 de l'arrière-plan de Claude Code.`, et une réponse à une demande qu'aipager devrait taper reçoit `Pour répondre, ramenez d'abord x1 de l'arrière-plan de Claude Code.` Les réponses qui passent par le hook (la plupart des demandes d'autorisation) fonctionnent toujours.
 

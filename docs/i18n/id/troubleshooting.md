@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
+<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -160,9 +160,9 @@ Menekan ← di kolom input yang kosong di Claude Code memindahkan percakapan ses
 Untuk mengembalikannya:
 
 - Kirim pesan ke sesi itu. Pesannya menunggu (👀), aipager menghentikan tugas latar belakang (`claude stop <job>`), memulai ulang sesi dengan percakapan tugas itu dan pengaturan aipager sendiri, lalu mengirim pesannya. Kalau tugas itu masih bekerja, atau pekerjaan yang ikut pindah dengan ← masih berjalan, kamu ditanya dulu: `Hentikan dan kembalikan` menghentikan yang sedang dikerjakannya, `Biarkan saja` membiarkannya selesai (kembalikan sesinya nanti). Dalam beberapa detik pertama setelah ←, tugas latar belakang yang baru bisa tampak diam sesaat sebelum melanjutkan pekerjaan itu, jadi pesan yang dikirim saat itu menunggu sebentar sebelum aipager memutuskan. Orang yang perannya tidak boleh memulai ulang sesi itu mendapat `Pesanmu untuk x1 menunggu sampai seseorang mengembalikan sesinya dari latar belakang Claude Code.`
-- Atau ketuk `↩️ Kembalikan sekarang` di bawah pemberitahuan itu, `/restart x1`, atau Kembalikan di Mini App. `/stop` saat tugas itu bekerja menghentikan pekerjaan itu dan mengembalikan sesinya. Tombol yang tersisa dari perpindahan ke latar belakang sebelumnya menjawab `x1 tidak sedang di latar belakang Claude Code.` dan tidak melakukan apa-apa.
+- Atau ketuk `↩️ Kembalikan sekarang` di bawah pemberitahuan itu, `/restart x1`, atau Kembalikan di Mini App. `/stop` saat tugas itu bekerja menghentikan pekerjaan itu dan mengembalikan sesinya. Tombol yang tersisa dari perpindahan ke latar belakang sebelumnya menjawab `x1 tidak sedang di latar belakang Claude Code.` dan tidak melakukan apa-apa. Saat pergantian mode yang memulai ulang sesi (pindah ke Akses penuh atau keluar darinya) terjadi selagi tugasnya masih bekerja, `Hentikan dan kembalikan` mengembalikan sesinya dalam mode yang kamu minta.
 
-Saat aturan keamanan menghentikan pekerjaan sesi selagi sesi itu ada di latar belakang, aipager menghentikan tugas latar belakangnya. Kalau tidak bisa, pemberitahuan penghentian itu menyebut bahwa pekerjaan yang diblokir mungkin masih berjalan di sana; hentikan tugas itu dengan `claude stop <job>` di terminal.
+Saat aturan keamanan menghentikan pekerjaan sesi selagi sesi itu ada di latar belakang, aipager menghentikan tugas latar belakangnya. Kalau tidak bisa, pemberitahuan penghentian itu menyebut bahwa pekerjaan yang diblokir mungkin masih berjalan di sana, dan baris pertamanya tidak diakhiri dengan `(dihentikan)`; hentikan tugas itu dengan `claude stop <job>` di terminal.
 
 Sampai saat itu, perintah yang akan mengetik ke sesi (`/compact`, `/model`, pergantian ke Mode Tanya atau Mode Auto, `/now`, Coba lagi) menjawab `Kembalikan dulu x1 dari latar belakang Claude Code.`, dan jawaban untuk permintaan yang harus diketik aipager mendapat `Untuk menjawab, kembalikan dulu x1 dari latar belakang Claude Code.` Jawaban yang lewat hook (sebagian besar permintaan izin) tetap berfungsi.
 

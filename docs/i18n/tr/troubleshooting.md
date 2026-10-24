@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
+<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -160,9 +160,9 @@ Claude Code'da boş bir giriş satırında ← tuşuna basmak, oturumun konuşma
 Geri getirmek için:
 
 - Ona bir mesaj gönder. Mesaj bekler (👀), aipager arka plan işini durdurur (`claude stop <job>`), oturumu işin konuşmasıyla ve aipager'ın kendi ayarlarıyla yeniden başlatır, sonra mesajı gönderir. İş hâlâ çalışıyorsa ya da ← ile birlikte taşınan görev hâlâ sürüyorsa önce sana sorulur: `Durdur ve geri getir` yaptığı işi durdurur, `Bırak çalışsın` bitirmesine izin verir (oturumu sonra geri getir). ← tuşundan sonraki ilk saniyelerde yeni bir arka plan işi, o göreve devam etmeden hemen önce hiçbir şey yapmıyor gibi görünebilir; bu yüzden o sırada gönderilen bir mesaj, aipager karar vermeden önce biraz bekler. Rolü oturumu yeniden başlatamayan biri şu yanıtı alır: `x1 oturumuna gönderdiğin mesaj, biri oturumu Claude Code arka planından geri getirene kadar bekliyor.`
-- Ya da bildirimin altındaki `↩️ Şimdi geri getir` düğmesine dokun, `/restart x1` gönder ya da Mini App'te Geri getir seçeneğine dokun. İş çalışırken `/stop` o çalışmayı durdurur ve oturumu geri getirir. Arka plana daha önceki bir geçişten kalan bir düğme `x1 Claude Code arka planında değil.` yanıtını verir ve hiçbir şey yapmaz.
+- Ya da bildirimin altındaki `↩️ Şimdi geri getir` düğmesine dokun, `/restart x1` gönder ya da Mini App'te Geri getir seçeneğine dokun. İş çalışırken `/stop` o çalışmayı durdurur ve oturumu geri getirir. Arka plana daha önceki bir geçişten kalan bir düğme `x1 Claude Code arka planında değil.` yanıtını verir ve hiçbir şey yapmaz. Oturumu yeniden başlatan bir mod değişikliği (Tam erişim moduna geçiş ya da bu moddan çıkış) çalışan bir işe denk gelirse, o zaman çıkan `Durdur ve geri getir` oturumu istediğin modda geri getirir.
 
-Oturum arka plandayken bir güvenlik kuralı oturumun çalışmasını durdurursa aipager arka plan işini durdurur. Durduramazsa durdurma bildirimi, engellenen çalışmanın orada hâlâ sürüyor olabileceğini söyler; o zaman işi bir terminalde `claude stop <job>` ile durdur.
+Oturum arka plandayken bir güvenlik kuralı oturumun çalışmasını durdurursa aipager arka plan işini durdurur. Durduramazsa durdurma bildirimi, engellenen çalışmanın orada hâlâ sürüyor olabileceğini söyler ve bildirimin ilk satırı `(durduruldu)` ile bitmez; o zaman işi bir terminalde `claude stop <job>` ile durdur.
 
 O zamana kadar oturuma yazması gereken komutlar (`/compact`, `/model`, Sor ya da Otomatik moda geçiş, `/now`, Yeniden dene) şu yanıtı verir: `Önce x1 oturumunu Claude Code arka planından geri getir.` aipager'ın yazması gereken bir isteğe verilen yanıt da şunu alır: `Yanıtlamak için x1 oturumunu Claude Code arka planından geri getir.` Hook üzerinden giden yanıtlar (izin isteklerinin çoğu) çalışmaya devam eder.
 

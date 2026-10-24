@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
+<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -160,9 +160,9 @@ Nhấn ← khi ô nhập của Claude Code trống sẽ chuyển cuộc trò chu
 Để đưa nó về lại:
 
 - Gửi cho nó một tin nhắn. Tin nhắn chờ (👀), aipager dừng tác vụ chạy nền (`claude stop <job>`), khởi động lại phiên trên cuộc trò chuyện của tác vụ với cài đặt riêng của aipager, rồi gửi tin nhắn. Nếu tác vụ vẫn đang làm việc, hoặc việc đã chuyển đi cùng ← vẫn đang chạy, bạn được hỏi trước: `Dừng và đưa về` dừng việc nó đang làm, `Cứ để vậy` để nó làm xong (đưa phiên về lại sau). Trong vài giây đầu sau ←, một tác vụ chạy nền mới có thể trông như đang không làm gì ngay trước khi nó tiếp tục việc đó, nên một tin nhắn gửi vào lúc ấy sẽ chờ một chút trước khi aipager quyết định. Người có vai trò không được khởi động lại phiên sẽ nhận `Tin nhắn bạn gửi x1 sẽ chờ đến khi có người đưa phiên này về lại từ chế độ chạy nền của Claude Code.`
-- Hoặc chạm `↩️ Đưa về ngay` dưới thông báo, gửi `/restart x1`, hoặc chạm “Đưa về” trong Mini App. `/stop` khi tác vụ đang làm việc sẽ dừng việc đó và đưa phiên về lại. Một nút còn lại từ lần chuyển sang chạy nền trước sẽ trả lời `x1 không ở trong chế độ chạy nền của Claude Code.` và không làm gì.
+- Hoặc chạm `↩️ Đưa về ngay` dưới thông báo, gửi `/restart x1`, hoặc chạm “Đưa về” trong Mini App. `/stop` khi tác vụ đang làm việc sẽ dừng việc đó và đưa phiên về lại. Một nút còn lại từ lần chuyển sang chạy nền trước sẽ trả lời `x1 không ở trong chế độ chạy nền của Claude Code.` và không làm gì. Khi một lần đổi chế độ phải khởi động lại phiên (chuyển sang Chế độ Toàn quyền hoặc rời Chế độ Toàn quyền) rơi vào lúc tác vụ đang làm việc, `Dừng và đưa về` sẽ đưa phiên về lại ở chế độ bạn đã chọn.
 
-Khi một quy tắc an toàn dừng việc của phiên trong lúc phiên đang ở chế độ chạy nền, aipager dừng tác vụ chạy nền. Nếu không dừng được, thông báo dừng sẽ nói rằng việc bị chặn có thể vẫn đang chạy ở đó; hãy dừng tác vụ bằng `claude stop <job>` trong một terminal.
+Khi một quy tắc an toàn dừng việc của phiên trong lúc phiên đang ở chế độ chạy nền, aipager dừng tác vụ chạy nền. Nếu không dừng được, thông báo dừng sẽ nói rằng việc bị chặn có thể vẫn đang chạy ở đó, và dòng đầu của thông báo không kết thúc bằng `(đã dừng)`; hãy dừng tác vụ bằng `claude stop <job>` trong một terminal.
 
 Cho tới lúc đó, các lệnh sẽ gõ vào phiên (`/compact`, `/model`, việc đổi sang Chế độ Hỏi hoặc Chế độ Auto, `/now`, “Thử lại”) trả lời `Đưa x1 về lại từ chế độ chạy nền của Claude Code trước.`, và một câu trả lời cho yêu cầu mà aipager sẽ phải gõ nhận `Để trả lời, đưa x1 về lại từ chế độ chạy nền của Claude Code trước.` Các câu trả lời đi qua hook (phần lớn yêu cầu cấp quyền) vẫn hoạt động.
 

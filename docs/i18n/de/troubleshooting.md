@@ -1,6 +1,6 @@
 # Fehlerbehebung
 
-<!-- i18n-source: docs/troubleshooting.md @ f43daab2 -->
+<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../troubleshooting.md))
 
@@ -160,9 +160,9 @@ Die Taste ← in einer leeren Eingabezeile von Claude Code verschiebt die Unterh
 So holst du sie zurück:
 
 - Schick ihr eine Nachricht. Die Nachricht wartet (👀), aipager stoppt den Hintergrund-Job (`claude stop <job>`), startet die Sitzung mit der Unterhaltung des Jobs und den eigenen Einstellungen von aipager neu und schickt dann die Nachricht. Arbeitet der Job noch oder läuft die Aufgabe noch, die mit ← gewechselt ist, wirst du vorher gefragt: `Stoppen und zurückholen` stoppt, was er gerade tut, `Weiterlaufen lassen` lässt ihn fertig werden (hol die Sitzung später zurück). In den ersten Sekunden nach ← kann ein neuer Job so aussehen, als täte er nichts, kurz bevor er mit dieser Aufgabe weitermacht; eine Nachricht, die dann kommt, wartet deshalb einen Moment, bevor aipager entscheidet. Wer eine Rolle hat, die die Sitzung nicht neu starten darf, bekommt `Deine Nachricht an x1 wartet, bis jemand die Sitzung aus dem Hintergrund von Claude Code zurückholt.`
-- Oder tippe unter der Meldung auf `↩️ Jetzt zurückholen`, schick `/restart x1` oder tippe in der Mini App auf „Zurückholen“. `/stop`, während der Job arbeitet, stoppt diese Arbeit und holt die Sitzung zurück. Ein Button, der von einem früheren Wechsel in den Hintergrund übrig ist, antwortet `x1 ist nicht im Hintergrund von Claude Code.` und tut nichts.
+- Oder tippe unter der Meldung auf `↩️ Jetzt zurückholen`, schick `/restart x1` oder tippe in der Mini App auf „Zurückholen“. `/stop`, während der Job arbeitet, stoppt diese Arbeit und holt die Sitzung zurück. Ein Button, der von einem früheren Wechsel in den Hintergrund übrig ist, antwortet `x1 ist nicht im Hintergrund von Claude Code.` und tut nichts. Trifft ein Moduswechsel, der die Sitzung neu startet (in den Vollzugriff-Modus oder aus ihm heraus), auf einen Job, der noch arbeitet, holt `Stoppen und zurückholen` die Sitzung in dem Modus zurück, den du gewählt hast.
 
-Hält eine Sicherheitsregel die Arbeit der Sitzung an, während sie im Hintergrund ist, stoppt aipager den Hintergrund-Job. Gelingt das nicht, sagt die Meldung zum Anhalten, dass die blockierte Arbeit dort womöglich noch läuft; stoppe den Job dann mit `claude stop <job>` in einem Terminal.
+Hält eine Sicherheitsregel die Arbeit der Sitzung an, während sie im Hintergrund ist, stoppt aipager den Hintergrund-Job. Gelingt das nicht, sagt die Meldung zum Anhalten, dass die blockierte Arbeit dort womöglich noch läuft, und ihre erste Zeile endet nicht mit `(gestoppt)`; stoppe den Job dann mit `claude stop <job>` in einem Terminal.
 
 Bis dahin antworten Befehle, die in die Sitzung tippen würden (`/compact`, `/model`, ein Wechsel in den Fragen- oder Auto-Modus, `/now`, „Erneut versuchen“), mit `Hol x1 zuerst aus dem Hintergrund von Claude Code zurück.`, und eine Antwort auf eine Anfrage, die aipager tippen müsste, bekommt `Hol x1 aus dem Hintergrund von Claude Code zurück, um das zu beantworten.` Antworten, die über den Hook gehen (die meisten Berechtigungsanfragen), funktionieren weiterhin.
 
