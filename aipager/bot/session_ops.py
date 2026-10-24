@@ -2272,6 +2272,7 @@ class SessionOpsMixin:
         mode_override: str | None = None,
         driver_user_id: int | None = None,
         force: bool = False,
+        force_job: str = "",
     ) -> ResumeOutcome:
         """Resume an already-resolved GONE session.
 
@@ -2290,7 +2291,8 @@ class SessionOpsMixin:
         Claude Code background job holding it is dealt with
         (:meth:`_resume_target`): an idle one is stopped, a busy one gives
         ``bg_busy`` unless *force*, a failed stop ``bg_stop_failed``; both
-        leave the session as it was.
+        leave the session as it was. *force_job* (a button's job key): force
+        only a job whose id starts with it.
         """
         if sess.status != Status.GONE:
             return ResumeOutcome(ok=False, reason="not_gone")
@@ -2310,7 +2312,8 @@ class SessionOpsMixin:
         sess.claude_session_id = ""
         self.registry.mark_dirty()
         sess.resuming_until = time.monotonic() + RESUME_GUARD_SECONDS
-        target, refusal = await self._resume_target(resume_id, force=force)
+        target, refusal = await self._resume_target(resume_id, force=force,
+                                                    force_job=force_job)
         if refusal is not None:
             sess.resuming_until = 0.0
             sess.claude_session_id = resume_id
@@ -2407,7 +2410,7 @@ class SessionOpsMixin:
                           query=None,
                           mode_override: str | None = None,
                           sess: TrackedSession | None = None,
-                          force: bool = False) -> None:
+                          force: bool = False, force_job: str = "") -> None:
         """Shared resume logic for /resume <name> and picker callbacks.
 
         ``reply_fn`` is the async-callable used to send the result back
@@ -2465,9 +2468,11 @@ class SessionOpsMixin:
         # is still the right "where you left off" for the recap below.
         snapshot = sess.last_assistant_preview
         if force:
+            # *force_job*: a button shown for one job forces only that job.
             outcome = await self._do_resume_core(
                 sess, mode_override=mode_override,
                 driver_user_id=driver_user_id, force=True,
+                **({"force_job": force_job} if force_job else {}),
             )
         else:
             outcome = await self._do_resume_core(
@@ -2857,7 +2862,8 @@ class SessionOpsMixin:
                     job)
         return "still_running", {}
 
-    async def _resume_target(self, session_id: str, *, force: bool) -> tuple:
+    async def _resume_target(self, session_id: str, *, force: bool,
+                             force_job: str = "") -> tuple:
         """R1 and R2 before *session_id* is resumed: ``(id, refusal)``.
 
         *id* is where the conversation went (``continued-in`` followed,
@@ -2866,7 +2872,10 @@ class SessionOpsMixin:
         held it was idle (or *force*) and has been stopped. Otherwise it is
         ``("bg_busy", ())`` (the job is working, or its state cannot be
         read; nothing was done) or ``("bg_stop_failed", (code, params))``.
-        An unreadable registry launches as before. Never raises."""
+        An unreadable registry launches as before. *force_job* (the job a
+        keyed button was shown for): *force* applies only to a holder whose
+        job id starts with it; any other holder is asked about. Never
+        raises."""
         from aipager import claude_jobs
 
         def look():
@@ -2889,6 +2898,12 @@ class SessionOpsMixin:
         job = holder.get("jobId") or ""
         if not claude_jobs.valid_job(job):
             return target, ("bg_stop_failed", ("still_running", {}))
+        if force and force_job and not job.startswith(force_job):
+            # A "Stop and bring back" shown for an earlier job: another job
+            # holds the conversation now, and it was never asked about.
+            log.info("conversation %s: a button for job %s does not stop job %s",
+                     target, force_job, job)
+            force = False
         try:
             state = await claude_jobs.job_state(job, entries)
         except Exception:

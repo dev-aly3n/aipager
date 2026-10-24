@@ -909,10 +909,12 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
     ``bgforce`` (stop the job and bring it back); ``bgleave`` (leave it
     running) is the dispatcher's. Each is re-checked like Restart at tap time
     (``_bring_back_refusal``). For an ended session whose conversation a
-    background job holds, the first two resume it (R2). On a live session
-    they act only on the park they were shown for (*job*, the first
-    characters of its id): any other is out of date ("not in the
-    background")."""
+    background job holds, the first two resume it (R2); a keyed
+    ``bgforce`` there stops only the job it was shown for (another holder
+    is asked about). On a live session they act only on the park they were
+    shown for (*job*, the first characters of its id): any other is out of
+    date ("not in the background"). The mode verbs (:data:`BG_MODE_VERBS`)
+    are ``bgforce`` that also brings the session back in their mode."""
     if await _bg_tap_refused(bot, query, sess, chat_id, user_id, person):
         return
     mode = BG_MODE_VERBS.get(action)
@@ -923,8 +925,15 @@ async def _handle_bg_tap(bot: "TelegramBot", update: Update, query, sess: Tracke
 
         await bot._safe_answer(query, person.text(_ops.BG_TOAST_BRINGING_BACK,
                                                   session=sess.label))
-        await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
-                             query=query, sess=sess, force=force)
+        if force and job:
+            # A keyed button was shown for one job: it forces only that one
+            # (an ended session's resume follows its conversation, and a
+            # later job may hold it now).
+            await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
+                                 query=query, sess=sess, force=True, force_job=job)
+        else:
+            await bot._do_resume(label=sess.label, reply_fn=_reply, update=update,
+                                 query=query, sess=sess, force=force)
         return
     if (not sess.parked_job or job is None
             or sess.parked_job[:BG_JOB_KEY_LEN] != job):

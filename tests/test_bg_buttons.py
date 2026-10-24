@@ -431,3 +431,36 @@ def test_the_question_of_an_earlier_park_does_not_stop_a_new_one(world, run_asyn
     ("bgmodefullab12cd34x", None)])
 def test_the_bring_back_verbs_are_read_strictly(action, parsed):
     assert session_parity.parse_bg_verb(action) == parsed
+
+
+# ---- review rev-iter2-003: a keyed bgforce on an ended session ---------------------------
+
+def _ended_with_a_busy_holder(world):
+    world.bot.registry.transition(NAME, Status.GONE)
+    world.sess.parked_job = ""
+    world.reg(WORKER, kind="bg", jobId=JOB, sessionId=JS, status="busy")
+
+
+def test_an_ended_sessions_keyed_force_for_another_job_stops_nothing(world, run_async):
+    """The question was shown for job 0f0f0f0f; job ab12cd34 holds the
+    conversation now: it is asked about, never stopped."""
+    _ended_with_a_busy_holder(world)
+    q = _tap(world, run_async, "bgforce0f0f0f0f")
+    assert [r for r in world.runs() if r[:1] == ["stop"]] == []
+    assert "launch" not in world.kinds()
+    text = q.edit_message_text.await_args.args[0]
+    assert text == EN.html(BG_BUSY_QUESTION, session="x")
+
+
+def test_an_ended_sessions_keyed_force_for_its_holder_stops_it(world, run_async):
+    _ended_with_a_busy_holder(world)
+    _tap(world, run_async, f"bgforce{JOB}")
+    assert world.runs()[0] == ["stop", JOB]
+    assert "launch" in world.kinds()
+
+
+def test_an_ended_sessions_bare_force_still_stops_the_holder(world, run_async):
+    """Deviation 7 of fix iteration 1: a bare verb names no job."""
+    _ended_with_a_busy_holder(world)
+    _tap(world, run_async, "bgforce")
+    assert world.runs()[0] == ["stop", JOB]
