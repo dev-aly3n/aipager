@@ -946,8 +946,11 @@ class CommandHandlersMixin:
                 # moment out and decide again, rather than ask.
                 log.info("[%s] bring-back waits %.1fs for the park to settle",
                          sess.label, outcome.retry_after)
+                waited_for = sess.parked_job
                 await session_ops_mod._sleep(outcome.retry_after)
-                outcome = await self._bring_back_core(sess, settled=True)
+                # Settled for the park it waited for only (a new park since
+                # has a window of its own).
+                outcome = await self._bring_back_core(sess, settled=waited_for)
         except Exception:
             log.exception("[%s] automatic bring-back failed", sess.label)
             return

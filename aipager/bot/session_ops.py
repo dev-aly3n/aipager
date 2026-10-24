@@ -2983,7 +2983,7 @@ class SessionOpsMixin:
     async def _bring_back_core(
         self, sess: TrackedSession, *, force: bool = False,
         release_held: bool = True, target_mode: str | None = None,
-        settled: bool = False,
+        settled: str = "",
     ) -> RestartOutcome:
         """Bring a session parked on a Claude Code background job back into
         its own terminal: the one core the park notice's button, Restart,
@@ -3001,7 +3001,9 @@ class SessionOpsMixin:
            ``claude_jobs.PARK_SETTLE_SECONDS`` (a just-forked job reads
            idle for a moment before it continues a moved turn; then
            ``retry_after`` says how long until it is settled, and a caller
-           that waited that long passes *settled*). The job's entry is
+           that waited that long passes *settled*: the job it waited for,
+           which counts only while the session is still parked on that
+           job). The job's entry is
            read again right before ``claude stop``, and the stricter of
            the two answers counts.
         3. Under the restart window (opened first, so the job's
@@ -3065,10 +3067,13 @@ class SessionOpsMixin:
 
     async def _bring_back_in_flight(self, sess: TrackedSession, *, force: bool,
                                     release_held: bool, mode: str,
-                                    settled: bool = False) -> RestartOutcome:
+                                    settled: str = "") -> RestartOutcome:
         from aipager import claude_jobs
         label = sess.label
         job = sess.parked_job
+        # The wait was for this park only: a park on another job since
+        # (brought back and parked again meanwhile) has a window of its own.
+        waited_out = bool(settled) and settled == job
         if not force and self._turn_in_flight(sess):
             log.info("[%s] bring-back from job %s refused: a turn is in flight",
                      label, job)
@@ -3093,7 +3098,7 @@ class SessionOpsMixin:
         resume_id = await claude_jobs.off_loop(follow)
         state = await claude_jobs.job_state(job, entries)
         if not force:
-            refused = self._bg_unforced_refusal(sess, job, state, settled=settled,
+            refused = self._bg_unforced_refusal(sess, job, state, settled=waited_out,
                                                 mode=mode)
             if refused is not None:
                 return refused
@@ -3103,7 +3108,7 @@ class SessionOpsMixin:
             if again is not None:
                 state = claude_jobs.stricter_state(
                     state, claude_jobs.entry_state(again))
-            refused = self._bg_unforced_refusal(sess, job, state, settled=settled,
+            refused = self._bg_unforced_refusal(sess, job, state, settled=waited_out,
                                                 mode=mode)
             if refused is not None:
                 return refused

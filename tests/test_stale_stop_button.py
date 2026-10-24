@@ -485,7 +485,7 @@ def test_the_message_gates_bring_back_is_unforced():
     """What lets ``_NOT_DESTRUCTIVE`` skip the gate's bring-back: it calls
     the core without ``force`` (a busy job is asked about, never stopped).
     The second call decides again after a young park settled
-    (``settled=True``), still unforced."""
+    (``settled=<the job waited for>``), still unforced."""
     import aipager
 
     src = (pathlib.Path(aipager.__file__).parent / "bot" / "handlers.py").read_text()

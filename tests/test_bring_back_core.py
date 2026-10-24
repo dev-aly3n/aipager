@@ -988,7 +988,7 @@ def test_a_young_park_asks_with_the_time_left(world, run_async):
 
 def test_a_young_park_waited_out_is_brought_back(world, run_async):
     world.sess.parked_since = time.time() - 1
-    out = run_async(world.bot._bring_back_core(world.sess, settled=True))
+    out = run_async(world.bot._bring_back_core(world.sess, settled=JOB))
     assert out.ok and world.calls[0] == ("run", ["stop", JOB])
 
 
@@ -1058,6 +1058,37 @@ def test_the_gate_waits_out_a_young_park_instead_of_asking(world, run_async,
     question = i18n.get("en").html(session_ops.BG_BUSY_QUESTION, session="x")
     assert not any(c.kwargs.get("text") == question
                    for c in world.bot._app.bot.send_message.await_args_list)
+
+
+def test_a_wait_for_another_park_does_not_settle_this_one(world, run_async):
+    """The nit of review 2: *settled* names the park that was waited out;
+    for a young park on another job it counts for nothing."""
+    world.sess.parked_since = time.time() - 1
+    out = run_async(world.bot._bring_back_core(world.sess, settled="cd34ef56"))
+    assert (out.reason, out.retry_after > 0) == ("bg_busy", True)
+    assert world.calls == []
+
+
+def test_the_gate_does_not_carry_its_wait_over_to_a_new_park(world, run_async, mk_update,
+                                                            monkeypatch):
+    """While the gate waits out a young park, the session is brought back
+    and parked on a new job: that new, young park asks again (its own
+    window), it is not stopped."""
+    sess = world.sess
+    sess.parked_since = time.time() - 1
+    sess.queue_prompt("held", 31)
+    inner = world._sleep
+
+    async def sleep(seconds):
+        await inner(seconds)
+        if 0 < seconds <= claude_jobs.PARK_SETTLE_SECONDS:
+            sess.parked_job = "cd34ef56"           # a new park, just now
+            sess.parked_since = time.time()
+
+    monkeypatch.setattr(session_ops, "_sleep", sleep)
+    run_async(world.bot._auto_bring_back(mk_update("held", chat_id=CHAT), sess))
+    assert [r for r in world.runs() if r[:1] == ["stop"]] == [], "nothing was stopped"
+    assert "kill" not in world.kinds() and sess.parked_job == "cd34ef56"
 
 
 def test_the_gate_asks_at_once_when_a_turn_is_in_flight(world, run_async, mk_update):
