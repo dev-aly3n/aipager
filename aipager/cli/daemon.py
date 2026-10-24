@@ -312,8 +312,9 @@ def _wire_parked_state(registry, hook_receiver, session_monitor, bot) -> None:
         return (sess.parked_job, sess.park_epoch)
 
     inject.set_parked_probe(parked)
-    hook_receiver.parked_check = session_monitor.check_parked
-    bot.parked_check = session_monitor.check_parked
+    # The check's reads run off the event loop (claude_jobs.off_loop).
+    hook_receiver.parked_check = session_monitor.check_parked_async
+    bot.parked_check = session_monitor.check_parked_async
 
 
 async def _run_daemon(bot_username: str) -> None:

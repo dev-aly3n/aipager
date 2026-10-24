@@ -10,6 +10,7 @@ Single owner of all Telegram communication. Handles:
 from __future__ import annotations
 
 import asyncio
+import inspect
 import html as html_mod
 import logging
 import os
@@ -852,7 +853,9 @@ class CommandHandlersMixin:
         check = self.parked_check
         if check is not None:
             try:
-                check(sess)
+                result = check(sess)
+                if inspect.isawaitable(result):
+                    await result        # the daemon's: its reads off the loop
             except Exception:
                 log.warning("[%s] parked check failed", sess.label, exc_info=True)
         for_park = bool(sess.parked_job)

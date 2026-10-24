@@ -95,6 +95,15 @@ _REGISTRY_FILE = re.compile(r"^([0-9]{1,10})\.json$")
 # os themselves (CLAUDE.md).
 _create_subprocess_exec = asyncio.create_subprocess_exec
 _subprocess_run = subprocess.run
+#: Runs a blocking read in a worker thread (:func:`off_loop`).
+_to_thread = asyncio.to_thread
+
+
+def _glob_transcripts(projects: Path, session_id: str) -> list[Path]:
+    """Every ``<projects>/*/<session_id>.jsonl`` (it lists every project
+    folder: the slow part of :func:`find_transcript`). A seam, so a test
+    can tell which thread runs it."""
+    return sorted(projects.glob(f"*/{session_id}.jsonl"))
 #: Opens a transcript for the tail read (a test counts the bytes read).
 _open_binary = open
 
@@ -153,7 +162,8 @@ def _pid_tagged(pid: int, session: str) -> bool:
 # -- where Claude's files are -------------------------------------------------
 
 _config_cache: tuple[float, Path] | None = None
-#: The registry and transcript caches are also used from worker threads.
+#: The registry and transcript caches are also used from worker threads
+#: (:func:`off_loop`): every change to them is made under this lock.
 _REGISTRY_LOCK = threading.Lock()
 
 
@@ -292,6 +302,31 @@ def read_registry(config: Path | None = None) -> Registry | None:
             entries.append(dict(entry))
     entries.complete = complete
     return entries
+
+
+async def off_loop(fn, *args, **kwargs):
+    """``fn(*args, **kwargs)`` in a worker thread: the registry reads
+    (a stat of every file) and the transcript lookups (a glob over every
+    project folder) never block the event loop on the hot paths (the
+    message gate, the hook receiver, the bring-back, the monitor's scan).
+    *fn* must only read: every cache it touches is thread-safe."""
+    return await _to_thread(fn, *args, **kwargs)
+
+
+async def read_registry_async(config: Path | None = None) -> Registry | None:
+    """:func:`read_registry` off the event loop."""
+    return await off_loop(read_registry, config)
+
+
+def prefetch_transcripts(session_ids) -> None:
+    """Look up the transcript of each of *session_ids* and read where it
+    moved, so the same lookups made next on the event loop find them in
+    the caches (a miss is remembered for :data:`FIND_MISS_TTL`). For a
+    worker thread (:func:`off_loop`)."""
+    for sid in dict.fromkeys(i for i in session_ids if valid_session_id(i)):
+        path = find_transcript(sid, cache_misses=True)
+        if path is not None:
+            transcript_continued_in(path)
 
 
 def _unique(candidates: list[dict]) -> tuple[bool, dict | None]:
@@ -459,9 +494,10 @@ def transcript_continued_in(path) -> str:
             target = record["continuedInSessionId"]
     except (OSError, ValueError, RecursionError):
         target = ""
-    if len(_TAIL_CACHE) >= _TAIL_CACHE_MAX:
-        _TAIL_CACHE.clear()
-    _TAIL_CACHE[path] = (st.st_size, st.st_mtime_ns, target)
+    with _REGISTRY_LOCK:
+        if len(_TAIL_CACHE) >= _TAIL_CACHE_MAX:
+            _TAIL_CACHE.clear()
+        _TAIL_CACHE[path] = (st.st_size, st.st_mtime_ns, target)
     return target
 
 
@@ -492,7 +528,7 @@ def find_transcript(session_id: str, *, cache_misses: bool = False) -> Path | No
             return None
     result: Path | None = None
     try:
-        matches = sorted(projects.glob(f"*/{session_id}.jsonl"))
+        matches = _glob_transcripts(projects, session_id)
     except OSError:
         matches = []
     for match in matches:
@@ -502,9 +538,10 @@ def find_transcript(session_id: str, *, cache_misses: bool = False) -> Path | No
                 break
         except OSError:
             continue
-    if len(_FIND_CACHE) >= _FIND_CACHE_MAX:
-        _FIND_CACHE.clear()
-    _FIND_CACHE[key] = (time.monotonic(), str(result) if result is not None else "")
+    with _REGISTRY_LOCK:
+        if len(_FIND_CACHE) >= _FIND_CACHE_MAX:
+            _FIND_CACHE.clear()
+        _FIND_CACHE[key] = (time.monotonic(), str(result) if result is not None else "")
     return result
 
 

@@ -2847,7 +2847,9 @@ class SessionOpsMixin:
         ids = [i for i in dict.fromkeys(session_ids) if i]
         polls = int(claude_jobs.HOLDER_WAIT / claude_jobs.HOLDER_POLL)
         for n in range(polls + 1):
-            if not any(claude_jobs.live_holder(i) is not None for i in ids):
+            held = await claude_jobs.off_loop(
+                lambda: any(claude_jobs.live_holder(i) is not None for i in ids))
+            if not held:
                 return ()
             if n < polls:
                 await _sleep(claude_jobs.HOLDER_POLL)
@@ -2866,11 +2868,16 @@ class SessionOpsMixin:
         read; nothing was done) or ``("bg_stop_failed", (code, params))``.
         An unreadable registry launches as before. Never raises."""
         from aipager import claude_jobs
-        try:
+
+        def look():
             entries = claude_jobs.read_registry()
             target = claude_jobs.follow_continued(session_id, entries)
             holder = (claude_jobs.live_holder(target, entries)
                       if entries is not None else None)
+            return entries, target, holder
+
+        try:
+            entries, target, holder = await claude_jobs.off_loop(look)
         except Exception:
             log.warning("resume target of %s not checked", session_id, exc_info=True)
             return session_id, None
@@ -2909,12 +2916,13 @@ class SessionOpsMixin:
                               err=english, bg_err=tuple(err))
 
     @staticmethod
-    def _bring_back_conversation(sess: TrackedSession, job: str, entries) -> str:
+    async def _bring_back_conversation(sess: TrackedSession, job: str, entries) -> str:
         """The conversation a bring-back resumes (B2.1): the job's, when
         its transcript exists; else the parked client's own (a fork that
         never ran a prompt), when its transcript exists; ``""`` when
         neither does. The session's own id stands in for the client's
-        when the registry cannot name the client."""
+        when the registry cannot name the client. The transcripts are
+        looked for off the event loop."""
         from aipager import claude_jobs
         entry = claude_jobs.job_entry(job, entries)
         client = claude_jobs.find_client(sess, entries) if entries else None
@@ -2924,10 +2932,14 @@ class SessionOpsMixin:
             client.get("sessionId") if client else "",
             sess.claude_session_id,
         ]
-        for sid in dict.fromkeys(c for c in candidates if c):
-            if claude_jobs.find_transcript(sid) is not None:
-                return sid
-        return ""
+
+        def first_saved() -> str:
+            for sid in dict.fromkeys(c for c in candidates if c):
+                if claude_jobs.find_transcript(sid) is not None:
+                    return sid
+            return ""
+
+        return await claude_jobs.off_loop(first_saved)
 
     def _clear_park(self, sess: TrackedSession) -> None:
         """Forget *sess*'s park after a bring-back: the link file and its
@@ -3033,18 +3045,24 @@ class SessionOpsMixin:
             log.info("[%s] bring-back from job %s refused: a turn is in flight",
                      label, job)
             return RestartOutcome(ok=False, reason="bg_busy", label=label, mode=mode)
-        entries = claude_jobs.read_registry()
-        resume_id = self._bring_back_conversation(sess, job, entries)
+        # Claude's files are read off the event loop (claude_jobs.off_loop).
+        entries = await claude_jobs.read_registry_async()
+        resume_id = await self._bring_back_conversation(sess, job, entries)
         if not resume_id:
             log.info("[%s] bring-back from job %s: no saved conversation", label, job)
             return RestartOutcome(ok=False, reason="bg_no_conversation", label=label,
                                   mode=mode)
-        followed = claude_jobs.follow_continued(resume_id, entries)
-        if followed != resume_id and claude_jobs.find_transcript(followed) is not None:
+
+        def follow() -> str:
             # Only to a saved conversation: the client's own id was chosen
             # because the job's has none, and a hop to the job's (its
             # holder is alive until the stop) would resume nothing.
-            resume_id = followed
+            moved = claude_jobs.follow_continued(resume_id, entries)
+            if moved != resume_id and claude_jobs.find_transcript(moved) is not None:
+                return moved
+            return resume_id
+
+        resume_id = await claude_jobs.off_loop(follow)
         state = await claude_jobs.job_state(job, entries)
         if not force:
             refused = self._bg_unforced_refusal(sess, job, state, settled=settled,
@@ -3053,7 +3071,7 @@ class SessionOpsMixin:
                 return refused
             # Right before the stop (job_state may have waited for `claude
             # agents`): the job's entry again, and the stricter answer.
-            again = claude_jobs.job_entry(job, claude_jobs.read_registry())
+            again = claude_jobs.job_entry(job, await claude_jobs.read_registry_async())
             if again is not None:
                 state = claude_jobs.stricter_state(
                     state, claude_jobs.entry_state(again))
@@ -3093,7 +3111,7 @@ class SessionOpsMixin:
             sess.restarting_until = earlier_window
             return outcome
         self._clear_park(sess)
-        path = claude_jobs.find_transcript(resume_id)
+        path = await claude_jobs.off_loop(claude_jobs.find_transcript, resume_id)
         if path is not None:
             sess.transcript_path = str(path)
         if release_held:

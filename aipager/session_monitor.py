@@ -893,6 +893,26 @@ class SessionMonitor:
         own read must still hold the message that called this."""
         return self._check_parked_with(sess, claude_jobs.read_registry())
 
+    async def check_parked_async(self, sess: TrackedSession) -> bool:
+        """:meth:`check_parked` with its reads made off the event loop
+        (the registry, and the transcript lookups of its fallback), then
+        decided on the loop. What the message gate and the hook receiver
+        call (wired by cli/daemon.py). Never raises."""
+        try:
+            entries = await claude_jobs.read_registry_async()
+            await claude_jobs.off_loop(claude_jobs.prefetch_transcripts,
+                                       self._fallback_ids(sess))
+        except Exception:
+            log.warning("[%s] parked check failed", sess.label, exc_info=True)
+            return bool(sess.parked_job)
+        return self._check_parked_with(sess, entries)
+
+    @staticmethod
+    def _fallback_ids(sess: TrackedSession) -> list[str]:
+        """The conversations whose transcripts the transcript fallback of
+        :meth:`_check_parked` reads."""
+        return [sess.claude_session_id, sess.parked_from_session_id]
+
     def _check_parked_with(self, sess: TrackedSession, entries) -> bool:
         """:meth:`check_parked` against *entries* (a registry read already
         made: the scan's own). Never raises."""
@@ -1030,7 +1050,13 @@ class SessionMonitor:
         event of a park noticed since the last scan (by this check or by
         the message gate or the receiver in between)."""
         if sess.status != Status.GONE and not sess.is_restarting():
-            # The scan's registry read: only this call uses it.
+            # The scan's registry read: only this call uses it. The
+            # transcript fallback's lookups are made off the loop first.
+            try:
+                await claude_jobs.off_loop(claude_jobs.prefetch_transcripts,
+                                           self._fallback_ids(sess))
+            except Exception:
+                log.debug("[%s] transcript prefetch failed", sess.label, exc_info=True)
             self._check_parked_with(sess, self._tick_registry)
         job = self._new_parks.pop(name, None)
         if job and sess.parked_job == job:
@@ -1252,7 +1278,7 @@ class SessionMonitor:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
         # Claude Code background jobs: the registry once for this scan.
-        self._tick_registry = claude_jobs.read_registry()
+        self._tick_registry = await claude_jobs.read_registry_async()
         try:
             await self._scan_sessions(now, compact_swept)
         finally:

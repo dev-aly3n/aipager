@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import os
@@ -985,7 +986,7 @@ class HookReceiver:
             if carry:
                 await self._end_carry(session_name)
 
-    def _bg_job_linked(self, session_name: str, bg_job) -> bool:
+    async def _bg_job_linked(self, session_name: str, bg_job) -> bool:
         """Whether *bg_job* is the job the known session *session_name*
         is parked on. When it is not, the park is looked for once more
         (``parked_check``, synchronous): a worker's first hook can come
@@ -1001,7 +1002,9 @@ class HookReceiver:
         if check is None:
             return False
         try:
-            check(sess)
+            result = check(sess)
+            if inspect.isawaitable(result):
+                await result            # the daemon's: its reads off the loop
         except Exception:
             log.warning("[%s] parked check failed", sess.label, exc_info=True)
             return False
@@ -1104,7 +1107,7 @@ class HookReceiver:
         # Any other one changes nothing: no session is created, stamped or
         # moved, and its ids are never adopted.
         bg_job = msg.get("bg_job") or ""
-        if bg_job and not self._bg_job_linked(session_name, bg_job):
+        if bg_job and not await self._bg_job_linked(session_name, bg_job):
             log.debug("dropping %s from an unlinked background job (session %s)",
                       event, session_name)
             report_store.record_counter("bg_job_unlinked")

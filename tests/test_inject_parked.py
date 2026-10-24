@@ -182,7 +182,7 @@ def test_the_daemons_probe_names_each_park(tmp_state_file):
     registry = SessionRegistry()
     sess = registry.get_or_create(NAME)
     _wire_parked_state(registry, SimpleNamespace(),
-                       SimpleNamespace(check_parked=None), SimpleNamespace())
+                       SimpleNamespace(check_parked=None, check_parked_async=None), SimpleNamespace())
     sess.parked_job = "ab12cd34"
     first = inject._parked_probe(NAME)
     sess.forget_park()

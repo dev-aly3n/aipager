@@ -415,7 +415,8 @@ def test_the_park_survives_a_restart(cfg, mon, tmp_state_file, monkeypatch):
     assert again.claude_pid == 0 and again.park_told == set()
 
     from aipager.cli.daemon import _wire_parked_state
-    _wire_parked_state(loaded, SimpleNamespace(), SimpleNamespace(check_parked=None),
+    _wire_parked_state(loaded, SimpleNamespace(),
+                       SimpleNamespace(check_parked=None, check_parked_async=None),
                        SimpleNamespace())
     assert inject.is_parked(NAME) is True, "a loaded park is honoured at once"
     assert inject.is_parked("claude-other") is False
@@ -480,8 +481,8 @@ def test_the_daemon_wires_one_source_of_truth(mon):
     registry, monitor, notify, sess = mon
     receiver, bot = SimpleNamespace(), SimpleNamespace()
     _wire_parked_state(registry, receiver, monitor, bot)
-    assert receiver.parked_check == monitor.check_parked
-    assert bot.parked_check == monitor.check_parked
+    assert receiver.parked_check == monitor.check_parked_async
+    assert bot.parked_check == monitor.check_parked_async
     assert inject.is_parked(NAME) is False
     sess.parked_job = JOB
     assert inject.is_parked(NAME) is True
@@ -551,7 +552,7 @@ def test_the_receivers_check_during_a_scan_links_the_job(cfg, proc, mon, run_asy
     recv.parked_check = monitor.check_parked
 
     async def receiver(s):
-        return recv._bg_job_linked(NAME, JOB)
+        return await recv._bg_job_linked(NAME, JOB)
 
     assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch,
                                      receiver) is True
