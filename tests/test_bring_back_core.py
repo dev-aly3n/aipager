@@ -859,6 +859,27 @@ def test_a_spawned_bring_back_that_finds_no_park(world, run_async, monkeypatch,
     assert world.calls == [], "nothing stopped, killed or launched"
 
 
+def test_a_spawned_bring_back_looks_for_a_park_again_before_it_drains(
+        world, run_async, monkeypatch, mk_update):
+    """Review rev-iter2-001: the park looked gone to this run, but Claude's
+    files say parked now: the held message stays held, nothing is typed."""
+    sess = world.sess
+    typed = _drainable(world.bot, monkeypatch)
+    sess.parked_job = ""
+    sess.queue_prompt("held", 31)
+    looks = []
+
+    def check(s):
+        looks.append(s.name)
+        s.parked_job = JOB              # Claude's registry: parked after all
+
+    world.bot.parked_check = check
+    run_async(world.bot._auto_bring_back(mk_update("held", chat_id=CHAT), sess))
+    assert looks == [NAME]
+    assert typed == [] and [q[0] for q in sess.pending_queue] == ["held"]
+    assert world.calls == []
+
+
 def test_an_own_fork_session_start_releases_nothing(world, run_async, monkeypatch):
     """A fork's SessionStart is not the relaunched claude coming up."""
     sess = world.sess

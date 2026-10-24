@@ -850,15 +850,7 @@ class CommandHandlersMixin:
         # (the park can be newer than the monitor's last tick): ahead of
         # every other reason, since typed into the parked client the text
         # can start a stray background job. Held until it is brought back.
-        check = self.parked_check
-        if check is not None:
-            try:
-                result = check(sess)
-                if inspect.isawaitable(result):
-                    await result        # the daemon's: its reads off the loop
-            except Exception:
-                log.warning("[%s] parked check failed", sess.label, exc_info=True)
-        for_park = bool(sess.parked_job)
+        for_park = await self._look_for_park(sess)
         for_dialog = (not for_park
                       and (sess.dialog_is_open() or sess.dialog_release_pending()))
         if for_park:
@@ -912,6 +904,20 @@ class CommandHandlersMixin:
             await self._after_park_hold(update, sess)
         return True
 
+    async def _look_for_park(self, sess) -> bool:
+        """Whether *sess* is parked on a Claude Code background job, looked
+        for afresh in Claude's files (``parked_check``) when it is wired.
+        Never raises."""
+        check = self.parked_check
+        if check is not None:
+            try:
+                result = check(sess)
+                if inspect.isawaitable(result):
+                    await result        # the daemon's: its reads off the loop
+            except Exception:
+                log.warning("[%s] parked check failed", sess.label, exc_info=True)
+        return bool(sess.parked_job)
+
     async def _after_park_hold(self, update: Update, sess) -> None:
         """A message was held for a Claude Code background-job park (P5).
         From someone who may Restart the session, it brings the session
@@ -956,6 +962,11 @@ class CommandHandlersMixin:
             # with no bring-back (an idle session nobody releases) drains
             # here.
             if not sess.bg_release_pending and sess.status == Status.IDLE:
+                # Looked for afresh before anything is typed: a park this
+                # run did not see still holds the message.
+                if await self._look_for_park(sess):
+                    log.info("[%s] parked again: the held message waits", sess.label)
+                    return
                 await self._drain_next_queued(sess)
             return
         chat_id = calling_chat_id(update)

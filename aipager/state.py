@@ -912,6 +912,12 @@ class TrackedSession:
     # How many parks of this session ended (``forget_park``): the terminal
     # guard tells one park from the next by it. Transient.
     park_epoch: int = 0
+    # When the park last changed (a park noticed, moved to another job, or
+    # forgotten), on the monotonic clock: a registry read that started
+    # before it is older than what it would decide, and may not change the
+    # park (``SessionMonitor._check_parked``). 0 for a park loaded from
+    # disk (any read is newer). Transient.
+    park_changed_at: float = 0.0
     # The pid of the session's own claude (its hooks forward CLAUDE_PID),
     # and that process's start time when known (0: unknown). Transient:
     # found again from the registry after a restart.
@@ -2668,6 +2674,7 @@ class TrackedSession:
         self.parked_from_session_id = ""
         self.park_told.clear()
         self.park_epoch += 1
+        self.park_changed_at = time.monotonic()
 
     def arm_bg_release(self) -> None:
         """A bring-back is about to launch the conversation again: the

@@ -508,15 +508,22 @@ def test_a_new_park_tells_every_sender_again(cfg, proc, mon):
 
 # ---- review rev-iter1-001: a check made while a scan awaits reads afresh ----------
 
-def _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch, inside):
+def _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch, inside,
+                              other_first=False):
     """Run one scan that awaits ``notify_fn`` (another session's park
     notice) after it read the registry, and run *inside* there: the
-    message gate or the receiver checking this session meanwhile."""
+    message gate or the receiver checking this session meanwhile. With
+    *other_first* the scan reaches this session only after that, with the
+    registry it read before the ``←``."""
     registry, monitor, notify, sess = mon
     proc.alive.add(CLIENT)
     sess.claude_pid = CLIENT
     reg(cfg, CLIENT, kind="interactive", sessionId=SID)    # not parked yet
+    if other_first:
+        registry._sessions.pop(NAME)
     other = registry.get_or_create("claude-backend")
+    if other_first:
+        registry._sessions[NAME] = sess
     registry.transition("claude-backend", Status.IDLE)
     other.parked_job = "cd34ef56"
     monitor._new_parks["claude-backend"] = "cd34ef56"
@@ -556,6 +563,74 @@ def test_the_receivers_check_during_a_scan_links_the_job(cfg, proc, mon, run_asy
 
     assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch,
                                      receiver) is True
+
+
+# ---- review rev-iter2-001: a read older than the park never ends it --------------
+
+@pytest.mark.parametrize("other_first", [True, False], ids=["other-first", "other-last"])
+def test_a_park_seen_during_a_scan_is_not_undone_by_that_scan(cfg, proc, mon, run_async,
+                                                              monkeypatch, other_first):
+    """The scan reaches the session after the gate parked it from a fresh
+    read: the scan's own read, made before the ``←``, decides nothing, and
+    the link stays."""
+    registry, monitor, notify, sess = mon
+
+    async def gate(s):
+        return monitor.check_parked(s)
+
+    assert _scan_suspended_in_notify(cfg, proc, mon, run_async, monkeypatch, gate,
+                                     other_first=other_first) is True
+    assert sess.parked_job == JOB
+    assert (_link() or {}).get("session") == NAME
+
+
+def test_the_scans_read_still_decides_a_park_older_than_it(cfg, proc, mon, run_async,
+                                                         monkeypatch):
+    """The guard compares times: a park recorded before the scan's read
+    is still ended by that read (the ``←`` was undone in the terminal)."""
+    registry, monitor, notify, sess = mon
+    proc.alive.add(CLIENT)
+    sess.claude_pid = CLIENT
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+    assert monitor.check_parked(sess) is True
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID)
+    _scan(monitor, run_async, monkeypatch)
+    assert sess.parked_job == "" and _link() is None
+
+
+def test_a_bring_backs_end_is_not_undone_by_an_older_read(cfg, proc, mon):
+    """The other way round: a read made before a bring-back forgot the
+    park cannot park the session again on the old client's entry."""
+    registry, monitor, notify, sess = mon
+    proc.alive.add(CLIENT)
+    sess.claude_pid = CLIENT
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+    import time as _time
+    read_at = _time.monotonic()
+    stale = claude_jobs.read_registry()
+    sess.forget_park()                       # the bring-back ended the park
+    assert monitor._check_parked_with(sess, stale, read_at) is False
+    assert sess.parked_job == ""
+
+
+def test_the_async_checks_read_cannot_undo_a_park_made_during_it(cfg, proc, mon,
+                                                                run_async, monkeypatch):
+    """``check_parked_async`` reads in a worker thread; a park another
+    check records meanwhile is newer than that read."""
+    registry, monitor, notify, sess = mon
+    proc.alive.add(CLIENT)
+    sess.claude_pid = CLIENT
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID)
+    stale = claude_jobs.read_registry()      # read before the ←
+    reg(cfg, CLIENT, kind="interactive", sessionId=SID, parkedJobId=JOB)
+
+    async def read_during_a_park(config=None):
+        assert monitor.check_parked(sess) is True    # the scan parks it meanwhile
+        return stale
+
+    monkeypatch.setattr(claude_jobs, "read_registry_async", read_during_a_park)
+    assert run_async(monitor.check_parked_async(sess)) is True
+    assert sess.parked_job == JOB and (_link() or {}).get("session") == NAME
 
 
 # ---- review rev-iter1-006: level 1 takes a live pid whose start matches ------------

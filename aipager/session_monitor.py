@@ -760,6 +760,8 @@ class SessionMonitor:
         # written per session, the pid map last written, and the parks
         # noticed since the last scan, whose event is still to be sent.
         self._tick_registry: list[dict] | None = None
+        #: When the scan's registry read started (``time.monotonic()``).
+        self._tick_read_at = 0.0
         self._links_written: dict[str, dict] = {}
         self._pidmap_written: dict | None = None
         self._new_parks: dict[str, str] = {}
@@ -891,13 +893,18 @@ class SessionMonitor:
         Always reads the registry afresh, also while a scan is in progress:
         the scan awaits Telegram sends, and a park newer than the scan's
         own read must still hold the message that called this."""
-        return self._check_parked_with(sess, claude_jobs.read_registry())
+        read_at = time.monotonic()
+        return self._check_parked_with(sess, claude_jobs.read_registry(), read_at)
 
     async def check_parked_async(self, sess: TrackedSession) -> bool:
         """:meth:`check_parked` with its reads made off the event loop
         (the registry, and the transcript lookups of its fallback), then
         decided on the loop. What the message gate and the hook receiver
         call (wired by cli/daemon.py). Never raises."""
+        # Stamped before the thread hop: a park the scan (or another
+        # check) records while this reads is newer than this read, and
+        # this read may not undo it (:meth:`_check_parked`).
+        read_at = time.monotonic()
         try:
             entries = await claude_jobs.read_registry_async()
             await claude_jobs.off_loop(claude_jobs.prefetch_transcripts,
@@ -905,7 +912,7 @@ class SessionMonitor:
         except Exception:
             log.warning("[%s] parked check failed", sess.label, exc_info=True)
             return bool(sess.parked_job)
-        return self._check_parked_with(sess, entries)
+        return self._check_parked_with(sess, entries, read_at)
 
     @staticmethod
     def _fallback_ids(sess: TrackedSession) -> list[str]:
@@ -913,17 +920,27 @@ class SessionMonitor:
         :meth:`_check_parked` reads."""
         return [sess.claude_session_id, sess.parked_from_session_id]
 
-    def _check_parked_with(self, sess: TrackedSession, entries) -> bool:
+    def _check_parked_with(self, sess: TrackedSession, entries,
+                           read_at: float) -> bool:
         """:meth:`check_parked` against *entries* (a registry read already
-        made: the scan's own). Never raises."""
+        made: the scan's own), whose read started at *read_at*
+        (``time.monotonic()``). Never raises."""
         try:
-            return self._check_parked(sess, entries)
+            return self._check_parked(sess, entries, read_at)
         except Exception:
             log.warning("[%s] parked check failed", sess.label, exc_info=True)
             return bool(sess.parked_job)
 
-    def _check_parked(self, sess: TrackedSession, entries) -> bool:
+    def _check_parked(self, sess: TrackedSession, entries, read_at: float) -> bool:
         if sess.status == Status.GONE or sess.is_restarting():
+            return bool(sess.parked_job)
+        if read_at < sess.park_changed_at:
+            # The park changed after this read started (the message gate or
+            # the receiver saw a fresh ←, or a bring-back ended it, while the
+            # scan awaited a Telegram send): what was read is older than the
+            # park, so it decides nothing. The next read does.
+            log.debug("[%s] parked check skipped: the read is older than the park",
+                      sess.label)
             return bool(sess.parked_job)
         client = claude_jobs.find_client(sess, entries)
         if client is not None:
@@ -985,6 +1002,7 @@ class SessionMonitor:
             sess.parked_job = job
             sess.parked_job_session_id = job_sid
             sess.parked_since = time.time()
+            sess.park_changed_at = time.monotonic()
             sess.park_told.clear()
             self._new_parks[sess.name] = job
             self.registry.mark_dirty()
@@ -1055,7 +1073,7 @@ class SessionMonitor:
             # and the transcript fallback's misses are cached: the scan
             # runs no user's request, and a worker-thread hop here would
             # let other work in between the scan's own steps.
-            self._check_parked_with(sess, self._tick_registry)
+            self._check_parked_with(sess, self._tick_registry, self._tick_read_at)
         job = self._new_parks.pop(name, None)
         if job and sess.parked_job == job:
             try:
@@ -1276,6 +1294,7 @@ class SessionMonitor:
                 log.warning("Failed to notify compact_timeout for %s", expired_name)
 
         # Claude Code background jobs: the registry once for this scan.
+        self._tick_read_at = time.monotonic()
         self._tick_registry = claude_jobs.read_registry()
         try:
             await self._scan_sessions(now, compact_swept)

@@ -138,15 +138,10 @@ def test_a_message_mid_scan_is_held(stack, mk_update, monkeypatch, first):
     assert [q[0] for q in stack.sess.pending_queue] == ["carry on"]
 
 
-STALE_SCAN = (
-    "qa finding tester-iter2-001: a scan that reaches frontend after the "
-    "other session judges it from the registry read at the start of the tick, "
-    "so it clears the park the gate (or the receiver) just saw fresh and "
-    "removes the link; the held message is then typed into the parked client "
-    "by the bring-back that finds it not parked (S1, Fact 9)")
-
-ORDER_STALE = [pytest.param(True, id="other_first", marks=pytest.mark.xfail(
-    strict=True, reason=STALE_SCAN)), pytest.param(False, id="other_last")]
+# qa finding tester-iter2-001 (fixed): a scan that reaches frontend after the
+# other session must not judge it from the registry read at the start of the
+# tick, which is older than the park the gate (or the receiver) just saw.
+ORDER_STALE = [pytest.param(True, id="other_first"), pytest.param(False, id="other_last")]
 
 
 @pytest.mark.parametrize("first", ORDER_STALE)
