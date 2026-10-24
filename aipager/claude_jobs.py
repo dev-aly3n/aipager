@@ -282,8 +282,7 @@ def read_registry(config: Path | None = None) -> Registry | None:
                 parsed[name] = (cached[2], cached[3])
                 continue
             if budget <= 0:
-                complete = False
-                continue
+                continue                # left out: it reads as not whole below
             budget -= 1
             data = bg_jobs.read_own_json(path)
             entry = _entry(data, file_pid) if data is not None else None

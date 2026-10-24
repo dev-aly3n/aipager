@@ -1182,10 +1182,18 @@ def test_the_backstop_waits_while_a_bring_back_runs(world, run_async, monkeypatc
     sess = world.sess
     typed = _drainable(world.bot, monkeypatch)
     sess.parked_job = ""
+    world.transcript(X, {"type": "user"})      # nothing parks it again meanwhile
     sess.queue_prompt("held", 31)
     sess.arm_bg_release()
     sess.relaunch_in_flight = True
     sess.bg_released_at = time.monotonic() - (claude_jobs.RELEASE_BACKSTOP + 1)
-    monitor = SessionMonitor(world.bot.registry, world.bot.notify)
+    events = []
+
+    async def notify(s, event, ctx):
+        events.append(event)
+        await world.bot.notify(s, event, ctx)
+
+    monitor = SessionMonitor(world.bot.registry, notify)
     run_async(monitor._check_parked_tick(NAME, sess))
+    assert "bg_release" not in events, "the backstop does not fire mid bring-back"
     assert typed == [] and sess.bg_release_pending is True

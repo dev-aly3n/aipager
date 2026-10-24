@@ -334,16 +334,26 @@ def test_the_real_paths_follow_the_runtime_folder(tmp_path, monkeypatch):
 
 def test_the_newest_registry_files_are_read_among_many_stale_ones(tmp_path):
     """Claude leaves old claudes' files behind: the entry ``←`` just wrote
-    is read even when it sorts after more stale names than the bound
-    (review nit: collect every name, then pick)."""
+    is read even when the folder lists it after more stale names than the
+    bound (review nit: collect every name, then pick by mtime)."""
     import os
     sessions = _registry(tmp_path)
-    for pid in range(1000, 1100):
+    for pid in range(1000, 1101):
         path = sessions / f"{pid}.json"
         path.write_text(json.dumps({"pid": pid}))
         os.utime(path, ns=(1_600_000_000_000_000_000 + pid, 1_600_000_000_000_000_000 + pid))
-    newest = sessions / "99999.json"
-    newest.write_text(json.dumps({"pid": 99999, "kind": "interactive"}))
+    # The newest entry is a file the folder lists after the first
+    # REGISTRY_LIMIT names (whatever order this filesystem lists in), and
+    # that also sorts after them by name.
+    listed = [e.name for e in os.scandir(sessions)]
+    by_name = sorted(listed)
+    last = next(n for n in reversed(listed)
+                if listed.index(n) >= bg_jobs.REGISTRY_LIMIT
+                and by_name.index(n) >= bg_jobs.REGISTRY_LIMIT)
+    pid = int(last.removesuffix(".json"))
+    (sessions / last).write_text(json.dumps({"pid": pid, "kind": "interactive"}))
+    os.utime(sessions / last, ns=(1_700_000_000_000_000_000, 1_700_000_000_000_000_000))
+    assert [e.name for e in os.scandir(sessions)] == listed, "precondition: same order"
     got = bg_jobs.scan_registry(str(tmp_path / "cfg"))
     assert len(got) == bg_jobs.REGISTRY_LIMIT
-    assert {"pid": 99999, "kind": "interactive"} in got
+    assert {"pid": pid, "kind": "interactive"} in got
