@@ -81,6 +81,14 @@ def test_a_restart_with_a_held_conversation_reads_off_the_loop(world, threads,
     _off_the_loop(threads)
 
 
+def test_a_jobs_state_without_a_registry_read_reads_it_off_the_loop(world, threads,
+                                                                   run_async):
+    """The nit of review 2: ``job_state`` given no entries (the caller's
+    read failed) reads the registry again, in a worker thread."""
+    assert run_async(claude_jobs.job_state(JOB, None)) == claude_jobs.IDLE
+    _off_the_loop(threads, glob=False)
+
+
 def test_the_parked_check_reads_off_the_loop(world, threads, run_async):
     """The check the gate and the receiver call: here the registry gives
     no client, so the transcript decides."""

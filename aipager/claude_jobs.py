@@ -736,9 +736,10 @@ async def job_state(job: str, entries: list[dict] | None = None) -> str:
     decides first (a parked client's ``status`` is never read: it is
     unreliable while parked); without one, the listing does. When the
     listing fails, no entry means gone only in a registry read whole
-    (``Registry.complete``): a file left out may be the job's."""
+    (``Registry.complete``): a file left out may be the job's. Without
+    *entries* the registry is read off the event loop."""
     if entries is None:
-        entries = read_registry()
+        entries = await read_registry_async()
     entry = job_entry(job, entries)
     if entry is not None:
         return _state_of(entry.get("status") or "")
