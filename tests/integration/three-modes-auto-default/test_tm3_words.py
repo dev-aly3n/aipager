@@ -297,6 +297,7 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
                                      APPEARANCE_SURFACES, NO_KEYBOARD_APP_SURFACES,
                                      RESTART_NOW_NEW_SURFACES, with_keyboard_app_removed,
                                      without_appearance_row, without_card_divider)
+    from tests.i18n_surfaces import CARD_FOLD_TAIL_SURFACES, with_agent_calls_folded
     # Restart now without a service (2026-10-12) added one new surface.
     # The agents tree (2026-10-14) changed the block under an answer, put a
     # divider above the card's status line, and added one surface.
@@ -311,4 +312,8 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
     for k in NO_KEYBOARD_APP_SURFACES:
         assert after[k] == with_keyboard_app_removed(before[k]), k
     for k in AGENTS_TREE_CARD_SURFACES:
-        assert without_card_divider(after[k]) == before[k], k
+        # Never end with a fold (2026-10-24): an agent's three calls
+        # show plain where they were folded, and only that.
+        cur = (with_agent_calls_folded(after[k]) if k in CARD_FOLD_TAIL_SURFACES
+               else after[k])
+        assert without_card_divider(cur) == before[k], k

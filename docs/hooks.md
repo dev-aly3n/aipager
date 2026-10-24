@@ -227,11 +227,12 @@ rate limit, ...) is shown in plain words.
 
 A subagent started or ended. Each one gets its own row on the busy card,
 `🤖 <type> · <activity> · <elapsed>`, with its own tool calls folded
-under it, and settles to `✅ 🤖 <type> · N tool calls · <elapsed>` when it
-stops. `SubagentStart` does not say which agent started it: aipager
-matches it to the `Agent` call (`PreToolUse`) of its type that is
-waiting. When every such call came from one agent, the new agent is
-linked to that agent at once (its card row reads `🤖 pipeline-runner ›
+under it (the newest one always shown after the fold), and settles to
+`✅ 🤖 <type> · N tool calls · <elapsed>` when it stops. `SubagentStart`
+does not say which agent started it: aipager matches it to the `Agent`
+call (`PreToolUse`) of its type that is waiting. When every such call
+came from one agent, the new agent is linked to that agent at once
+(its card row reads `🤖 pipeline-runner ›
 ship-tester`, and it joins the agents under it in an answer's status);
 when they came from different agents, nothing is linked until the
 starting agent's own `PostToolUse` names it. A call's description is

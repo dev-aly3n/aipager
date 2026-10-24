@@ -1091,19 +1091,21 @@ def test_build_stream_card_ex_keeps_active_agent_row_visible_under_pressure():
 
 # ---- live and settled agent nested folds ------------------------------------
 
-def test_live_agent_gets_a_nested_fold_once_it_has_three_or_more_tools():
+def test_live_agent_gets_a_nested_fold_once_three_calls_precede_its_newest():
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.tool_history = [(f"{MARK} explore", False)]
     sess.active_subagents["a1"] = {
         "type": "explore", "started_at": time.monotonic() - 10,
         "history_idx": 0, "activity": "Bash: ls",
-        "tools": ["Bash: a", "Bash: b", "Bash: c"],
+        "tools": ["Bash: a", "Bash: b", "Bash: c", "Bash: d"],
     }
     card = build_stream_card(sess, "Working")
+    # The fold holds the three older calls; the newest stays plain after it.
     assert "<details><summary>▸ 3 tool calls</summary>" in card
     assert f"{MARK} explore · Bash: ls · 0:10" in card
     # The nested fold sits directly beneath the agent's own row.
     assert card.index(f"{MARK} explore") < card.index("<details>")
+    assert card.index("</details>") < card.index("`Bash: d`")
 
 
 def test_live_agent_with_fewer_than_three_tools_shows_them_plain():
@@ -1138,7 +1140,8 @@ def test_settled_agent_gets_a_nested_fold_from_finished_subagents():
         "tools": ["Bash: a", "Bash: b", "Bash: c", "Bash: d"], "history_idx": 0,
     })
     card = build_stream_card(sess, "Working")
-    assert "<details><summary>▸ 4 tool calls</summary>" in card
+    assert "<details><summary>▸ 3 tool calls</summary>" in card
+    assert card.index("</details>") < card.index("`Bash: d`")
     assert f"✅ `{MARK} explore · 4 tool calls · 5s`" in card
 
 

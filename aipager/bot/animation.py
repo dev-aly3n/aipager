@@ -812,7 +812,8 @@ def _build_sections(
     ``tools`` list — sourced live from ``active_subagents[id]["tools"]``
     or, once settled, from the matching ``finished_subagents`` entry via
     its ``history_idx`` — feeds that agent's OWN nested fold once it has
-    3+ calls (:func:`_fit_sections`'s job, not this function's).
+    4+ calls, the newest always outside it (:func:`_render_section`'s
+    job, not this function's).
 
     ``agent_tools`` is ``None`` for ``"prose"``/``"run"`` sections (not
     applicable) and the agent's own raw tool-call summary list (verbatim
@@ -1060,13 +1061,25 @@ def _render_section(
       has ``_FOLD_MIN_ROWS`` or more rows (rule 4), else stays plain.
     - ``"agent-run"``/``"agent-settled"``: the agent's own row (``rows[0]``)
       always stays plain and visible. Its own tool calls, if any, render
-      directly beneath it — folded behind their own nested `<details>`
-      block once there are ``_FOLD_MIN_ROWS`` or more (design.md rule 5),
-      else shown plain inline (rule 4's "a tap for two lines is worse
+      directly beneath it — all but the newest folded behind their own
+      nested `<details>` block once those reach ``_FOLD_MIN_ROWS``
+      (design.md rule 5), the newest always a plain row after the fold,
+      else all shown plain inline (rule 4's "a tap for two lines is worse
       than showing them" is stated as a general threshold rule, not
       scoped to ordinary run sections only — so fewer than three of an
       agent's own tool calls are shown plain rather than silently
       dropped).
+
+    No section's form ends with a `<details>` block that could end the
+    card body ("never end with collapse", 2026-10-24): an agent's fold is
+    always followed by its newest call, and a folded ``"run"`` is never
+    the newest run, so the newest run (never wrapped, never dropped by
+    :func:`_fit_sections`) always comes after it. The divider above the
+    status line therefore always follows a plain row, never Telegram's
+    own line under a fold. aipager's other dividers cannot follow a fold
+    either: the merged layout's comes after the card's status line, and
+    the one above an answer's agents block comes after Claude's answer
+    (or that merged message), which aipager never wraps in `<details>`.
 
     Pure."""
     if kind == "prose":
@@ -1081,8 +1094,16 @@ def _render_section(
     if not tools:
         return agent_row
     tool_rows = _render_agent_tool_rows(tools, tr)
-    if len(tool_rows) >= _FOLD_MIN_ROWS:
-        nested = _build_details_block(_tool_fold_summary(len(tool_rows), tr), tool_rows)
+    # The newest call always stays plain AFTER the fold (operator,
+    # 2026-10-24: "never end with collapse"). Telegram draws its own line
+    # under every `<details>` block, so a card whose last section ended
+    # in one showed that line right above aipager's divider: two lines
+    # over the status line. The fold counts only the calls it holds, and
+    # folds only when those alone reach _FOLD_MIN_ROWS.
+    folded, newest = tool_rows[:-1], tool_rows[-1]
+    if len(folded) >= _FOLD_MIN_ROWS:
+        nested = (f"{_build_details_block(_tool_fold_summary(len(folded), tr), folded)}"
+                  f"{_ROW_SEP}{newest}")
     else:
         nested = _ROW_SEP.join(tool_rows)
     return f"{agent_row}{_ROW_SEP}{nested}"

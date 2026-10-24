@@ -32,6 +32,8 @@ from tests.i18n_surfaces import (
     with_keyboard_app_removed,
     without_appearance_row,
     without_card_divider,
+    with_agent_calls_folded,
+    CARD_FOLD_TAIL_SURFACES,
     without_mode_labels,
 )
 
@@ -238,7 +240,12 @@ def test_english_surfaces_change_only_under_agents_line():
         assert new[k] == with_keyboard_app_removed(old[k]), k
     for k in AGENTS_TREE_CARD_SURFACES:
         assert new[k] != old[k], k
-        assert without_card_divider(new[k]) == old[k], k
+        # Never end with a fold (2026-10-24): an agent's three calls
+        # show plain where they were folded, and only that.
+        cur = with_agent_calls_folded(new[k]) if k in CARD_FOLD_TAIL_SURFACES else new[k]
+        if k in CARD_FOLD_TAIL_SURFACES:
+            assert cur != new[k], k
+        assert without_card_divider(cur) == old[k], k
     for k in APPEARANCE_SURFACES:
         assert new[k] != old[k], k
         assert without_appearance_row(new[k]) == old[k], k

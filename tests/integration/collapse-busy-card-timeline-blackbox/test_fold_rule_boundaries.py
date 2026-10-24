@@ -150,7 +150,9 @@ def test_live_agent_with_two_tools_shows_them_plainly_not_folded():
     assert "Grep: a" in card and "Grep: b" in card
 
 
-def test_live_agent_with_three_tools_gets_its_own_nested_fold():
+def test_live_agent_with_three_tools_shows_them_plainly_not_folded():
+    """The newest call stays outside any fold, so three calls would leave
+    two folded: under _FOLD_MIN_ROWS, so all three show plain."""
     sess = _sess()
     sess.tool_history = [(f"{MARK} explorer", False)]
     sess.active_subagents["a1"] = {
@@ -159,7 +161,21 @@ def test_live_agent_with_three_tools_gets_its_own_nested_fold():
         "tools": ["Grep: a", "Grep: b", "Grep: c"],
     }
     card, _truncated = build_stream_card_ex(sess, "Working")
+    assert "<details" not in card
+    assert "Grep: a" in card and "Grep: b" in card and "Grep: c" in card
+
+
+def test_live_agent_with_four_tools_folds_three_and_keeps_the_newest_plain():
+    sess = _sess()
+    sess.tool_history = [(f"{MARK} explorer", False)]
+    sess.active_subagents["a1"] = {
+        "type": "explorer", "activity": "Bash: probing",
+        "started_at": time.monotonic() - 5, "history_idx": 0,
+        "tools": ["Grep: a", "Grep: b", "Grep: c", "Grep: d"],
+    }
+    card, _truncated = build_stream_card_ex(sess, "Working")
     assert "<details><summary>▸ 3 tool call" in card
+    assert card.index("</details>") < card.index("Grep: d")
 
 
 def test_live_agent_row_itself_is_never_wrapped_regardless_of_tool_count():
@@ -189,7 +205,7 @@ def test_settled_agent_with_two_tools_shows_them_plainly_not_folded():
     assert "Read: x" in card and "Read: y" in card
 
 
-def test_settled_agent_with_three_tools_gets_its_own_nested_fold():
+def test_settled_agent_with_three_tools_shows_them_plainly_not_folded():
     sess = _sess()
     sess.tool_history = [(f"{MARK} archivist", True)]
     sess.finished_subagents.append({
@@ -198,7 +214,21 @@ def test_settled_agent_with_three_tools_gets_its_own_nested_fold():
         "history_idx": 0,
     })
     card, _truncated = build_stream_card_ex(sess, "Working")
+    assert "<details" not in card
+    assert "Read: x" in card and "Read: z" in card
+
+
+def test_settled_agent_with_four_tools_folds_three_and_keeps_the_newest_plain():
+    sess = _sess()
+    sess.tool_history = [(f"{MARK} archivist", True)]
+    sess.finished_subagents.append({
+        "type": "archivist", "started_at": 0.0, "elapsed": 12.0,
+        "tool_count": 4, "tools": ["Read: w", "Read: x", "Read: y", "Read: z"],
+        "history_idx": 0,
+    })
+    card, _truncated = build_stream_card_ex(sess, "Working")
     assert "<details><summary>▸ 3 tool call" in card
+    assert card.index("</details>") < card.index("Read: z")
 
 
 def test_settled_agent_nested_fold_count_reflects_the_tools_list_not_tool_count():
@@ -210,9 +240,10 @@ def test_settled_agent_nested_fold_count_reflects_the_tools_list_not_tool_count(
     sess.tool_history = [(f"{MARK} archivist", True)]
     sess.finished_subagents.append({
         "type": "archivist", "started_at": 0.0, "elapsed": 12.0,
-        "tool_count": 99, "tools": ["A", "B", "C", "D"], "history_idx": 0,
+        "tool_count": 99, "tools": ["A", "B", "C", "D", "E"], "history_idx": 0,
     })
     card, _truncated = build_stream_card_ex(sess, "Working")
+    # Five present, the newest outside the fold: the fold holds four.
     assert "<details><summary>▸ 4 tool call" in card
     assert "99 tool call" not in card
 

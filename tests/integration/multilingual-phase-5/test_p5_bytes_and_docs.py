@@ -40,6 +40,8 @@ from tests.i18n_surfaces import (
     with_keyboard_app_removed,
     without_appearance_row,
     without_card_divider,
+    with_agent_calls_folded,
+    CARD_FOLD_TAIL_SURFACES,
     updates_card_change_only,
     without_appearance_section,
     without_mode_labels,
@@ -146,7 +148,11 @@ def test_every_english_surface_of_the_base_is_unchanged():
     # The card got a divider above its status line (2026-10-14), and only
     # that.
     for k in AGENTS_TREE_CARD_SURFACES & set(base):
-        assert without_card_divider(cur[k]) == base[k], k
+        # ...and (2026-10-24) an agent's three calls show plain where they
+        # were folded, so the card never ends with a fold; only that.
+        got = (with_agent_calls_folded(cur[k]) if k in CARD_FOLD_TAIL_SURFACES
+               else cur[k])
+        assert without_card_divider(got) == base[k], k
     # The settings menus got a "🎨 Appearance" row (2026-10-15), and only
     # that.
     for k in APPEARANCE_SURFACES:

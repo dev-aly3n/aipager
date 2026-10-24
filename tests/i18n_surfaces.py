@@ -108,6 +108,23 @@ def without_card_divider(value):
     return [unfooter(v).replace("\n\n---\n\n", "\n\n") for v in value]
 
 
+#: The card surfaces the "never end with a fold" fix (2026-10-24) changed:
+#: an agent's newest tool call stays plain after its fold, and a fold
+#: needs three calls besides it, so the sample Explore agent's three calls
+#: show plain where they were folded (see :func:`with_agent_calls_folded`).
+CARD_FOLD_TAIL_SURFACES = frozenset({"card.busy", "card.final", "card.waiting"})
+_EXPLORE_CALLS_PLAIN = "\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`"
+_EXPLORE_CALLS_FOLDED = ("<details><summary>\u25b8 3 tool calls</summary>\n\n"
+                         f"{_EXPLORE_CALLS_PLAIN}\n\n</details>")
+
+
+def with_agent_calls_folded(value):
+    """*value* (a card surface's list of texts) as goldens recorded before
+    2026-10-24 have it: the sample Explore agent's three tool calls behind
+    a "3 tool calls" fold again, and nothing else changed."""
+    return [v.replace(_EXPLORE_CALLS_PLAIN, _EXPLORE_CALLS_FOLDED) for v in value]
+
+
 def without_appearance_row(value):
     """*value* (a settings menu's list of texts) without the "🎨 Appearance"
     row goldens recorded on older bases do not have."""
