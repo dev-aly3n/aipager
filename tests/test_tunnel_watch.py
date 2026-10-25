@@ -109,6 +109,9 @@ def test_exit_during_probe_publishes_nothing_and_restarts_within_one_interval(
 
 def test_resolve_public_url_hides_the_managed_url_until_its_probe_passes(
         table, run_async, monkeypatch):
+    # The next tunnel never comes up, so the empty slot after the exit
+    # cannot be replaced by a new URL before this test looks at it.
+    table.hosts[40002] = '{"hostname":""}'
     gate = {}
 
     async def _gated(url):
