@@ -116,7 +116,10 @@ def test_callback_data_does_not_depend_on_language(mk_bot, run_async, code):
 
 
 def test_persian_prose_writes_no_latin_digits():
-    code_token = re.compile(r"\b[A-Z][A-Z0-9_]*=\d+\b|\{[a-z_0-9]+\}|U\+[0-9A-F.]+")
+    # Code is not prose, as tools/i18n.py check_digits has it: a value a
+    # person types (an address, a port) stays as it is typed, inside <code>.
+    code_token = re.compile(r"\b[A-Z][A-Z0-9_]*=\d+\b|\{[a-z_0-9]+\}|U\+[0-9A-F.]+"
+                            r"|<code>[^<]*</code>")
     bad = []
     for key, row in catalog("fa").items():
         values = row["v"].values() if isinstance(row["v"], dict) else [row["v"]]
