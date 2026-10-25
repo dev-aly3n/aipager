@@ -1042,8 +1042,11 @@ class TunnelManager:
             raw = ("" if reason == tunnel_state.BINARY_MISSING
                    else tunnel_state.raw_cause(log_path, err_path))
             code = "none" if exc.exit_code is None else str(exc.exit_code)
+            message = str(exc)
+            if raw and raw in message:
+                raw = ""                    # said once is enough
             # aipager's own words first, then cloudflared's.
-            detail = "; ".join(t for t in (str(exc), raw) if t)
+            detail = "; ".join(t for t in (message, raw) if t)
             return _Verdict(reason, "launch_failed", "launch", code, detail)
         except Exception as exc:
             log.log(level, "cloudflared: launch attempt crashed", exc_info=True)

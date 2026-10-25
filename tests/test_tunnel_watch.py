@@ -665,3 +665,62 @@ def test_the_clear_goes_out_only_after_the_dead_tunnels_publish(table, run_async
 
     run_async(scenario())
     assert events == [("start", URL1), ("end", URL1), ("start", ""), ("end", "")]
+
+# ---- the failure line says cloudflared's words once -----------------------------------------
+
+def test_the_failure_line_never_repeats_cloudflareds_words(table, run_async, monkeypatch,
+                                                          caplog):
+    raw = "expected at least 2 Cloudflare Regions regions, but SRV only returned 1"
+    log_path, err_path = tm._log_paths()
+    calls = []
+
+    async def _spawn(binary, port):
+        calls.append(1)
+        if len(calls) > 1:
+            await asyncio.Event().wait()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(json.dumps({"level": "error", "error": raw,
+                                        "message": "Initiating shutdown"}) + "\n")
+        err_path.write_text(raw + "\n")
+        # aipager's own message already holds cloudflared's words.
+        raise tm.TunnelLaunchError(raw, exit_code=1)
+    monkeypatch.setattr(tm, "spawn_and_discover_url", _spawn)
+
+    async def scenario():
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: len(calls) == 2)
+        await m.stop()
+
+    with caplog.at_level(logging.WARNING, logger="aipager.miniapp.tunnel_manager"):
+        run_async(scenario())
+    [line] = [r.getMessage() for r in caplog.records if "reason dns_incomplete" in r.getMessage()]
+    assert line.count(raw) == 1, line
+
+
+def test_the_failure_line_keeps_both_when_they_differ(table, run_async, monkeypatch, caplog):
+    raw = "expected at least 2 Cloudflare Regions regions, but SRV only returned 1"
+    log_path, _err = tm._log_paths()
+    calls = []
+
+    async def _spawn(binary, port):
+        calls.append(1)
+        if len(calls) > 1:
+            await asyncio.Event().wait()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(json.dumps({"level": "error", "error": raw,
+                                        "message": "Initiating shutdown"}) + "\n")
+        raise tm.TunnelLaunchError("cloudflared exited before reporting a tunnel URL",
+                                   exit_code=1)
+    monkeypatch.setattr(tm, "spawn_and_discover_url", _spawn)
+
+    async def scenario():
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: len(calls) == 2)
+        await m.stop()
+
+    with caplog.at_level(logging.WARNING, logger="aipager.miniapp.tunnel_manager"):
+        run_async(scenario())
+    [line] = [r.getMessage() for r in caplog.records if "reason dns_incomplete" in r.getMessage()]
+    assert f"[cloudflared exited before reporting a tunnel URL; {raw}]" in line
