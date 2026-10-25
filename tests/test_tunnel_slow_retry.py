@@ -391,8 +391,10 @@ def test_the_managers_probe_lines_are_info_also_in_the_fast_phase(loop_config, m
 
 def test_the_bots_own_probe_still_warns(run_async, monkeypatch, caplog, real_probe_public_url):
     """Out of scope and unchanged: the probe of an override or Tailscale
-    address (the bot's, not the manager's) warns, also after the manager
-    probed in the same loop."""
+    address (the bot's, not the manager's) warns, also when it runs right
+    after a manager probe in the same task: ``_quiet_probe`` resets the
+    level before it returns. (Between tasks the level cannot leak at all:
+    each task runs in its own copy of the context.)"""
     _fail_probe_at_aiohttp(monkeypatch, "502")
 
     async def scenario():
