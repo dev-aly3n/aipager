@@ -2252,6 +2252,7 @@ class HookReceiver:
             sess.last_prompt_origin = "telegram"  # fail-closed between turns
             sess.pending_tool_started_at = None
             sess.compact_started_at = None
+            sess.compacted_size_pending = None
             await self.notify_fn(sess, "session_end",
                                  {"source": source, "notes": notes,
                                   "session_id": ended_sid})
@@ -2271,6 +2272,9 @@ class HookReceiver:
                 if sl:
                     pre_pct = sl.get("context_pct", 0)
             sess.pre_compact_pct = pre_pct
+            # A size still owed to an earlier compaction's message is no
+            # longer its own: this compaction changes it.
+            sess.compacted_size_pending = None
             # Mark compact-in-flight so session_monitor's stale-busy warning
             # stands down while claude is compacting — no hooks fire between
             # PreCompact and the post-compact SessionStart, which can take
@@ -2304,7 +2308,10 @@ class HookReceiver:
                 # A new or resumed conversation: no turn of it runs yet, so
                 # none that files Claude sends may come from (a /clear typed
                 # from Telegram opened one for the conversation it ended).
-                self.registry.get_or_create(session_name).files_turn_closed()
+                started_conv = self.registry.get_or_create(session_name)
+                started_conv.files_turn_closed()
+                # Nor is a size owed to a compaction of the one before.
+                started_conv.compacted_size_pending = None
                 # A process (re)starting under this id — `--resume` of a
                 # conversation /kill just ended keeps its id — is not the
                 # killed one: its exit must be announced again.
@@ -2405,9 +2412,18 @@ class HookReceiver:
                 sess.lines_removed_baseline = lines_rm
             sess.last_lines_added = max(0, lines_add - (sess.lines_added_baseline or 0))
             sess.last_lines_removed = max(0, lines_rm - (sess.lines_removed_baseline or 0))
+            # The first real reading after a compaction between turns gives
+            # its "Compacted from N%" message the size after it. Taken off
+            # the session before any await, so one reading does it.
+            size_pending = None
+            if ctx_pct > 0 and not sess.pre_compact_pct and sess.compacted_size_pending:
+                size_pending, sess.compacted_size_pending = sess.compacted_size_pending, None
             # Compact-done fallback: if SessionStart hook didn't fire (or had stale data),
-            # detect compaction completion from the first low statusLine reading
-            if ctx_pct < 30 and sess.pre_compact_pct > 0:
+            # detect compaction completion from the first low statusLine reading.
+            # Below the pre-compact value too: a reading sent just before
+            # PreCompact (each datagram is its own task) still carries it,
+            # and at 10-29% it would end the compaction before it is done.
+            if ctx_pct < 30 and ctx_pct < sess.pre_compact_pct:
                 before_pct = sess.pre_compact_pct
                 sess.pre_compact_pct = 0  # reset SYNCHRONOUSLY before await
                 sess.compact_started_at = None  # belt-and-braces if SessionStart missed
@@ -2429,6 +2445,11 @@ class HookReceiver:
                     sess.context_warned_conversation = conversation
                     self.registry.mark_dirty()
                     await self.notify_fn(sess, "context_warning", {"context_pct": ctx_pct})
+            if size_pending is not None:
+                await self.notify_fn(sess, "compact_size", {
+                    "pending": size_pending, "after_pct": ctx_pct,
+                    "session_id": msg.get("session_id") or "",
+                })
             log.debug("[%s] statusline: %d%% ctx, ↓%d out (base=%d, total=%d)",
                       sess.label, ctx_pct, sess.last_output_tokens,
                       sess.output_baseline or 0, total_out)

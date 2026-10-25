@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ İlk mesajın üzerinde çalışıyor."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"one": "⏱️ <b>{session}</b> · {n} dk geçti, sıkıştırmanın bittiği hâlâ bildirilmedi", "other": "⏱️ <b>{session}</b> · {n} dk geçti, sıkıştırmanın bittiği hâlâ bildirilmedi"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Konuşma sıkıştırıldı: {before} → {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · Konuşma {before} doluyken sıkıştırıldı"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · Konuşma sıkıştırıldı"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Bağlam {percent} dolu - yakında otomatik sıkıştırılacak"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · bellek sınırına ulaşıldı"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · <code>{tool}</code> sırasında bellek sınırına ulaşıldı"}

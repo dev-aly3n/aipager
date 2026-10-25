@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ 첫 메시지를 처리하는 중이에요."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · {n}분이 지났지만 대화 압축이 끝났다는 확인이 아직 없어요"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · 대화 압축됨: {before} → {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · 대화 압축됨 (압축 전 {before})"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · 대화 압축됨"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · 컨텍스트 {percent} 사용 - 곧 자동으로 압축해요"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · 메모리 한도 도달"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · <code>{tool}</code> 실행 중 메모리 한도 도달"}

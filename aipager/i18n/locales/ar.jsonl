@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ يجري العمل على رسالتك الأولى."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"few": "⏱️ <b>{session}</b> · مرت {n} دقائق ولم يُبلغ تلخيص المحادثة عن انتهائه بعد", "many": "⏱️ <b>{session}</b> · مرت {n} دقيقة ولم يُبلغ تلخيص المحادثة عن انتهائه بعد", "one": "⏱️ <b>{session}</b> · مرت دقيقة واحدة ولم يُبلغ تلخيص المحادثة عن انتهائه بعد", "other": "⏱️ <b>{session}</b> · مرت {n} دقيقة ولم يُبلغ تلخيص المحادثة عن انتهائه بعد", "two": "⏱️ <b>{session}</b> · مرت دقيقتان ولم يُبلغ تلخيص المحادثة عن انتهائه بعد", "zero": "⏱️ <b>{session}</b> · مرت {n} دقيقة ولم يُبلغ تلخيص المحادثة عن انتهائه بعد"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · لُخّصت المحادثة: {before} ← {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · لُخّصت المحادثة بعد أن بلغت {before}"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · لُخّصت المحادثة"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · امتلأ السياق بنسبة {percent} - سيُلخَّص تلقائيًا قريبًا"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · بلغ حد الذاكرة"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · بلغ حد الذاكرة أثناء <code>{tool}</code>"}

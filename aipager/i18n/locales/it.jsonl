@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Sta lavorando al tuo primo messaggio."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"many": "⏱️ <b>{session}</b> · Dopo {n} min la compattazione non ha ancora detto di aver finito", "one": "⏱️ <b>{session}</b> · Dopo {n} min la compattazione non ha ancora detto di aver finito", "other": "⏱️ <b>{session}</b> · Dopo {n} min la compattazione non ha ancora detto di aver finito"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Conversazione compattata: {before} → {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · Conversazione compattata (prima: {before})"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · Conversazione compattata"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Contesto usato: {percent} - presto verrà compattato in automatico"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · limite di memoria raggiunto"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · limite di memoria raggiunto durante <code>{tool}</code>"}

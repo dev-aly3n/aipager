@@ -98,7 +98,7 @@ hook's own work is in `aipager/dtach/notify_hook.py`.
 
 A session started, resumed or was compacted. A session the daemon does
 not track yet is registered. After a compaction the card reads
-`📦 name · Compacted: 82% → 4%` (see [PreCompact](#precompact--postcompact)). For
+`📦 name · Compacted from 82%` (see [PreCompact](#precompact--postcompact)). For
 a new conversation the hook also clears the previous turn's open mark.
 A background job's first `SessionStart` (source `fork`) only tells the
 daemon the job's conversation id; it does not close the turn that moved
@@ -290,9 +290,12 @@ are ignored.
 Claude is compacting its context (`trigger` is `auto` or `manual`). The
 busy card reads `🔄 name · Compacting` (a new message when no card is
 up), so the pause does not look like a crash. `PostCompact` ends that
-state; the `📦 name · Compacted: X% → Y%` line comes from the
+state; the `📦 name · Compacted from X%` line comes from the
 `SessionStart` that follows, or from the status line when that is
-missed. The status line also gives the warning `⚠️ name · Context at
+missed. Claude Code's status line reads 0% until the next message, so
+the new size is not known yet: after a compaction between turns, the
+line becomes `📦 name · Compacted: X% → Y%` once the status line reports
+it. The status line also gives the warning `⚠️ name · Context at
 82% - auto-compact soon` (with a Compact button) when the context
 reaches 80%, once per conversation: compacting does not repeat it, and a
 new conversation (after `/clear`, for example) gets it again.

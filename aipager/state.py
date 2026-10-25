@@ -590,6 +590,13 @@ class TrackedSession:
     context_warned_conversation: str = ""
     # Context % before compaction (for delta display in compact_done notification)
     pre_compact_pct: int = 0
+    # A compaction's own message still waiting for the size after it:
+    # (message id, chat id, % before, conversation id). Right after a
+    # compaction Claude Code's status line reads 0 until the next message,
+    # so compact_done says "Compacted from N%" and the first real reading
+    # completes that one message. Only for a message nothing else edits
+    # (a compaction between turns). Transient, never in _PERSIST_FIELDS.
+    compacted_size_pending: tuple[int, int | str, int, str] | None = None
     # Last injected prompt text — enables retry on API errors
     last_prompt: str = ""
     # The person's own text of the prompt that started the running turn

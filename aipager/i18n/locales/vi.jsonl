@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Đang xử lý tin nhắn đầu tiên của bạn."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · Đã {n} phút mà việc thu gọn cuộc trò chuyện vẫn chưa báo xong"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Đã thu gọn cuộc trò chuyện: {before} → {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · Đã thu gọn cuộc trò chuyện (trước đó {before})"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · Đã thu gọn cuộc trò chuyện"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Ngữ cảnh đã đầy {percent} - sắp tự động thu gọn"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · chạm giới hạn bộ nhớ"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · chạm giới hạn bộ nhớ trong lúc chạy <code>{tool}</code>"}

@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Працює над твоїм першим повідомленням."}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"few": "⏱️ <b>{session}</b> · Стиснення за {n} хвилини так і не повідомило про завершення", "many": "⏱️ <b>{session}</b> · Стиснення за {n} хвилин так і не повідомило про завершення", "one": "⏱️ <b>{session}</b> · Стиснення за {n} хвилину так і не повідомило про завершення", "other": "⏱️ <b>{session}</b> · Стиснення за {n} хвилини так і не повідомило про завершення"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Розмову стиснуто: {before} → {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · Розмову стиснуто, було {before}"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · Розмову стиснуто"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · Контекст заповнено на {percent} - скоро стиснеться автоматично"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · перевищено ліміт пам'яті"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · перевищено ліміт пам'яті під час <code>{tool}</code>"}

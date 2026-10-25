@@ -3522,9 +3522,7 @@ class NotifyMixin:
             )
             if not target_msg_id and popped is not None:
                 target_msg_id = popped.msg_id
-            tr = i18n.for_sess(sess)
-            text = tr.html(COMPACTED, session=label, before=tr.num(f"{before_pct}%"),
-                           after=tr.num(f"{after_pct}%"))
+            text = _compacted_text(i18n.for_sess(sess), label, before_pct, after_pct)
             if standalone:
                 # Not tracked, so a turn that starts meanwhile opens a card
                 # of its own, and nothing here may touch that card. Under
@@ -3532,19 +3530,35 @@ class NotifyMixin:
                 # already out for this message (a phantom SubagentStop's
                 # repaint) lands first, and one taking the lock later finds
                 # the stack popped and sends nothing.
+                chat_id = resolve_chat_id(sess)
+                conversation = sess.claude_session_id
+                shown_id = None
                 try:
                     async with _card_edit_lock(sess):
                         if target_msg_id and target_msg_id > 0:
-                            await self._edit_busy_raw(target_msg_id, text,
-                                                      chat_id=resolve_chat_id(sess))
+                            # Not gone (None): a failed edit still leaves a
+                            # message the size can complete later.
+                            if await self._edit_busy_raw(target_msg_id, text,
+                                                         chat_id=chat_id) is not None:
+                                shown_id = target_msg_id
                         else:
-                            await bot.send_message(
-                                resolve_chat_id(sess), text, parse_mode="HTML",
+                            sent = await bot.send_message(
+                                chat_id, text, parse_mode="HTML",
                                 reply_to_message_id=sess.trigger_msg_id,
                             )
+                            shown_id = sent.message_id
                 except Exception:
                     log.warning("Failed to show compact_done", exc_info=True)
                 sess.last_token_pct = after_pct
+                # The size after it is not measured yet: the first real
+                # status line reading completes this message ("compact_size").
+                # Not when, during the edit, another compaction began, the
+                # conversation changed (/clear) or the session ended.
+                if (shown_id and before_pct > 0 and after_pct <= 0
+                        and not sess.pre_compact_pct and sess.compact_started_at is None
+                        and sess.claude_session_id == conversation
+                        and sess.status != Status.GONE):
+                    sess.compacted_size_pending = (shown_id, chat_id, before_pct, conversation)
                 return
             if target_msg_id and target_msg_id > 0:
                 result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
@@ -3585,6 +3599,31 @@ class NotifyMixin:
             await asyncio.sleep(COMPACT_DONE_PAUSE_SECONDS)
             sess.last_token_pct = after_pct
             self._start_animation(sess)
+            return
+
+        if event == "compact_size":
+            # The first real status line reading after a compaction between
+            # turns: its "Compacted from N%" message gets the size after it.
+            # The hook receiver took the record off the session. Not under
+            # the card-edit lock: that message is no card, and nothing else
+            # edits it, while a turn's live card would wait behind this edit.
+            pending = context.get("pending")
+            after_pct = context.get("after_pct", 0)
+            if not pending or after_pct <= 0:
+                return
+            msg_id, chat_id, before_pct, conversation = pending
+            reading_conversation = context.get("session_id") or ""
+            if conversation and reading_conversation and reading_conversation != conversation:
+                return  # another conversation's size
+            if sess.pre_compact_pct or sess.compact_started_at is not None:
+                return  # a newer compaction is on
+            if msg_id == sess.busy_msg_id:
+                return  # defensive: never a live card (nothing tracks it today)
+            text = _compacted_text(i18n.for_sess(sess), label, before_pct, after_pct)
+            try:
+                await self._edit_busy_raw(msg_id, text, chat_id=chat_id)
+            except Exception:
+                log.warning("Failed to add the size after a compaction", exc_info=True)
             return
 
         if event == "compact_timeout":
@@ -4923,6 +4962,28 @@ QUIET_TURN = Plural(
 COMPACTED = Msg("notice.compacted", "📦 <b>{session}</b> · Compacted: {before} → {after}",
                 note="The context was compacted: how full before and after; RTL catalogs use ←",
                 eg={"session": "x1", "before": "88%", "after": "12%"})
+COMPACTED_FROM = Msg("notice.compacted_from", "📦 <b>{session}</b> · Compacted from {before}",
+                     note="The context was compacted from {before} full; the size after it "
+                          "is not known yet",
+                     eg={"session": "x1", "before": "88%"})
+COMPACTED_PLAIN = Msg("notice.compacted_plain", "📦 <b>{session}</b> · Compacted",
+                      note="The context was compacted; how full it was is not known",
+                      eg={"session": "x1"})
+
+
+def _compacted_text(tr, label: str, before_pct: int, after_pct: int) -> str:
+    """The Compacted notice. Right after a compaction Claude Code's status
+    line reads 0 until the next message is sent, so an after of 0 is "not
+    measured yet", never the new size: the notice then says what it was
+    compacted from. A before of 0 is PreCompact having measured nothing."""
+    if before_pct <= 0:
+        return tr.html(COMPACTED_PLAIN, session=label)
+    before = tr.num(f"{before_pct}%")
+    if after_pct <= 0:
+        return tr.html(COMPACTED_FROM, session=label, before=before)
+    return tr.html(COMPACTED, session=label, before=before, after=tr.num(f"{after_pct}%"))
+
+
 COMPACT_TIMEOUT = Plural(
     "notice.compact_timeout",
     one="⏱️ <b>{session}</b> · Compaction didn't confirm completion after {n} min",

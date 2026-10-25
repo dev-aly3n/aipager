@@ -501,6 +501,8 @@
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ 正在处理你的第一条消息。"}
 {"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · 已过 {n} 分钟，压缩对话仍未报告完成"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · 对话已压缩：{before} → {after}"}
+{"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · 对话已压缩（压缩前 {before}）"}
+{"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · 对话已压缩"}
 {"k": "notice.context", "src": "ae5791e1", "v": "⚠️ <b>{session}</b> · 上下文已用 {percent}，即将自动压缩"}
 {"k": "notice.memcap_head", "src": "7a7e07f4", "v": "⚠️ <b>{session}</b> · 达到内存上限"}
 {"k": "notice.memcap_head_tool", "src": "d02739f6", "v": "⚠️ <b>{session}</b> · 运行 <code>{tool}</code> 时达到内存上限"}
