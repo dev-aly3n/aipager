@@ -635,6 +635,34 @@ def test_the_state_is_not_working_while_the_clear_goes_out(table, run_async):
 
 
 
+def test_the_failure_is_logged_before_the_clear_goes_out(table, run_async, caplog):
+    """The log says why as soon as the state does: a stop() that lands
+    while the clear goes out never loses the failure line."""
+    table.hosts[40002] = '{"hostname":""}'        # the next tunnel never comes up
+    state = {}
+
+    async def on_change(url):
+        if not url and "release" in state:
+            state["clearing"].set()
+            await state["release"].wait()
+
+    async def scenario():
+        m = tm.TunnelManager(8765, on_change)
+        await m.start()
+        await _until(lambda: m.current_url == URL1 and m._publish_task.done())
+        state["clearing"], state["release"] = asyncio.Event(), asyncio.Event()
+        _die(table, 4000, code=3)
+        await _until(lambda: state["clearing"].is_set())
+        during = [r.getMessage() for r in caplog.records]
+        state["release"].set()
+        await m.stop()
+        return during
+
+    with caplog.at_level(logging.WARNING, logger="aipager.miniapp.tunnel_manager"):
+        during = run_async(scenario())
+    assert any("cloudflared exited (code=3, stage run)" in m for m in during), during
+
+
 def test_the_clear_goes_out_only_after_the_dead_tunnels_publish(table, run_async):
     """The manager's own order, whatever the callback does: the clear
     starts once the publish in flight has ended, never beside it (a

@@ -1136,30 +1136,31 @@ class TunnelManager:
             fast = budget_used < int(config.TUNNEL_RESTART_MAX_ATTEMPTS)
             phase = tunnel_state.RETRYING if fast else tunnel_state.SLOW
             delay = _backoff_seconds(budget_used) if fast else _slow_interval()
-            # Not working from here on: /app and doctor say so at once,
-            # also while a publish in flight and the clear go out.
-            self._set_status(phase, reason, budget_used, time.time() + delay)
-            await self._set_url("")
-            # The wait starts now, after the clear.
+            # Not working from here on: /app and doctor say so at once, and
+            # the log says why, also while a publish in flight and the
+            # clear go out.
             self._set_status(phase, reason, budget_used, time.time() + delay)
             if fast:
                 log.warning("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
                             "trying again in %.0fs", v.kind, v.code, v.stage, reason,
                             v.detail, delay)
+            elif not slow_announced:
+                slow_announced = True
+                log.warning("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
+                            "%d attempts failed, so the tunnel is now retried slowly, "
+                            "every %.0fs", v.kind, v.code, v.stage, reason, v.detail,
+                            budget_used, delay)
+            else:
+                log.info("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
+                         "next slow retry in %.0fs", v.kind, v.code, v.stage, reason,
+                         v.detail, delay)
+            await self._set_url("")
+            # The wait starts now, after the clear.
+            self._set_status(phase, reason, budget_used, time.time() + delay)
+            if fast:
                 await asyncio.sleep(delay)
             else:
-                interval = delay
-                if not slow_announced:
-                    slow_announced = True
-                    log.warning("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
-                                "%d attempts failed, so the tunnel is now retried slowly, "
-                                "every %.0fs", v.kind, v.code, v.stage, reason, v.detail,
-                                budget_used, interval)
-                else:
-                    log.info("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
-                             "next slow retry in %.0fs", v.kind, v.code, v.stage, reason,
-                             v.detail, interval)
-                await self._slow_wait(interval)
+                await self._slow_wait(delay)
                 log.info("cloudflared: trying the tunnel again (slow retry)")
             self._set_status(phase, reason, budget_used, 0.0)
 
