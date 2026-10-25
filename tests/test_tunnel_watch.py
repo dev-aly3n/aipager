@@ -449,3 +449,80 @@ def test_stop_during_publish_lets_it_finish_and_is_bounded(table, run_async, mon
     assert first == ["started", "finished"], "stop() cut the publish half way"
     assert second == ["started", "cancelled"]
     assert took < 1.5
+
+
+# ---- nothing outlives its attempt -----------------------------------------------------------
+
+def test_the_probe_stops_when_cloudflared_exits_first(table, run_async, monkeypatch):
+    """Spec requirement 1, "the probe stops": a dead tunnel's probe is
+    cancelled at once, not left running for its whole window (logging the
+    dead URL and overlapping the next attempt's probe)."""
+    state = {"started": False, "cancelled_at": None}
+
+    async def _probe(url):
+        if url == URL1:
+            state["started"] = True
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                state["cancelled_at"] = time.monotonic()
+                raise
+        return True
+    monkeypatch.setattr(tunnel_mod, "probe_public_url", _probe)
+
+    async def scenario():
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: state["started"])
+        _die(table, 4000)
+        died = time.monotonic()
+        await _until(lambda: m.current_url == URL2)
+        cancelled_at = state["cancelled_at"]
+        await m.stop()
+        return died, cancelled_at
+
+    died, cancelled_at = run_async(scenario())
+    assert cancelled_at is not None, "the dead tunnel's probe kept running"
+    assert cancelled_at - died < 1.0
+
+
+def _pending_tasks():
+    me = asyncio.current_task()
+    return [t for t in asyncio.all_tasks() if t is not me and not t.done()]
+
+
+@pytest.mark.parametrize("stage", ["probe", "hold"])
+def test_a_planned_stop_leaves_no_task_of_the_manager_running(table, run_async,
+                                                              monkeypatch, stage):
+    """stop(keep=True) during the probe or while the tunnel is held: the
+    tunnel is kept for the next daemon, and no task the manager made (the
+    process watch, the probe) keeps running in this one."""
+    monkeypatch.setattr("aipager.config.MINIAPP_KEEP_TUNNEL", True)
+    gate = {}
+
+    async def _probe(url):
+        if stage == "probe":
+            await gate["never"].wait()
+        return True
+    monkeypatch.setattr(tunnel_mod, "probe_public_url", _probe)
+
+    async def scenario():
+        gate["never"] = asyncio.Event()
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        if stage == "probe":
+            await _until(lambda: len(_tunnel_spawns(table)) == 1)
+            for _ in range(10):
+                await asyncio.sleep(0.005)
+        else:
+            await _until(lambda: m.current_url == URL1)
+            for _ in range(10):
+                await asyncio.sleep(0.005)
+        await m.stop(keep=True)
+        for _ in range(3):
+            await asyncio.sleep(0)
+        return _pending_tasks()
+
+    pending = run_async(scenario())
+    assert 4000 in table.alive and table.guards(), "the tunnel was not kept"
+    assert pending == [], f"tasks left running after stop(): {pending}"
