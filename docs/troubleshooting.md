@@ -445,6 +445,77 @@ If the bot lost connection mid-install, the install itself usually
 completed on the host - restart the daemon and try a voice message
 again.
 
+## The Mini App link isn't working
+
+When the Mini App's link can't be set up, `/app` says why. The person
+who can fix the machine (the operator in a personal setup, an admin of
+the chat in a group setup) gets the cause and what to do; anyone else
+gets `📱 The Mini App isn't available right now. Try /app again later.`
+`aipager doctor` says the same in its `miniapp` row (a warning, never a
+failure), with the number of failed attempts and when the next one is.
+
+aipager keeps trying by itself: a few quick attempts first, then one
+every 10 minutes (`TUNNEL_RETRY_SLOW_SECONDS`, never less than 60
+seconds), and a `/app` in that slow phase starts one attempt at once (at
+most once a minute). Once the machine is fixed, the Mini App comes back
+without a restart.
+
+### The DNS server gave an incomplete answer
+
+`/app` says `this machine's DNS server gave an incomplete answer`. The
+DNS server answered cloudflared's lookup of Cloudflare's servers with
+only part of the list (one region where Cloudflare publishes two), and
+cloudflared stops when that happens. The DNS server the machine was
+given (often a router's, or a virtual machine network's) is at fault,
+not aipager. Check it:
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+It should list two records. If it lists one, point the machine at
+another DNS server, for example 1.1.1.1. With netplan (Ubuntu), keep the
+address DHCP gives but not its DNS server, in your file under
+`/etc/netplan/` (`eth0` is your network interface's name):
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+Then run `sudo netplan apply`. With systemd-resolved alone, write a file
+such as `/etc/systemd/resolved.conf.d/dns.conf`:
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+Then run `sudo systemctl restart systemd-resolved`. Run the `resolvectl`
+check again: once it lists two records, aipager's next attempt brings
+the Mini App back.
+
+### What the other answers mean
+
+- `this machine could not look up Cloudflare's servers in DNS`: the lookup failed outright (no answer, or a timeout). Check the machine's internet connection and its DNS server as above.
+- `cloudflared could not get a link from Cloudflare`: cloudflared could not reach `api.trycloudflare.com` to ask for a link. Check that the machine can open https://api.trycloudflare.com (a firewall can block it).
+- `this machine can't reach Cloudflare's servers on port 7844 (UDP)`: cloudflared connects to Cloudflare over UDP port 7844, and something blocks it. Allow outgoing UDP 7844 in the machine's firewall or network.
+- `aipager could not download or start cloudflared`: aipager downloads a checked copy of cloudflared the first time; the download, its check or its start failed. Check the internet connection; `aipager logs` names the step that failed.
+- `cloudflared is running, but its link never answered`: cloudflared has a link, but nothing reached aipager through it. aipager stops that tunnel and starts a new one.
+- `The Mini App isn't working right now`: a reason aipager does not recognise. `aipager logs` shows cloudflared's own message, and its files are `~/.claude/aipager-cloudflared.log` and `~/.claude/aipager-cloudflared.err`.
+
+cloudflared's own messages go to aipager's log only, never to the chat.
+With `MINIAPP_PUBLIC_URL` set, aipager runs no tunnel and none of this
+applies. While the tunnel is not working on a machine that also has
+Tailscale, `/app` hands out the Tailscale address.
+
 ## Open App shows "Open this page from the Telegram app to sign in"
 
 The page loaded, but Telegram's Mini App SDK script (the one that
@@ -565,7 +636,7 @@ A check that crashes on an unexpected environment shows as a single
 | `daemon` | Daemon is running and its socket answers; also shows Telegram rate-limit state (see [above](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | Optional: service unit is present | `aipager service install` |
 | `service_unit_path` | Linux only: the *installed* unit's `Environment=PATH=` actually contains the resolved claude binary's directory, parsed as text, since doctor cannot see systemd's own PATH from the operator's interactive shell | `aipager service install --yes` |
-| `miniapp` | Whether the Mini App can start when it is on. **Never FAILs**: the Mini App is optional | the fix it names |
+| `miniapp` | Whether the Mini App can start when it is on, and, while the running daemon holds a tunnel for it, whether that tunnel works (when it does not: the reason, the failed attempts and the next try; see [above](#the-mini-app-link-isnt-working)). **Never FAILs**: the Mini App is optional | the fix it names |
 
 `aipager doctor --json` prints the same checks, in this order, with
 these keys (see [commands](commands.md#aipager-doctor---json)).
