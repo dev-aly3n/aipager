@@ -39,7 +39,8 @@ _managed_tunnel_url: str = ""
 
 def set_managed_tunnel_url(url: str) -> None:
     """Set (or clear, with ``""``) the in-memory managed-tunnel URL that
-    :func:`resolve_public_url` consults."""
+    :func:`resolve_public_url` consults. The tunnel manager sets a URL
+    only after its probe passed."""
     global _managed_tunnel_url
     _managed_tunnel_url = url
 
@@ -92,10 +93,12 @@ async def resolve_public_url() -> str:
     Precedence: an explicit ``MINIAPP_PUBLIC_URL`` override wins
     outright; otherwise the managed tunnel's current URL (set by
     :class:`~aipager.miniapp.tunnel_manager.TunnelManager` via
-    :func:`set_managed_tunnel_url`) is used if there is one; otherwise
-    Tailscale is probed as the opt-in fallback for the startup window
-    before the first tunnel URL, and for the (rare) case the tunnel's
-    restart ceiling has been reached.  :func:`detect_public_url` shells
+    :func:`set_managed_tunnel_url`) is used if there is one. The managed
+    slot holds only a probed URL: it is filled once the URL answered and
+    emptied the moment cloudflared exits, so /app never hands out a link
+    the menu button would not. Otherwise Tailscale is probed as the
+    opt-in fallback for the startup window before the first verified
+    tunnel URL, and while the managed tunnel is not working.  :func:`detect_public_url` shells
     out to ``tailscale status --json`` **synchronously**, and every
     caller here is on the daemon's single shared event loop, so the
     probe runs in an executor. A hung ``tailscale`` binary blocking that

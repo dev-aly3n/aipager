@@ -515,7 +515,9 @@ def test_run_daemon_constructs_and_starts_the_tunnel_manager_with_no_override(
     assert len(calls) == 1
     port, on_url_change = calls[0]
     assert port == 8765
-    assert on_url_change == bot.publish_miniapp_button
+    # The manager probes every URL itself (while watching cloudflared),
+    # so its callback is the publish without a second probe.
+    assert on_url_change == bot.publish_managed_miniapp_button
     manager.start.assert_awaited_once()
     manager.stop.assert_awaited_once()
     # No kept tunnel: the button a previous run left is cleared at once.

@@ -1666,11 +1666,28 @@ class LifecycleMixin:
         listening on; a button that opens a broken page is worse than no
         button, and it would otherwise survive every restart.
 
+        A URL is probed first. Publishes run one at a time, and one that
+        began before the last applied real URL is dropped (a slow startup
+        probe of a Tailscale URL never replaces the tunnel's verified
+        one).
+
         Failures are logged per chat and never raised: this runs during
         startup, and one blocked or unknown chat must not cost the other
         scopes their button, let alone take the daemon down.
         """
-        from telegram import MenuButtonCommands
+        await self._publish_miniapp_button(url, probe=True)
+
+    async def publish_managed_miniapp_button(self, url: str) -> None:
+        """:meth:`publish_miniapp_button` without the probe: the managed
+        tunnel's own callback, whose manager probed the URL already (while
+        watching cloudflared), so a URL is probed exactly once."""
+        await self._publish_miniapp_button(url, probe=False)
+
+    async def _publish_miniapp_button(self, url: str, *, probe: bool) -> None:
+        # Numbered as it begins, before any await: the order the drop rule
+        # below judges by.
+        self._miniapp_publish_seq = getattr(self, "_miniapp_publish_seq", 0) + 1
+        seq = self._miniapp_publish_seq
 
         # Verify before advertising. The daemon used to publish whatever
         # URL config held, unchecked — so when an ephemeral tunnel died the
@@ -1681,15 +1698,30 @@ class LifecycleMixin:
         # Runs here rather than in resolve_public_url() because the URL is
         # resolved before the Mini App server is listening; only by publish
         # time is a positive result meaningful.
-        if url:
+        if url and probe:
             from aipager.miniapp.tunnel import probe_public_url
             if not await probe_public_url(url):
                 log.warning(
-                    "Mini App URL %s did not answer — publishing no button. "
+                    "Mini App URL %s did not answer - publishing no button. "
                     "The Mini App will be unavailable until it is reachable.",
                     url,
                 )
                 url = ""
+
+        if getattr(self, "_miniapp_publish_lock", None) is None:
+            self._miniapp_publish_lock = asyncio.Lock()
+        async with self._miniapp_publish_lock:
+            if seq < getattr(self, "_miniapp_applied_url_seq", 0):
+                log.debug("Mini App button publish dropped: a newer URL was published "
+                          "after it began")
+                return
+            if url:
+                self._miniapp_applied_url_seq = seq
+            await self._apply_miniapp_button(url)
+
+    async def _apply_miniapp_button(self, url: str) -> None:
+        """The body of a publish, under the publish lock."""
+        from telegram import MenuButtonCommands
 
         previous = getattr(self, "_miniapp_url", "") or ""
         self._miniapp_url = url

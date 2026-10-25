@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App 링크가 아직 준비되지 않았어요. 몇 초 뒤에 /app을 다시 보내 주세요."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 이 봇은 아직 이 계정과 대화하도록 설정되어 있지 않아요. 봇 소유자에게 {command} 명령으로 Telegram ID({user_id})를 추가해 달라고 하세요."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "aipager 대시보드를 열려면 누르세요:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Mini App이 연결되지 않아요. aipager가 Mini App 링크를 만드는 프로그램인 cloudflared를 다운로드하거나 실행하지 못했어요. 컴퓨터의 인터넷 연결을 확인하세요. aipager는 알아서 계속 다시 시도해요."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Mini App이 연결되지 않아요. cloudflared가 Cloudflare 서버를 찾을 때 이 컴퓨터의 DNS 서버가 불완전한 답을 줬어요. 컴퓨터가 다른 DNS 서버(예: <code>1.1.1.1</code>)를 쓰도록 설정하세요. aipager는 알아서 계속 다시 시도해요."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Mini App이 연결되지 않아요. 이 컴퓨터가 DNS에서 Cloudflare 서버를 찾지 못했어요. 컴퓨터의 인터넷 연결과 DNS 서버를 확인하세요. 예를 들어 DNS 서버를 <code>1.1.1.1</code>로 바꿔 보세요. aipager는 알아서 계속 다시 시도해요."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Mini App이 연결되지 않아요. 이 컴퓨터가 cloudflared에 필요한 <code>7844</code> 포트(UDP)로 Cloudflare 서버에 연결하지 못해요. 컴퓨터의 방화벽이나 네트워크를 확인하세요. aipager는 알아서 계속 다시 시도해요."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 지금은 Mini App이 작동하지 않아요. 이유를 보려면 이 컴퓨터에서 {command} 명령을 실행하세요. aipager는 알아서 계속 다시 시도해요."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Mini App이 연결되지 않아요. cloudflared가 Cloudflare에서 링크를 받지 못했어요. 이 컴퓨터가 인터넷에 연결되는지 확인하세요. aipager는 알아서 계속 다시 시도해요."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 지금은 Mini App을 쓸 수 없어요. 나중에 /app을 다시 보내 주세요."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Mini App이 연결되지 않아요. cloudflared는 실행 중이지만 그 링크가 인터넷에서 한 번도 응답하지 않았어요. 컴퓨터의 네트워크를 확인하세요. aipager는 알아서 계속 다시 시도해요."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} 차단됨"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {person} 님에게 {tool} 차단됨"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {person} 님에게 {tool} 차단됨 (역할 {role})"}

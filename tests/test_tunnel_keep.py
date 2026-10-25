@@ -266,7 +266,9 @@ def test_a_kept_tunnel_failing_a_check_is_replaced(table, run_async, case, kille
     elif case == "no-metrics":
         table.hosts[40001] = None
     elif case == "not-answering":
-        table.probe_ok = False
+        # Only the kept address: the fresh tunnel's own probe (the manager
+        # probes every new URL) answers.
+        table.dead_urls.add(f"https://{HOST}")
     tm._write_record(rec)
     table.hosts[40002] = json.dumps({"hostname": "fresh-words.trycloudflare.com"})
     table.next_port = 40002

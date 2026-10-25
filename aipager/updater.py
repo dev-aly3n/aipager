@@ -142,9 +142,13 @@ def cmd_update(_args=None) -> int:
 _USER_PATHS_TO_REMOVE = [
     Path.home() / ".config" / "aipager",
     Path.home() / ".claude" / "aipager-sessions.json",
-    # The Mini App tunnel's record and log (aipager.miniapp.tunnel_manager).
+    # The Mini App tunnel's record, log and stderr file
+    # (aipager.miniapp.tunnel_manager), and its state for doctor
+    # (aipager.miniapp.tunnel_state).
     Path.home() / ".claude" / "aipager-tunnel.json",
     Path.home() / ".claude" / "aipager-cloudflared.log",
+    Path.home() / ".claude" / "aipager-cloudflared.err",
+    Path.home() / ".local" / "state" / "aipager" / "tunnel-status.json",
 ]
 
 _MACOS_PATHS_TO_REMOVE = [

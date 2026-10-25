@@ -93,6 +93,14 @@ class TelegramBot(
         # once the Mini App server is confirmed listening — which
         # re-clears this if it turned out not to be.
         self._miniapp_url: str = ""
+        # Mini App button publishes run one at a time (the lock, made on
+        # first use, on the running loop), numbered as they begin; one
+        # that began before the last applied real URL is dropped, so a
+        # slow startup probe never replaces the tunnel's verified URL
+        # (lifecycle._publish_miniapp_button).
+        self._miniapp_publish_seq: int = 0
+        self._miniapp_applied_url_seq: int = 0
+        self._miniapp_publish_lock: asyncio.Lock | None = None
         # Hold the very first keyboard until the Mini App URL is known
         # (no longer needed since the keyboard lost its App button on
         # 2026-10-12): see lifecycle.defer_first_keyboard.

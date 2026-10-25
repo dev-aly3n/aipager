@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Посилання на Mini App ще готується: спробуй /app знову за кілька секунд."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Цей бот не налаштований на спілкування з тобою. Попроси власника бота додати твій Telegram ID ({user_id}) командою {command}."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Натисни, щоб відкрити панель aipager:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Mini App не може під'єднатися: aipager не зміг завантажити або запустити cloudflared, програму, що створює посилання на Mini App. Перевір підключення комп'ютера до інтернету. aipager і далі пробує сам."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Mini App не може під'єднатися: DNS-сервер цього комп'ютера дав неповну відповідь, коли cloudflared шукав сервери Cloudflare. Налаштуй комп'ютер на інший DNS-сервер, наприклад <code>1.1.1.1</code>. aipager і далі пробує сам."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Mini App не може під'єднатися: цей комп'ютер не зміг знайти сервери Cloudflare у DNS. Перевір підключення комп'ютера до інтернету та його DNS-сервер, наприклад перейди на <code>1.1.1.1</code>. aipager і далі пробує сам."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Mini App не може під'єднатися: цей комп'ютер не може зв'язатися із серверами Cloudflare через порт <code>7844</code> (UDP), потрібний cloudflared. Перевір брандмауер або мережу комп'ютера. aipager і далі пробує сам."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 Mini App зараз не працює. Запусти {command} на цьому комп'ютері, щоб побачити причину. aipager і далі пробує сам."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Mini App не може під'єднатися: cloudflared не зміг отримати посилання від Cloudflare. Перевір, чи має цей комп'ютер доступ до інтернету. aipager і далі пробує сам."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Зараз відкрити Mini App не можна. Спробуй /app пізніше."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Mini App не може під'єднатися: cloudflared працює, але його посилання так і не відповіло з інтернету. Перевір мережу комп'ютера. aipager і далі пробує сам."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} заблоковано"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} заблоковано для {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} заблоковано для {person} (роль {role})"}

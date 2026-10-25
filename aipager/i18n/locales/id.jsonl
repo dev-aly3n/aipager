@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Tautan Mini App belum siap - kirim /app lagi beberapa detik lagi."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Bot ini belum diatur untuk bicara denganmu. Minta pemilik bot menambahkan ID Telegram-mu ({user_id}) lewat {command}."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Ketuk untuk membuka dasbor aipager:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Mini App tidak bisa terhubung: aipager tidak bisa mengunduh atau menjalankan cloudflared, program yang membuat tautan Mini App. Periksa koneksi internet komputer. aipager terus mencoba sendiri."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Mini App tidak bisa terhubung: server DNS komputer ini memberi jawaban yang tidak lengkap saat cloudflared mencari server Cloudflare. Atur komputer agar memakai server DNS lain, misalnya <code>1.1.1.1</code>. aipager terus mencoba sendiri."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Mini App tidak bisa terhubung: komputer ini tidak bisa menemukan server Cloudflare di DNS. Periksa koneksi internet komputer dan server DNS-nya, misalnya dengan beralih ke <code>1.1.1.1</code>. aipager terus mencoba sendiri."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Mini App tidak bisa terhubung: komputer ini tidak bisa menjangkau server Cloudflare lewat port <code>7844</code> (UDP), yang dibutuhkan cloudflared. Periksa firewall atau jaringan komputer. aipager terus mencoba sendiri."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 Mini App sedang tidak berfungsi. Jalankan {command} di komputer ini untuk melihat penyebabnya. aipager terus mencoba sendiri."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Mini App tidak bisa terhubung: cloudflared tidak bisa mendapatkan tautan dari Cloudflare. Pastikan komputer ini bisa terhubung ke internet. aipager terus mencoba sendiri."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Mini App sedang tidak tersedia. Coba /app lagi nanti."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Mini App tidak bisa terhubung: cloudflared sedang berjalan, tapi tautannya tidak pernah menjawab dari internet. Periksa jaringan komputer. aipager terus mencoba sendiri."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} diblokir"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} diblokir untuk {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} diblokir untuk {person} (peran {role})"}

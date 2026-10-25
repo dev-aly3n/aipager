@@ -452,7 +452,7 @@ async def _run_daemon(bot_username: str) -> None:
     manager = None
     if MINIAPP_ENABLED and not MINIAPP_PUBLIC_URL and miniapp_server is not None:
         from aipager.miniapp.tunnel_manager import TunnelManager
-        manager = TunnelManager(MINIAPP_PORT, bot.publish_miniapp_button)
+        manager = TunnelManager(MINIAPP_PORT, bot.publish_managed_miniapp_button)
         await manager.start()
 
     # The permanent launch button, published only once the server it

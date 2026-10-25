@@ -502,6 +502,75 @@ APP_SETTING_UP = Msg("appcmd.setting_up",
                      "📱 The Mini App link is still being set up - try /app again in a few "
                      "seconds.",
                      note="/app while its link is not ready yet")
+# /app while the managed tunnel is not working (it keeps retrying by
+# itself): the person who can fix the machine gets the cause and the fix,
+# chosen by reason id (aipager.miniapp.tunnel_state); everyone else gets
+# APP_TUNNEL_UNAVAILABLE. Never cloudflared's own text, never a host command.
+APP_TUNNEL_DNS_INCOMPLETE = Msg(
+    "appcmd.tunnel.dns_incomplete",
+    "📱 The Mini App can't connect: this machine's DNS server gave an incomplete answer "
+    "when cloudflared looked up Cloudflare's servers. Set the machine to use another DNS "
+    "server, for example <code>1.1.1.1</code>. aipager keeps trying by itself.",
+    note="HTML. /app to the operator or an admin while the Mini App's link fails because the "
+         "machine's DNS server returns only part of Cloudflare's server list; cloudflared is "
+         "the program that makes the link")
+APP_TUNNEL_DNS_LOOKUP_FAILED = Msg(
+    "appcmd.tunnel.dns_lookup_failed",
+    "📱 The Mini App can't connect: this machine could not look up Cloudflare's servers in "
+    "DNS. Check the machine's internet connection and its DNS server, for example by "
+    "switching to <code>1.1.1.1</code>. aipager keeps trying by itself.",
+    note="HTML. /app to the operator or an admin while the Mini App's link fails because the "
+         "machine's DNS lookups fail")
+APP_TUNNEL_QUICK_TUNNEL = Msg(
+    "appcmd.tunnel.quick_tunnel",
+    "📱 The Mini App can't connect: cloudflared could not get a link from Cloudflare. "
+    "Check that this machine can reach the internet. aipager keeps trying by itself.",
+    note="/app to the operator or an admin while cloudflared (the program that makes the "
+         "Mini App's link) cannot get a link from Cloudflare")
+APP_TUNNEL_EDGE_UNREACHABLE = Msg(
+    "appcmd.tunnel.edge_unreachable",
+    "📱 The Mini App can't connect: this machine can't reach Cloudflare's servers on port "
+    "<code>7844</code> (UDP), which cloudflared needs. Check the machine's firewall or "
+    "network. aipager keeps trying by itself.",
+    note="HTML. /app to the operator or an admin while a firewall blocks the network port "
+         "cloudflared (the program that makes the Mini App's link) uses; 7844 and UDP stay "
+         "as they are")
+APP_TUNNEL_BINARY_MISSING = Msg(
+    "appcmd.tunnel.binary_missing",
+    "📱 The Mini App can't connect: aipager could not download or start cloudflared, the "
+    "program that makes its link. Check the machine's internet connection. aipager keeps "
+    "trying by itself.",
+    note="/app to the operator or an admin while cloudflared cannot be downloaded")
+APP_TUNNEL_UNREACHABLE = Msg(
+    "appcmd.tunnel.unreachable",
+    "📱 The Mini App can't connect: cloudflared is running, but its link never answered "
+    "from the internet. Check the machine's network. aipager keeps trying by itself.",
+    note="/app to the operator or an admin while the Mini App's link does not answer; "
+         "cloudflared is the program that makes the link")
+APP_TUNNEL_OTHER = Msg(
+    "appcmd.tunnel.other",
+    "📱 The Mini App isn't working right now. Run {command} on this machine to see why. "
+    "aipager keeps trying by itself.",
+    note="HTML. /app to the operator or an admin while the Mini App's link fails for a "
+         "reason aipager does not recognise; {command} is the check command",
+    eg={"command": "aipager doctor"})
+APP_TUNNEL_UNAVAILABLE = Msg(
+    "appcmd.tunnel.unavailable",
+    "📱 The Mini App isn't available right now. Try /app again later.",
+    note="/app to someone who cannot fix the machine while the Mini App's link is not "
+         "working")
+# By reason id; an unknown id falls back to APP_TUNNEL_OTHER. The values a
+# person types into a setting (1.1.1.1, the port) are code, so those
+# messages are HTML.
+APP_TUNNEL_HTML = frozenset({"dns_incomplete", "dns_lookup_failed", "edge_unreachable"})
+APP_TUNNEL_REASON_TEXT = {
+    "dns_incomplete": APP_TUNNEL_DNS_INCOMPLETE,
+    "dns_lookup_failed": APP_TUNNEL_DNS_LOOKUP_FAILED,
+    "quick_tunnel": APP_TUNNEL_QUICK_TUNNEL,
+    "edge_unreachable": APP_TUNNEL_EDGE_UNREACHABLE,
+    "binary_missing": APP_TUNNEL_BINARY_MISSING,
+    "unreachable": APP_TUNNEL_UNREACHABLE,
+}
 APP_STRANGER = Msg("appcmd.stranger",
                    "🚫 This bot isn't configured to talk to you. Ask the operator to add your "
                    "Telegram user ID ({user_id}) via {command}.",
@@ -1434,7 +1503,7 @@ class CommandHandlersMixin:
             if not miniapp_extra_available():
                 await reply_text(update.message, tr.text(APP_CANT_START))
             else:
-                await reply_text(update.message, tr.text(APP_SETTING_UP))
+                await self._reply_tunnel_state(update, tr, chat.id)
             return
 
         # Personal mode only (scope/team mode already gated above via
@@ -1461,6 +1530,41 @@ class CommandHandlersMixin:
                 style=appearance.app_style(getattr(update.effective_chat, "id", None))),
         ]])
         await reply_text(update.message, tr.text(APP_TAP_TO_OPEN), reply_markup=keyboard)
+
+    async def _reply_tunnel_state(self, update: Update, tr, chat_id: int) -> None:
+        """/app with no URL: what the managed tunnel's state says.
+
+        Starting (or no managed tunnel at all): the link is still being
+        set up. Not working: the person who can fix the machine
+        (:meth:`_is_update_admin`: the operator in personal mode, an admin
+        of this chat in a group setup) gets the cause and the fix; anyone
+        else a short "not available right now", no machine details. In the
+        slow phase, anyone but a personal-mode stranger also starts one
+        attempt now (at most once a minute for the whole daemon)."""
+        from aipager.miniapp import tunnel_state
+
+        status = tunnel_state.current_status()
+        if status is None or status.phase not in (tunnel_state.RETRYING, tunnel_state.SLOW):
+            await reply_text(update.message, tr.text(APP_SETTING_UP))
+            return
+        tg_user = update.effective_user
+        user_id = tg_user.id if tg_user is not None else None
+        personal = self.scopes is None and self.team is None
+        if status.phase == tunnel_state.SLOW and (
+                not personal or self._is_personal_mode_operator(user_id)):
+            tunnel_state.request_attempt()
+        if not self._is_update_admin(user_id, chat_id):
+            await reply_text(update.message, tr.text(APP_TUNNEL_UNAVAILABLE))
+            return
+        msg = APP_TUNNEL_REASON_TEXT.get(status.reason)
+        if msg is None:
+            await reply_text(update.message, tr.html(
+                APP_TUNNEL_OTHER, command=Span("<code>aipager doctor</code>")),
+                parse_mode="HTML")
+        elif status.reason in APP_TUNNEL_HTML:
+            await reply_text(update.message, tr.html(msg), parse_mode="HTML")
+        else:
+            await reply_text(update.message, tr.text(msg))
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status: this chat's sessions as a list you can act on."""

@@ -179,11 +179,12 @@ del _miniapp_file
 # should be able to override from the environment, and live in
 # aipager.miniapp.cloudflared_fetch instead.
 
-# Lifetime ceiling on failed restart attempts (fetch/spawn/discovery
-# failure OR the child eventually exiting all count) before the
-# supervision loop gives up for the rest of this daemon run. NOT reset
-# on success — see tunnel_manager.py's module docstring for why a
-# lifetime cap was chosen over "N failures in a row".
+# The fast attempts (fetch/spawn/discovery failure, a link that never
+# answers, OR the child exiting all count) before the supervision loop
+# slows down to one try every TUNNEL_RETRY_SLOW_SECONDS. The budget is
+# refreshed only after the tunnel has worked for a whole slow interval,
+# so a tunnel that dies right after starting never earns a fast spin:
+# see tunnel_manager.py's module docstring for the bounded-rate design.
 TUNNEL_RESTART_MAX_ATTEMPTS: int = int(
     os.environ.get("TUNNEL_RESTART_MAX_ATTEMPTS", "8")
 )
@@ -195,6 +196,15 @@ TUNNEL_RESTART_BACKOFF_BASE_SECONDS: float = float(
 )
 TUNNEL_RESTART_BACKOFF_MAX_SECONDS: float = float(
     os.environ.get("TUNNEL_RESTART_BACKOFF_MAX_SECONDS", "60.0")
+)
+
+# After the fast attempts, how often the loop tries again, for ever: a
+# machine fixed hours later heals without a restart. Values under 60
+# act as 60 (tunnel_manager._SLOW_FLOOR_SECONDS), so a 0 here never
+# spins. /app during this phase may start one extra try, at most once a
+# minute for the whole daemon.
+TUNNEL_RETRY_SLOW_SECONDS: float = float(
+    os.environ.get("TUNNEL_RETRY_SLOW_SECONDS", "600")
 )
 
 # How long to wait for cloudflared to print its assigned
@@ -240,6 +250,16 @@ TUNNEL_CHECK_SECONDS: float = float(
 # TESTS: redirected into tmp_path by `tests/conftest.py::_isolate_home_paths`,
 # and read LATE by aipager.miniapp.tunnel_manager (never imported by value).
 TUNNEL_STATE_FILE = Path.home() / ".claude" / "aipager-tunnel.json"
+
+# The managed tunnel's state (starting, working, not working with a reason
+# id, the next try; never its address), written by the daemon on each
+# change and removed at its stop, for `aipager doctor`, a separate
+# process (aipager.miniapp.tunnel_state). In the XDG state dir, beside the
+# problem report store, because the live daemon rewrites it on its own.
+#
+# TESTS: redirected into tmp_path by `tests/conftest.py::_isolate_home_paths`,
+# and read LATE by aipager.miniapp.tunnel_state (never imported by value).
+TUNNEL_STATUS_FILE = Path.home() / ".local" / "state" / "aipager" / "tunnel-status.json"
 
 def _default_socket_path() -> str:
     """Resolve the control socket path.

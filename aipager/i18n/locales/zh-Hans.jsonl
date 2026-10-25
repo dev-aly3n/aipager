@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App 链接还没准备好，请过几秒再发送 /app。"}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 这个机器人还没有设置为与你对话。请让机器人主人通过 {command} 添加你的 Telegram 用户 ID（{user_id}）。"}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "点按打开 aipager 控制面板："}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Mini App 无法连接：aipager 无法下载或启动 cloudflared（生成 Mini App 链接的程序）。请检查电脑的网络连接。aipager 会自己不断重试。"}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Mini App 无法连接：cloudflared 查找 Cloudflare 服务器时，这台电脑的 DNS 服务器给出的回答不完整。请把电脑改用其他 DNS 服务器，例如 <code>1.1.1.1</code>。aipager 会自己不断重试。"}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Mini App 无法连接：这台电脑无法通过 DNS 找到 Cloudflare 的服务器。请检查电脑的网络连接和 DNS 服务器，例如换成 <code>1.1.1.1</code>。aipager 会自己不断重试。"}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Mini App 无法连接：这台电脑无法通过 <code>7844</code> 端口（UDP）连接 Cloudflare 的服务器，而 cloudflared 需要这个端口。请检查电脑的防火墙或网络。aipager 会自己不断重试。"}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 Mini App 现在无法使用。请在这台电脑上运行 {command} 查看原因。aipager 会自己不断重试。"}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Mini App 无法连接：cloudflared 无法从 Cloudflare 获取链接。请检查这台电脑能否访问互联网。aipager 会自己不断重试。"}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Mini App 现在不可用。请稍后再发送 /app。"}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Mini App 无法连接：cloudflared 正在运行，但它的链接从互联网上一直没有响应。请检查电脑的网络。aipager 会自己不断重试。"}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} 已被阻止"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · 已对 {person} 阻止 {tool}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · 已对 {person} 阻止 {tool}（角色 {role}）"}
