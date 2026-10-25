@@ -542,6 +542,21 @@ def _kill_quietly(tunnel: Tunnel) -> None:
         pass
 
 
+async def _quiet_probe(url: str) -> bool:
+    """``probe_public_url`` for a tunnel this module holds, its per-check
+    lines at INFO: the manager's own line says whether the link answered,
+    and in the slow phase it probes on every try (see
+    ``tunnel.probe_log_level``; the level is reset before this returns,
+    so it never reaches the caller's other work)."""
+    from aipager.miniapp import tunnel as tunnel_mod
+
+    token = tunnel_mod.probe_log_level.set(logging.INFO)
+    try:
+        return await tunnel_mod.probe_public_url(url)
+    finally:
+        tunnel_mod.probe_log_level.reset(token)
+
+
 async def _stop_tunnel(tunnel: Tunnel) -> None:
     """SIGTERM, then SIGKILL after ``TUNNEL_KILL_TIMEOUT_SECONDS``: a
     running tunnel that was proven ours and is not wanted."""
@@ -564,8 +579,6 @@ async def _adopt_kept_tunnel(port: int) -> tuple[Tunnel, str] | None:
     the recorded hostname, and the address answering from outside.
     Otherwise kill it once it is proven ours, forget the record, and
     return None (the caller starts a fresh tunnel). Never raises."""
-    from aipager.miniapp.tunnel import probe_public_url
-
     try:
         rec = _read_record()
         if rec is None:
@@ -594,7 +607,7 @@ async def _adopt_kept_tunnel(port: int) -> tuple[Tunnel, str] | None:
             if not host or _host_digest(host) != rec["host_sha256"]:
                 log.info("cloudflared: the kept tunnel does not report the same address - "
                          "not taking it over")
-            elif not await probe_public_url(f"https://{host}"):
+            elif not await _quiet_probe(f"https://{host}"):
                 log.info("cloudflared: the kept tunnel's address does not answer - "
                          "not taking it over")
             else:
@@ -972,12 +985,15 @@ class TunnelManager:
         return _Verdict(tunnel_state.classify(log_path, err_path), "exited", stage, code,
                         tunnel_state.raw_cause(log_path, err_path), worked)
 
-    async def _attempt(self, adopt: bool) -> _Verdict:
+    async def _attempt(self, adopt: bool, *, quiet: bool = False) -> _Verdict:
         """One try: launch (or adopt), probe while watching the process,
         publish while watching it, then hold it until it exits. Returns
-        how it ended; never raises (except cancellation)."""
+        how it ended; never raises (except cancellation). ``quiet`` (the
+        slow phase, already announced): the fetch's and a crash's lines
+        are INFO; the loop's own line says the try failed."""
         from aipager.miniapp.cloudflared_fetch import ensure_cloudflared
 
+        level = logging.INFO if quiet else logging.WARNING
         log_path, err_path = _log_paths()
         adopted = False
         try:
@@ -987,7 +1003,7 @@ class TunnelManager:
                 adopted = True
                 log.info("cloudflared: took over the tunnel the last run kept")
             else:
-                binary = await ensure_cloudflared()
+                binary = await ensure_cloudflared(log_level=level)
                 if not binary:
                     raise TunnelLaunchError("cloudflared binary unavailable",
                                             reason=tunnel_state.BINARY_MISSING)
@@ -1003,7 +1019,7 @@ class TunnelManager:
             detail = "; ".join(t for t in (str(exc), raw) if t)
             return _Verdict(reason, "launch_failed", "launch", code, detail)
         except Exception as exc:
-            log.warning("cloudflared: launch attempt crashed", exc_info=True)
+            log.log(level, "cloudflared: launch attempt crashed", exc_info=True)
             return _Verdict(tunnel_state.OTHER, "crashed", "launch", detail=repr(exc))
 
         # Held from here: `stop()` finds it in self._proc whatever await
@@ -1025,9 +1041,7 @@ class TunnelManager:
     async def _probe(self, proc, url: str, wait_task: asyncio.Task, log_path: Path,
                      err_path: Path) -> _Verdict | None:
         """Probe *url* while watching the process: None when it answered."""
-        from aipager.miniapp.tunnel import probe_public_url
-
-        probe_task = asyncio.create_task(probe_public_url(url))
+        probe_task = asyncio.create_task(_quiet_probe(url))
         try:
             await asyncio.wait({probe_task, wait_task}, return_when=asyncio.FIRST_COMPLETED)
         finally:
@@ -1080,7 +1094,8 @@ class TunnelManager:
         budget_used = 0
         slow_announced = False
         while True:
-            verdict = await self._attempt(adopt)
+            # Once the slow phase was announced, a try's own lines are INFO.
+            verdict = await self._attempt(adopt, quiet=slow_announced)
             adopt = False
             if verdict.worked_seconds >= _slow_interval():
                 # It worked for a whole slow interval: a fresh fast budget.

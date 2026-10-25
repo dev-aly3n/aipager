@@ -218,3 +218,190 @@ def test_a_success_in_the_slow_phase_heals(loop_config, monkeypatch, run_async):
     assert healed.phase == ts.WORKING and healed.reason == "" and healed.attempt == 0
     assert url == f"https://{host}"
     assert published == ["", f"https://{host}"]
+
+
+# ---- the slow phase stays quiet whatever fails (spec requirement 5) -----------------
+#
+# These run the REAL code that logs on every try: the real probe (failing
+# at the aiohttp layer, never the network), the real binary fetch (its
+# download failing at urlopen) and a launch that raises. Only the slow
+# phase's start may be a WARNING; every later try's lines are INFO.
+
+SLOW_TRIES = 3
+
+
+class _FailingSession:
+    """``aiohttp.ClientSession`` whose GET answers 502 (the live run's
+    case) or fails to connect: the probe's two failure lines."""
+
+    mode = "502"
+    gets: list = []
+
+    def __init__(self, *a, **k):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    def get(self, url, **k):
+        type(self).gets.append(url)
+        if type(self).mode == "refused":
+            raise ConnectionRefusedError("connection refused")
+        return _Answer502()
+
+
+class _Answer502:
+    status = 502
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+
+def _slow_config(monkeypatch):
+    monkeypatch.setattr(tm, "_SLOW_FLOOR_SECONDS", 0.03)
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", 0.03)
+
+
+def _fail_probe_at_aiohttp(monkeypatch, mode):
+    import aiohttp
+
+    from tests.conftest import REAL_PROBE_PUBLIC_URL
+
+    table = tunnel_fakes.install(monkeypatch)
+    for i in range(TRIPWIRE + 10):
+        table.hosts[40001 + i] = json.dumps({"hostname": f"try-{i}-words.trycloudflare.com"})
+    monkeypatch.setattr(tunnel_mod, "probe_public_url", REAL_PROBE_PUBLIC_URL)
+    monkeypatch.setattr(tunnel_mod, "PROBE_ATTEMPTS", 3)
+    monkeypatch.setattr(tunnel_mod, "PROBE_RETRY_DELAY_SECONDS", 0)
+    monkeypatch.setattr(_FailingSession, "mode", mode)
+    monkeypatch.setattr(_FailingSession, "gets", [])
+    monkeypatch.setattr(aiohttp, "ClientSession", _FailingSession)
+    return lambda: len(table.spawns)
+
+
+def _fail_fetch_at_urlopen(monkeypatch, tmp_path):
+    import urllib.error
+
+    monkeypatch.setenv("AIPAGER_CLOUDFLARED_CACHE_DIR", str(tmp_path / "cf-cache"))
+    monkeypatch.setattr(cloudflared_fetch, "platform_key", lambda: "linux-amd64")
+    # The real ensure_cloudflared, not the fixture's AsyncMock.
+    monkeypatch.setattr(cloudflared_fetch, "ensure_cloudflared", REAL_ENSURE_CLOUDFLARED)
+    opens = []
+
+    def _offline(url, timeout=None):
+        opens.append(url)
+        if len(opens) > TRIPWIRE:
+            raise AssertionError("fetched without bound")
+        raise urllib.error.URLError("no network")
+    monkeypatch.setattr(cloudflared_fetch.urllib.request, "urlopen", _offline)
+    return lambda: len(opens)
+
+
+def _crash_the_launch(monkeypatch):
+    calls = []
+
+    async def _spawn(binary, port):
+        calls.append(1)
+        if len(calls) > TRIPWIRE:
+            await asyncio.Event().wait()
+        raise RuntimeError("an unexpected bug in the launch")
+    monkeypatch.setattr(tm, "spawn_and_discover_url", _spawn)
+    return lambda: len(calls)
+
+
+REAL_ENSURE_CLOUDFLARED = cloudflared_fetch.ensure_cloudflared
+
+# The per-try line each failure writes, besides the loop's own.
+PER_TRY_LINE = {
+    "probe_502": "answered 502",
+    "probe_refused": "is unreachable",
+    "binary_missing": "download failed",
+    "launch_crash": "launch attempt crashed",
+}
+
+
+@pytest.mark.parametrize("failure", list(PER_TRY_LINE))
+def test_the_slow_phase_logs_one_warning_whatever_fails(loop_config, monkeypatch, run_async,
+                                                       caplog, tmp_path, failure):
+    _slow_config(monkeypatch)
+    if failure == "probe_502":
+        tries = _fail_probe_at_aiohttp(monkeypatch, "502")
+    elif failure == "probe_refused":
+        tries = _fail_probe_at_aiohttp(monkeypatch, "refused")
+    elif failure == "binary_missing":
+        tries = _fail_fetch_at_urlopen(monkeypatch, tmp_path)
+    else:
+        tries = _crash_the_launch(monkeypatch)
+
+    async def scenario():
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: tries() >= MAX + SLOW_TRIES + 1, limit=10.0)
+        status = ts.current_status()
+        await m.stop()
+        return status
+
+    with caplog.at_level(logging.INFO):
+        status = run_async(scenario())
+    assert status.phase == ts.SLOW
+    assert tries() <= TRIPWIRE
+    records = [r for r in caplog.records if r.name.startswith("aipager")]
+    start = [i for i, r in enumerate(records) if "retried slowly" in r.getMessage()]
+    assert len(start) == 1, [r.getMessage() for r in records]
+    assert records[start[0]].levelno == logging.WARNING
+    after = records[start[0] + 1:]
+    loud = [r.getMessage() for r in after if r.levelno >= logging.WARNING]
+    assert loud == [], f"the slow phase logged warnings: {loud}"
+    per_try = [r for r in after if PER_TRY_LINE[failure] in r.getMessage()]
+    assert len(per_try) >= SLOW_TRIES, "the failure never ran through the real code"
+    assert all(r.levelno == logging.INFO for r in per_try)
+    assert sum("next slow retry" in r.getMessage() for r in after) >= SLOW_TRIES
+
+
+@pytest.mark.parametrize("mode", ["502", "refused"])
+def test_the_managers_probe_lines_are_info_also_in_the_fast_phase(loop_config, monkeypatch,
+                                                                  run_async, caplog, mode):
+    """Each fast failure is one WARNING, the manager's own line: its
+    probe's per-check lines (each with the tunnel's URL) are INFO."""
+    tries = _fail_probe_at_aiohttp(monkeypatch, mode)
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", 3600.0)
+
+    async def scenario():
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: tries() == MAX and m._waiting_slow)
+        await m.stop()
+
+    with caplog.at_level(logging.INFO):
+        run_async(scenario())
+    records = [r for r in caplog.records if r.name.startswith("aipager")]
+    warnings = [r.getMessage() for r in records if r.levelno >= logging.WARNING]
+    assert len(warnings) == MAX, warnings
+    assert all(w.startswith("cloudflared never_answered") for w in warnings), warnings
+    probe_lines = [r for r in records if r.name == "aipager.miniapp.tunnel"]
+    assert len(probe_lines) >= MAX * 3
+    assert all(r.levelno == logging.INFO for r in probe_lines)
+
+
+def test_the_bots_own_probe_still_warns(run_async, monkeypatch, caplog, real_probe_public_url):
+    """Out of scope and unchanged: the probe of an override or Tailscale
+    address (the bot's, not the manager's) warns, also after the manager
+    probed in the same loop."""
+    _fail_probe_at_aiohttp(monkeypatch, "502")
+
+    async def scenario():
+        assert await tm._quiet_probe("https://managed-words.trycloudflare.com") is False
+        return await tunnel_mod.probe_public_url("https://override.example")
+
+    with caplog.at_level(logging.INFO, logger="aipager.miniapp.tunnel"):
+        assert run_async(scenario()) is False
+    own = [r for r in caplog.records if "override.example" in r.getMessage()]
+    managed = [r for r in caplog.records if "managed-words" in r.getMessage()]
+    assert len(own) == 4 and all(r.levelno == logging.WARNING for r in own)
+    assert len(managed) == 4 and all(r.levelno == logging.INFO for r in managed)
