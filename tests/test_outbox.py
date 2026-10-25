@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 
 import pytest
+from telegram import Bot
+from telegram.request import BaseRequest
 
 from aipager import config, send_check
 from aipager.bot import outbox as ob
@@ -589,6 +591,110 @@ def test_a_mute_keeps_the_rest(home, tmp_path, run_async):
     assert pending.batches[0].caption is None
 
 
+class _RefusesAlbums(_Bot):
+    """Refuses every album; refuses a single send of any file in *bad*."""
+
+    def __init__(self, bad=(), album_exc=None):
+        super().__init__()
+        self.bad = set(bad)
+        self.album_exc = album_exc
+
+    async def send_media_group(self, *a, **k):
+        from telegram.error import BadRequest
+        self.calls.append(("send_media_group", a, k))
+        if [c[0] for c in self.calls].count("send_media_group") > 1:
+            # A tripwire, not a hang: the same files as an album again.
+            raise RuntimeError("the refused album was sent again")
+        raise self.album_exc or BadRequest("Bad Request: photo_invalid_dimensions")
+
+    async def send_photo(self, *a, **k):
+        from telegram.error import BadRequest
+        self.calls.append(("send_photo", a, k))
+        if k["photo"].filename in self.bad:
+            raise BadRequest("Bad Request: photo_invalid_dimensions")
+
+
+def test_a_refused_album_goes_again_one_file_at_a_time(home, tmp_path, run_async):
+    import json as _json
+    from aipager import audit, i18n
+    pending, items = _pending(home, tmp_path, ["a.png", "b.png"], caption="cap")
+    bot = _RefusesAlbums()
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is True
+    assert [c[0] for c in bot.calls] == ["send_media_group", "send_photo", "send_photo"]
+    # Claude's caption goes with the first file that is really sent.
+    assert [c[2]["caption"] for c in bot.calls[1:]] == ["💬 x\ncap", "💬 x"]
+    records = [_json.loads(x) for x in audit.AUDIT_LOG_PATH.read_text().splitlines()]
+    assert [(r["action"], r["file_name"]) for r in records] == [
+        ("FileSent", "a.png"), ("FileSent", "b.png")]
+    assert pending.batches == [] and not any(i.path.exists() for i in items)
+
+
+def test_a_file_refused_on_its_own_too_gets_its_line(home, tmp_path, run_async):
+    from aipager import i18n
+    pending, _items = _pending(home, tmp_path, ["a.png", "b.png"])
+    bot = _RefusesAlbums(bad={"b.png"})
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is True
+    assert [c[0] for c in bot.calls] == ["send_media_group", "send_photo", "send_photo",
+                                         "send_message"]
+    assert "b.png" in bot.calls[-1][1][1] and "a.png" not in bot.calls[-1][1][1]
+
+
+def test_a_refused_album_keeps_its_place_beside_another_album(home, tmp_path, run_async):
+    from aipager import i18n
+
+    class _RefusesPhotoAlbums(_RefusesAlbums):
+        async def send_media_group(self, *a, **k):
+            if all(m.type == "document" for m in k["media"]):
+                self.calls.append(("send_media_group", a, k))
+                return None
+            return await super().send_media_group(*a, **k)
+
+    pending, _items = _pending(home, tmp_path, ["a.png", "d.txt", "b.png", "e.txt"])
+    bot = _RefusesPhotoAlbums()
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is True
+    sent = [(c[0], [m.media.filename for m in c[2]["media"]] if c[0] == "send_media_group"
+             else c[2]["photo"].filename) for c in bot.calls]
+    assert sent == [("send_media_group", ["a.png", "b.png"]), ("send_photo", "a.png"),
+                    ("send_media_group", ["d.txt", "e.txt"]), ("send_photo", "b.png")]
+
+
+def test_a_mute_during_the_singles_never_sends_the_album_again(home, tmp_path, run_async):
+    from aipager import i18n
+    from aipager.bot.flood import FloodMuted
+
+    class _MutesSecondPhoto(_RefusesAlbums):
+        async def send_photo(self, *a, **k):
+            self.calls.append(("send_photo", a, k))
+            if [c[0] for c in self.calls].count("send_photo") == 2:
+                raise FloodMuted(60, CHAT)
+
+    pending, _items = _pending(home, tmp_path, ["a.png", "b.png", "c.png"])
+    bot = _MutesSecondPhoto()
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is False
+    assert [i.name for i in pending.batches[0].items] == ["b.png", "c.png"]
+    # The mute ends and the same pending goes again: each file alone.
+    again = _RefusesAlbums()
+    assert run_async(ob.deliver(again, pending, "x", i18n.get("en"))) is True
+    assert [(c[0], c[2]["photo"].filename) for c in again.calls] == [
+        ("send_photo", "b.png"), ("send_photo", "c.png")]
+    assert pending.batches == []
+
+
+@pytest.mark.parametrize("why", ["timed_out", "forbidden"])
+def test_an_album_not_refused_for_its_files_is_not_sent_again(home, tmp_path, run_async,
+                                                              why):
+    # A timeout: it may have arrived, and its files again could show twice.
+    # Forbidden: the chat takes nothing from the bot, file by file neither.
+    from telegram.error import Forbidden, TimedOut
+
+    from aipager import i18n
+    pending, _items = _pending(home, tmp_path, ["a.png", "b.png"])
+    exc = TimedOut() if why == "timed_out" else Forbidden("Forbidden: bot was blocked")
+    bot = _RefusesAlbums(album_exc=exc)
+    assert run_async(ob.deliver(bot, pending, "x", i18n.get("en"))) is True
+    assert [c[0] for c in bot.calls] == ["send_media_group", "send_message", "send_message"]
+
+
 def test_newest_held_key():
     from aipager.bot.held import HeldAnswers
     held = HeldAnswers()
@@ -614,6 +720,93 @@ def test_each_refused_file_adds_one_audit_record(mk_bot, run_async):
         ("FileRefused", "SendUserFile", "id_rsa", True, "floor: a protected file"),
         ("FileRefused", "SendUserFile", "b.png", True, "missing: no such file")]
     assert bot._app.bot.send_message.await_count == 0
+
+
+# ---- the request Telegram gets ------------------------------------------------------
+# A real PTB Bot builds each send's request, and a request object that never
+# opens a socket keeps it: the fake bots above record the call, never what
+# goes over the wire, so an album whose items named no file passed them.
+
+class _Wire(BaseRequest):
+    """Keeps each request and answers it as Telegram would, offline."""
+
+    def __init__(self):
+        self.seen = []
+
+    async def initialize(self):
+        pass
+
+    async def shutdown(self):
+        pass
+
+    @property
+    def read_timeout(self):
+        return 5.0
+
+    async def do_request(self, url, method, request_data=None, read_timeout=None,
+                         write_timeout=None, connect_timeout=None, pool_timeout=None):
+        self.seen.append((url.rsplit("/", 1)[-1], request_data))
+        params = request_data.json_parameters if request_data else {}
+        n = len(json.loads(params["media"])) if "media" in params else 1
+        msgs = [{"message_id": i + 1, "date": 0,
+                 "chat": {"id": CHAT, "type": "supergroup"}} for i in range(n)]
+        result = msgs if "media" in params else msgs[0]
+        return 200, json.dumps({"ok": True, "result": result}).encode()
+
+
+def _wire_bot():
+    wire = _Wire()
+    return Bot("123:TEST", request=wire, get_updates_request=_Wire()), wire
+
+
+def _real_item(tmp_path, name, method, data):
+    path = tmp_path / name
+    path.write_bytes(data)
+    return ob.Item(name=name, path=path, size=len(data), kind="", width=None, height=None,
+                   method=method)
+
+
+@pytest.mark.parametrize("methods", [
+    ("photo", "photo"),
+    ("photo", "video", "photo"),
+    ("audio", "audio"),
+    ("document", "document", "document"),
+], ids=["photos", "photos-and-video", "audio", "documents"])
+def test_an_album_names_each_file_it_uploads(tmp_path, run_async, methods):
+    items = [_real_item(tmp_path, f"f{i}.{m}", m, f"bytes of file {i}".encode())
+             for i, m in enumerate(methods)]
+    planned = ob.Planned(method=ob.METHOD_MEDIA_GROUP, items=items, caption="💬 x\ncap")
+    bot, wire = _wire_bot()
+    assert run_async(ob.send_planned(bot, CHAT, planned, 42)) is True
+    [(endpoint, data)] = wire.seen
+    assert endpoint == "sendMediaGroup"
+    media = json.loads(data.json_parameters["media"])
+    parts = data.multipart_data or {}
+    assert [m["type"] for m in media] == list(methods)
+    for item, m in zip(items, media):
+        # Each item names its own uploaded part, and that part is the file.
+        assert m.get("media", "").startswith("attach://"), m
+        part = m["media"].removeprefix("attach://")
+        assert parts[part][0] == item.name
+        assert parts[part][1] == item.path.read_bytes()
+    assert len(parts) == len(items)
+    assert [m.get("caption") for m in media] == ["💬 x\ncap"] + [None] * (len(items) - 1)
+
+
+@pytest.mark.parametrize("method,endpoint", [
+    ("photo", "sendPhoto"), ("video", "sendVideo"), ("animation", "sendAnimation"),
+    ("audio", "sendAudio"), ("document", "sendDocument"),
+], ids=["photo", "video", "animation", "audio", "document"])
+def test_a_single_file_uploads_under_its_own_field(tmp_path, run_async, method, endpoint):
+    item = _real_item(tmp_path, f"a.{method}", method, b"the file itself")
+    planned = ob.Planned(method=method, items=[item], caption="💬 x")
+    bot, wire = _wire_bot()
+    assert run_async(ob.send_planned(bot, CHAT, planned, 42)) is True
+    [(sent_to, data)] = wire.seen
+    assert sent_to == endpoint
+    assert data.multipart_data[method][:2] == (f"a.{method}", b"the file itself")
+    assert method not in data.json_parameters
+    assert data.json_parameters["caption"] == "💬 x"
 
 
 # ---- the call in the transcript (rev-iter1-002) --------------------------------
