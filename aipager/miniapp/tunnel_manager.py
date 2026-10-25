@@ -948,6 +948,11 @@ class TunnelManager:
             return
         self.current_url = url
         set_managed_tunnel_url(url)
+        prev = self._publish_task
+        if prev is not None and not prev.done():
+            # A publish still going out (its tunnel died meanwhile) is let
+            # finish, never cut half way, and this one goes out behind it.
+            await asyncio.wait({prev})
         await asyncio.wait({self._start_publish(url)})
 
     def _set_status(self, phase: str, reason: str, attempt: int, next_try_at: float) -> None:
@@ -1093,13 +1098,12 @@ class TunnelManager:
         await asyncio.wait({publish, wait_task}, return_when=asyncio.FIRST_COMPLETED)
         if wait_task.done() and not publish.done():
             # It died while its button was going out: no surface may hand
-            # out the dead address from now on, and the button the
-            # publish leaves is cleared once it has finished (never cut).
+            # out the dead address from now on. The loop says it is not
+            # working at once, then clears the button the publish leaves
+            # once that has finished (never cut: see _set_url).
             self.current_url = ""
             set_managed_tunnel_url("")
-            verdict = self._exit_verdict(proc, wait_task, _monotonic() - started, "publish")
-            await asyncio.wait({publish})
-            return verdict
+            return self._exit_verdict(proc, wait_task, _monotonic() - started, "publish")
         await asyncio.wait({wait_task})
         self.current_url = ""
         set_managed_tunnel_url("")
@@ -1122,20 +1126,24 @@ class TunnelManager:
                 budget_used = 0
                 slow_announced = False
             budget_used += 1
-            await self._set_url("")
             v = verdict
             reason = v.reason
-            if budget_used < int(config.TUNNEL_RESTART_MAX_ATTEMPTS):
-                delay = _backoff_seconds(budget_used)
-                self._set_status(tunnel_state.RETRYING, reason, budget_used, time.time() + delay)
+            fast = budget_used < int(config.TUNNEL_RESTART_MAX_ATTEMPTS)
+            phase = tunnel_state.RETRYING if fast else tunnel_state.SLOW
+            delay = _backoff_seconds(budget_used) if fast else _slow_interval()
+            # Not working from here on: /app and doctor say so at once,
+            # also while a publish in flight and the clear go out.
+            self._set_status(phase, reason, budget_used, time.time() + delay)
+            await self._set_url("")
+            # The wait starts now, after the clear.
+            self._set_status(phase, reason, budget_used, time.time() + delay)
+            if fast:
                 log.warning("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
                             "trying again in %.0fs", v.kind, v.code, v.stage, reason,
                             v.detail, delay)
                 await asyncio.sleep(delay)
-                phase = tunnel_state.RETRYING
             else:
-                interval = _slow_interval()
-                self._set_status(tunnel_state.SLOW, reason, budget_used, time.time() + interval)
+                interval = delay
                 if not slow_announced:
                     slow_announced = True
                     log.warning("cloudflared %s (code=%s, stage %s) - reason %s [%s]; "
@@ -1148,7 +1156,6 @@ class TunnelManager:
                              v.detail, interval)
                 await self._slow_wait(interval)
                 log.info("cloudflared: trying the tunnel again (slow retry)")
-                phase = tunnel_state.SLOW
             self._set_status(phase, reason, budget_used, 0.0)
 
 

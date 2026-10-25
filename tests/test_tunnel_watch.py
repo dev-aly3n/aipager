@@ -572,3 +572,96 @@ def test_a_discovery_timeout_reaps_the_killed_child(monkeypatch, run_async):
                 child.wait(timeout=5)
     assert returncode == -signal.SIGKILL, "the killed cloudflared was never reaped"
     assert not zombie
+
+
+# ---- the state says "not working" as soon as cloudflared is gone ----------------------------
+
+def test_the_state_is_not_working_while_a_dead_tunnels_publish_finishes(table, run_async):
+    """It dies while its button goes out: /app and doctor must stop saying
+    "working" at once, not when the publish and the clear are done."""
+    table.hosts[40002] = '{"hostname":""}'        # the next tunnel never comes up
+    state = {}
+
+    async def on_change(url):
+        if url:
+            state["started"].set()
+            await state["release"].wait()
+
+    async def scenario():
+        state["started"], state["release"] = asyncio.Event(), asyncio.Event()
+        m = tm.TunnelManager(8765, on_change)
+        await m.start()
+        await _until(lambda: state["started"].is_set())
+        working = ts.current_status().phase
+        _die(table, 4000, code=1)
+        await _until(lambda: ts.current_status().phase != ts.WORKING, limit=1.0)
+        during = ts.current_status()
+        still_publishing = not m._publish_task.done()
+        state["release"].set()
+        await m.stop()
+        return working, during, still_publishing
+
+    working, during, still_publishing = run_async(scenario())
+    assert working == ts.WORKING
+    assert still_publishing
+    assert during.phase == ts.RETRYING and during.reason == ts.OTHER
+    assert during.attempt == 1
+
+
+def test_the_state_is_not_working_while_the_clear_goes_out(table, run_async):
+    table.hosts[40002] = '{"hostname":""}'        # the next tunnel never comes up
+    state = {}
+
+    async def on_change(url):
+        if not url and "release" in state:
+            state["clearing"].set()
+            await state["release"].wait()
+
+    async def scenario():
+        m = tm.TunnelManager(8765, on_change)
+        await m.start()
+        await _until(lambda: m.current_url == URL1 and m._publish_task.done())
+        state["clearing"], state["release"] = asyncio.Event(), asyncio.Event()
+        _die(table, 4000, code=1)
+        await _until(lambda: state["clearing"].is_set())
+        during = ts.current_status()
+        state["release"].set()
+        await m.stop()
+        return during
+
+    during = run_async(scenario())
+    assert during.phase == ts.RETRYING, "doctor and /app said working during the clear"
+    assert during.reason == ts.OTHER
+
+
+
+def test_the_clear_goes_out_only_after_the_dead_tunnels_publish(table, run_async):
+    """The manager's own order, whatever the callback does: the clear
+    starts once the publish in flight has ended, never beside it (a
+    callback with no lock of its own would otherwise end on the dead URL)."""
+    table.hosts[40002] = '{"hostname":""}'        # the next tunnel never comes up
+    events = []
+    state = {}
+
+    async def on_change(url):
+        events.append(("start", url))
+        if url:
+            state["started"].set()
+            await state["release"].wait()
+        events.append(("end", url))
+
+    async def scenario():
+        state["started"], state["release"] = asyncio.Event(), asyncio.Event()
+        m = tm.TunnelManager(8765, on_change)
+        await m.start()
+        await _until(lambda: state["started"].is_set())
+        _die(table, 4000)
+        await _until(lambda: ts.current_status().phase != ts.WORKING, limit=1.0)
+        for _ in range(20):
+            await asyncio.sleep(0.005)
+        state["release"].set()
+        await _until(lambda: ("end", "") in events)
+        await m.stop()
+
+    run_async(scenario())
+    assert events == [("start", URL1), ("end", URL1), ("start", ""), ("end", "")]
