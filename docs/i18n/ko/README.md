@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6ececab -->
+<!-- i18n-source: README.md @ 0746c0a -->
 
 <h3>이제 Claude도 채팅 하나예요.</h3>
 

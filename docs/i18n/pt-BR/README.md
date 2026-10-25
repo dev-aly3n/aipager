@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6ececab -->
+<!-- i18n-source: README.md @ 0746c0a -->
 
 <h3>O Claude vira mais um chat.</h3>
 

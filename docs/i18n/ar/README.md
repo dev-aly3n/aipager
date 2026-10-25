@@ -6,7 +6,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6ececab -->
+<!-- i18n-source: README.md @ 0746c0a -->
 
 <h3>أصبح Claude مجرد دردشة أخرى.</h3>
 
