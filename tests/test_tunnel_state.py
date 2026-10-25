@@ -61,7 +61,11 @@ CASES = {
         "dial tcp: lookup api.trycloudflare.com: no such host",
     ], ts.QUICK_TUNNEL),
     "other": ([_line("Initiating shutdown", "context canceled")], [], ts.OTHER),
-    "non_json": (["this is not json", "{broken", "[1, 2]", ""], ["\x00\xff"], ts.OTHER),
+    # Lines that are not a JSON object are skipped, never the end of the
+    # reading: the reason after them is still found.
+    "non_json": (["this is not json", "{broken", "[1, 2]", '{"error": 7}', ""] + INCIDENT,
+                 [], ts.DNS_INCOMPLETE),
+    "garbage": (["this is not json", "{broken", "[1, 2]", ""], ["\x00\xff"], ts.OTHER),
 }
 
 
@@ -151,8 +155,9 @@ def test_status_file_is_owner_only(daemon):
 
     path = config.TUNNEL_STATUS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("{}")
-    os.chmod(path, 0o644)
+    stale_tmp = path.with_name(path.name + ".tmp")     # a crash left it, readable
+    stale_tmp.write_text("{}")
+    os.chmod(stale_tmp, 0o644)
     assert ts.write_status_file(_status())
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     data = json.loads(path.read_text())
