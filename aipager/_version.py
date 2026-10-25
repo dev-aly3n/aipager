@@ -8,4 +8,4 @@ nothing. Bumped with every release (CONTRIBUTING.md, step 1);
 ``tests/test_version_file.py`` keeps it equal to pyproject's version.
 """
 
-__version__ = "1.3.9"
+__version__ = "1.3.10"

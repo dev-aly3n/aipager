@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Monte em `/workspace` as pastas que você quer que o Claude edite. A montagem de `~/.claude` leva suas credenciais do Claude e o histórico de conversas: rode `claude` uma vez no host para fazer login, ou `docker exec -it aipager claude` para fazer login dentro do contêiner.
 
-Tags: `latest`, `1.3`, `1.3.9` (uma por versão exata e uma por versão menor).
+Tags: `latest`, `1.3`, `1.3.10` (uma por versão exata e uma por versão menor).
 
 ### <a id="nix"></a>Nix
 

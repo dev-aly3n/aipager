@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.10] - 2026-10-25
+
 ### Fixed
 - **/app now says why the Mini App isn't working.** When the Mini App's link can't be set up (for example a DNS server that gives an incomplete answer), /app tells the person who can fix the machine what is wrong and what to do, and `aipager doctor` shows the same. aipager keeps trying by itself, so fixing the machine brings the Mini App back without a restart, and cloudflared is now watched while its link is checked, so a tunnel that stops is restarted at once. See [troubleshooting](docs/troubleshooting.md#the-mini-app-link-isnt-working).
 - **Two or more files Claude sends in one turn arrive together again.** Telegram refused every album, so each file failed with "Telegram refused it" while single files went through. If Telegram refuses an album because of one of its files, the files now go again one by one, so the others still arrive.
