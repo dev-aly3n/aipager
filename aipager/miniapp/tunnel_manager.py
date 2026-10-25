@@ -351,7 +351,10 @@ async def _wait_bounded(aw: Awaitable[_T], timeout: float) -> _T:
         if not inner.done():
             inner.cancel()
             await asyncio.wait({inner})
-    if inner.cancelled():                   # only ever by the timeout above
+    # Cancelled by our own cancel (the timeout above), or by an inner that
+    # raised CancelledError itself, which reads as a timeout too (no
+    # current inner does).
+    if inner.cancelled():
         raise asyncio.TimeoutError
     return inner.result()
 
