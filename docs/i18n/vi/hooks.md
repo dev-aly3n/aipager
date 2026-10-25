@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 
@@ -45,7 +45,7 @@ Phần xử lý của aipager nằm trong `aipager/dtach/hook_receiver.py`; vi�
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Một phiên vừa bắt đầu, được tiếp tục, hoặc vừa được thu gọn. Một phiên mà aipager chưa theo dõi sẽ được đăng ký. Sau khi thu gọn, thẻ hiện `📦 name · Đã thu gọn cuộc trò chuyện: 82% → 4%` (xem [PreCompact](#precompact--postcompact)). Với một cuộc trò chuyện mới, hook còn xóa dấu việc đang mở của việc trước. `SessionStart` đầu tiên của một tác vụ chạy nền (nguồn `fork`) chỉ báo cho aipager ID cuộc trò chuyện của tác vụ; nó không đóng việc đang mở đã chuyển đi cùng. `SessionStart` đầu tiên của một phiên được đưa về lại từ chế độ chạy nền của Claude Code sẽ gửi các tin nhắn bị giữ trong lúc đó.
+Một phiên vừa bắt đầu, được tiếp tục, hoặc vừa được thu gọn. Một phiên mà aipager chưa theo dõi sẽ được đăng ký. Sau khi thu gọn, thẻ hiện `📦 name · Đã thu gọn cuộc trò chuyện (trước đó 82%)` (xem [PreCompact](#precompact--postcompact)). Với một cuộc trò chuyện mới, hook còn xóa dấu việc đang mở của việc trước. `SessionStart` đầu tiên của một tác vụ chạy nền (nguồn `fork`) chỉ báo cho aipager ID cuộc trò chuyện của tác vụ; nó không đóng việc đang mở đã chuyển đi cùng. `SessionStart` đầu tiên của một phiên được đưa về lại từ chế độ chạy nền của Claude Code sẽ gửi các tin nhắn bị giữ trong lúc đó.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ Một agent chạy nền dừng lại trong lúc một agent do nó khởi chạ
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude đang thu gọn ngữ cảnh của nó (`trigger` là `auto` hoặc `manual`). Thẻ làm việc hiện `🔄 name · Đang thu gọn cuộc trò chuyện` (một tin nhắn mới khi chưa có thẻ), để lúc tạm dừng không trông giống một lần crash. `PostCompact` kết thúc trạng thái đó; dòng `📦 name · Đã thu gọn cuộc trò chuyện: X% → Y%` đến từ `SessionStart` ngay sau đó, hoặc từ dòng trạng thái khi sự kiện kia bị lỡ. Dòng trạng thái cũng đưa ra cảnh báo `⚠️ name · Ngữ cảnh đã đầy 82% - sắp tự động thu gọn` (kèm nút Thu gọn ngay) khi ngữ cảnh đạt 80%, mỗi cuộc trò chuyện một lần: thu gọn không làm nó hiện lại, còn một cuộc trò chuyện mới (ví dụ sau `/clear`) sẽ nhận lại nó.
+Claude đang thu gọn ngữ cảnh của nó (`trigger` là `auto` hoặc `manual`). Thẻ làm việc hiện `🔄 name · Đang thu gọn cuộc trò chuyện` (một tin nhắn mới khi chưa có thẻ), để lúc tạm dừng không trông giống một lần crash. `PostCompact` kết thúc trạng thái đó; dòng `📦 name · Đã thu gọn cuộc trò chuyện (trước đó X%)` đến từ `SessionStart` ngay sau đó, hoặc từ dòng trạng thái khi sự kiện kia bị lỡ. Dòng trạng thái của Claude Code hiện 0% cho tới tin nhắn tiếp theo, nên kích thước mới chưa biết: sau một lần thu gọn giữa hai việc, dòng này đổi thành `📦 name · Đã thu gọn cuộc trò chuyện: X% → Y%` ngay khi dòng trạng thái báo kích thước. Dòng trạng thái cũng đưa ra cảnh báo `⚠️ name · Ngữ cảnh đã đầy 82% - sắp tự động thu gọn` (kèm nút Thu gọn ngay) khi ngữ cảnh đạt 80%, mỗi cuộc trò chuyện một lần: thu gọn không làm nó hiện lại, còn một cuộc trò chuyện mới (ví dụ sau `/clear`) sẽ nhận lại nó.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

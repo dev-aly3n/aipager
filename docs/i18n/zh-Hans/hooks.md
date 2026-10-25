@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -45,7 +45,7 @@ aipager 的处理程序在 `aipager/dtach/hook_receiver.py`；hook 自己的工�
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-会话启动、被恢复或被压缩了。aipager 还没跟踪的会话会被登记。压缩之后，卡片显示 `📦 name · 对话已压缩：82% → 4%`（见 [PreCompact](#precompact--postcompact)）。对于新的对话，hook 还会清除上一个任务的打开标记。后台任务的第一个 `SessionStart`（来源 `fork`）只告诉 aipager 该任务的对话 ID；它不会结束随之移过去的那个未结束的任务。从 Claude Code 后台带回来的会话的第一个 `SessionStart` 会发出这期间暂缓的消息。
+会话启动、被恢复或被压缩了。aipager 还没跟踪的会话会被登记。压缩之后，卡片显示 `📦 name · 对话已压缩（压缩前 82%）`（见 [PreCompact](#precompact--postcompact)）。对于新的对话，hook 还会清除上一个任务的打开标记。后台任务的第一个 `SessionStart`（来源 `fork`）只告诉 aipager 该任务的对话 ID；它不会结束随之移过去的那个未结束的任务。从 Claude Code 后台带回来的会话的第一个 `SessionStart` 会发出这期间暂缓的消息。
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ aipager 读取 Claude Code 的 `notification_type`：
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude 正在压缩它的上下文（`trigger` 为 `auto` 或 `manual`）。工作卡片显示 `🔄 name · 正在压缩对话`（没有卡片时会新发一条消息），这样这段停顿不会看起来像崩溃。`PostCompact` 结束这个状态；`📦 name · 对话已压缩：X% → Y%` 这一行来自随后的 `SessionStart`，如果错过了，则来自状态行。状态行还会在上下文达到 80% 时给出警告 `⚠️ name · 上下文已用 82%，即将自动压缩`（带一个“立即压缩”按钮），每个对话只给一次：压缩不会让它再次出现，新的对话（例如 `/clear` 之后）会再收到一次。
+Claude 正在压缩它的上下文（`trigger` 为 `auto` 或 `manual`）。工作卡片显示 `🔄 name · 正在压缩对话`（没有卡片时会新发一条消息），这样这段停顿不会看起来像崩溃。`PostCompact` 结束这个状态；`📦 name · 对话已压缩（压缩前 X%）` 这一行来自随后的 `SessionStart`，如果错过了，则来自状态行。Claude Code 的状态行在下一条消息之前一直显示 0%，所以还不知道新的大小：两个任务之间的压缩，等状态行报出大小后，这一行会变成 `📦 name · 对话已压缩：X% → Y%`。状态行还会在上下文达到 80% 时给出警告 `⚠️ name · 上下文已用 82%，即将自动压缩`（带一个“立即压缩”按钮），每个对话只给一次：压缩不会让它再次出现，新的对话（例如 `/clear` 之后）会再收到一次。
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

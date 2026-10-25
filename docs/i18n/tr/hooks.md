@@ -1,6 +1,6 @@
 # Hook olayları
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../hooks.md))
 
@@ -45,7 +45,7 @@ aipager'ın işleyicileri `aipager/dtach/hook_receiver.py` içinde; hook'un kend
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Bir oturum başladı, devam ettirildi ya da konuşması sıkıştırıldı. aipager'ın henüz izlemediği bir oturum kaydedilir. Sıkıştırmadan sonra kart `📦 name · Konuşma sıkıştırıldı: 82% → 4%` gösterir (bkz. [PreCompact](#precompact--postcompact)). Yeni bir konuşma için hook ayrıca önceki görevin açık görev işaretini kaldırır. Bir arka plan işinin ilk `SessionStart` olayı (kaynak `fork`) aipager'a yalnızca işin konuşma kimliğini bildirir; onunla birlikte taşınan açık görevi kapatmaz. Claude Code arka planından geri getirilen bir oturumun ilk `SessionStart` olayı, bu arada bekletilen mesajları gönderir.
+Bir oturum başladı, devam ettirildi ya da konuşması sıkıştırıldı. aipager'ın henüz izlemediği bir oturum kaydedilir. Sıkıştırmadan sonra kart `📦 name · Konuşma 82% doluyken sıkıştırıldı` gösterir (bkz. [PreCompact](#precompact--postcompact)). Yeni bir konuşma için hook ayrıca önceki görevin açık görev işaretini kaldırır. Bir arka plan işinin ilk `SessionStart` olayı (kaynak `fork`) aipager'a yalnızca işin konuşma kimliğini bildirir; onunla birlikte taşınan açık görevi kapatmaz. Claude Code arka planından geri getirilen bir oturumun ilk `SessionStart` olayı, bu arada bekletilen mesajları gönderir.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ Başlattığı bir ajan hâlâ çalışırken duran bir arka plan ajanı da bir 
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude bağlamını sıkıştırıyor (`trigger` değeri `auto` ya da `manual`). Çalışma kartı `🔄 name · Konuşma sıkıştırılıyor` gösterir (kart yoksa yeni bir mesaj), böylece duraklama bir çökme gibi görünmez. `PostCompact` bu durumu bitirir; `📦 name · Konuşma sıkıştırıldı: X% → Y%` satırı bir sonraki `SessionStart` olayından ya da o kaçırılırsa durum satırından gelir. Durum satırı ayrıca bağlam %80'e ulaştığında `⚠️ name · Bağlam 82% dolu - yakında otomatik sıkıştırılacak` uyarısını verir (Sıkıştır düğmesiyle); bunu her konuşmada bir kez yapar: sıkıştırma uyarıyı tekrarlatmaz, yeni bir konuşma (örneğin `/clear` sonrası) onu yeniden alır.
+Claude bağlamını sıkıştırıyor (`trigger` değeri `auto` ya da `manual`). Çalışma kartı `🔄 name · Konuşma sıkıştırılıyor` gösterir (kart yoksa yeni bir mesaj), böylece duraklama bir çökme gibi görünmez. `PostCompact` bu durumu bitirir; `📦 name · Konuşma X% doluyken sıkıştırıldı` satırı bir sonraki `SessionStart` olayından ya da o kaçırılırsa durum satırından gelir. Claude Code'un durum satırı bir sonraki mesaja kadar %0 gösterir, yani yeni boyut henüz bilinmez: iki görev arasında yapılan bir sıkıştırmadan sonra, durum satırı boyutu bildirince satır `📦 name · Konuşma sıkıştırıldı: X% → Y%` olur. Durum satırı ayrıca bağlam %80'e ulaştığında `⚠️ name · Bağlam 82% dolu - yakında otomatik sıkıştırılacak` uyarısını verir (Sıkıştır düğmesiyle); bunu her konuşmada bir kez yapar: sıkıştırma uyarıyı tekrarlatmaz, yeni bir konuşma (örneğin `/clear` sonrası) onu yeniden alır.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

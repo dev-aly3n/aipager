@@ -1,6 +1,6 @@
 # Eventi hook
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../hooks.md))
 
@@ -45,7 +45,7 @@ I gestori di aipager sono in `aipager/dtach/hook_receiver.py`; il lavoro dell'ho
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Una sessione è partita, è stata ripresa o è stata compattata. Una sessione che aipager non seguiva ancora viene registrata. Dopo una compattazione la scheda mostra `📦 name · Conversazione compattata: 82% → 4%` (vedi [PreCompact](#precompact--postcompact)). Per una conversazione nuova, l'hook cancella anche il segno di attività aperta di un'attività precedente. Il primo `SessionStart` di un job in background (origine `fork`) dice ad aipager solo l'ID della conversazione del job; non chiude l'attività aperta che si è spostata con esso. Il primo `SessionStart` di una sessione riportata qui dal background di Claude Code invia i messaggi trattenuti nel frattempo.
+Una sessione è partita, è stata ripresa o è stata compattata. Una sessione che aipager non seguiva ancora viene registrata. Dopo una compattazione la scheda mostra `📦 name · Conversazione compattata (prima: 82%)` (vedi [PreCompact](#precompact--postcompact)). Per una conversazione nuova, l'hook cancella anche il segno di attività aperta di un'attività precedente. Il primo `SessionStart` di un job in background (origine `fork`) dice ad aipager solo l'ID della conversazione del job; non chiude l'attività aperta che si è spostata con esso. Il primo `SessionStart` di una sessione riportata qui dal background di Claude Code invia i messaggi trattenuti nel frattempo.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ Un agente in background che si ferma mentre un agente avviato da lui è ancora i
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude sta compattando il suo contesto (`trigger` `auto` o `manual`). La scheda di attività mostra `🔄 name · Compattazione della conversazione` (o, senza scheda, viene inviato un messaggio nuovo), così la pausa non sembra un crash. `PostCompact` chiude questo stato; la riga `📦 name · Conversazione compattata: X% → Y%` arriva dal `SessionStart` successivo, oppure dalla riga di stato se quello sfugge. La riga di stato dà anche l'avviso `⚠️ name · Contesto usato: 82% - presto verrà compattato in automatico` all'80% di contesto (con un pulsante «Compatta ora»), una sola volta per conversazione: la compattazione non lo ripete, e una conversazione nuova (per esempio dopo `/clear`) lo riceve di nuovo.
+Claude sta compattando il suo contesto (`trigger` `auto` o `manual`). La scheda di attività mostra `🔄 name · Compattazione della conversazione` (o, senza scheda, viene inviato un messaggio nuovo), così la pausa non sembra un crash. `PostCompact` chiude questo stato; la riga `📦 name · Conversazione compattata (prima: X%)` arriva dal `SessionStart` successivo, oppure dalla riga di stato se quello sfugge. La riga di stato di Claude Code segna 0% fino al messaggio successivo, quindi la nuova dimensione non si conosce ancora: dopo una compattazione tra un'attività e l'altra, la riga diventa `📦 name · Conversazione compattata: X% → Y%` appena la riga di stato la riporta. La riga di stato dà anche l'avviso `⚠️ name · Contesto usato: 82% - presto verrà compattato in automatico` all'80% di contesto (con un pulsante «Compatta ora»), una sola volta per conversazione: la compattazione non lo ripete, e una conversazione nuova (per esempio dopo `/clear`) lo riceve di nuovo.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

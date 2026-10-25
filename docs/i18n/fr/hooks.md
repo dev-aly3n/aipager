@@ -1,6 +1,6 @@
 # Événements de hook
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../hooks.md))
 
@@ -45,7 +45,7 @@ Les gestionnaires d'aipager sont dans `aipager/dtach/hook_receiver.py` ; le tra
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Une session a démarré, a repris ou a été compactée. Une session qu'aipager ne suit pas encore est enregistrée. Après un compactage, la carte affiche `📦 name · Conversation compactée : 82% → 4%` (voir [PreCompact](#precompact--postcompact)). Pour une nouvelle conversation, le hook efface aussi la marque de tâche ouverte de la tâche précédente. Le premier `SessionStart` d'une tâche d'arrière-plan (source `fork`) ne fait que donner à aipager l'identifiant de conversation de la tâche ; il ne ferme pas la tâche en cours qui est passée avec elle. Le premier `SessionStart` d'une session ramenée de l'arrière-plan de Claude Code envoie les messages retenus entre-temps.
+Une session a démarré, a repris ou a été compactée. Une session qu'aipager ne suit pas encore est enregistrée. Après un compactage, la carte affiche `📦 name · Conversation compactée (elle était à 82%)` (voir [PreCompact](#precompact--postcompact)). Pour une nouvelle conversation, le hook efface aussi la marque de tâche ouverte de la tâche précédente. Le premier `SessionStart` d'une tâche d'arrière-plan (source `fork`) ne fait que donner à aipager l'identifiant de conversation de la tâche ; il ne ferme pas la tâche en cours qui est passée avec elle. Le premier `SessionStart` d'une session ramenée de l'arrière-plan de Claude Code envoie les messages retenus entre-temps.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ Un agent en arrière-plan qui s'arrête pendant qu'un agent qu'il a lancé tourn
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude compacte son contexte (`trigger` vaut `auto` ou `manual`). La carte d'activité affiche `🔄 name · Compactage de la conversation` (un nouveau message quand il n'y a pas de carte), pour que la pause ne ressemble pas à un plantage. `PostCompact` met fin à cet état ; la ligne `📦 name · Conversation compactée : X% → Y%` vient du `SessionStart` qui suit, ou de la ligne d'état quand celui-ci est manqué. La ligne d'état donne aussi l'avertissement `⚠️ name · Contexte à 82% - il sera bientôt compacté automatiquement` (avec un bouton Compacter) une fois que le contexte atteint 80 %, une seule fois par conversation : le compactage ne le répète pas, et une nouvelle conversation (après `/clear`, par exemple) le reçoit à nouveau.
+Claude compacte son contexte (`trigger` vaut `auto` ou `manual`). La carte d'activité affiche `🔄 name · Compactage de la conversation` (un nouveau message quand il n'y a pas de carte), pour que la pause ne ressemble pas à un plantage. `PostCompact` met fin à cet état ; la ligne `📦 name · Conversation compactée (elle était à X%)` vient du `SessionStart` qui suit, ou de la ligne d'état quand celui-ci est manqué. La ligne d'état de Claude Code affiche 0 % jusqu'au message suivant, donc la nouvelle taille n'est pas encore connue : après un compactage entre deux tâches, la ligne devient `📦 name · Conversation compactée : X% → Y%` dès que la ligne d'état la donne. La ligne d'état donne aussi l'avertissement `⚠️ name · Contexte à 82% - il sera bientôt compacté automatiquement` (avec un bouton Compacter) une fois que le contexte atteint 80 %, une seule fois par conversation : le compactage ne le répète pas, et une nouvelle conversation (après `/clear`, par exemple) le reçoit à nouveau.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

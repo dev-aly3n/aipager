@@ -1,6 +1,6 @@
 # Hook-Ereignisse
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../hooks.md))
 
@@ -45,7 +45,7 @@ Die Handler von aipager stehen in `aipager/dtach/hook_receiver.py`; die eigene A
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Eine Sitzung ist gestartet, wurde fortgesetzt oder komprimiert. Eine Sitzung, die aipager noch nicht verfolgt, wird registriert. Nach einer Komprimierung zeigt die Karte `📦 name · Unterhaltung komprimiert: 82% → 4%` (siehe [PreCompact](#precompact--postcompact)). Bei einer neuen Unterhaltung löscht der Hook außerdem die Markierung der offenen Aufgabe der vorigen Aufgabe. Das erste `SessionStart` eines Hintergrund-Jobs (Quelle `fork`) teilt aipager nur die Gesprächs-ID des Jobs mit; die Aufgabe, die mit ihm gewechselt ist, beendet es nicht. Das erste `SessionStart` einer Sitzung, die aus dem Hintergrund von Claude Code zurückgeholt wurde, schickt die Nachrichten, die bis dahin zurückgehalten wurden.
+Eine Sitzung ist gestartet, wurde fortgesetzt oder komprimiert. Eine Sitzung, die aipager noch nicht verfolgt, wird registriert. Nach einer Komprimierung zeigt die Karte `📦 name · Unterhaltung bei 82% komprimiert` (siehe [PreCompact](#precompact--postcompact)). Bei einer neuen Unterhaltung löscht der Hook außerdem die Markierung der offenen Aufgabe der vorigen Aufgabe. Das erste `SessionStart` eines Hintergrund-Jobs (Quelle `fork`) teilt aipager nur die Gesprächs-ID des Jobs mit; die Aufgabe, die mit ihm gewechselt ist, beendet es nicht. Das erste `SessionStart` einer Sitzung, die aus dem Hintergrund von Claude Code zurückgeholt wurde, schickt die Nachrichten, die bis dahin zurückgehalten wurden.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ Ein Hintergrundagent, der stoppt, während ein von ihm gestarteter Agent noch l�
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude komprimiert seinen Kontext (`trigger` ist `auto` oder `manual`). Die Arbeitskarte zeigt `🔄 name · Komprimiert die Unterhaltung` (eine neue Nachricht, wenn keine Karte da ist), damit die Pause nicht wie ein Absturz aussieht. `PostCompact` beendet diesen Zustand; die Zeile `📦 name · Unterhaltung komprimiert: X% → Y%` kommt aus dem folgenden `SessionStart` oder, wenn das verpasst wird, aus der Statuszeile. Die Statuszeile gibt außerdem die Warnung `⚠️ name · Kontext bei 82% - wird bald automatisch komprimiert` (mit einem Button Komprimieren), sobald der Kontext 80 % erreicht, einmal pro Unterhaltung: Komprimieren wiederholt sie nicht, und eine neue Unterhaltung (zum Beispiel nach `/clear`) bekommt sie wieder.
+Claude komprimiert seinen Kontext (`trigger` ist `auto` oder `manual`). Die Arbeitskarte zeigt `🔄 name · Komprimiert die Unterhaltung` (eine neue Nachricht, wenn keine Karte da ist), damit die Pause nicht wie ein Absturz aussieht. `PostCompact` beendet diesen Zustand; die Zeile `📦 name · Unterhaltung bei X% komprimiert` kommt aus dem folgenden `SessionStart` oder, wenn das verpasst wird, aus der Statuszeile. Die Statuszeile von Claude Code zeigt bis zur nächsten Nachricht 0 %, die neue Größe ist also noch nicht bekannt: Nach einer Komprimierung zwischen zwei Aufgaben wird die Zeile zu `📦 name · Unterhaltung komprimiert: X% → Y%`, sobald die Statuszeile sie meldet. Die Statuszeile gibt außerdem die Warnung `⚠️ name · Kontext bei 82% - wird bald automatisch komprimiert` (mit einem Button Komprimieren), sobald der Kontext 80 % erreicht, einmal pro Unterhaltung: Komprimieren wiederholt sie nicht, und eine neue Unterhaltung (zum Beispiel nach `/clear`) bekommt sie wieder.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 

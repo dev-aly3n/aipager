@@ -1,6 +1,6 @@
 # Event hook
 
-<!-- i18n-source: docs/hooks.md @ a7e34bee -->
+<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../hooks.md))
 
@@ -45,7 +45,7 @@ Penangan aipager ada di `aipager/dtach/hook_receiver.py`; pekerjaan hook sendiri
 
 ### <a id="sessionstart"></a>`SessionStart`
 
-Sesi dimulai, dilanjutkan, atau percakapannya diringkas. Sesi yang belum dilacak aipager akan didaftarkan. Setelah peringkasan, kartu menampilkan `📦 name · Percakapan diringkas: 82% → 4%` (lihat [PreCompact](#precompact--postcompact)). Untuk percakapan baru, hook juga melepas penanda tugas terbuka dari tugas sebelumnya. `SessionStart` pertama dari tugas latar belakang (sumber `fork`) hanya memberi tahu aipager ID percakapan tugas itu; event ini tidak menutup tugas terbuka yang ikut pindah bersamanya. `SessionStart` pertama dari sesi yang dikembalikan dari latar belakang Claude Code mengirim pesan yang ditahan selama itu.
+Sesi dimulai, dilanjutkan, atau percakapannya diringkas. Sesi yang belum dilacak aipager akan didaftarkan. Setelah peringkasan, kartu menampilkan `📦 name · Percakapan diringkas (sebelumnya 82%)` (lihat [PreCompact](#precompact--postcompact)). Untuk percakapan baru, hook juga melepas penanda tugas terbuka dari tugas sebelumnya. `SessionStart` pertama dari tugas latar belakang (sumber `fork`) hanya memberi tahu aipager ID percakapan tugas itu; event ini tidak menutup tugas terbuka yang ikut pindah bersamanya. `SessionStart` pertama dari sesi yang dikembalikan dari latar belakang Claude Code mengirim pesan yang ditahan selama itu.
 
 ### <a id="sessionend"></a>`SessionEnd`
 
@@ -112,7 +112,7 @@ Agen latar belakang yang berhenti selagi agen yang dimulainya masih berjalan jug
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
-Claude sedang meringkas konteksnya (`trigger` bernilai `auto` atau `manual`). Kartu kerja menampilkan `🔄 name · Meringkas percakapan` (pesan baru kalau tidak ada kartu), supaya jeda itu tidak terlihat seperti crash. `PostCompact` mengakhiri keadaan itu; baris `📦 name · Percakapan diringkas: X% → Y%` datang dari `SessionStart` berikutnya, atau kalau itu terlewat, dari baris status. Baris status juga memberi peringatan `⚠️ name · Konteks terisi 82% - sebentar lagi diringkas otomatis` (dengan tombol Ringkas sekarang) saat konteks mencapai 80%, sekali per percakapan: meringkas tidak memunculkannya lagi, dan percakapan baru (misalnya setelah `/clear`) mendapatkannya lagi.
+Claude sedang meringkas konteksnya (`trigger` bernilai `auto` atau `manual`). Kartu kerja menampilkan `🔄 name · Meringkas percakapan` (pesan baru kalau tidak ada kartu), supaya jeda itu tidak terlihat seperti crash. `PostCompact` mengakhiri keadaan itu; baris `📦 name · Percakapan diringkas (sebelumnya X%)` datang dari `SessionStart` berikutnya, atau kalau itu terlewat, dari baris status. Baris status Claude Code menunjukkan 0% sampai pesan berikutnya, jadi ukuran barunya belum diketahui: setelah peringkasan di antara dua tugas, baris itu berubah menjadi `📦 name · Percakapan diringkas: X% → Y%` begitu baris status melaporkannya. Baris status juga memberi peringatan `⚠️ name · Konteks terisi 82% - sebentar lagi diringkas otomatis` (dengan tombol Ringkas sekarang) saat konteks mencapai 80%, sekali per percakapan: meringkas tidak memunculkannya lagi, dan percakapan baru (misalnya setelah `/clear`) mendapatkannya lagi.
 
 ### <a id="messagedisplay"></a>`MessageDisplay`
 
