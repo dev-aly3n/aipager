@@ -227,6 +227,8 @@ class Batch:
     #: ``failures`` name the files that transcript line lists): already
     #: looked for, never checked again.
     unconfirmed: bool = False
+    #: Files of an album Telegram refused: each goes again on its own.
+    alone: list[Item] = field(default_factory=list)
 
 
 @dataclass
@@ -1313,16 +1315,18 @@ def _chunks(items: list[Item]) -> list[list[Item]]:
         k += 1
 
 
-def plan_sends(items: list[Item], label: str, caption: str | None) -> list[Planned]:
+def plan_sends(items: list[Item], label: str, caption: str | None,
+               alone: list[Item] | None = None) -> list[Planned]:
     """The Telegram sends for one batch's files, in the order Claude gave
     them: albums by class (photo + video, audio, document), classes in the
-    order of their first file, an animation always on its own. Each send's
-    first item carries the caption; Claude's caption only the first send's."""
+    order of their first file, an animation, and any file in *alone*,
+    always on its own. Each send's first item carries the caption;
+    Claude's caption only the first send's."""
     groups: list[list[Item]] = []
     by_class: dict[str, list[Item]] = {}
     for item in items:
         cls = _ALBUM_CLASS.get(item.method)
-        if cls is None:            # an animation: alone, where it is
+        if cls is None or item in (alone or ()):    # alone, where it is
             groups.append([item])
             continue
         if cls not in by_class:
@@ -1384,15 +1388,19 @@ def send_cause(exc: BaseException) -> str:
     return CAUSE_OTHER
 
 
-def _input_file(item: Item) -> InputFile:
-    return InputFile(item.path.read_bytes(), filename=item.name)
+def _input_file(item: Item, *, attach: bool = False) -> InputFile:
+    return InputFile(item.path.read_bytes(), filename=item.name, attach=attach)
 
 
 def _input_media(item: Item, caption: str | None):
     kind = {media_kind.METHOD_PHOTO: InputMediaPhoto,
             media_kind.METHOD_VIDEO: InputMediaVideo,
             media_kind.METHOD_AUDIO: InputMediaAudio}.get(item.method, InputMediaDocument)
-    return kind(media=_input_file(item), caption=caption or None)
+    # An album item's file is uploaded as its own part and named in the
+    # item's JSON ("media": "attach://<part>"): PTB does that only for an
+    # attached InputFile. Without it the JSON has no "media" and Telegram
+    # refuses the whole album ("Can't parse inputmedia: media not found").
+    return kind(media=_input_file(item, attach=True), caption=caption or None)
 
 
 def send_kwargs(anchor: int | None) -> dict:
@@ -1454,12 +1462,23 @@ async def deliver(bot, pending: Pending, label: str, tr) -> bool:
         while pending.batches:
             batch = pending.batches[0]
             while batch.items:
-                planned = plan_sends(batch.items, label, batch.caption)[0]
+                planned = plan_sends(batch.items, label, batch.caption, batch.alone)[0]
                 try:
                     sent = await send_planned(bot, pending.chat_id, planned,
                                               pending.anchor)
                 except Exception as exc:
                     cause = send_cause(exc)
+                    if (planned.method == METHOD_MEDIA_GROUP
+                            and isinstance(exc, BadRequest) and cause == CAUSE_REFUSED):
+                        # Telegram refuses a whole album for one file it
+                        # will not take, and nothing of it was sent: each
+                        # goes again on its own, so the others still arrive.
+                        # Only a refusal: after a timeout the album may
+                        # have arrived, and sending it again would double it.
+                        log.warning("turn files sent one by one: %s (album refused: %s)",
+                                    ", ".join(i.name for i in planned.items), exc)
+                        batch.alone.extend(planned.items)
+                        continue
                     log.warning("turn file failed: %s (%s: %s)",
                                 ", ".join(i.name for i in planned.items), cause, exc)
                     for it in planned.items:
