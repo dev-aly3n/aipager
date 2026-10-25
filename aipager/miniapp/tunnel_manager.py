@@ -523,6 +523,15 @@ async def spawn_and_discover_url(binary: str, port: int) -> tuple[Tunnel, str]:
         # leave cloudflared running with nobody holding it (a leaked public
         # tunnel surviving the daemon).
         _kill_quietly(tunnel)
+        # And reaped: a planned restart is an in-place execve, so a child
+        # left unreaped here is a zombie of the next daemon for its whole
+        # life. Milliseconds after a SIGKILL, so stop() stays prompt.
+        try:
+            await _reap_killed(tunnel)
+        except asyncio.CancelledError:
+            # Cancelled again while reaping: one last look that never
+            # waits, then the original cancellation goes on.
+            tunnel.poll()
         raise
     except (asyncio.TimeoutError, TunnelLaunchError) as exc:
         _kill_quietly(tunnel)

@@ -574,6 +574,133 @@ def test_a_discovery_timeout_reaps_the_killed_child(monkeypatch, run_async):
     assert not zombie
 
 
+def _proc_state(pid):
+    """The one-letter state in /proc/<pid>/stat ("Z" for a zombie), or ""
+    once the pid is gone."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0]
+    except OSError:
+        return ""
+
+
+def _discovery_with_a_real_child(monkeypatch, children, timers, *, kill_delay=0.0):
+    """spawn_and_discover_url over a real, harmless ``python -c`` child that
+    stands in for cloudflared (never cloudflared), whose metrics never name
+    a host. ``kill_delay`` delivers the SIGKILL that late, from a timer."""
+    import threading
+
+    from aipager import self_restart
+
+    monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 30.0)
+    monkeypatch.setattr("aipager.config.TUNNEL_KILL_TIMEOUT_SECONDS", 3.0)
+    queried = []
+
+    def _popen(argv, **kwargs):
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+        children.append(child)
+        return child
+
+    def _kill(pid, sig):
+        assert [c.pid for c in children] == [pid], "a signal for a process not ours"
+        if kill_delay:
+            timer = threading.Timer(kill_delay, os.kill, (pid, sig))
+            timers.append(timer)
+            timer.start()
+        else:
+            os.kill(pid, sig)
+
+    async def _no_answer(port, path):
+        queried.append(port)
+        return None
+    monkeypatch.setattr(self_restart, "_popen", _popen)
+    monkeypatch.setattr(self_restart, "_kill", _kill)
+    monkeypatch.setattr(tm, "_is_our_tunnel", lambda pid, binary, port: True)
+    monkeypatch.setattr(tm, "_free_port", lambda: 40001)
+    monkeypatch.setattr(tm, "_query_metrics", _no_answer)
+    return queried
+
+
+def _kill_and_reap(children, timers):
+    for timer in timers:
+        timer.cancel()
+        timer.join(timeout=5)
+    for child in children:
+        if child.poll() is None:
+            child.kill()
+            child.wait(timeout=5)
+
+
+@linux_only
+def test_a_stop_during_discovery_reaps_the_killed_child(monkeypatch, run_async):
+    """A stop (a /restart or an update restart) while the URL is still
+    being discovered: cloudflared is killed AND reaped before the
+    cancellation goes on. The restart is an in-place execve, so a child
+    left unreaped would be the next daemon's zombie for its whole life."""
+    children, timers = [], []
+    queried = _discovery_with_a_real_child(monkeypatch, children, timers)
+
+    async def scenario():
+        task = asyncio.create_task(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
+        await _until(lambda: queried, limit=5.0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("the cancellation was swallowed")
+        [child] = children
+        # Read before anything else could reap it: the attempt did.
+        return child.returncode, os.path.exists(f"/proc/{child.pid}")
+
+    try:
+        returncode, zombie = run_async(scenario())
+    finally:
+        _kill_and_reap(children, timers)
+    assert returncode == -signal.SIGKILL, "the killed cloudflared was never reaped"
+    assert not zombie
+
+
+@linux_only
+def test_a_second_cancel_while_reaping_still_reaps_and_cancels(monkeypatch, run_async):
+    """Cancelled again while it waits for the killed child: no further
+    wait, one last non-blocking look reaps the zombie, and the
+    cancellation still goes on (never swallowed)."""
+    monkeypatch.setattr(tm, "_REAP_POLL_SECONDS", 30.0)   # the reap waits long
+    children, timers = [], []
+    # The SIGKILL lands 0.2 s late, so the reap's first look finds it
+    # running and the reap is sleeping when the child becomes a zombie.
+    queried = _discovery_with_a_real_child(monkeypatch, children, timers, kill_delay=0.2)
+
+    async def scenario():
+        task = asyncio.create_task(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
+        await _until(lambda: queried, limit=5.0)
+        task.cancel()
+        [child] = children
+        await _until(lambda: _proc_state(child.pid) == "Z", limit=5.0)
+        assert not task.done(), "the reap no longer waits for the child"
+        task.cancel()
+        started = time.monotonic()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("the cancellation was swallowed")
+        assert time.monotonic() - started < 2.0, "the second cancel was not prompt"
+        return child.returncode, os.path.exists(f"/proc/{child.pid}")
+
+    try:
+        returncode, zombie = run_async(scenario())
+    finally:
+        _kill_and_reap(children, timers)
+    assert returncode == -signal.SIGKILL, "the zombie was not reaped on the second cancel"
+    assert not zombie
+
+
 # ---- the state says "not working" as soon as cloudflared is gone ----------------------------
 
 def test_the_state_is_not_working_while_a_dead_tunnels_publish_finishes(table, run_async):
