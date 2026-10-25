@@ -6,7 +6,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 0746c0a -->
+<!-- i18n-source: README.md @ bd8a636 -->
 
 <h3>حالا Claude هم یکی از چت‌های شماست.</h3>
 
