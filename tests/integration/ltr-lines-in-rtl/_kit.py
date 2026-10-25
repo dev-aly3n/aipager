@@ -239,6 +239,15 @@ def card_session(label: str = "x1", commentary: str = "", waiting_agents: int = 
     return s
 
 
+def shift_clocks(s, seconds: float) -> None:
+    """Move the clocks :func:`card_session` set on by *seconds*, as if the
+    turn and its agents had started that much later: two cards drawn a
+    second apart on a slow runner then show the same times."""
+    s.busy_started_at += seconds
+    for info in s.active_subagents.values():
+        info["started_at"] += seconds
+
+
 def render_cases() -> dict[str, str]:
     """Every output that must stay byte for byte as on main: id -> text."""
     from aipager import i18n

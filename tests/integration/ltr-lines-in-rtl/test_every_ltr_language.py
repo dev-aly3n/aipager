@@ -17,6 +17,7 @@ import importlib.util
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -130,7 +131,9 @@ def _card_pair(code: str, label: str, waiting: bool) -> tuple[str, str]:
     left to right, in *code*."""
     s = kit.card_session(label, kit.FA_PROSE, waiting_agents=3 if waiting else 0)
     tr = i18n.get(code)
+    drawn = time.monotonic()
     rtl, _ = animation.build_stream_card_ex(s, "Working", tr=tr, rtl=True, waiting=waiting)
+    kit.shift_clocks(s, time.monotonic() - drawn)
     ltr, _ = animation.build_stream_card_ex(s, "Working", tr=tr, rtl=False, waiting=waiting)
     return rtl, ltr
 
