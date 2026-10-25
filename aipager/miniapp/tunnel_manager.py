@@ -864,8 +864,10 @@ class TunnelManager:
             tunnel_state.set_attempt_hook(None)
         await self._settle_publish()
         proc = self._proc
+        # Never one already being stopped (a failed probe's kill that this
+        # stop() cut short): it is on its way out, not worth handing over.
         if (keep and MINIAPP_KEEP_TUNNEL and isinstance(proc, Tunnel) and proc.host
-                and proc.poll() is None):
+                and not proc._stopping and proc.poll() is None):
             token = secrets.token_hex(8)
             if _write_record(proc.record(owner=0, handover_token=token)) and \
                     _start_guard(proc, token):
