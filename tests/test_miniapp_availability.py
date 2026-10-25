@@ -156,3 +156,50 @@ def test_doctor_is_ok_when_enabled_and_installed(monkeypatch):
 def test_the_miniapp_row_is_actually_registered():
     """A check nobody runs is not a check."""
     assert doctor.check_miniapp in doctor.CHECKS
+
+
+# ---- doctor: the running daemon's tunnel state -----------------------------
+
+def _daemon_tunnel(monkeypatch, phase, reason=""):
+    """A running daemon's state file (this test process plays the daemon)."""
+    import os
+
+    from aipager.miniapp import tunnel_manager as tm
+    from aipager.miniapp import tunnel_state as ts
+
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+    monkeypatch.setattr(
+        "aipager.miniapp.server.miniapp_extra_available", lambda: True)
+    monkeypatch.setattr(tm, "_boot_id", lambda: "boot-1")
+    monkeypatch.setattr(ts, "_daemon_alive", lambda pid: pid == os.getpid())
+    monkeypatch.setattr(tm, "_is_aipager", lambda pid: pid == os.getpid())
+    ts.write_status_file(ts.TunnelStatus(phase=phase, reason=reason, attempt=8,
+                                         next_try_at=0.0, since=1.0))
+    return ts
+
+
+def test_doctor_tunnel_failing_is_warn_never_fail(monkeypatch):
+    _daemon_tunnel(monkeypatch, "slow", "dns_incomplete")
+    r = doctor.check_miniapp()
+    assert r.status == doctor.WARN
+    text = " ".join(r.detail)
+    assert "enabled · port 8765" in text
+    assert "tunnel: not working - this machine's DNS server returns only one" in text
+    assert "retrying slowly" in text
+    assert "resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com" in r.fix
+
+
+@pytest.mark.parametrize("phase", ["working", "starting"])
+def test_doctor_tunnel_working_or_starting_is_ok(monkeypatch, phase):
+    _daemon_tunnel(monkeypatch, phase)
+    r = doctor.check_miniapp()
+    assert r.status == doctor.OK and r.fix is None
+    assert r.detail == ["enabled · port 8765", f"tunnel: {phase}"]
+
+
+def test_doctor_row_is_unchanged_when_the_daemon_is_gone(monkeypatch):
+    ts = _daemon_tunnel(monkeypatch, "slow", "dns_incomplete")
+    monkeypatch.setattr(ts, "_daemon_alive", lambda pid: False)
+    r = doctor.check_miniapp()
+    assert r.status == doctor.OK and r.detail == ["enabled · port 8765"]
