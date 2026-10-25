@@ -21,7 +21,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import sys
+import textwrap
 import time
 import urllib.request
 from pathlib import Path
@@ -268,3 +270,139 @@ def write_status(phase="retrying", reason="dns_incomplete", attempt=3,
         }))
     os.chmod(path, 0o600)
     return path
+
+
+# ---- a fake cloudflared: a real child running a tiny script under tmp_path ----
+
+def _proc_state(pid: int) -> tuple[str, int] | None:
+    """(state letter, parent pid) from /proc, or None when the pid is gone
+    (reaped). Reads only; never waits on the child."""
+    try:
+        after = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()
+    except (OSError, IndexError):
+        return None
+    return after[0], int(after[1])
+
+
+def child_is_gone(pid: int) -> bool:
+    """True once ``pid`` is no longer in the process table, i.e. it was
+    reaped (a zombie still shows as state Z)."""
+    return _proc_state(pid) is None
+
+
+class FakeCloudflared:
+    """Writes the script and routes its spawn to a real child; any other
+    spawn goes to the fake process table. A kill reaches only our own
+    child, and only while /proc still shows it as this process's child;
+    it never polls or waits, so it can never reap the child on the
+    product's behalf (a zombie stays visible to the test). The liveness
+    and command-line seams answer truthfully for our children from /proc
+    (a zombie counts as not running), again without reaping."""
+
+    def __init__(self, tmp_path, monkeypatch):
+        from aipager import self_restart
+        from tests.tunnel_fakes import install
+
+        self.table = install(monkeypatch)
+        self.path = tmp_path / "bin" / "cloudflared"
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.children: list = []
+        self.stderr_at_spawn: list[tuple[int, int]] = []   # (mode, size)
+        self.argvs: list[list[str]] = []
+        self.signals: list[tuple[int, int]] = []
+        self.configure()
+        monkeypatch.setattr("aipager.miniapp.cloudflared_fetch.ensure_cloudflared",
+                            AsyncMock(return_value=str(self.path)))
+        monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 8.0)
+        table_popen = self.table.popen
+        table_kill = self.table.kill
+
+        def popen(argv, **kwargs):
+            if argv and argv[0] == str(self.path):
+                import subprocess
+                err = kwargs.get("stderr")
+                if isinstance(err, int) and err >= 0:
+                    st = os.fstat(err)
+                    self.stderr_at_spawn.append((st.st_mode, st.st_size))
+                self.argvs.append(list(argv))
+                child = subprocess.Popen(argv, **kwargs)
+                self.children.append(child)
+                return child
+            return table_popen(argv, **kwargs)
+
+        def kill(pid, sig):
+            for child in self.children:
+                if child.pid == pid:
+                    self.signals.append((pid, sig))
+                    if child.returncode is not None:
+                        raise ProcessLookupError(pid)
+                    state = _proc_state(pid)
+                    if state is None or state[1] != os.getpid():
+                        raise ProcessLookupError(pid)
+                    os.kill(pid, sig)   # a zombie takes the signal harmlessly
+                    return
+            return table_kill(pid, sig)
+
+        table_alive = self.table.pid_alive
+        table_cmdline = self.table.cmdline
+
+        def _ours_running(pid):
+            """Running (not a zombie, not reaped) and still our child."""
+            for i, child in enumerate(self.children):
+                if child.pid == pid:
+                    st = _proc_state(pid)
+                    return i, (child.returncode is None and st is not None
+                               and st[0] != "Z" and st[1] == os.getpid())
+            return None, False
+
+        def pid_alive(pid):
+            i, running = _ours_running(pid)
+            return running if i is not None else table_alive(pid)
+
+        def cmdline(pid):
+            i, running = _ours_running(pid)
+            if i is None:
+                return table_cmdline(pid)
+            return list(self.argvs[i]) if running else None
+
+        import aipager.miniapp.tunnel_manager as tm
+        monkeypatch.setattr(tm, "_pid_alive", pid_alive)
+        monkeypatch.setattr(tm, "_cmdline", cmdline)
+        monkeypatch.setattr(self_restart, "_popen", popen)
+        monkeypatch.setattr(self_restart, "_kill", kill)
+
+    def configure(self, *, log_lines=(), stderr="", code=1, delay=0.2,
+                  ignore_sigterm=False):
+        body = textwrap.dedent(f"""\
+            #!{sys.executable} -I
+            import signal, sys, time
+            if {ignore_sigterm!r}:
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+            argv = sys.argv
+            log = argv[argv.index("--logfile") + 1] if "--logfile" in argv else None
+            if log:
+                with open(log, "a") as f:
+                    f.write({json.dumps("".join(line + chr(10) for line in log_lines))})
+            sys.stderr.write({json.dumps(stderr)})
+            sys.stderr.flush()
+            time.sleep({delay!r})
+            sys.exit({code!r})
+            """)
+        self.path.write_text(body)
+        self.path.chmod(0o700)
+
+    def cleanup(self):
+        for child in self.children:
+            if child.poll() is None:
+                try:
+                    child.send_signal(signal.SIGKILL)
+                except OSError:
+                    pass
+                child.wait(timeout=5)
+
+
+@pytest.fixture
+def cloudflared(tmp_path, monkeypatch):
+    fake = FakeCloudflared(tmp_path, monkeypatch)
+    yield fake
+    fake.cleanup()

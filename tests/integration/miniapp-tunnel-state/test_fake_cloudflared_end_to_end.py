@@ -13,16 +13,12 @@ status", "The stderr file is created 0600 and emptied per spawn").
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
-import signal
 import stat
-import sys
-import textwrap
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -32,87 +28,6 @@ from miniapp_tunnel_state_bb import (  # noqa: I001 (the package conftest)
     DNS_INCOMPLETE_TEXT, DNS_LOOKUP_TEXT, QUICK_TUNNEL_TEXT, cf_paths, log_line, settle,
     wait_until,
 )
-
-
-class FakeCloudflared:
-    """Writes the script and routes its spawn to a real child; any other
-    spawn goes to the fake process table. Kills reach only our own
-    unreaped children."""
-
-    def __init__(self, tmp_path, monkeypatch):
-        from aipager import self_restart
-        from tests.tunnel_fakes import install
-
-        self.table = install(monkeypatch)
-        self.path = tmp_path / "bin" / "cloudflared"
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.children: list = []
-        self.stderr_at_spawn: list[tuple[int, int]] = []   # (mode, size)
-        self.argvs: list[list[str]] = []
-        self.configure()
-        monkeypatch.setattr("aipager.miniapp.cloudflared_fetch.ensure_cloudflared",
-                            AsyncMock(return_value=str(self.path)))
-        monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 8.0)
-        table_popen = self.table.popen
-        table_kill = self.table.kill
-
-        def popen(argv, **kwargs):
-            if argv and argv[0] == str(self.path):
-                import subprocess
-                err = kwargs.get("stderr")
-                if isinstance(err, int) and err >= 0:
-                    st = os.fstat(err)
-                    self.stderr_at_spawn.append((st.st_mode, st.st_size))
-                self.argvs.append(list(argv))
-                child = subprocess.Popen(argv, **kwargs)
-                self.children.append(child)
-                return child
-            return table_popen(argv, **kwargs)
-
-        def kill(pid, sig):
-            for child in self.children:
-                if child.pid == pid:
-                    if child.poll() is not None:
-                        raise ProcessLookupError(pid)
-                    os.kill(pid, sig)
-                    return
-            return table_kill(pid, sig)
-
-        monkeypatch.setattr(self_restart, "_popen", popen)
-        monkeypatch.setattr(self_restart, "_kill", kill)
-
-    def configure(self, *, log_lines=(), stderr="", code=1, delay=0.2):
-        body = textwrap.dedent(f"""\
-            #!{sys.executable} -I
-            import sys, time
-            argv = sys.argv
-            log = argv[argv.index("--logfile") + 1] if "--logfile" in argv else None
-            if log:
-                with open(log, "a") as f:
-                    f.write({json.dumps("".join(line + chr(10) for line in log_lines))})
-            sys.stderr.write({json.dumps(stderr)})
-            sys.stderr.flush()
-            time.sleep({delay!r})
-            sys.exit({code!r})
-            """)
-        self.path.write_text(body)
-        self.path.chmod(0o700)
-
-    def cleanup(self):
-        for child in self.children:
-            if child.poll() is None:
-                try:
-                    child.send_signal(signal.SIGKILL)
-                except OSError:
-                    pass
-                child.wait(timeout=5)
-
-
-@pytest.fixture
-def cloudflared(tmp_path, monkeypatch):
-    fake = FakeCloudflared(tmp_path, monkeypatch)
-    yield fake
-    fake.cleanup()
 
 
 @pytest.fixture
