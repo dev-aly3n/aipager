@@ -56,7 +56,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, TypeVar
 
 from aipager.miniapp import tunnel_state
 from aipager.miniapp.tunnel import set_managed_tunnel_url
@@ -322,12 +322,46 @@ def _free_port() -> int:
         return sock.getsockname()[1]
 
 
+_T = TypeVar("_T")
+
+
+def _retrieve(task: asyncio.Future) -> None:
+    if not task.cancelled():
+        task.exception()
+
+
+async def _wait_bounded(aw: Awaitable[_T], timeout: float) -> _T:
+    """``asyncio.wait_for`` that never loses its caller's cancel.
+
+    On Python 3.10 and 3.11, ``wait_for`` returns the result and drops a
+    cancel that lands in the same loop tick as its awaitable finishing
+    (CPython gh-86296, fixed in 3.12): the cancelled task runs on, and a
+    ``stop()`` waiting for it would wait for ever. ``asyncio.wait`` never
+    swallows a cancel, so this runs *aw* as a task and waits on it.
+    Like ``wait_for``: its result or exception, ``asyncio.TimeoutError``
+    after *timeout*, and on a timeout or a cancel *aw* is cancelled and
+    waited for before this returns."""
+    inner = asyncio.ensure_future(aw)
+    # Its exception is always read: one raised while it was being
+    # cancelled is never logged as "never retrieved".
+    inner.add_done_callback(_retrieve)
+    try:
+        await asyncio.wait({inner}, timeout=timeout)
+    finally:
+        if not inner.done():
+            inner.cancel()
+            await asyncio.wait({inner})
+    if inner.cancelled():                   # only ever by the timeout above
+        raise asyncio.TimeoutError
+    return inner.result()
+
+
 async def _query_metrics(port: int, path: str) -> str | None:
     """``GET http://127.0.0.1:<port><path>`` from cloudflared's metrics
     server: the body of a 200 answer, else None. Bounded in time and size."""
     try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection("127.0.0.1", port), timeout=_METRICS_TIMEOUT_SECONDS)
+        reader, writer = await _wait_bounded(
+            asyncio.open_connection("127.0.0.1", port), _METRICS_TIMEOUT_SECONDS)
     except (OSError, asyncio.TimeoutError):
         return None
     raw = b""
@@ -344,7 +378,7 @@ async def _query_metrics(port: int, path: str) -> str | None:
                 data += chunk
             return data
 
-        raw = await asyncio.wait_for(_read_all(), timeout=_METRICS_TIMEOUT_SECONDS)
+        raw = await _wait_bounded(_read_all(), _METRICS_TIMEOUT_SECONDS)
     except (OSError, asyncio.TimeoutError):
         return None
     finally:
@@ -516,7 +550,7 @@ async def spawn_and_discover_url(binary: str, port: int) -> tuple[Tunnel, str]:
             await asyncio.sleep(_DISCOVERY_POLL_SECONDS)
 
     try:
-        host = await asyncio.wait_for(_until_host(), timeout=TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS)
+        host = await _wait_bounded(_until_host(), TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS)
     except asyncio.CancelledError:
         # CancelledError is a BaseException, NOT an Exception: without this
         # branch, cancelling the supervision task during discovery would
@@ -602,7 +636,7 @@ async def _stop_tunnel(tunnel: Tunnel) -> None:
     except (ProcessLookupError, PermissionError):
         return
     try:
-        await asyncio.wait_for(tunnel.wait(), timeout=TUNNEL_KILL_TIMEOUT_SECONDS)
+        await _wait_bounded(tunnel.wait(), TUNNEL_KILL_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         _kill_quietly(tunnel)
 
@@ -946,14 +980,14 @@ class TunnelManager:
             self._proc = None
             return
         try:
-            await asyncio.wait_for(proc.wait(), timeout=TUNNEL_KILL_TIMEOUT_SECONDS)
+            await _wait_bounded(proc.wait(), TUNNEL_KILL_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             try:
                 proc.kill()
                 # Bounded too: a shutdown never waits forever on a process
                 # it cannot reap (one adopted from the last daemon is not
                 # this image's child).
-                await asyncio.wait_for(proc.wait(), timeout=TUNNEL_KILL_TIMEOUT_SECONDS)
+                await _wait_bounded(proc.wait(), TUNNEL_KILL_TIMEOUT_SECONDS)
             except (ProcessLookupError, PermissionError, asyncio.TimeoutError):
                 pass
         # Only once it is done: a kill cut short by stop() leaves the
@@ -1021,7 +1055,9 @@ class TunnelManager:
         self._wake.clear()
         self._waiting_slow = True
         try:
-            await asyncio.wait_for(self._wake.wait(), timeout=interval)
+            # Never wait_for: an /app wake in the tick a stop() cancels
+            # would drop that cancel on Python 3.10/3.11 (see _wait_bounded).
+            await _wait_bounded(self._wake.wait(), interval)
         except asyncio.TimeoutError:
             pass
         finally:

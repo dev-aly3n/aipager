@@ -542,3 +542,106 @@ def test_a_lost_cancel_with_a_tunnel_held_still_stops_it(loop_config, monkeypatc
     assert procs[0].terminated == 1 and procs[0].returncode is not None
     assert m._proc is None and m.current_url == ""
 
+
+def test_an_app_wake_and_a_stop_in_one_tick_end_promptly(loop_config, monkeypatch,
+                                                           run_async):
+    """/app asks for a try and stop() cancels the loop in the same tick of
+    the slow wait. A wait_for there drops that cancel on Python 3.10/3.11
+    (it fails only there without the guard): the loop would start a new
+    attempt and stop() would hang until its re-cancel. It must end at once,
+    with no new attempt."""
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", 3600.0)
+    monkeypatch.setattr(tm, "_STOP_RECANCEL_SECONDS", 30.0)
+    seam = _Seam()
+    monkeypatch.setattr(tm, "spawn_and_discover_url", seam)
+
+    async def scenario():
+        before = asyncio.all_tasks()
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: seam.calls == MAX and m._waiting_slow)
+        calls = seam.calls
+        loop_task = m._task
+        asked = ts.request_attempt()
+        stopper = asyncio.create_task(m.stop())      # the same tick as the wake
+        done, _ = await asyncio.wait({stopper}, timeout=STOP_BOUND)
+        if done:
+            stopper.result()
+        left = asyncio.all_tasks() - before
+        return asked, bool(done), loop_task.done(), calls, seam.calls, left
+
+    asked, finished, loop_done, calls_before, calls_after, left = run_async(scenario())
+    assert asked is True
+    assert finished, "stop() did not end at once"
+    assert loop_done
+    assert calls_after == calls_before, "a new attempt started after stop()"
+    assert left == set()
+
+
+# ---- _wait_bounded: wait_for without the lost cancel ----------------------------------
+
+def test_wait_bounded_never_loses_a_cancel_in_the_tick_its_awaitable_ends(run_async):
+    """The awaitable finishes and the caller is cancelled in the same tick:
+    the caller still gets its CancelledError (wait_for on 3.10/3.11 returns
+    the result instead; this fails only there without the guard)."""
+
+    async def scenario():
+        ev = asyncio.Event()
+        task = asyncio.create_task(tm._wait_bounded(ev.wait(), 30.0))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        ev.set()
+        task.cancel()
+        try:
+            return await task
+        except asyncio.CancelledError:
+            return "cancelled"
+
+    assert run_async(scenario()) == "cancelled"
+
+
+def test_wait_bounded_behaves_like_wait_for(run_async):
+    async def scenario():
+        out = {}
+
+        async def value():
+            await asyncio.sleep(0)
+            return 7
+
+        out["value"] = await tm._wait_bounded(value(), 5.0)
+
+        async def boom():
+            await asyncio.sleep(0)
+            raise tm.TunnelLaunchError("x")
+
+        try:
+            await tm._wait_bounded(boom(), 5.0)
+        except tm.TunnelLaunchError:
+            out["raised"] = True
+
+        ended = []
+
+        async def parked():
+            try:
+                await asyncio.Event().wait()
+            finally:
+                ended.append(True)
+
+        try:
+            await tm._wait_bounded(parked(), 0.01)
+        except asyncio.TimeoutError:
+            out["timeout_ended_inner"] = ended == [True]
+
+        ended.clear()
+        task = asyncio.create_task(tm._wait_bounded(parked(), 30.0))
+        for _ in range(3):                  # the helper, then its inner task, run
+            await asyncio.sleep(0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            out["cancel_ended_inner"] = ended == [True]
+        return out
+
+    assert run_async(scenario()) == {"value": 7, "raised": True, "timeout_ended_inner": True,
+                                "cancel_ended_inner": True}
