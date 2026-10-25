@@ -526,3 +526,49 @@ def test_a_planned_stop_leaves_no_task_of_the_manager_running(table, run_async,
     pending = run_async(scenario())
     assert 4000 in table.alive and table.guards(), "the tunnel was not kept"
     assert pending == [], f"tasks left running after stop(): {pending}"
+
+
+# ---- a discovery timeout leaves no zombie ---------------------------------------------------
+
+@linux_only
+def test_a_discovery_timeout_reaps_the_killed_child(monkeypatch, run_async):
+    """No URL in time: cloudflared is killed AND reaped by this attempt,
+    not by whichever spawn comes next (in the slow phase, minutes later)."""
+    from aipager import self_restart
+
+    monkeypatch.setattr("aipager.config.TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", 0.3)
+    monkeypatch.setattr("aipager.config.TUNNEL_KILL_TIMEOUT_SECONDS", 3.0)
+    children = []
+
+    def _popen(argv, **kwargs):
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+        children.append(child)
+        return child
+
+    def _kill(pid, sig):
+        assert [c.pid for c in children] == [pid], "a signal for a process not ours"
+        os.kill(pid, sig)
+
+    async def _no_answer(port, path):
+        return None
+    monkeypatch.setattr(self_restart, "_popen", _popen)
+    monkeypatch.setattr(self_restart, "_kill", _kill)
+    monkeypatch.setattr(tm, "_is_our_tunnel", lambda pid, binary, port: True)
+    monkeypatch.setattr(tm, "_free_port", lambda: 40001)
+    monkeypatch.setattr(tm, "_query_metrics", _no_answer)
+    try:
+        with pytest.raises(tm.TunnelLaunchError):
+            run_async(tm.spawn_and_discover_url("/fake/cloudflared", 8765))
+        [child] = children
+        # Read before anything else could reap it: the attempt did.
+        returncode = child.returncode
+        zombie = os.path.exists(f"/proc/{child.pid}")
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=5)
+    assert returncode == -signal.SIGKILL, "the killed cloudflared was never reaped"
+    assert not zombie

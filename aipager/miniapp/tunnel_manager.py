@@ -526,6 +526,9 @@ async def spawn_and_discover_url(binary: str, port: int) -> tuple[Tunnel, str]:
         raise
     except (asyncio.TimeoutError, TunnelLaunchError) as exc:
         _kill_quietly(tunnel)
+        # Reaped here, not by the next spawn: in the slow phase that is
+        # minutes away, and a zombie cloudflared would wait for it.
+        await _reap_killed(tunnel)
         if isinstance(exc, TunnelLaunchError):
             raise
         raise TunnelLaunchError(
@@ -540,6 +543,23 @@ def _kill_quietly(tunnel: Tunnel) -> None:
         tunnel.kill()
     except (ProcessLookupError, PermissionError):
         pass
+
+
+# How often _reap_killed looks whether a killed child has exited.
+_REAP_POLL_SECONDS = 0.05
+
+
+async def _reap_killed(tunnel: Tunnel) -> None:
+    """After a SIGKILL, reap the spawned child: poll it (never a blocking
+    wait on the event loop) for at most ``TUNNEL_KILL_TIMEOUT_SECONDS``.
+    A tunnel with no Popen (adopted) is not ours to reap."""
+    from aipager.config import TUNNEL_KILL_TIMEOUT_SECONDS
+
+    if tunnel._popen is None:
+        return
+    deadline = time.monotonic() + TUNNEL_KILL_TIMEOUT_SECONDS
+    while tunnel.poll() is None and time.monotonic() < deadline:
+        await asyncio.sleep(_REAP_POLL_SECONDS)
 
 
 async def _quiet_probe(url: str) -> bool:
