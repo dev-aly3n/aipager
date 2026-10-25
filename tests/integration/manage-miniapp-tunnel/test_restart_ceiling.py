@@ -123,12 +123,15 @@ def test_ceiling_still_holds_when_a_few_early_attempts_almost_succeed(
     monkeypatch, run_async, FakeProcess, settle, mock_cloudflared_binary, caplog,
 ):
     """Same property, but with the discovered-then-immediately-died shape
-    mixed in: the first attempt's URL is found, probed, published as
-    working, and the child dies right after its button went out --
-    proving the ceiling counts failed *attempts* generically, and that a
-    success shorter than a whole slow interval does NOT refresh the fast
-    budget (a tunnel that keeps dying right after starting must never get
-    a fresh run of fast attempts each time).
+    mixed in: after MAX-1 failures, the last fast attempt's URL is found,
+    probed, published as working, and the child dies right after its
+    button went out -- proving the ceiling counts failed *attempts*
+    generically, and that a success shorter than a whole slow interval
+    does NOT refresh the fast budget (a tunnel that keeps dying right
+    after starting must never get a fresh run of fast attempts each
+    time). The short success comes last on purpose: on the first attempt
+    the budget is still empty, so a wrong refresh there would change
+    nothing and prove nothing.
     """
     import aipager.miniapp.tunnel_manager as tunnel_manager_mod
 
@@ -143,7 +146,7 @@ def test_ceiling_still_holds_when_a_few_early_attempts_almost_succeed(
             raise _SeamCalledPastCeiling(
                 f"seam invoked a {call_count['n']}th time; ceiling is {MAX}"
             )
-        if call_count["n"] == 1:
+        if call_count["n"] == MAX:
             return first, "https://short-lived-attempt-one.trycloudflare.com"
         raise TunnelLaunchError("simulated launch failure")
 
@@ -177,8 +180,8 @@ def test_ceiling_still_holds_when_a_few_early_attempts_almost_succeed(
 
     final_count = run_async(scenario())
 
-    assert published[0] == "https://short-lived-attempt-one.trycloudflare.com", (
-        "the first attempt never reached the working state this test is about"
+    assert "https://short-lived-attempt-one.trycloudflare.com" in published, (
+        "the last fast attempt never reached the working state this test is about"
     )
     assert overuse == [], f"seam was invoked past the ceiling: calls {overuse}"
     assert final_count == MAX
