@@ -9,6 +9,7 @@ the clock. Every seam fake carries a tripwire against a spin.
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
 import logging
 import time
@@ -645,3 +646,71 @@ def test_wait_bounded_behaves_like_wait_for(run_async):
 
     assert run_async(scenario()) == {"value": 7, "raised": True, "timeout_ended_inner": True,
                                 "cancel_ended_inner": True}
+
+
+def test_wait_bounded_leaves_no_inner_exception_unretrieved(run_async):
+    """The caller is cancelled while its inner awaitable fails, so nobody
+    awaits the inner task: in the same tick the inner raises, and again
+    while the helper waits for a cancelled inner that then raises. asyncio
+    must not report "Task exception was never retrieved" for either one
+    (it does at GC without the helper's done callback)."""
+
+    async def scenario():
+        loop = asyncio.get_running_loop()
+        reports = []
+        loop.set_exception_handler(lambda _loop, context: reports.append(context))
+
+        # Same tick: the inner raises as the caller's cancel lands.
+        ev = asyncio.Event()
+
+        async def fails_when_set():
+            await ev.wait()
+            raise tm.TunnelLaunchError("same tick")
+
+        task = asyncio.create_task(tm._wait_bounded(fails_when_set(), 30.0))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        ev.set()
+        task.cancel()
+        outcomes = []
+        try:
+            await task
+        except asyncio.CancelledError:
+            outcomes.append("cancelled")
+        del task
+
+        # Cancelled twice: the inner outlives its cancel and raises later.
+        late = asyncio.Event()
+
+        async def fails_after_its_cancel():
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await late.wait()
+                raise tm.TunnelLaunchError("after the cancel") from None
+
+        task = asyncio.create_task(tm._wait_bounded(fails_after_its_cancel(), 30.0))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        task.cancel()
+        for _ in range(3):                  # the helper's finally now waits
+            await asyncio.sleep(0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            outcomes.append("cancelled")
+        del task
+        late.set()
+        for _ in range(5):                  # the inner raises and ends
+            await asyncio.sleep(0)
+
+        gc.collect()
+        for _ in range(3):
+            await asyncio.sleep(0)
+        loop.set_exception_handler(None)
+        return outcomes, [str(c.get("message")) for c in reports]
+
+    outcomes, reports = run_async(scenario())
+    assert outcomes == ["cancelled", "cancelled"]
+    assert reports == []
