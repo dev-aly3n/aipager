@@ -407,3 +407,138 @@ def test_the_bots_own_probe_still_warns(run_async, monkeypatch, caplog, real_pro
     managed = [r for r in caplog.records if "managed-words" in r.getMessage()]
     assert len(own) == 4 and all(r.levelno == logging.WARNING for r in own)
     assert len(managed) == 4 and all(r.levelno == logging.INFO for r in managed)
+
+
+# ---- a lost cancel never hangs stop() -------------------------------------------------
+#
+# On Python 3.10 and 3.11, asyncio.wait_for returns normally and drops a cancel
+# that lands in the tick its awaitable finishes (CPython gh-86296). These fakes
+# lose the first cancel the same way on every Python: they catch it and return.
+
+STOP_BOUND = 5.0
+
+
+class _LosesFirstCancel:
+    """An awaitable seam that waits until cancelled; the first cancel it
+    catches and returns ``value`` (a lost cancel), every later one goes on."""
+
+    def __init__(self, value):
+        self.value = value
+        self.calls = 0
+        self.lost = 0
+        self.overuse = 0
+
+    async def __call__(self, *args, **kwargs):
+        self.calls += 1
+        if self.calls > TRIPWIRE:
+            self.overuse += 1
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            if self.lost == 0:
+                self.lost += 1
+                return self.value() if callable(self.value) else self.value
+            raise
+
+
+class _HeldProc:
+    """A live tunnel stand-in: runs until terminated or killed."""
+
+    def __init__(self):
+        self.returncode = None
+        self.terminated = 0
+        self._exited = asyncio.Event()
+
+    async def wait(self):
+        await self._exited.wait()
+        return self.returncode
+
+    def terminate(self):
+        self.terminated += 1
+        self.returncode = -15
+        self._exited.set()
+
+    def kill(self):
+        self.returncode = -9
+        self._exited.set()
+
+
+async def _stop_within(m, bound=STOP_BOUND):
+    """stop() as a task: (finished in time, the loop task)."""
+    loop_task = m._task
+    stopper = asyncio.create_task(m.stop())
+    done, _ = await asyncio.wait({stopper}, timeout=bound)
+    if done:
+        stopper.result()
+    return bool(done), loop_task
+
+
+def test_stop_ends_when_the_loops_cancel_is_lost(loop_config, monkeypatch, run_async):
+    """The cancel lands in the binary fetch, which drops it and returns: the
+    loop runs on into its next attempt, and stop() cancels it again."""
+    monkeypatch.setattr(tm, "_STOP_RECANCEL_SECONDS", 0.1)
+    fetch = _LosesFirstCancel("/fake/cloudflared")
+    monkeypatch.setattr(cloudflared_fetch, "ensure_cloudflared", fetch)
+    seam = _Seam()
+    monkeypatch.setattr(tm, "spawn_and_discover_url", seam)
+
+    async def scenario():
+        before = asyncio.all_tasks()
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: fetch.calls == 1)
+        finished, loop_task = await _stop_within(m)
+        left = asyncio.all_tasks() - before
+        return finished, loop_task.done(), left, m
+
+    finished, loop_done, left, m = run_async(scenario())
+    assert fetch.lost == 1                 # the cancel was really lost
+    assert seam.calls >= 1                 # and the loop ran on past it
+    assert finished, "stop() hung on a lost cancel"
+    assert loop_done
+    assert left == set()
+    assert m._proc is None and m.current_url == ""
+    assert fetch.overuse == 0 and seam.overuse == 0
+
+
+def test_a_lost_cancel_with_a_tunnel_held_still_stops_it(loop_config, monkeypatch,
+                                                          run_async):
+    """The cancel lands in the spawn, which drops it and hands back a live
+    tunnel: the loop holds it and probes it, and stop() still ends the loop
+    and terminates that tunnel."""
+    monkeypatch.setattr(tm, "_STOP_RECANCEL_SECONDS", 0.1)
+    procs: list[_HeldProc] = []
+
+    def _launched():
+        procs.append(_HeldProc())
+        return procs[-1], "https://lost-cancel-test.trycloudflare.com"
+
+    spawn = _LosesFirstCancel(_launched)
+    monkeypatch.setattr(tm, "spawn_and_discover_url", spawn)
+    probing = []
+
+    async def _probe_waits(url):
+        probing.append(url)
+        await asyncio.Event().wait()
+        return True
+
+    monkeypatch.setattr(tunnel_mod, "probe_public_url", _probe_waits)
+
+    async def scenario():
+        before = asyncio.all_tasks()
+        m = tm.TunnelManager(8765, AsyncMock())
+        await m.start()
+        await _until(lambda: spawn.calls == 1)
+        finished, loop_task = await _stop_within(m)
+        left = asyncio.all_tasks() - before
+        return finished, loop_task.done(), left, m
+
+    finished, loop_done, left, m = run_async(scenario())
+    assert spawn.lost == 1 and len(procs) == 1
+    assert probing                         # the loop ran on into the probe
+    assert finished, "stop() hung on a lost cancel"
+    assert loop_done
+    assert left == set()
+    assert procs[0].terminated == 1 and procs[0].returncode is not None
+    assert m._proc is None and m.current_url == ""
+

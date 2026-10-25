@@ -762,6 +762,11 @@ _APP_ATTEMPT_MIN_SECONDS = 60.0
 # stop() lets a menu-button publish in flight finish for at most this long
 # before it cancels it: a cancelled publish can leave chats half updated.
 _PUBLISH_SETTLE_SECONDS = 10.0
+# stop() cancels the supervision loop again while it still runs after
+# this long: a cancel can be lost (see stop()). A cancelled loop's own
+# cleanup (a kill, a reap, a cancelled probe) takes milliseconds, so one
+# second never cuts it short in practice and still keeps a shutdown prompt.
+_STOP_RECANCEL_SECONDS = 1.0
 
 
 def _monotonic() -> float:
@@ -871,6 +876,18 @@ class TunnelManager:
         if self._task is not None:
             task, self._task = self._task, None
             task.cancel()
+            # A cancel can be lost: on Python 3.10 and 3.11,
+            # asyncio.wait_for returns its result and drops a cancel that
+            # lands in the same loop tick as its awaitable finishing
+            # (CPython gh-86296, fixed in 3.12), and code the loop calls
+            # may use it. The loop then runs on, and a plain `await task`
+            # would wait for ever. So: cancel it again while it still runs.
+            while True:
+                await asyncio.wait({task}, timeout=_STOP_RECANCEL_SECONDS)
+                if task.done():
+                    break
+                log.info("cloudflared: the tunnel loop did not stop - cancelling it again")
+                task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
