@@ -458,6 +458,34 @@ def test_non_admin_gets_unavailable_without_details(mk_bot, mk_update, run_async
     assert kwargs.get("reply_markup") is None
 
 
+
+@pytest.mark.parametrize("uid,admin", [(7, True), (8, False)], ids=["team_admin", "team_member"])
+def test_legacy_team_mode_gives_the_reason_to_an_admin_only(mk_bot, mk_update, run_async,
+                                                            monkeypatch, uid, admin):
+    from aipager.team import Role, Rules, Team, User as TeamUser
+
+    _failing(monkeypatch, "dns_incomplete")
+    bot = mk_bot(team=Team(
+        group_id=-100,
+        users={7: TeamUser(id=7, label="alice", role=Role.ADMIN),
+               8: TeamUser(id=8, label="bob", role=Role.DEVELOPER)},
+        rules=Rules(deny_tools=[]),
+    ))
+    update = _dm_update(mk_update, user_id=uid)
+    update.effective_message = update.message
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    text, kwargs = _reply(update)
+    if admin:
+        assert REASON_PHRASE["dns_incomplete"] in text
+    else:
+        assert "isn't available right now" in text
+        for phrase in REASON_PHRASE.values():
+            assert phrase not in text
+        assert "DNS" not in text and "cloudflared" not in text
+    assert kwargs.get("reply_markup") is None
+
 @pytest.mark.parametrize("reason", list(REASON_PHRASE) + ["unavailable"])
 def test_app_reason_texts_never_carry_cloudflared_text(mk_bot, mk_update, run_async,
                                                        monkeypatch, reason):
