@@ -576,7 +576,13 @@ async def _quiet_probe(url: str) -> bool:
     lines at INFO: the manager's own line says whether the link answered,
     and in the slow phase it probes on every try (see
     ``tunnel.probe_log_level``; the level is reset before this returns,
-    so it never reaches the caller's other work)."""
+    so it never reaches the caller's other work).
+
+    Awaited straight from the caller's task, the level sits in that
+    task's context until this returns, and any task created meanwhile
+    copies it: no publish or bot-probe task may be started from inside
+    this await (``_probe`` runs it as a task of its own; the adoption
+    check awaits it with nothing else running)."""
     from aipager.miniapp import tunnel as tunnel_mod
 
     token = tunnel_mod.probe_log_level.set(logging.INFO)
