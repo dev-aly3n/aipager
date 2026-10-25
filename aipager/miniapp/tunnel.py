@@ -13,6 +13,7 @@ session, discoverable failure, not a security hole (see design.md).
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import shutil
@@ -39,7 +40,8 @@ _managed_tunnel_url: str = ""
 
 def set_managed_tunnel_url(url: str) -> None:
     """Set (or clear, with ``""``) the in-memory managed-tunnel URL that
-    :func:`resolve_public_url` consults."""
+    :func:`resolve_public_url` consults. The tunnel manager sets a URL
+    only after its probe passed."""
     global _managed_tunnel_url
     _managed_tunnel_url = url
 
@@ -92,10 +94,12 @@ async def resolve_public_url() -> str:
     Precedence: an explicit ``MINIAPP_PUBLIC_URL`` override wins
     outright; otherwise the managed tunnel's current URL (set by
     :class:`~aipager.miniapp.tunnel_manager.TunnelManager` via
-    :func:`set_managed_tunnel_url`) is used if there is one; otherwise
-    Tailscale is probed as the opt-in fallback for the startup window
-    before the first tunnel URL, and for the (rare) case the tunnel's
-    restart ceiling has been reached.  :func:`detect_public_url` shells
+    :func:`set_managed_tunnel_url`) is used if there is one. The managed
+    slot holds only a probed URL: it is filled once the URL answered and
+    emptied the moment cloudflared exits, so /app never hands out a link
+    the menu button would not. Otherwise Tailscale is probed as the
+    opt-in fallback for the startup window before the first verified
+    tunnel URL, and while the managed tunnel is not working.  :func:`detect_public_url` shells
     out to ``tailscale status --json`` **synchronously**, and every
     caller here is on the daemon's single shared event loop, so the
     probe runs in an executor. A hung ``tailscale`` binary blocking that
@@ -153,6 +157,19 @@ PROBE_TIMEOUT_SECONDS = 3.0
 PROBE_ATTEMPTS = 15
 PROBE_RETRY_DELAY_SECONDS = 6.0
 
+# The level of the probe's own lines (each failed check, and the final
+# "did not answer"). WARNING for the bot's probe of an override or
+# Tailscale address, which runs once. The tunnel manager probes every new
+# tunnel, for ever in its slow phase, and its own line already says
+# whether the link answered, so it sets INFO for its probes
+# (``tunnel_manager._quiet_probe``). A ContextVar, set and reset by that
+# caller: the value lives in the caller's task only (asyncio gives every
+# task its own copy of the context), so no other probe is affected, and
+# ``probe_public_url`` keeps its one-argument shape for the fakes tests
+# put in its place.
+probe_log_level: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "aipager_probe_log_level", default=logging.WARNING)
+
 
 async def _probe_once(url: str) -> bool:
     """Does ``url`` actually answer? Never raises.
@@ -179,7 +196,8 @@ async def _probe_once(url: str) -> bool:
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, allow_redirects=True) as resp:
                 if resp.status >= 500:
-                    log.warning(
+                    log.log(
+                        probe_log_level.get(),
                         "Mini App URL %s answered %d — treating as unreachable",
                         url, resp.status,
                     )
@@ -189,8 +207,8 @@ async def _probe_once(url: str) -> bool:
         # Includes DNS failure (the dead-tunnel case), TLS errors, and the
         # timeout above. Deliberately broad: every one of them means "do
         # not advertise this".
-        log.warning("Mini App URL %s is unreachable (%s: %s)",
-                    url, type(exc).__name__, exc)
+        log.log(probe_log_level.get(), "Mini App URL %s is unreachable (%s: %s)",
+                url, type(exc).__name__, exc)
         return False
 
 
@@ -217,6 +235,6 @@ async def probe_public_url(url: str) -> bool:
             return True
         if attempt < PROBE_ATTEMPTS:
             await asyncio.sleep(PROBE_RETRY_DELAY_SECONDS)
-    log.warning("Mini App URL %s did not answer after %d attempts",
-                url, PROBE_ATTEMPTS)
+    log.log(probe_log_level.get(), "Mini App URL %s did not answer after %d attempts",
+            url, PROBE_ATTEMPTS)
     return False

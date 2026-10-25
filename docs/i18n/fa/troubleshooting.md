@@ -2,7 +2,7 @@
 
 # رفع مشکل
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../troubleshooting.md))
 
@@ -206,6 +206,66 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # به ثانیه
 
 اگر ربات وسط نصب ارتباطش را از دست داد، خود نصب معمولاً روی کامپیوتر تمام شده: aipager را ری‌استارت کنید و دوباره یک ویس امتحان کنید.
 
+## <a id="the-mini-app-link-isnt-working"></a>لینک Mini App کار نمی‌کند
+
+وقتی لینک Mini App راه نمی‌افتد، &lrm;`/app` علتش را می‌گوید. کسی که می‌تواند کامپیوتر را درست کند (در نصب شخصی مالک ربات، و در گروه ادمین همان چت) علت و راه‌حل را می‌گیرد؛ بقیه این را می‌بینند: `📱 Mini App الان در دسترس نیست. کمی بعد دوباره /app بفرستید.` `aipager doctor` هم همین را در ردیف `miniapp` می‌گوید (به‌شکل هشدار، هیچ‌وقت FAIL)، همراه با تعداد تلاش‌های ناموفق و زمان تلاش بعدی.
+
+&rlm;aipager خودش مرتب دوباره امتحان می‌کند: اول چند بار پشت سر هم، بعد هر ۱۰ دقیقه یک بار (`TUNNEL_RETRY_SLOW_SECONDS`، هیچ‌وقت کمتر از ۶۰ ثانیه)، و یک &lrm;`/app` در این مرحلهٔ کند همان لحظه یک تلاش را شروع می‌کند (حداکثر دقیقه‌ای یک بار). وقتی کامپیوتر درست شد، Mini App بدون ری‌استارت برمی‌گردد.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>سرور DNS جواب ناقص داد
+
+&rlm;&lrm;`/app` می‌گوید `سرور DNS این کامپیوتر جواب ناقص داد`. سرور DNS به جست‌وجوی cloudflared برای سرورهای Cloudflare فقط با بخشی از فهرست جواب داد (یک منطقه، در حالی که Cloudflare دو منطقه اعلام می‌کند)، و cloudflared در این حالت متوقف می‌شود. ایراد از سرور DNSی است که به کامپیوتر داده شده (اغلب سرور مودم یا شبکهٔ یک ماشین مجازی)، نه از aipager. چکش کنید:
+
+<div dir="ltr">
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+</div>
+
+باید دو رکورد نشان بدهد. اگر یکی نشان داد، کامپیوتر را روی یک سرور DNS دیگر تنظیم کنید، مثلاً `1.1.1.1`. با netplan (در Ubuntu)، آدرسی را که DHCP می‌دهد نگه دارید ولی سرور DNS آن را نه، در فایل خودتان زیر &lrm;`/etc/netplan/`&lrm; (`eth0` اسم کارت شبکهٔ شماست):
+
+<div dir="ltr">
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+</div>
+
+بعد `sudo netplan apply` را اجرا کنید. اگر فقط systemd-resolved دارید، فایلی مثل &lrm;`/etc/systemd/resolved.conf.d/dns.conf` بنویسید:
+
+<div dir="ltr">
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+</div>
+
+بعد `sudo systemctl restart systemd-resolved` را اجرا کنید. دوباره با `resolvectl` چک کنید: وقتی دو رکورد نشان داد، تلاش بعدی aipager،&rlm; Mini App را برمی‌گرداند.
+
+### <a id="what-the-other-answers-mean"></a>معنی بقیهٔ جواب‌ها
+
+- `این کامپیوتر نتوانست سرورهای Cloudflare را در DNS پیدا کند`: جست‌وجو کلاً شکست خورد (جوابی نیامد یا وقتش تمام شد). اینترنت کامپیوتر و سرور DNS آن را مثل بالا چک کنید.
+- &rlm;`cloudflared نتوانست از Cloudflare لینک بگیرد`: cloudflared برای گرفتن لینک به `api.trycloudflare.com` نرسید. چک کنید کامپیوتر بتواند https://api.trycloudflare.com را باز کند (فایروال می‌تواند جلویش را بگیرد).
+- `این کامپیوتر نمی‌تواند روی پورت 7844 (UDP) به سرورهای Cloudflare وصل شود`: cloudflared از راه پورت UDP ‏`7844` به Cloudflare وصل می‌شود و چیزی جلویش را گرفته. در فایروال یا شبکهٔ کامپیوتر اجازهٔ خروج UDP روی پورت `7844` را بدهید.
+- &rlm;`aipager نتوانست cloudflared را دانلود یا اجرا کند`: aipager بار اول یک نسخهٔ چک‌شده از cloudflared دانلود می‌کند؛ دانلود، چک کردن یا اجرای آن شکست خورد. اینترنت را چک کنید؛ `aipager logs` مرحله‌ای را که شکست خورد نام می‌برد.
+- &rlm;`cloudflared در حال اجراست، اما لینکش هیچ‌وقت از اینترنت جواب نداد`: cloudflared لینک دارد، ولی از راه آن چیزی به aipager نرسید. aipager آن تونل را می‌بندد و یک تونل جدید راه می‌اندازد.
+- &rlm;`Mini App الان کار نمی‌کند`: علتی که aipager نمی‌شناسد. `aipager logs` پیام خود cloudflared را نشان می‌دهد، و فایل‌هایش &lrm;`~/.claude/aipager-cloudflared.log` و &lrm;`~/.claude/aipager-cloudflared.err` هستند.
+
+پیام‌های خود cloudflared فقط در لاگ aipager می‌آیند، هیچ‌وقت در چت. اگر `MINIAPP_PUBLIC_URL` تنظیم شده باشد، aipager هیچ تونلی راه نمی‌اندازد و هیچ‌کدام از این‌ها پیش نمی‌آید. تا وقتی تونل روی کامپیوتری که Tailscale هم دارد کار نمی‌کند، &lrm;`/app` آدرس Tailscale را می‌دهد.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>باز کردن اپ می‌گوید «برای ورود، این صفحه را از برنامهٔ Telegram باز کنید.»
 
 صفحه لود شد، ولی اسکریپت Mini App تلگرام (همان که `initData` را می‌سازد) لود نشد، پس صفحه چیزی برای ورود ندارد و هیچ درخواستی به API نمی‌فرستد. پیام تقصیر را گردن شما می‌اندازد؛ دلیلش شبکه است.
@@ -286,7 +346,7 @@ uv tool install --reinstall aipager
 | `daemon` | aipager اجرا می‌شود و سوکتش جواب می‌دهد؛ وضعیت محدودیت سرعت تلگرام را هم نشان می‌دهد ([بالا](#the-bot-slowed-down-a-rate-limit-429) را ببینید) | `aipager start` |
 | `service_installed` | اختیاری: فایل سرویس وجود دارد | `aipager service install` |
 | `service_unit_path` | فقط Linux:&rlm; `Environment=PATH=`&lrm; در فایل سرویس *نصب‌شده* واقعاً پوشهٔ فایل اجرایی claude را دارد؛ به‌شکل متن خوانده می‌شود، چون doctor نمی‌تواند PATH خود systemd را از shell تعاملی شما ببیند | `aipager service install --yes` |
-| `miniapp` | وقتی Mini App روشن است، می‌تواند شروع شود یا نه. **هیچ‌وقت FAIL نمی‌شود**: Mini App اختیاری است | راه‌حلی که خودش نام می‌برد |
+| `miniapp` | وقتی Mini App روشن است، می‌تواند شروع شود یا نه، و تا وقتی aipager در حال اجرا تونلی برایش نگه می‌دارد، آن تونل کار می‌کند یا نه (اگر نه: علت، تلاش‌های ناموفق و تلاش بعدی؛ [بالا](#the-mini-app-link-isnt-working) را ببینید). **هیچ‌وقت FAIL نمی‌شود**: Mini App اختیاری است | راه‌حلی که خودش نام می‌برد |
 
 &rlm;`aipager doctor --json` همین بررسی‌ها را، به همین ترتیب، با همین کلیدها چاپ می‌کند ([فرمان‌ها](commands.md#aipager-doctor---json) را ببینید).
 

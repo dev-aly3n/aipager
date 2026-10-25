@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **/app now says why the Mini App isn't working.** When the Mini App's link can't be set up (for example a DNS server that gives an incomplete answer), /app tells the person who can fix the machine what is wrong and what to do, and `aipager doctor` shows the same. aipager keeps trying by itself, so fixing the machine brings the Mini App back without a restart, and cloudflared is now watched while its link is checked, so a tunnel that stops is restarted at once. See [troubleshooting](docs/troubleshooting.md#the-mini-app-link-isnt-working).
+- **Stopping or restarting aipager on Python 3.10 or 3.11 can no longer hang.** A stop that came while the Mini App's link was being set up could leave the daemon waiting for ever.
+
 ## [1.3.9] - 2026-10-25
 
 ### Added

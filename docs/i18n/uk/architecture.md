@@ -1,6 +1,6 @@
 # Архітектура
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Цю сторінку перекладено з англійської; якщо вони розходяться, правильною є англійська версія. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ flowchart LR
 | `~/.claude/aipager-sessions.json` | Довготривалий стан списку сесій | aipager |
 | `~/.claude/aipager-audit.jsonl` | Журнал натискань «Дозволити» / «Відхилити» і відповідей | aipager (лише дописує) |
 | `~/.claude/aipager-flood-state.json` | Історія лімітів Telegram для кожного чату, зберігається між перезапусками ([розв'язання проблем](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Тунель Mini App, який тримає aipager: його процес, локальні порти й хеш його адреси (ніколи не сама адреса), щоб наступний aipager міг підхопити його після планового перезапуску (права 600); попередження cloudflared | aipager; запис також видаляють сторож залишеного тунелю і `aipager uninstall` |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | Тунель Mini App, який тримає aipager: його процес, локальні порти й хеш його адреси (ніколи не сама адреса), щоб наступний aipager міг підхопити його після планового перезапуску (права 600); попередження cloudflared; останній вивід помилок cloudflared (права 600), де сказано, чому тунель не зміг запуститися ([усунення проблем](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; запис також видаляють сторож залишеного тунелю і `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Люди, які звернулися до бота в групі, яку він не обслуговує, або які не є учасниками групи, яку він обслуговує, щоб `aipager config` міг їх додати (права 0600, повністю перезаписується під час кожного запису, останні 200 людей за 30 днів) | aipager (пише), `aipager config` (читає) |
 | `~/aipager-users/<label>/` | [Кореневі папки](groups.md#root-folders) учасників за замовчуванням (права 0700), де учасники з `user` і `read_only` запускають свої сесії; `aipager uninstall` їх зберігає | aipager (створює під час першого `/new` учасника або його першого натискання «Нова сесія» в Mini App) |
 | `~/.claude/settings.json` (або `$CLAUDE_CONFIG_DIR/settings.json`) | Конфігурація hooks Claude Code: той, який читають сесії демона, з теки налаштувань Claude Code для оточення, яке вони отримують ([усунення проблем](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; під час кожного запуску aipager додає відсутні hooks або рядок стану aipager і ставить `skipDangerousModePermissionPrompt` ([безпека](security.md#who-decides-whether-a-tool-call-runs)), і ще раз перед запуском сесії, якщо цей файл новий |
@@ -132,6 +132,7 @@ flowchart LR
 | `~/.local/state/aipager/reports.json` | Звіти про проблеми: записані відбитки помилок, їхня кількість і стан пропозицій (права 600); див. [звіти про проблеми](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Звіти про проблеми, надіслані сьогодні (денний ліміт) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | Стан мов (права 600): хто вже користувався aipager до появи мов, остання мова Telegram, помічена в кожної людини, чи пішли разова пропозиція мови та рядок першого контакту, і відбиток кожного опису бота, який поставив aipager; див. [Мови](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Стан тунелю Mini App (запускається, працює або не працює, з причиною й часом наступної спроби; ніколи його адреса; права 600), для `aipager doctor` ([усунення проблем](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (пише й видаляє під час зупинки), `aipager doctor` (читає) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS) і копія `.bak.<time>` того, що замінює встановлення (на Linux лише якщо воно відрізняється) | Фонова служба | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | Лог служби launchd, його читає `aipager logs` | launchd, для служби |
 

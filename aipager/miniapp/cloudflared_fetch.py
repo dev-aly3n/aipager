@@ -158,7 +158,7 @@ def verify_sha256(data: bytes, expected_hex: str) -> bool:
     return hashlib.sha256(data).hexdigest() == expected_hex.lower()
 
 
-def _download_sync(url: str) -> bytes | None:
+def _download_sync(url: str, log_level: int = logging.WARNING) -> bytes | None:
     """Download ``url`` synchronously (cert-verified by default — no
     custom SSL context, same as the stdlib default
     ``cli/daemon.py::_telegram_preflight`` relies on). Always called
@@ -168,12 +168,14 @@ def _download_sync(url: str) -> bytes | None:
     collapse to ``None``, the same "no binary available" outcome as
     every other fetch failure. ``urllib.error.HTTPError`` is a
     ``URLError`` subclass, so it is covered by the same branch.
+    ``log_level`` is the level of its failure line (see
+    :func:`ensure_cloudflared`).
     """
     try:
         with urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as resp:
             return resp.read()
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        log.warning("cloudflared: download failed for %s: %s", url, exc)
+        log.log(log_level, "cloudflared: download failed for %s: %s", url, exc)
         return None
 
 
@@ -192,7 +194,7 @@ def _extract_tgz(data: bytes) -> bytes | None:
         return None
 
 
-def _atomic_install(dest: Path, data: bytes) -> bool:
+def _atomic_install(dest: Path, data: bytes, log_level: int = logging.WARNING) -> bool:
     """Write ``data`` to a temp file beside ``dest``, ``chmod(0o755)``
     it, then ``Path.replace()`` it into place — so a reader never
     observes a partially-written or not-yet-verified file at ``dest``.
@@ -207,7 +209,7 @@ def _atomic_install(dest: Path, data: bytes) -> bool:
         tmp.replace(dest)
         return True
     except OSError as exc:
-        log.warning("cloudflared: could not install binary to %s: %s", dest, exc)
+        log.log(log_level, "cloudflared: could not install binary to %s: %s", dest, exc)
         try:
             tmp.unlink(missing_ok=True)
         except OSError:
@@ -215,17 +217,23 @@ def _atomic_install(dest: Path, data: bytes) -> bool:
         return False
 
 
-async def ensure_cloudflared() -> str | None:
+async def ensure_cloudflared(*, log_level: int = logging.WARNING) -> str | None:
     """Absolute path to a verified, executable ``cloudflared`` binary —
     downloading and caching it on first call, reusing the cache on
     every call after. Returns ``None`` (never raises) when the platform
     is unsupported, there is no network, the download fails, or
     verification fails.
+
+    ``log_level`` is the level of every line saying why there is no
+    binary. The tunnel manager passes INFO in its slow phase, where it
+    calls this on every try for the rest of the run: its own line already
+    said, once, that the tunnel is failing.
     """
     try:
         key = platform_key()
         if key is None:
-            log.warning(
+            log.log(
+                log_level,
                 "cloudflared: unsupported platform (%s/%s) — managed Mini "
                 "App tunnel disabled",
                 platform.system(), platform.machine(),
@@ -239,13 +247,14 @@ async def ensure_cloudflared() -> str | None:
         filename = _ASSET_NAMES[key]
         url = f"{_RELEASE_BASE}/{_CLOUDFLARED_VERSION}/{filename}"
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(None, _download_sync, url)
+        data = await loop.run_in_executor(None, _download_sync, url, log_level)
         if data is None:
             return None
 
         expected = _SHA256[key]
         if not verify_sha256(data, expected):
-            log.warning(
+            log.log(
+                log_level,
                 "cloudflared: checksum mismatch for %s (expected %s) — "
                 "discarding download, never executing it",
                 filename, expected,
@@ -255,14 +264,14 @@ async def ensure_cloudflared() -> str | None:
         if filename.endswith(".tgz"):
             binary = _extract_tgz(data)
             if binary is None:
-                log.warning(
-                    "cloudflared: could not extract binary from %s", filename,
+                log.log(
+                    log_level, "cloudflared: could not extract binary from %s", filename,
                 )
                 return None
         else:
             binary = data
 
-        if not _atomic_install(dest, binary):
+        if not _atomic_install(dest, binary, log_level):
             return None
 
         log.info(
@@ -275,7 +284,7 @@ async def ensure_cloudflared() -> str | None:
         # bot/lifecycle.py::publish_miniapp_button's own reasoning: the
         # guarantee has to cover every step, not just the ones already
         # wrapped in a narrower try/except above.
-        log.warning("cloudflared: fetch/verify failed unexpectedly", exc_info=True)
+        log.log(log_level, "cloudflared: fetch/verify failed unexpectedly", exc_info=True)
         return None
 
 

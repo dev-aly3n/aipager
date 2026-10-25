@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `~/.claude/aipager-sessions.json` | 세션 목록의 저장된 상태 | aipager |
 | `~/.claude/aipager-audit.jsonl` | 허용 / 거부 / 답변 로그 | aipager (추가만 함) |
 | `~/.claude/aipager-flood-state.json` | 채팅마다의 Telegram 속도 제한 기록, 재시작해도 유지돼요([문제 해결](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | aipager가 붙잡고 있는 Mini App 터널: 프로세스, 로컬 포트, 주소의 해시(주소 자체는 절대 아님)를 적어 두어서 계획된 재시작 뒤 다음 aipager가 이어받을 수 있게 해요(권한 600). cloudflared의 경고도 있어요 | aipager. 유지된 터널의 감시 프로세스와 `aipager uninstall`도 이 기록을 지워요 |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | aipager가 붙잡고 있는 Mini App 터널: 프로세스, 로컬 포트, 주소의 해시(주소 자체는 절대 아님)를 적어 두어서 계획된 재시작 뒤 다음 aipager가 이어받을 수 있게 해요(권한 600). cloudflared의 경고도 있어요. 터널이 시작되지 못한 이유를 알려 주는 cloudflared의 마지막 오류 출력도 있어요(권한 600, [문제 해결](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager. 유지된 터널의 감시 프로세스와 `aipager uninstall`도 이 기록을 지워요 |
 | `~/.claude/aipager-pending-users.json` | 봇이 서비스하지 않는 그룹에서 봇을 부른 사람, 또는 서비스하는 그룹에 있지만 멤버가 아닌 사람, `aipager config`로 추가할 수 있게(권한 0600, 쓸 때마다 통째로 바꿈, 최근 30일 동안 나타난 최신 200명 보관) | aipager (씀), `aipager config` (읽음) |
 | `~/aipager-users/<label>/` | 멤버의 기본 [루트 폴더](groups.md#root-folders)(권한 0700), `user`와 `read_only` 멤버가 여기서 세션을 시작해요. `aipager uninstall`은 이것을 남겨 둬요 | aipager (멤버가 처음 `/new`를 쓰거나 Mini App에서 처음 “새 세션”을 누를 때 만들어요) |
 | `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`) | Claude Code의 hook 설정: 데몬의 세션이 읽는 파일이며, 세션이 받는 환경에 맞는 Claude Code 설정 폴더에 있어요 ([문제 해결](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`. 시작할 때마다 aipager가 빠진 aipager hook이나 상태 줄을 채우고 `skipDangerousModePermissionPrompt`를 설정해요([보안](security.md#who-decides-whether-a-tool-call-runs)), 그리고 그 파일이 새것이면 세션이 시작되기 전에 다시 |
@@ -132,6 +132,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `~/.local/state/aipager/reports.json` | 문제 신고: 기록된 오류 지문, 횟수, 제안 상태(권한 600). [문제 신고](problem-reports.md#what-is-kept-on-your-machine) 참고 | aipager |
 | `~/.local/state/aipager/report-sends.json` | 오늘 보낸 문제 신고 보고서(하루 한도) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | 언어 상태(권한 600): 언어 기능이 생기기 전부터 aipager를 쓴 사람, 사람마다 마지막으로 본 Telegram 언어, 한 번만 하는 언어 제안과 첫 만남 안내 줄이 나갔는지, aipager가 설정한 봇 설명마다의 해시. [언어](commands.md#languages) 참고 | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | `aipager doctor`가 읽는 Mini App 터널 상태(시작 중, 작동 중, 또는 원인과 다음 시도 시간이 있는 작동 안 함. 주소는 절대 없음. 권한 600, [문제 해결](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager(쓰고, 멈출 때 지움), `aipager doctor`(읽음) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), 그리고 설치 때 바뀐 파일의 `.bak.<time>` 사본(Linux에서는 내용이 다를 때만) | 백그라운드 서비스 | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | launchd 서비스의 로그, `aipager logs`가 읽어요 | launchd, 서비스를 위해 씀 |
 

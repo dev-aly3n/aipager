@@ -1,6 +1,6 @@
 # Arsitektur
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ Mulai ulang dari Telegram mengandalkan seluruh jalur ini selesai sebelum penggan
 | `~/.claude/aipager-sessions.json` | Keadaan daftar sesi yang tahan lama | aipager |
 | `~/.claude/aipager-audit.jsonl` | Log Izinkan / Tolak / jawaban | aipager (hanya menambahkan) |
 | `~/.claude/aipager-flood-state.json` | Riwayat batas Telegram per chat, disimpan antar mulai ulang ([pemecahan masalah](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Tunnel Mini App yang dipegang aipager: prosesnya, port lokalnya, dan hash alamatnya (tidak pernah alamatnya), supaya aipager berikutnya bisa mengambil alihnya setelah mulai ulang yang direncanakan (izin 600); peringatan dari cloudflared | aipager; catatannya juga dihapus oleh penjaga tunnel yang dipertahankan dan `aipager uninstall` |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | Tunnel Mini App yang dipegang aipager: prosesnya, port lokalnya, dan hash alamatnya (tidak pernah alamatnya), supaya aipager berikutnya bisa mengambil alihnya setelah mulai ulang yang direncanakan (izin 600); peringatan dari cloudflared; keluaran galat terakhir dari cloudflared (izin 600), yang menyebutkan kenapa tunnel tidak bisa mulai ([pemecahan masalah](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; catatannya juga dihapus oleh penjaga tunnel yang dipertahankan dan `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Orang yang menyapa bot di grup yang tidak dilayaninya, atau yang bukan anggota grup yang dilayaninya, supaya `aipager config` bisa menambahkan mereka (izin 0600, ditulis ulang utuh setiap kali, 200 orang terakhir dalam 30 hari) | aipager (menulis), `aipager config` (membaca) |
 | `~/aipager-users/<label>/` | [Folder utama](groups.md#root-folders) bawaan para anggota (izin 0700), tempat anggota `user` dan `read_only` memulai sesinya; `aipager uninstall` menyimpannya | aipager (dibuat saat anggota pertama kali memakai `/new` atau “Sesi baru” di Mini App) |
 | `~/.claude/settings.json` (atau `$CLAUDE_CONFIG_DIR/settings.json`) | Konfigurasi hook Claude Code: file yang dibaca sesi-sesi daemon, dari folder konfigurasi Claude Code untuk lingkungan yang mereka dapat ([pemecahan masalah](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; setiap kali mulai, aipager menambahkan hook atau baris status aipager yang belum ada dan mengatur `skipDangerousModePermissionPrompt` ([keamanan](security.md#who-decides-whether-a-tool-call-runs)), dan lagi sebelum sesi dimulai kalau file itu baru |
@@ -132,6 +132,7 @@ Mulai ulang dari Telegram mengandalkan seluruh jalur ini selesai sebelum penggan
 | `~/.local/state/aipager/reports.json` | Laporan masalah: sidik jari error yang tercatat, jumlahnya, dan keadaan tawaran (izin 600); lihat [laporan masalah](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Laporan masalah yang dikirim hari ini (batas harian) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | Keadaan bahasa (izin 600): siapa yang sudah memakai aipager sebelum ada bahasa, bahasa Telegram terakhir yang terlihat pada setiap orang, apakah tawaran bahasa sekali saja dan baris kontak pertama sudah terkirim, dan sidik jari setiap deskripsi bot yang dipasang aipager; lihat [Bahasa](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Keadaan tunnel Mini App (sedang mulai, berfungsi, atau tidak berfungsi beserta penyebab dan kapan mencoba lagi; tidak pernah alamatnya; izin 600), untuk `aipager doctor` ([pemecahan masalah](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (ditulis, dihapus saat berhenti), `aipager doctor` (dibaca) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), dan salinan `.bak.<time>` dari yang diganti pemasangan (di Linux hanya kalau berbeda) | Layanan latar belakang | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | Log layanan launchd, dibaca oleh `aipager logs` | launchd, untuk layanan |
 

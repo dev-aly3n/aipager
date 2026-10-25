@@ -1,6 +1,6 @@
 # 문제 해결
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../troubleshooting.md))
 
@@ -188,6 +188,54 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # 초 단위
 
 설치 도중 봇의 연결이 끊겼다면 컴퓨터에서의 설치 자체는 보통 끝나 있어요. aipager를 재시작하고 음성 메시지를 다시 보내 보세요.
 
+## <a id="the-mini-app-link-isnt-working"></a>Mini App 링크가 작동하지 않아요
+
+Mini App 링크를 만들 수 없으면 `/app`이 그 이유를 알려 줘요. 컴퓨터를 고칠 수 있는 사람(개인 설치에서는 봇 소유자, 그룹에서는 그 채팅의 관리자)은 원인과 해결 방법을 받고, 다른 사람은 `📱 지금은 Mini App을 쓸 수 없어요. 나중에 /app을 다시 보내 주세요.`를 받아요. `aipager doctor`도 `miniapp` 행에서 같은 내용을 보여 주고(경고로, 절대 실패로는 아님), 실패한 시도 횟수와 다음 시도 시간도 알려 줘요.
+
+aipager는 알아서 계속 다시 시도해요. 처음에는 빠르게 몇 번 시도하고, 그다음에는 10분마다 한 번씩 시도해요(`TUNNEL_RETRY_SLOW_SECONDS`, 60초보다 짧아지지 않아요). 이 느린 단계에서 `/app`을 보내면 바로 한 번 시도해요(1분에 최대 한 번). 컴퓨터를 고치면 재시작하지 않아도 Mini App이 돌아와요.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>DNS 서버가 불완전한 답을 줬어요
+
+`/app`이 `이 컴퓨터의 DNS 서버가 불완전한 답을 줬어요`라고 해요. cloudflared가 Cloudflare 서버를 찾을 때 DNS 서버가 목록의 일부만 답했고(Cloudflare는 두 지역을 알리는데 한 지역만), 그러면 cloudflared는 멈춰요. 문제는 aipager가 아니라 컴퓨터가 받은 DNS 서버(주로 공유기나 가상 머신 네트워크의 것)에 있어요. 확인해 보세요:
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+레코드가 두 개 나와야 해요. 하나만 나오면 컴퓨터가 다른 DNS 서버(예: 1.1.1.1)를 쓰도록 설정하세요. netplan(Ubuntu)에서는 `/etc/netplan/` 아래 파일에서 DHCP가 주는 주소는 유지하고 DNS 서버만 쓰지 않도록 해요(`eth0`은 네트워크 인터페이스 이름이에요):
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+그다음 `sudo netplan apply`를 실행하세요. systemd-resolved만 쓴다면 `/etc/systemd/resolved.conf.d/dns.conf` 같은 파일을 만드세요:
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+그다음 `sudo systemctl restart systemd-resolved`를 실행하세요. `resolvectl`로 다시 확인해서 레코드가 두 개 나오면, aipager의 다음 시도에서 Mini App이 돌아와요.
+
+### <a id="what-the-other-answers-mean"></a>다른 답의 뜻
+
+- `이 컴퓨터가 DNS에서 Cloudflare 서버를 찾지 못했어요`: 조회 자체가 실패했어요(답이 없거나 시간 초과). 위와 같이 컴퓨터의 인터넷 연결과 DNS 서버를 확인하세요.
+- `cloudflared가 Cloudflare에서 링크를 받지 못했어요`: cloudflared가 링크를 받으려고 `api.trycloudflare.com`에 연결하지 못했어요. 컴퓨터에서 https://api.trycloudflare.com 을 열 수 있는지 확인하세요(방화벽이 막을 수 있어요).
+- `이 컴퓨터가 cloudflared에 필요한 7844 포트(UDP)로 Cloudflare 서버에 연결하지 못해요`: cloudflared는 UDP 7844 포트로 Cloudflare에 연결하는데, 무언가가 이를 막고 있어요. 컴퓨터의 방화벽이나 네트워크에서 나가는 UDP 7844를 허용하세요.
+- `aipager가 Mini App 링크를 만드는 프로그램인 cloudflared를 다운로드하거나 실행하지 못했어요`: aipager는 처음에 검증된 cloudflared를 다운로드해요. 다운로드, 검증 또는 실행이 실패했어요. 인터넷 연결을 확인하세요. `aipager logs`가 실패한 단계를 알려 줘요.
+- `cloudflared는 실행 중이지만 그 링크가 인터넷에서 한 번도 응답하지 않았어요`: cloudflared에 링크는 있지만 그 링크로 aipager에 아무것도 도착하지 않았어요. aipager가 그 터널을 멈추고 새 터널을 시작해요.
+- `지금은 Mini App이 작동하지 않아요`: aipager가 알지 못하는 원인이에요. `aipager logs`에서 cloudflared 자체의 메시지를 볼 수 있고, cloudflared의 파일은 `~/.claude/aipager-cloudflared.log`와 `~/.claude/aipager-cloudflared.err`예요.
+
+cloudflared 자체의 메시지는 aipager 로그에만 남고 채팅에는 절대 나오지 않아요. `MINIAPP_PUBLIC_URL`을 설정했다면 aipager는 터널을 만들지 않으니 이 내용은 해당되지 않아요. Tailscale도 있는 컴퓨터에서 터널이 작동하지 않는 동안에는 `/app`이 Tailscale 주소를 줘요.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>앱을 열면 “로그인하려면 Telegram 앱에서 이 페이지를 여세요.”가 나와요
 
 페이지는 불러왔지만 Telegram의 Mini App SDK 스크립트(`initData`를 만드는 스크립트)는 불러오지 못해서, 페이지에 로그인할 수단이 없고 API를 전혀 호출하지 않아요. 이 메시지는 내 잘못처럼 들리지만, 원인은 네트워크에 있어요.
@@ -258,7 +306,7 @@ dtach가 거부한 시작은 채팅에 이유를 한 줄로 보여 줘요(소켓
 | `daemon` | aipager가 실행 중이고 소켓이 응답해요. Telegram 속도 제한 상태도 보여 줘요([위](#the-bot-slowed-down-a-rate-limit-429) 참고) | `aipager start` |
 | `service_installed` | 선택: 서비스 파일이 있어요 | `aipager service install` |
 | `service_unit_path` | Linux만: *설치된* 서비스의 `Environment=PATH=`에 찾은 claude 프로그램의 폴더가 정말 들어 있어요. doctor는 봇 소유자의 대화형 shell에서 systemd 자체의 PATH를 볼 수 없으니 글로 읽어서 확인해요 | `aipager service install --yes` |
-| `miniapp` | Mini App이 켜져 있을 때 시작할 수 있는지. **절대 FAIL이 아니에요**: Mini App은 선택 사항이에요 | 알려 주는 해결 방법 |
+| `miniapp` | Mini App이 켜져 있을 때 시작할 수 있는지, 그리고 실행 중인 aipager가 Mini App용 터널을 붙잡고 있는 동안 그 터널이 작동하는지(작동하지 않으면 원인, 실패한 시도, 다음 시도; [위](#the-mini-app-link-isnt-working) 참고). **절대 FAIL이 아니에요**: Mini App은 선택 사항이에요 | 알려 주는 해결 방법 |
 
 `aipager doctor --json`은 같은 확인을 이 순서대로, 이 키로 출력해요([명령](commands.md#aipager-doctor---json) 참고).
 

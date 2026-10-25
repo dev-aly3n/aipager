@@ -1,6 +1,6 @@
 # Xử lý sự cố
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../troubleshooting.md))
 
@@ -188,6 +188,54 @@ Nút `[📦 Cài tính năng thoại]` chạy trình cài đặt và sửa tin n
 
 Nếu bot mất kết nối giữa lúc cài, bản thân việc cài trên máy thường đã xong: hãy khởi động lại aipager và thử lại một tin nhắn thoại.
 
+## <a id="the-mini-app-link-isnt-working"></a>Link Mini App không hoạt động
+
+Khi không tạo được link Mini App, `/app` cho biết lý do. Người có thể sửa máy tính (chủ bot khi cài cho riêng mình, quản trị viên của chat đó trong nhóm) nhận được nguyên nhân và cách xử lý; những người khác nhận được `📱 Mini App hiện không dùng được. Hãy gửi lại /app sau.` `aipager doctor` cũng nói như vậy ở dòng `miniapp` (là cảnh báo, không bao giờ là lỗi), kèm số lần thử thất bại và khi nào thử lần tới.
+
+aipager vẫn tiếp tục tự thử lại: đầu tiên vài lần thử nhanh, sau đó cứ 10 phút một lần (`TUNNEL_RETRY_SLOW_SECONDS`, không bao giờ dưới 60 giây), và một lệnh `/app` trong giai đoạn chậm này bắt đầu ngay một lần thử (tối đa mỗi phút một lần). Khi máy tính được sửa, Mini App quay lại mà không cần khởi động lại.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>Máy chủ DNS trả lời thiếu
+
+`/app` báo `máy chủ DNS của máy tính này trả lời thiếu`. Máy chủ DNS chỉ trả lời một phần danh sách khi cloudflared tìm các máy chủ của Cloudflare (một vùng, trong khi Cloudflare công bố hai), và khi đó cloudflared dừng lại. Lỗi nằm ở máy chủ DNS mà máy tính được cấp (thường là của router hoặc của mạng máy ảo), không phải ở aipager. Hãy kiểm tra:
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+Kết quả phải có hai bản ghi. Nếu chỉ có một, hãy đặt máy tính dùng máy chủ DNS khác, ví dụ 1.1.1.1. Với netplan (Ubuntu), giữ địa chỉ mà DHCP cấp nhưng bỏ máy chủ DNS của nó, trong tệp của bạn ở `/etc/netplan/` (`eth0` là tên giao diện mạng của bạn):
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+Sau đó chạy `sudo netplan apply`. Nếu chỉ dùng systemd-resolved, hãy tạo một tệp như `/etc/systemd/resolved.conf.d/dns.conf`:
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+Sau đó chạy `sudo systemctl restart systemd-resolved`. Kiểm tra lại bằng `resolvectl`: khi đã có hai bản ghi, lần thử tiếp theo của aipager sẽ đưa Mini App trở lại.
+
+### <a id="what-the-other-answers-mean"></a>Ý nghĩa của các thông báo khác
+
+- `máy tính này không tìm được các máy chủ của Cloudflare qua DNS`: việc tìm kiếm thất bại hoàn toàn (không có trả lời, hoặc hết thời gian chờ). Hãy kiểm tra kết nối internet và máy chủ DNS của máy tính như ở trên.
+- `cloudflared không lấy được link từ Cloudflare`: cloudflared không kết nối được tới `api.trycloudflare.com` để xin link. Hãy kiểm tra xem máy tính có mở được https://api.trycloudflare.com không (tường lửa có thể chặn).
+- `máy tính này không kết nối được tới các máy chủ của Cloudflare qua cổng 7844 (UDP)`: cloudflared kết nối tới Cloudflare qua cổng UDP 7844, và có thứ gì đó đang chặn. Hãy cho phép UDP 7844 đi ra trong tường lửa hoặc mạng của máy tính.
+- `aipager không tải hoặc chạy được cloudflared`: lần đầu, aipager tải một bản cloudflared đã được kiểm tra; việc tải, kiểm tra hoặc chạy đã thất bại. Hãy kiểm tra kết nối internet; `aipager logs` cho biết bước nào thất bại.
+- `cloudflared đang chạy nhưng link của nó chưa bao giờ trả lời từ internet`: cloudflared có link, nhưng không có gì tới được aipager qua link đó. aipager dừng tunnel đó và mở một tunnel mới.
+- `Mini App hiện không hoạt động`: một nguyên nhân mà aipager không nhận ra. `aipager logs` hiện thông báo của chính cloudflared, và các tệp của nó là `~/.claude/aipager-cloudflared.log` và `~/.claude/aipager-cloudflared.err`.
+
+Thông báo của chính cloudflared chỉ ghi vào log của aipager, không bao giờ vào chat. Khi đã đặt `MINIAPP_PUBLIC_URL`, aipager không mở tunnel nào và những điều trên không áp dụng. Trong lúc tunnel không hoạt động trên một máy tính cũng có Tailscale, `/app` đưa ra địa chỉ Tailscale.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Mở Mini App thì thấy “Hãy mở trang này từ ứng dụng Telegram để đăng nhập.”
 
 Trang đã tải, nhưng script Mini App SDK của Telegram (script tạo ra `initData`) thì không, nên trang không có gì để đăng nhập và không gọi API nào cả. Câu thông báo nghe như lỗi của bạn; thực ra nguyên nhân là ở mạng.
@@ -258,7 +306,7 @@ Thứ tự là quan trọng: mỗi bước kiểm tra sau giả định các bư
 | `daemon` | aipager đang chạy và socket của nó trả lời; còn hiện trạng thái giới hạn tốc độ của Telegram (xem [ở trên](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | Không bắt buộc: file dịch vụ có tồn tại | `aipager service install` |
 | `service_unit_path` | Chỉ Linux: `Environment=PATH=` của dịch vụ *đã cài* thực sự chứa thư mục của chương trình claude tìm được, đọc như văn bản, vì doctor không thấy được PATH riêng của systemd từ shell tương tác của người vận hành | `aipager service install --yes` |
-| `miniapp` | Mini App có khởi động được không khi nó bật. **Không bao giờ FAIL**: Mini App là tùy chọn | cách sửa mà nó nêu |
+| `miniapp` | Mini App có khởi động được không khi nó bật, và, trong lúc aipager đang chạy giữ một tunnel cho nó, tunnel đó có hoạt động không (nếu không: nguyên nhân, các lần thử thất bại và lần thử tới; xem [ở trên](#the-mini-app-link-isnt-working)). **Không bao giờ FAIL**: Mini App là tùy chọn | cách sửa mà nó nêu |
 
 `aipager doctor --json` in ra cùng các bước kiểm tra, theo thứ tự này, với các khóa này (xem [lệnh](commands.md#aipager-doctor---json)).
 

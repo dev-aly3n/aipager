@@ -1,6 +1,6 @@
 # Архитектура
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ flowchart LR
 | `~/.claude/aipager-sessions.json` | Долговременное состояние списка сессий | aipager |
 | `~/.claude/aipager-audit.jsonl` | Журнал Разрешить / Отклонить / ответов | aipager (только дописывает) |
 | `~/.claude/aipager-flood-state.json` | История лимитов Telegram для каждого чата, сохраняется между перезапусками ([решение проблем](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Туннель Mini App, который держит aipager: его процесс, локальные порты и хеш его адреса (никогда не сам адрес), чтобы следующий aipager мог подхватить его после планового перезапуска (права 600); предупреждения cloudflared | aipager; запись также удаляют сторож оставленного туннеля и `aipager uninstall` |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | Туннель Mini App, который держит aipager: его процесс, локальные порты и хеш его адреса (никогда не сам адрес), чтобы следующий aipager мог подхватить его после планового перезапуска (права 600); предупреждения cloudflared; последний вывод ошибок cloudflared (права 600), где сказано, почему туннель не смог запуститься ([устранение неполадок](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; запись также удаляют сторож оставленного туннеля и `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Люди, которые обратились к боту в группе, которую он не обслуживает, или которые не участники группы, которую он обслуживает, чтобы `aipager config` мог их добавить (права 0600, целиком перезаписывается при каждой записи, последние 200 человек за 30 дней) | aipager (пишет), `aipager config` (читает) |
 | `~/aipager-users/<label>/` | [Корневые папки](groups.md#root-folders) участников по умолчанию (права 0700), где участники с `user` и `read_only` запускают свои сессии; `aipager uninstall` их сохраняет | aipager (создаёт при первом `/new` или первой «Новой сессии» в Mini App у участника) |
 | `~/.claude/settings.json` (или `$CLAUDE_CONFIG_DIR/settings.json`) | Конфигурация hooks Claude Code: тот, который читают сессии демона, из папки настроек Claude Code для окружения, которое они получают ([устранение неполадок](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; при каждом запуске aipager добавляет недостающие hooks или строку состояния aipager и ставит `skipDangerousModePermissionPrompt` ([безопасность](security.md#who-decides-whether-a-tool-call-runs)), и ещё раз перед запуском сессии, если этот файл новый |
@@ -132,6 +132,7 @@ flowchart LR
 | `~/.local/state/aipager/reports.json` | Отчёты о проблемах: записанные отпечатки ошибок, их количество и состояние предложений (права 600); см. [отчёты о проблемах](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Отчёты о проблемах, отправленные сегодня (дневной лимит) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | Состояние языков (права 600): кто уже пользовался aipager до появления языков, последний язык Telegram, замеченный у каждого человека, ушли ли разовое предложение языка и строка первого контакта, и отпечаток каждого описания бота, которое поставил aipager; см. [Языки](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Состояние туннеля Mini App (запускается, работает или не работает, с причиной и временем следующей попытки; никогда его адрес; права 600), для `aipager doctor` ([устранение неполадок](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (пишет и удаляет при остановке), `aipager doctor` (читает) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS) и копия `.bak.<time>` того, что заменяет установка (на Linux только если он отличается) | Фоновая служба | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | Лог службы launchd, его читает `aipager logs` | launchd, для службы |
 

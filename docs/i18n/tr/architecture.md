@@ -1,6 +1,6 @@
 # Mimari
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ Telegram'dan yeniden başlatma, yerine gelen sürecin sokete bağlanmasından ö
 | `~/.claude/aipager-sessions.json` | Oturum listesinin kalıcı durumu | aipager |
 | `~/.claude/aipager-audit.jsonl` | İzin ver / Reddet / yanıtların kaydı | aipager (yalnızca sonuna ekler) |
 | `~/.claude/aipager-flood-state.json` | Her sohbetin Telegram sınır geçmişi, yeniden başlatmalar arasında saklanır ([sorun giderme](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | aipager'ın tuttuğu Mini App tüneli: süreci, yerel portları ve adresinin bir hash'i (asla adresin kendisi değil), böylece planlı bir yeniden başlatmadan sonra bir sonraki aipager onu devralabilir (izinler 600); cloudflared'in uyarıları | aipager; kaydı tutulan tünelin bekçisi ve `aipager uninstall` de siler |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | aipager'ın tuttuğu Mini App tüneli: süreci, yerel portları ve adresinin bir hash'i (asla adresin kendisi değil), böylece planlı bir yeniden başlatmadan sonra bir sonraki aipager onu devralabilir (izinler 600); cloudflared'in uyarıları; cloudflared'ın son hata çıktısı (izinler 600), bir tünelin neden başlayamadığını söyler ([sorun giderme](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; kaydı tutulan tünelin bekçisi ve `aipager uninstall` de siler |
 | `~/.claude/aipager-pending-users.json` | Botun hizmet vermediği bir grupta bota yazan ya da hizmet verdiği bir grubun üyesi olmayan kişiler, `aipager config` onları ekleyebilsin diye (izinler 0600, her yazımda baştan yazılır, son 30 günün son 200 kişisi) | aipager (yazar), `aipager config` (okur) |
 | `~/aipager-users/<label>/` | Üyelerin varsayılan [kök klasörleri](groups.md#root-folders) (izinler 0700); `user` ve `read_only` üyeler oturumlarını burada başlatır; `aipager uninstall` bunları korur | aipager (üyenin ilk `/new` komutunda ya da Mini App'teki ilk “Yeni oturum” işleminde oluşturur) |
 | `~/.claude/settings.json` (ya da `$CLAUDE_CONFIG_DIR/settings.json`) | Claude Code hook yapılandırması: daemon'un oturumlarının okuduğu dosya, Claude Code'un aldıkları ortam için ayar klasöründen ([sorun giderme](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; her başlangıçta aipager eksik hook'ları ya da aipager durum satırını ekler ve `skipDangerousModePermissionPrompt` ayarlar ([güvenlik](security.md#who-decides-whether-a-tool-call-runs)), ve o dosya yeniyse bir oturum başlamadan önce yeniden |
@@ -132,6 +132,7 @@ Telegram'dan yeniden başlatma, yerine gelen sürecin sokete bağlanmasından ö
 | `~/.local/state/aipager/reports.json` | Sorun raporları: kaydedilen hata parmak izleri, sayıları ve tekliflerin durumu (izinler 600); bkz. [sorun raporları](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Bugün gönderilen sorun raporları (günlük sınır) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | Dillerin durumu (izinler 600): diller gelmeden önce aipager'ı kimin kullandığı, her kişide görülen son Telegram dili, tek seferlik dil önerisinin ve ilk temas satırının gidip gitmediği ve aipager'ın koyduğu her bot açıklamasının parmak izi; bkz. [Diller](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Mini App tünelinin durumu (başlıyor, çalışıyor ya da nedeni ve bir sonraki deneme zamanıyla çalışmıyor; asla adresi değil; izinler 600), `aipager doctor` için ([sorun giderme](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (yazar, dururken siler), `aipager doctor` (okur) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS) ve kurulumun değiştirdiği dosyanın bir `.bak.<time>` kopyası (Linux'ta yalnızca farklıysa) | Arka plan hizmeti | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | launchd hizmetinin günlüğü, `aipager logs` bunu okur | launchd, hizmet için |
 

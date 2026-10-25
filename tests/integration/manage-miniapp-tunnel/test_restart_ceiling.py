@@ -1,10 +1,16 @@
-"""design.md success criterion 4 -- the safety property:
+"""The safety property, restated as a rate bound (spec requirement 5):
 
-    "After exactly TUNNEL_RESTART_MAX_ATTEMPTS consecutive failed
-    attempts the loop stops permanently for the run, publishes no
-    button, and logs one WARNING containing both 'cloudflared' and
-    'giving up'; the seam is never invoked an (N+1)th time
-    (tripwire-verified)."
+    "After exactly TUNNEL_RESTART_MAX_ATTEMPTS failed attempts the fast
+    retries stop, publish no button, and the loop says once, in one
+    WARNING containing 'cloudflared' and 'retried slowly', that it now
+    waits TUNNEL_RETRY_SLOW_SECONDS between tries; within that interval
+    the seam is never invoked an (N+1)th time (tripwire-verified)."
+
+The loop no longer gives up for the run: a machine fixed later heals the
+Mini App by itself. What keeps it from becoming the unbounded loop behind
+two OOM incidents is the rate: MAX fast attempts, then one try per slow
+interval (never under 60 s), and the fast budget is refreshed only after
+the tunnel worked for a whole slow interval.
 
 The fake seam here does not merely count its calls -- past MAX it raises
 its own distinct, loud exception AND records the overuse in a list that
@@ -17,7 +23,8 @@ going" cannot produce a false pass.
 MAX is a small literal (3) chosen independently of the constant's real
 default (8) -- never derived from the constant under test, per the /ship
 hard constraints (the incident that made a mutation attempt 1,000,000
-requests came from exactly that mistake).
+requests came from exactly that mistake). The slow interval is left at a
+large literal so it never elapses during a test.
 """
 from __future__ import annotations
 
@@ -26,6 +33,7 @@ import logging
 from aipager.miniapp.tunnel_manager import TunnelLaunchError
 
 MAX = 3
+SLOW = 3600.0
 
 
 class _SeamCalledPastCeiling(AssertionError):
@@ -56,6 +64,7 @@ def test_seam_never_invoked_past_the_ceiling_even_when_it_would_keep_failing(
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_MAX_ATTEMPTS", MAX)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_BASE_SECONDS", 0.01)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_MAX_SECONDS", 0.02)
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", SLOW)
 
     async def scenario():
         from aipager.miniapp.tunnel_manager import TunnelManager
@@ -77,26 +86,28 @@ def test_seam_never_invoked_past_the_ceiling_even_when_it_would_keep_failing(
                     lambda: call_count["n"], stable_checks=15, interval=0.02,
                     timeout=8.0,
                 )
+                still_running = not manager._task.done()
             finally:
                 await manager.stop()
-        return changes, final_count
+        return changes, final_count, still_running
 
-    changes, final_count = run_async(scenario())
+    changes, final_count, still_running = run_async(scenario())
 
     assert overuse == [], f"seam was invoked past the ceiling: calls {overuse}"
     assert final_count == MAX, (
         f"expected exactly {MAX} attempts, seam was called {final_count} times"
     )
+    assert still_running, "the loop gave up for the run instead of retrying slowly"
     assert manager_current_url_is_cleared(changes)
 
     warnings = [
         r for r in caplog.records
         if r.levelno == logging.WARNING
         and "cloudflared" in r.getMessage()
-        and "giving up" in r.getMessage()
+        and "retried slowly" in r.getMessage()
     ]
     assert len(warnings) == 1, (
-        f"expected exactly one 'cloudflared...giving up' WARNING, got "
+        f"expected exactly one 'cloudflared...retried slowly' WARNING, got "
         f"{len(warnings)}: {[r.getMessage() for r in caplog.records]}"
     )
 
@@ -112,15 +123,21 @@ def test_ceiling_still_holds_when_a_few_early_attempts_almost_succeed(
     monkeypatch, run_async, FakeProcess, settle, mock_cloudflared_binary, caplog,
 ):
     """Same property, but with the discovered-then-immediately-died shape
-    (a URL is found, published, and then the child dies right away) mixed
-    in -- proving the ceiling counts failed *attempts* generically, not
-    just a specific failure mode, and is not reset by an intervening
-    partial success.
+    mixed in: after MAX-1 failures, the last fast attempt's URL is found,
+    probed, published as working, and the child dies right after its
+    button went out -- proving the ceiling counts failed *attempts*
+    generically, and that a success shorter than a whole slow interval
+    does NOT refresh the fast budget (a tunnel that keeps dying right
+    after starting must never get a fresh run of fast attempts each
+    time). The short success comes last on purpose: on the first attempt
+    the budget is still empty, so a wrong refresh there would change
+    nothing and prove nothing.
     """
     import aipager.miniapp.tunnel_manager as tunnel_manager_mod
 
     call_count = {"n": 0}
     overuse = []
+    first = FakeProcess()
 
     async def fake_seam(binary, port):
         call_count["n"] += 1
@@ -129,21 +146,27 @@ def test_ceiling_still_holds_when_a_few_early_attempts_almost_succeed(
             raise _SeamCalledPastCeiling(
                 f"seam invoked a {call_count['n']}th time; ceiling is {MAX}"
             )
-        if call_count["n"] == 1:
-            proc = FakeProcess()
-            proc.die(1)  # dies immediately after "success"
-            return proc, "https://short-lived-attempt-one.trycloudflare.com"
+        if call_count["n"] == MAX:
+            return first, "https://short-lived-attempt-one.trycloudflare.com"
         raise TunnelLaunchError("simulated launch failure")
+
+    published = []
+
+    async def on_change(url):
+        published.append(url)
+        if url:
+            first.die(1)        # dies right after its button went out
 
     monkeypatch.setattr(tunnel_manager_mod, "spawn_and_discover_url", fake_seam)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_MAX_ATTEMPTS", MAX)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_BASE_SECONDS", 0.01)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_MAX_SECONDS", 0.02)
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", SLOW)
 
     async def scenario():
         from aipager.miniapp.tunnel_manager import TunnelManager
 
-        manager = TunnelManager(port=8765, on_url_change=_noop)
+        manager = TunnelManager(port=8765, on_url_change=on_change)
         with caplog.at_level(logging.WARNING):
             try:
                 await manager.start()
@@ -157,9 +180,8 @@ def test_ceiling_still_holds_when_a_few_early_attempts_almost_succeed(
 
     final_count = run_async(scenario())
 
+    assert "https://short-lived-attempt-one.trycloudflare.com" in published, (
+        "the last fast attempt never reached the working state this test is about"
+    )
     assert overuse == [], f"seam was invoked past the ceiling: calls {overuse}"
     assert final_count == MAX
-
-
-async def _noop(url):
-    pass

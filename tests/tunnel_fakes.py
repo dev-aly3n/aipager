@@ -14,13 +14,23 @@ from dataclasses import dataclass, field
 
 
 class FakePopen:
-    def __init__(self, pid: int):
+    def __init__(self, pid: int, table=None):
         self.pid = pid
         self.waited = False
+        self._table = table
 
     def wait(self, timeout=None):
         self.waited = True
         return 0
+
+    def poll(self):
+        """None while the table holds the pid alive, else its exit code
+        (``table.exit_codes``, default 0)."""
+        if self._table is None:
+            return 0
+        if self.pid in self._table.alive:
+            return None
+        return self._table.exit_codes.get(self.pid, 0)
 
 
 @dataclass
@@ -39,21 +49,27 @@ class ProcessTable:
     next_pid: int = 4000
     next_port: int = 40001
     probe_ok: bool = True
+    dead_urls: set = field(default_factory=set)     # urls whose probe fails
     probes: list = field(default_factory=list)
     spawn_error: Exception | None = None
     popens: list = field(default_factory=list)
+    exit_codes: dict = field(default_factory=dict)  # pid -> code FakePopen.poll() reports
+    stderr_modes: list = field(default_factory=list)  # st_mode of each int stderr given
 
     # -- seams --------------------------------------------------------------
     def popen(self, argv, **kwargs):
         if self.spawn_error is not None:
             raise self.spawn_error
         self.spawns.append((list(argv), kwargs))
+        if isinstance(kwargs.get("stderr"), int) and kwargs["stderr"] >= 0:
+            import os
+            self.stderr_modes.append(os.fstat(kwargs["stderr"]).st_mode)
         pid = self.next_pid
         self.next_pid += 1
         if argv and argv[0] != "sh":
             self.argv[pid] = list(argv)
             self.alive.add(pid)
-        popen = FakePopen(pid)
+        popen = FakePopen(pid, self)
         self.popens.append(popen)
         return popen
 
@@ -79,7 +95,7 @@ class ProcessTable:
 
     async def probe(self, url):
         self.probes.append(url)
-        return self.probe_ok
+        return self.probe_ok and url not in self.dead_urls
 
     def free_port(self):
         port = self.next_port

@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 O link do Mini App ainda está sendo preparado: tente /app de novo em alguns segundos."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Este bot não está configurado para falar com você. Peça ao dono do bot para adicionar seu ID do Telegram ({user_id}) com {command}."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Toque para abrir o painel do aipager:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 O Mini App não consegue se conectar: o aipager não conseguiu baixar nem iniciar o cloudflared, o programa que cria o link dele. Verifique a conexão com a internet do computador. O aipager continua tentando sozinho."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 O Mini App não consegue se conectar: o servidor DNS deste computador deu uma resposta incompleta quando o cloudflared procurou os servidores da Cloudflare. Configure o computador para usar outro servidor DNS, por exemplo <code>1.1.1.1</code>. O aipager continua tentando sozinho."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 O Mini App não consegue se conectar: este computador não conseguiu encontrar os servidores da Cloudflare no DNS. Verifique a conexão com a internet do computador e o servidor DNS dele, por exemplo trocando para <code>1.1.1.1</code>. O aipager continua tentando sozinho."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 O Mini App não consegue se conectar: este computador não alcança os servidores da Cloudflare na porta <code>7844</code> (UDP), que o cloudflared precisa usar. Verifique o firewall ou a rede do computador. O aipager continua tentando sozinho."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 O Mini App não está funcionando agora. Execute {command} neste computador para ver o motivo. O aipager continua tentando sozinho."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 O Mini App não consegue se conectar: o cloudflared não conseguiu um link da Cloudflare. Verifique se este computador consegue acessar a internet. O aipager continua tentando sozinho."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 O Mini App não está disponível agora. Tente /app de novo mais tarde."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 O Mini App não consegue se conectar: o cloudflared está rodando, mas o link dele nunca respondeu pela internet. Verifique a rede do computador. O aipager continua tentando sozinho."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} bloqueado"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} bloqueado para {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} bloqueado para {person} (função {role})"}

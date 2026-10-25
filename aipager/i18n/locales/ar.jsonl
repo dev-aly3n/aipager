@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 رابط Mini App لم يجهز بعد - يمكنك إرسال /app مرة أخرى بعد بضع ثوانٍ."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 هذا البوت غير مهيأ للتحدث معك. يمكنك أن تطلب من مالك البوت إضافة معرّف Telegram الخاص بك ({user_id}) عبر {command}."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "لفتح لوحة aipager:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 تعذّر اتصال Mini App: لم يتمكن aipager من تنزيل cloudflared أو تشغيله، وهو البرنامج الذي ينشئ رابط Mini App. يمكنك التحقق من اتصال الكمبيوتر بالإنترنت. يواصل aipager المحاولة من تلقاء نفسه."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 تعذّر اتصال Mini App: أعطى خادم DNS في هذا الكمبيوتر إجابة ناقصة عندما بحث cloudflared عن خوادم Cloudflare. يمكنك ضبط الكمبيوتر على خادم DNS آخر، مثل <code>1.1.1.1</code>. يواصل aipager المحاولة من تلقاء نفسه."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 تعذّر اتصال Mini App: لم يتمكن هذا الكمبيوتر من العثور على خوادم Cloudflare في DNS. يمكنك التحقق من اتصال الكمبيوتر بالإنترنت ومن خادم DNS الخاص به، مثلًا بالتبديل إلى <code>1.1.1.1</code>. يواصل aipager المحاولة من تلقاء نفسه."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 تعذّر اتصال Mini App: لا يصل هذا الكمبيوتر إلى خوادم Cloudflare على المنفذ <code>7844</code> (UDP)، وهو منفذ يحتاجه cloudflared. يمكنك التحقق من جدار الحماية أو الشبكة في الكمبيوتر. يواصل aipager المحاولة من تلقاء نفسه."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 لا يعمل Mini App الآن. لمعرفة السبب: يمكنك تشغيل {command} على هذا الكمبيوتر. يواصل aipager المحاولة من تلقاء نفسه."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 تعذّر اتصال Mini App: لم يتمكن cloudflared من الحصول على رابط من Cloudflare. يمكنك التحقق من أن هذا الكمبيوتر متصل بالإنترنت. يواصل aipager المحاولة من تلقاء نفسه."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Mini App غير متاح الآن. يمكنك إرسال /app مرة أخرى لاحقًا."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 تعذّر اتصال Mini App: يعمل cloudflared، لكن رابطه لم يستجب أبدًا من الإنترنت. يمكنك التحقق من شبكة الكمبيوتر. يواصل aipager المحاولة من تلقاء نفسه."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · حُظر {tool}"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · حُظر {tool} على {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · حُظر {tool} على {person} (الدور {role})"}

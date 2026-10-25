@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 لینک Mini App هنوز آماده نشده - چند ثانیهٔ دیگر دوباره /app بفرستید."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 این ربات برای گفتگو با شما تنظیم نشده. از مالک ربات بخواهید شناسهٔ Telegram شما ({user_id}) را با {command} اضافه کند."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "برای باز کردن داشبورد aipager بزنید:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Mini App وصل نمی‌شود: aipager نتوانست cloudflared را دانلود یا اجرا کند (برنامه‌ای که لینک Mini App را می‌سازد). اینترنت کامپیوتر را چک کنید. aipager خودش مرتب دوباره امتحان می‌کند."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Mini App وصل نمی‌شود: وقتی cloudflared دنبال سرورهای Cloudflare می‌گشت، سرور DNS این کامپیوتر جواب ناقص داد. کامپیوتر را روی یک سرور DNS دیگر تنظیم کنید، مثلاً <code>1.1.1.1</code>. aipager خودش مرتب دوباره امتحان می‌کند."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Mini App وصل نمی‌شود: این کامپیوتر نتوانست سرورهای Cloudflare را در DNS پیدا کند. اینترنت کامپیوتر و سرور DNS آن را چک کنید، مثلاً سرور DNS را به <code>1.1.1.1</code> عوض کنید. aipager خودش مرتب دوباره امتحان می‌کند."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Mini App وصل نمی‌شود: این کامپیوتر نمی‌تواند روی پورت <code>7844</code> (UDP) به سرورهای Cloudflare وصل شود، و cloudflared به این پورت نیاز دارد. فایروال یا شبکهٔ کامپیوتر را چک کنید. aipager خودش مرتب دوباره امتحان می‌کند."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 Mini App الان کار نمی‌کند. برای دیدن علتش {command} را روی این کامپیوتر اجرا کنید. aipager خودش مرتب دوباره امتحان می‌کند."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Mini App وصل نمی‌شود: cloudflared نتوانست از Cloudflare لینک بگیرد. چک کنید این کامپیوتر به اینترنت وصل باشد. aipager خودش مرتب دوباره امتحان می‌کند."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Mini App الان در دسترس نیست. کمی بعد دوباره /app بفرستید."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Mini App وصل نمی‌شود: cloudflared در حال اجراست، اما لینکش هیچ‌وقت از اینترنت جواب نداد. شبکهٔ کامپیوتر را چک کنید. aipager خودش مرتب دوباره امتحان می‌کند."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} مسدود شد"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} برای {person} مسدود شد"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} برای {person} (نقش {role}) مسدود شد"}

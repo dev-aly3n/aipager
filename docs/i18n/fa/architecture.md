@@ -2,7 +2,7 @@
 
 # معماری
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../architecture.md))
 
@@ -118,7 +118,7 @@ flowchart LR
 | &lrm;`~/.claude/aipager-sessions.json` | وضعیت ماندگار فهرست سشن‌ها | aipager |
 | &lrm;`~/.claude/aipager-audit.jsonl` | لاگ اجازه دادن، رد کردن و جواب‌ها | aipager (فقط اضافه می‌کند) |
 | &lrm;`~/.claude/aipager-flood-state.json` | تاریخچهٔ محدودیت سرعت تلگرام برای هر چت، که بعد از ری‌استارت هم می‌ماند ([رفع مشکل](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| &lrm;`~/.claude/aipager-tunnel.json`،&rlm; `aipager-cloudflared.log` | تونل Mini App که aipager نگهش می‌دارد: پروسه‌اش، پورت‌های محلی‌اش و هش آدرسش (هیچ‌وقت خود آدرس)، تا aipager بعدی بعد از یک ری‌استارت برنامه‌ریزی‌شده آن را تحویل بگیرد (حالت دسترسی 600)؛ و هشدارهای cloudflared | aipager؛ این رکورد را نگهبانِ تونلِ نگه‌داشته‌شده و `aipager uninstall` هم پاک می‌کنند |
+| &lrm;`~/.claude/aipager-tunnel.json`،&rlm; `aipager-cloudflared.log`،&rlm; `aipager-cloudflared.err` | تونل Mini App که aipager نگهش می‌دارد: پروسه‌اش، پورت‌های محلی‌اش و هش آدرسش (هیچ‌وقت خود آدرس)، تا aipager بعدی بعد از یک ری‌استارت برنامه‌ریزی‌شده آن را تحویل بگیرد (حالت دسترسی 600)؛ و هشدارهای cloudflared؛ و آخرین خروجی خطای cloudflared (حالت دسترسی 600) که می‌گوید چرا یک تونل راه نیفتاد ([رفع مشکل](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager؛ این رکورد را نگهبانِ تونلِ نگه‌داشته‌شده و `aipager uninstall` هم پاک می‌کنند |
 | &lrm;`~/.claude/aipager-pending-users.json` | کسانی که در گروهی که ربات در آن کار نمی‌کند ربات را صدا زده‌اند، یا عضو گروهی که ربات در آن کار می‌کند نیستند، تا `aipager config` بتواند اضافه‌شان کند (حالت دسترسی 0600، هر بار کامل عوض می‌شود، ۲۰۰ نفر آخری که در ۳۰ روز گذشته دیده شده‌اند) | aipager (می‌نویسد)، `aipager config` (می‌خواند) |
 | &lrm;`~/aipager-users/<label>/`&lrm; | پوشهٔ root پیش‌فرض اعضا ([پوشه‌های root](groups.md#root-folders))، با حالت دسترسی 0700، جایی که اعضای `user` و `read_only` سشن‌هایشان را شروع می‌کنند؛ `aipager uninstall` نگهشان می‌دارد | aipager (در اولین &lrm;`/new` یا «سشن جدید» یک عضو در Mini App می‌سازدش) |
 | &lrm;`~/.claude/settings.json` (یا &lrm;`$CLAUDE_CONFIG_DIR/settings.json`) | تنظیم هوک‌های Claude Code؛ همان فایلی که سشن‌های aipager می‌خوانند، از پوشهٔ تنظیمات Claude Code برای محیطی که می‌گیرند ([عیب‌یابی](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` /&rlm; `aipager setup`؛ در هر شروع، aipager هر هوک یا خط وضعیتی را که کم باشد اضافه می‌کند و `skipDangerousModePermissionPrompt` را تنظیم می‌کند ([مدل امنیتی](security.md#who-decides-whether-a-tool-call-runs))، و دوباره پیش از شروع یک سشن وقتی آن فایل تازه باشد |
@@ -138,6 +138,7 @@ flowchart LR
 | &lrm;`~/.local/state/aipager/reports.json` | گزارش مشکل: fingerprint خطاهای ثبت‌شده، تعدادها و وضعیت پیشنهادها (حالت دسترسی 600)؛ [گزارش مشکل](problem-reports.md#what-is-kept-on-your-machine) را ببینید | aipager |
 | &lrm;`~/.local/state/aipager/report-sends.json` | گزارش‌هایی که امروز فرستاده شده (سقف روزانه) | aipager،&rlm; `aipager report` |
 | &lrm;`~/.local/state/aipager/languages.json` | وضعیت زبان (حالت دسترسی 600): چه کسانی قبل از اضافه شدن زبان‌ها از aipager استفاده می‌کردند، آخرین زبان تلگرامی که از هر نفر دیده شد، اینکه پیشنهاد یک‌بارهٔ زبان و خط اولین آشنایی فرستاده شده یا نه، و هش هر توضیح رباتی که aipager تنظیم کرده؛ [زبان‌ها](commands.md#languages) را ببینید | aipager |
+| &lrm;`~/.local/state/aipager/tunnel-status.json` | وضعیت تونل Mini App (در حال شروع، در حال کار، یا کار نمی‌کند با علتش و زمان تلاش بعدی؛ هیچ‌وقت آدرسش؛ حالت دسترسی 600)، برای `aipager doctor` ([رفع مشکل](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (می‌نویسد، و موقع توقف پاکش می‌کند)، `aipager doctor` (می‌خواند) |
 | &lrm;`~/.config/systemd/user/aipager.service` (Linux)،&rlm; &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS)، و یک کپی &lrm;`.bak.<time>`&lrm; از فایلی که نصب جایگزینش می‌کند (روی Linux فقط وقتی فرق داشته باشد) | سرویس پس‌زمینه | `aipager service install` |
 | &lrm;`~/Library/Logs/aipager.log` (macOS) | لاگ سرویس launchd، که `aipager logs` می‌خواندش | launchd، برای سرویس |
 

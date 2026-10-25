@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ Việc tự khởi động lại từ Telegram dựa vào việc toàn bộ trì
 | `~/.claude/aipager-sessions.json` | Trạng thái lâu dài của danh sách phiên | aipager |
 | `~/.claude/aipager-audit.jsonl` | Log Cho phép / Từ chối / câu trả lời | aipager (chỉ ghi thêm) |
 | `~/.claude/aipager-flood-state.json` | Lịch sử giới hạn tốc độ của Telegram cho từng chat, được giữ qua các lần khởi động lại ([xử lý sự cố](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Tunnel Mini App mà aipager giữ: tiến trình, các cổng cục bộ và một mã băm của địa chỉ (không bao giờ là chính địa chỉ), để aipager kế tiếp tiếp quản nó sau một lần khởi động lại có kế hoạch (quyền 600); các cảnh báo của cloudflared | aipager; tiến trình canh gác của tunnel được giữ lại và `aipager uninstall` cũng xóa bản ghi này |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | Tunnel Mini App mà aipager giữ: tiến trình, các cổng cục bộ và một mã băm của địa chỉ (không bao giờ là chính địa chỉ), để aipager kế tiếp tiếp quản nó sau một lần khởi động lại có kế hoạch (quyền 600); các cảnh báo của cloudflared; đầu ra lỗi cuối cùng của cloudflared (quyền 600), cho biết vì sao một tunnel không khởi động được ([khắc phục sự cố](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; tiến trình canh gác của tunnel được giữ lại và `aipager uninstall` cũng xóa bản ghi này |
 | `~/.claude/aipager-pending-users.json` | Những người đã nhắn bot trong một nhóm mà bot không phục vụ, hoặc không phải thành viên của một nhóm mà bot phục vụ, để `aipager config` thêm họ (quyền 0600, mỗi lần ghi thì thay cả file, 200 người mới nhất trong 30 ngày qua) | aipager (ghi), `aipager config` (đọc) |
 | `~/aipager-users/<label>/` | [Thư mục gốc](groups.md#root-folders) mặc định của các thành viên (quyền 0700), nơi các thành viên `user` và `read_only` bắt đầu phiên của mình; `aipager uninstall` giữ lại chúng | aipager (tạo ra ở lần `/new` đầu tiên hoặc lần “Phiên mới” đầu tiên trong Mini App của một thành viên) |
 | `~/.claude/settings.json` (hoặc `$CLAUDE_CONFIG_DIR/settings.json`) | Cấu hình hook của Claude Code: tệp mà các phiên của daemon đọc, từ thư mục cấu hình của Claude Code cho môi trường chúng nhận được ([khắc phục sự cố](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; mỗi lần khởi động, aipager thêm hook hoặc dòng trạng thái aipager còn thiếu và đặt `skipDangerousModePermissionPrompt` ([bảo mật](security.md#who-decides-whether-a-tool-call-runs)), và một lần nữa trước khi phiên bắt đầu nếu tệp đó là tệp mới |
@@ -132,6 +132,7 @@ Việc tự khởi động lại từ Telegram dựa vào việc toàn bộ trì
 | `~/.local/state/aipager/reports.json` | Báo cáo sự cố: dấu vân tay lỗi đã ghi nhận, số lần, và trạng thái của lời đề nghị (quyền 600); xem [báo cáo sự cố](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Các báo cáo sự cố đã gửi hôm nay (giới hạn mỗi ngày) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | Trạng thái ngôn ngữ (quyền 600): ai đã dùng aipager trước khi có ngôn ngữ, ngôn ngữ Telegram gần nhất thấy được của từng người, lời đề nghị đổi ngôn ngữ (chỉ một lần) và dòng chào đầu tiên đã được gửi chưa, và mã băm của mỗi mô tả bot mà aipager đã đặt; xem [Ngôn ngữ](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Trạng thái tunnel Mini App (đang khởi động, đang hoạt động, hoặc không hoạt động kèm nguyên nhân và lúc thử lại; không bao giờ có địa chỉ; quyền 600), dành cho `aipager doctor` ([khắc phục sự cố](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (ghi, xóa khi dừng), `aipager doctor` (đọc) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), và một bản `.bak.<time>` của file bị lần cài đặt thay thế (trên Linux chỉ khi nó khác) | Dịch vụ chạy nền | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | Log của dịch vụ launchd, được `aipager logs` đọc | launchd, cho dịch vụ |
 

@@ -348,3 +348,199 @@ def test_the_app_keyboard_label_routes_to_the_app_command(mk_bot, mk_update, run
     run_async(bot._handle_message(update, None))
 
     bot._handle_app_cmd.assert_awaited_once()
+
+
+# ===== /app while the managed tunnel is not working ======================
+#
+# The state comes from aipager.miniapp.tunnel_state (the tunnel manager's
+# in-memory slot); who may see the cause is the /update rule
+# (_is_update_admin): the operator in personal mode, an admin of the chat
+# in a group setup. Everyone else gets a short "not available right now".
+
+# One phrase of each reason's English text, to tell the replies apart.
+REASON_PHRASE = {
+    "dns_incomplete": "incomplete answer",
+    "dns_lookup_failed": "could not look up",
+    "quick_tunnel": "could not get a link",
+    "edge_unreachable": "7844",
+    "binary_missing": "download or start cloudflared",
+    "unreachable": "never answered",
+    "other": "aipager doctor",
+}
+# What cloudflared itself wrote: the log's, never the chat's.
+RAW_CLOUDFLARED = "expected at least 2 Cloudflare Regions regions, but SRV only returned 1"
+
+
+def _failing(monkeypatch, reason="dns_incomplete", phase="retrying"):
+    from aipager.miniapp import tunnel_state
+
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.miniapp.tunnel.detect_public_url", lambda: None)
+    monkeypatch.setattr("aipager.miniapp.server.miniapp_extra_available", lambda: True)
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
+    tunnel_state.publish_status(tunnel_state.TunnelStatus(
+        phase=phase, reason=reason, attempt=3, next_try_at=0.0, since=1.0))
+    attempts = []
+
+    def _hook():
+        attempts.append(1)
+        return True
+    tunnel_state.set_attempt_hook(_hook)
+    return attempts
+
+
+def _dm_scope(user_id, role):
+    from aipager.scope import Member, Scope
+    return Scope(chat_id=user_id, kind="dm", label="dm",
+                 members=(Member(id=user_id, label="alice", role=role),))
+
+
+def _scoped_bot(mk_bot, user_id, role):
+    from pathlib import Path
+
+    from aipager.policy import load_policy
+
+    bot = mk_bot(scopes=[_dm_scope(user_id, role)])
+    bot.policy = load_policy(Path("/nonexistent/p.yaml"), Path("/nonexistent/p.d"))
+    return bot
+
+
+def _reply(update):
+    update.message.reply_text.assert_awaited_once()
+    args, kwargs = update.message.reply_text.await_args
+    return args[0], kwargs
+
+
+@pytest.mark.parametrize("who", ["personal_operator", "scope_admin"])
+@pytest.mark.parametrize("reason", list(REASON_PHRASE))
+def test_admin_gets_the_reason(mk_bot, mk_update, run_async, monkeypatch, who, reason):
+    _failing(monkeypatch, reason)
+    if who == "personal_operator":
+        bot, update = mk_bot(), _dm_update(mk_update, user_id=555)
+    else:
+        bot, update = _scoped_bot(mk_bot, 777, "admin"), _dm_update(mk_update, user_id=777)
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    text, kwargs = _reply(update)
+    assert REASON_PHRASE[reason] in text
+    assert "keeps trying by itself" in text
+    assert kwargs.get("reply_markup") is None
+
+
+def test_an_unknown_reason_reads_as_other(mk_bot, mk_update, run_async, monkeypatch):
+    _failing(monkeypatch, "martian")
+    update = _dm_update(mk_update, user_id=555)
+    run_async(mk_bot()._handle_app_cmd(update, MagicMock()))
+    text, kwargs = _reply(update)
+    assert "<code>aipager doctor</code>" in text and kwargs.get("parse_mode") == "HTML"
+
+
+@pytest.mark.parametrize("who", ["personal_stranger", "scope_member"])
+def test_non_admin_gets_unavailable_without_details(mk_bot, mk_update, run_async,
+                                                    monkeypatch, who):
+    """A member whose role cannot manage gets no machine details, even in
+    their own private chat with the bot."""
+    _failing(monkeypatch, "dns_incomplete")
+    if who == "personal_stranger":
+        bot, update = mk_bot(), _dm_update(mk_update, user_id=999999)
+    else:
+        bot, update = _scoped_bot(mk_bot, 778, "user"), _dm_update(mk_update, user_id=778)
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    text, kwargs = _reply(update)
+    assert "isn't available right now" in text
+    for phrase in REASON_PHRASE.values():
+        assert phrase not in text
+    assert "DNS" not in text and "cloudflared" not in text
+    assert kwargs.get("reply_markup") is None
+
+
+
+@pytest.mark.parametrize("uid,admin", [(7, True), (8, False)], ids=["team_admin", "team_member"])
+def test_legacy_team_mode_gives_the_reason_to_an_admin_only(mk_bot, mk_update, run_async,
+                                                            monkeypatch, uid, admin):
+    from aipager.team import Role, Rules, Team, User as TeamUser
+
+    _failing(monkeypatch, "dns_incomplete")
+    bot = mk_bot(team=Team(
+        group_id=-100,
+        users={7: TeamUser(id=7, label="alice", role=Role.ADMIN),
+               8: TeamUser(id=8, label="bob", role=Role.DEVELOPER)},
+        rules=Rules(deny_tools=[]),
+    ))
+    update = _dm_update(mk_update, user_id=uid)
+    update.effective_message = update.message
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    text, kwargs = _reply(update)
+    if admin:
+        assert REASON_PHRASE["dns_incomplete"] in text
+    else:
+        assert "isn't available right now" in text
+        for phrase in REASON_PHRASE.values():
+            assert phrase not in text
+        assert "DNS" not in text and "cloudflared" not in text
+    assert kwargs.get("reply_markup") is None
+
+@pytest.mark.parametrize("reason", list(REASON_PHRASE) + ["unavailable"])
+def test_app_reason_texts_never_carry_cloudflared_text(mk_bot, mk_update, run_async,
+                                                       monkeypatch, reason):
+    from aipager.miniapp import tunnel_manager as tm
+
+    _failing(monkeypatch, "dns_incomplete" if reason == "unavailable" else reason)
+    log, err = tm._log_paths()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text('{"level":"error","error":"%s","message":"Initiating shutdown"}\n'
+                   % RAW_CLOUDFLARED)
+    err.write_text(RAW_CLOUDFLARED + "\n")
+    uid = 999999 if reason == "unavailable" else 555
+    update = _dm_update(mk_update, user_id=uid)
+
+    run_async(mk_bot()._handle_app_cmd(update, MagicMock()))
+
+    text, _kwargs = _reply(update)
+    assert RAW_CLOUDFLARED not in text and "SRV" not in text
+    for bad in FORBIDDEN_IN_APP_REPLY:
+        assert bad not in text.lower(), f"/app told the user to run {bad!r}: {text!r}"
+
+
+def test_app_while_starting_says_setting_up(mk_bot, mk_update, run_async, monkeypatch):
+    attempts = _failing(monkeypatch, "", phase="starting")
+    update = _dm_update(mk_update, user_id=555)
+    run_async(mk_bot()._handle_app_cmd(update, MagicMock()))
+    text, _kwargs = _reply(update)
+    assert "still being set up" in text
+    assert attempts == []
+
+
+@pytest.mark.parametrize("who", ["personal_operator", "scope_member"])
+def test_app_in_the_slow_phase_starts_an_attempt(mk_bot, mk_update, run_async,
+                                                 monkeypatch, who):
+    attempts = _failing(monkeypatch, "dns_incomplete", phase="slow")
+    if who == "personal_operator":
+        bot, update = mk_bot(), _dm_update(mk_update, user_id=555)
+    else:
+        bot, update = _scoped_bot(mk_bot, 778, "user"), _dm_update(mk_update, user_id=778)
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+    assert attempts == [1]
+
+
+def test_app_while_retrying_fast_starts_no_attempt(mk_bot, mk_update, run_async,
+                                                   monkeypatch):
+    attempts = _failing(monkeypatch, "dns_incomplete", phase="retrying")
+    run_async(mk_bot()._handle_app_cmd(_dm_update(mk_update, user_id=555), MagicMock()))
+    assert attempts == []
+
+
+def test_personal_stranger_app_does_not_start_an_attempt(mk_bot, mk_update, run_async,
+                                                         monkeypatch):
+    attempts = _failing(monkeypatch, "dns_incomplete", phase="slow")
+    update = _dm_update(mk_update, user_id=999999)
+    run_async(mk_bot()._handle_app_cmd(update, MagicMock()))
+    assert attempts == []
+    text, _kwargs = _reply(update)
+    assert "isn't available right now" in text

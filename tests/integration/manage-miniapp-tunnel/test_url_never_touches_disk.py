@@ -151,3 +151,54 @@ def test_discovered_url_string_never_appears_in_any_watched_config_file(
                 assert DISCOVERED_URL_1.encode() not in content, (
                     f"the managed tunnel hostname leaked into {dotted} ({f})"
                 )
+
+
+def test_status_file_never_holds_the_url(
+    monkeypatch, run_async, FakeProcess, wait_until, mock_cloudflared_binary,
+):
+    """The tunnel's state, written for `aipager doctor` on every change,
+    says the phase and reason only: never the address or its host, at any
+    point of a discover -> death -> restart cycle."""
+    import aipager.miniapp.tunnel_manager as tunnel_manager_mod
+    from aipager import config
+
+    proc1, proc2 = FakeProcess(), FakeProcess()
+    attempts = {"n": 0}
+    seen: list[bytes] = []
+
+    async def fake_seam(binary, port):
+        attempts["n"] += 1
+        return (proc1, DISCOVERED_URL_1) if attempts["n"] == 1 else (proc2, DISCOVERED_URL_2)
+
+    monkeypatch.setattr(tunnel_manager_mod, "spawn_and_discover_url", fake_seam)
+    monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_BASE_SECONDS", 0.01)
+    monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_MAX_SECONDS", 0.02)
+
+    def snap():
+        path = config.TUNNEL_STATUS_FILE
+        if path.exists():
+            seen.append(path.read_bytes())
+        return True
+
+    async def scenario():
+        from aipager.miniapp.tunnel_manager import TunnelManager
+
+        manager = TunnelManager(port=8765, on_url_change=_noop)
+        try:
+            await manager.start()
+            await wait_until(lambda: snap() and manager.current_url == DISCOVERED_URL_1,
+                             timeout=5.0)
+            proc1.die(1)
+            await wait_until(lambda: snap() and manager.current_url == DISCOVERED_URL_2,
+                             timeout=5.0)
+        finally:
+            await manager.stop()
+
+    run_async(scenario())
+    assert seen, "the state file was never written"
+    for raw in seen:
+        for url in (DISCOVERED_URL_1, DISCOVERED_URL_2):
+            assert url.encode() not in raw
+            assert url.removeprefix("https://").encode() not in raw
+        assert b"trycloudflare" not in raw
+    assert not config.TUNNEL_STATUS_FILE.exists(), "stop() left the state file behind"

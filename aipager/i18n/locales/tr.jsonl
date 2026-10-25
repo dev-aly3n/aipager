@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Mini App bağlantısı hâlâ hazırlanıyor: birkaç saniye sonra /app komutunu tekrar dene."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Bu bot seninle konuşacak şekilde ayarlanmamış. Botun sahibinden Telegram kimliğini ({user_id}) {command} ile eklemesini iste."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "aipager panelini açmak için dokun:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Mini App bağlanamıyor: aipager, Mini App bağlantısını oluşturan program olan cloudflared'ı indiremedi veya başlatamadı. Bilgisayarın internet bağlantısını kontrol et. aipager kendi kendine denemeye devam ediyor."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Mini App bağlanamıyor: cloudflared, Cloudflare sunucularını ararken bu bilgisayarın DNS sunucusu eksik bir yanıt verdi. Bilgisayarı başka bir DNS sunucusu kullanacak şekilde ayarla, örneğin <code>1.1.1.1</code>. aipager kendi kendine denemeye devam ediyor."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Mini App bağlanamıyor: bu bilgisayar DNS'te Cloudflare sunucularını bulamadı. Bilgisayarın internet bağlantısını ve DNS sunucusunu kontrol et, örneğin <code>1.1.1.1</code> adresine geç. aipager kendi kendine denemeye devam ediyor."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Mini App bağlanamıyor: bu bilgisayar, cloudflared'ın ihtiyaç duyduğu <code>7844</code> (UDP) portu üzerinden Cloudflare sunucularına ulaşamıyor. Bilgisayarın güvenlik duvarını veya ağını kontrol et. aipager kendi kendine denemeye devam ediyor."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 Mini App şu an çalışmıyor. Nedenini görmek için bu bilgisayarda {command} komutunu çalıştır. aipager kendi kendine denemeye devam ediyor."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Mini App bağlanamıyor: cloudflared, Cloudflare'dan bağlantı alamadı. Bu bilgisayarın internete erişebildiğini kontrol et. aipager kendi kendine denemeye devam ediyor."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Mini App şu an kullanılamıyor. Daha sonra /app komutunu tekrar dene."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Mini App bağlanamıyor: cloudflared çalışıyor ama bağlantısı internetten hiç yanıt vermedi. Bilgisayarın ağını kontrol et. aipager kendi kendine denemeye devam ediyor."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} engellendi"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} engellendi (kişi: {person})"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} engellendi (kişi: {person}, rol: {role})"}

@@ -145,6 +145,14 @@
 {"k": "appcmd.setting_up", "src": "1aa4471d", "v": "📱 Der Link zur Mini App wird noch vorbereitet: Versuch /app in ein paar Sekunden noch einmal."}
 {"k": "appcmd.stranger", "src": "d08aa656", "v": "🚫 Dieser Bot ist nicht für dich eingerichtet. Bitte den Besitzer des Bots, deine Telegram-ID ({user_id}) mit {command} hinzuzufügen."}
 {"k": "appcmd.tap_to_open", "src": "371e3eaa", "v": "Tippe, um das aipager-Dashboard zu öffnen:"}
+{"k": "appcmd.tunnel.binary_missing", "src": "14689681", "v": "📱 Die Mini App kann keine Verbindung herstellen: aipager konnte cloudflared, das Programm für ihren Link, nicht herunterladen oder starten. Prüf die Internetverbindung des Computers. aipager versucht es von selbst weiter."}
+{"k": "appcmd.tunnel.dns_incomplete", "src": "5fdf573a", "v": "📱 Die Mini App kann keine Verbindung herstellen: Der DNS-Server dieses Computers hat unvollständig geantwortet, als cloudflared die Server von Cloudflare gesucht hat. Stell den Computer auf einen anderen DNS-Server um, zum Beispiel <code>1.1.1.1</code>. aipager versucht es von selbst weiter."}
+{"k": "appcmd.tunnel.dns_lookup_failed", "src": "a2b110d4", "v": "📱 Die Mini App kann keine Verbindung herstellen: Dieser Computer konnte die Server von Cloudflare im DNS nicht finden. Prüf die Internetverbindung und den DNS-Server des Computers, zum Beispiel mit einem Wechsel auf <code>1.1.1.1</code>. aipager versucht es von selbst weiter."}
+{"k": "appcmd.tunnel.edge_unreachable", "src": "d73ce83a", "v": "📱 Die Mini App kann keine Verbindung herstellen: Dieser Computer erreicht die Server von Cloudflare nicht über Port <code>7844</code> (UDP), den cloudflared braucht. Prüf die Firewall oder das Netzwerk des Computers. aipager versucht es von selbst weiter."}
+{"k": "appcmd.tunnel.other", "src": "55e74bcb", "v": "📱 Die Mini App funktioniert gerade nicht. Führ {command} auf diesem Computer aus, um den Grund zu sehen. aipager versucht es von selbst weiter."}
+{"k": "appcmd.tunnel.quick_tunnel", "src": "5ecd1451", "v": "📱 Die Mini App kann keine Verbindung herstellen: cloudflared hat von Cloudflare keinen Link bekommen. Prüf, ob dieser Computer ins Internet kommt. aipager versucht es von selbst weiter."}
+{"k": "appcmd.tunnel.unavailable", "src": "6653691e", "v": "📱 Die Mini App ist gerade nicht verfügbar. Versuch /app später noch einmal."}
+{"k": "appcmd.tunnel.unreachable", "src": "f975a616", "v": "📱 Die Mini App kann keine Verbindung herstellen: cloudflared läuft, aber sein Link hat aus dem Internet nie geantwortet. Prüf das Netzwerk des Computers. aipager versucht es von selbst weiter."}
 {"k": "auth.blocked", "src": "396a88b7", "v": "⛔ <b>{session}</b> · {tool} blockiert"}
 {"k": "auth.blocked_for", "src": "c18be30f", "v": "⛔ <b>{session}</b> · {tool} blockiert für {person}"}
 {"k": "auth.blocked_for_role", "src": "8f1c4535", "v": "⛔ <b>{session}</b> · {tool} blockiert für {person} (Rolle {role})"}

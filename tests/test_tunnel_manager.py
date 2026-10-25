@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+import stat
 import subprocess
 from unittest.mock import AsyncMock
 
@@ -111,7 +112,9 @@ def test_spawns_cloudflared_detached_and_reads_its_url_from_the_metrics(monkeypa
     """Detached: its own session, no death signal, no pipe (a Go program
     exits on SIGPIPE writing to a pipe a restart closed), its metrics
     server on a free local port, and the address read from that server's
-    /quicktunnel, never from the process's output."""
+    /quicktunnel, never from the process's output. Its stderr goes to a
+    regular file (the quick-tunnel request's failure is printed only
+    there), never a pipe; stdin and stdout to /dev/null."""
     table = tunnel_fakes.install(monkeypatch)
     table.hosts[40001] = '{"hostname":"yes-consolidation-math-shorter.trycloudflare.com"}'
 
@@ -125,8 +128,11 @@ def test_spawns_cloudflared_detached_and_reads_its_url_from_the_metrics(monkeypa
     assert argv[9] == "--logfile" and argv[10].endswith("aipager-cloudflared.log")
     assert kwargs["start_new_session"] is True
     assert "preexec_fn" not in kwargs
-    for stream in ("stdin", "stdout", "stderr"):
+    for stream in ("stdin", "stdout"):
         assert kwargs[stream] == subprocess.DEVNULL
+    [mode] = table.stderr_modes
+    assert stat.S_ISREG(mode), "stderr must be a regular file, never a pipe"
+    assert stat.S_IMODE(mode) == 0o600
 
 
 def test_raises_when_the_process_exits_before_a_url_appears(monkeypatch, run_async):
@@ -307,17 +313,22 @@ def test_set_url_skips_a_redundant_republish_of_the_same_value(run_async):
     assert published == ["https://same.trycloudflare.com"]
 
 
-def test_gives_up_after_exactly_the_ceiling_and_never_calls_the_seam_again(
+def test_fast_attempts_stop_at_the_ceiling_then_the_loop_waits_slowly(
     monkeypatch, run_async, caplog,
 ):
-    """Design.md success criterion 4, with the tripwire the task brief
-    calls for: the fake raises if called an (N+1)th time, not merely a
-    counter checked after the fact. N=3 is a fixed literal, independent
-    of whatever TUNNEL_RESTART_MAX_ATTEMPTS is patched to — the patched
-    value IS 3, chosen here, not read back from the constant."""
+    """The fast budget, with the tripwire the task brief calls for: the
+    fake raises if called an (N+1)th time, not merely a counter checked
+    after the fact. N=3 is a fixed literal, independent of whatever
+    TUNNEL_RESTART_MAX_ATTEMPTS is patched to. The loop no longer gives
+    up for the run (spec requirement 5): after N it waits in the slow
+    phase (TUNNEL_RETRY_SLOW_SECONDS, left large here), still running,
+    having said so once in a WARNING."""
+    from aipager.miniapp import tunnel_state
+
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_MAX_ATTEMPTS", 3)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_BASE_SECONDS", 0.0)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_MAX_SECONDS", 0.0)
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", 3600.0)
 
     calls = {"n": 0}
 
@@ -325,7 +336,7 @@ def test_gives_up_after_exactly_the_ceiling_and_never_calls_the_seam_again(
         calls["n"] += 1
         if calls["n"] > 3:
             raise AssertionError(
-                "spawn_and_discover_url invoked an (N+1)th time — the tripwire",
+                "spawn_and_discover_url invoked an (N+1)th time - the tripwire",
             )
         raise tm.TunnelLaunchError("simulated failure")
     monkeypatch.setattr(tm, "spawn_and_discover_url", _always_fails)
@@ -339,27 +350,38 @@ def test_gives_up_after_exactly_the_ceiling_and_never_calls_the_seam_again(
         manager = tm.TunnelManager(8765, _on_url_change)
         with caplog.at_level("WARNING"):
             await manager.start()
-            await asyncio.wait_for(manager._task, timeout=1.0)
+            for _ in range(200):
+                await asyncio.sleep(0.005)
+            still_running = not manager._task.done()
+            status = tunnel_state.current_status()
+            await manager.stop()
+        return still_running, status
 
-    run_async(_scenario())
+    still_running, status = run_async(_scenario())
 
     assert calls["n"] == 3
+    assert still_running, "the loop gave up instead of waiting slowly"
+    assert status.phase == tunnel_state.SLOW and status.attempt == 3
     # Every attempt failed before ever discovering a URL. The manager's
     # first answer always goes out once (the daemon leaves the startup
     # clear to it, so a button the last run left is removed), and after
     # that only real changes: one "" publish, not one per attempt.
     assert published == [""]
     messages = [r.getMessage() for r in caplog.records]
-    assert any("cloudflared" in m and "giving up" in m for m in messages)
+    assert sum("cloudflared" in m and "retried slowly" in m for m in messages) == 1
 
 
 def test_binary_fetch_failure_counts_toward_the_ceiling_without_spawning(
     monkeypatch, run_async,
 ):
+    from aipager.miniapp import tunnel_state
+
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_MAX_ATTEMPTS", 2)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_BASE_SECONDS", 0.0)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_MAX_SECONDS", 0.0)
-    monkeypatch.setattr(cloudflared_fetch, "ensure_cloudflared", AsyncMock(return_value=None))
+    monkeypatch.setattr("aipager.config.TUNNEL_RETRY_SLOW_SECONDS", 3600.0)
+    fetch = AsyncMock(return_value=None)
+    monkeypatch.setattr(cloudflared_fetch, "ensure_cloudflared", fetch)
 
     async def _must_not_be_called(binary, port):
         raise AssertionError(
@@ -370,8 +392,15 @@ def test_binary_fetch_failure_counts_toward_the_ceiling_without_spawning(
     async def _scenario():
         manager = tm.TunnelManager(8765, AsyncMock())
         await manager.start()
-        await asyncio.wait_for(manager._task, timeout=1.0)
+        for _ in range(200):
+            await asyncio.sleep(0.005)
+        assert fetch.await_count == 2
+        assert not manager._task.done()
+        status = tunnel_state.current_status()
+        assert status.phase == tunnel_state.SLOW
+        assert status.reason == tunnel_state.BINARY_MISSING
         assert manager.current_url == ""
+        await manager.stop()
 
     run_async(_scenario())
 

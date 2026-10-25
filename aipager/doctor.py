@@ -830,6 +830,12 @@ def check_miniapp() -> CheckResult:
     opt-in extra at the time) still reported ``13 ok · 0 warn · 0 fail``, and the
     only clue was a daemon log line nobody reads. The failure surfaced
     to the operator as ``/app`` not working, in Telegram, much later.
+
+    While a running daemon holds the managed tunnel, the row also says
+    its state (``aipager.miniapp.tunnel_state``, from the file that
+    daemon writes): working or starting stays OK; not working is a WARN
+    with the reason and the fix, still never a FAIL. No file, or one a
+    dead daemon or another boot left, keeps the row as it was.
     """
     from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT
     from aipager.miniapp.server import (
@@ -845,7 +851,17 @@ def check_miniapp() -> CheckResult:
                     "server cannot start (incomplete install)"],
             fix=reinstall_with_miniapp_hint(),
         )
-    return CheckResult(OK, "Mini App", detail=[f"enabled · port {MINIAPP_PORT}"])
+    from aipager.miniapp import tunnel_state
+
+    result = CheckResult(OK, "Mini App", detail=[f"enabled · port {MINIAPP_PORT}"])
+    status = tunnel_state.read_status_file()
+    if status is None:
+        return result
+    lines, warn, fix = tunnel_state.doctor_lines(status)
+    result.detail.extend(lines + warn)
+    if warn:
+        result.status, result.fix = WARN, fix
+    return result
 
 
 CHECKS: list[Callable[[], CheckResult]] = [

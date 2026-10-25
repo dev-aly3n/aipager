@@ -206,6 +206,27 @@ def test_a_dead_tunnel_is_not_kept(table, run_async):
     assert table.guards() == [] and not tm._record_path().exists()
 
 
+
+def test_a_tunnel_already_being_killed_is_not_kept(table, run_async, monkeypatch):
+    """A planned restart that lands while the manager is ending a tunnel
+    whose link never answered (SIGTERM sent, not yet gone) finishes the
+    kill: no handover record, no guard, nothing for the next daemon."""
+    monkeypatch.setattr("aipager.config.TUNNEL_KILL_TIMEOUT_SECONDS", 0.5)
+    table.hosts[40001] = json.dumps({"hostname": HOST})
+    table.dead_urls.add(URL)
+    table.stubborn.add(4000)                    # outlives the SIGTERM for a while
+
+    async def _run():
+        manager = tm.TunnelManager(8765, AsyncMock())
+        await manager.start()
+        await _until(lambda: (4000, signal.SIGTERM) in table.signals)
+        await manager.stop(keep=True)
+    run_async(_run())
+
+    assert table.guards() == [], "a tunnel being killed was handed over"
+    assert 4000 not in table.alive
+    assert not tm._record_path().exists()
+
 # ---- startup: take over or replace ---------------------------------------------
 
 def _start_and_settle(table, run_async, *, keep=False):
@@ -266,7 +287,9 @@ def test_a_kept_tunnel_failing_a_check_is_replaced(table, run_async, case, kille
     elif case == "no-metrics":
         table.hosts[40001] = None
     elif case == "not-answering":
-        table.probe_ok = False
+        # Only the kept address: the fresh tunnel's own probe (the manager
+        # probes every new URL) answers.
+        table.dead_urls.add(f"https://{HOST}")
     tm._write_record(rec)
     table.hosts[40002] = json.dumps({"hostname": "fresh-words.trycloudflare.com"})
     table.next_port = 40002

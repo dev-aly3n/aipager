@@ -274,6 +274,11 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # The managed tunnel's record, beside the session file, read LATE
         # by aipager.miniapp.tunnel_manager.
         "aipager.config.TUNNEL_STATE_FILE": claude / "aipager-tunnel.json",
+        # The managed tunnel's state for doctor, read LATE by
+        # aipager.miniapp.tunnel_state (the cloudflared .log and .err
+        # follow TUNNEL_STATE_FILE above).
+        "aipager.config.TUNNEL_STATUS_FILE":
+            home / ".local" / "state" / "aipager" / "tunnel-status.json",
         # Problem reports (8.112): read LATE by aipager.report.store and
         # .markers, so one entry each covers every reader.
         "aipager.config.REPORTS_FILE": home / ".local" / "state" / "aipager" / "reports.json",
@@ -826,6 +831,17 @@ def _no_real_tunnel_probe(monkeypatch):
         return True
 
     monkeypatch.setattr("aipager.miniapp.tunnel.probe_public_url", _reachable)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_tunnel_state(monkeypatch):
+    """The managed tunnel's in-memory state and /app's attempt hook are
+    module globals (aipager.miniapp.tunnel_state): every test starts with
+    none, and one test's manager never leaks into the next."""
+    from aipager.miniapp import tunnel_state
+
+    monkeypatch.setattr(tunnel_state, "_status", None)
+    monkeypatch.setattr(tunnel_state, "_attempt_hook", None)
 
 
 # Captured before the fixture above can stub it, so tests OF the probe
