@@ -2,7 +2,7 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 
@@ -118,7 +118,7 @@ flowchart LR
 | &lrm;`~/.claude/aipager-sessions.json` | الحالة الدائمة لقائمة الجلسات | aipager |
 | &lrm;`~/.claude/aipager-audit.jsonl` | سجل السماح / الرفض / الإجابات | aipager (إضافة فقط) |
 | &lrm;`~/.claude/aipager-flood-state.json` | سجل حدود السرعة في Telegram لكل دردشة، محفوظ عبر إعادات التشغيل ([حل المشكلات](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| &lrm;`~/.claude/aipager-tunnel.json` و`aipager-cloudflared.log` | نفق Mini App الذي يحتفظ به aipager: عمليته ومنافذه المحلية وبصمة عنوانه (لا العنوان نفسه أبدًا)، حتى يتولاه aipager التالي بعد إعادة تشغيل مخطط لها (الصلاحية 600)؛ وتحذيرات cloudflared | aipager؛ ويحذف هذا السجل أيضًا حارس النفق المحفوظ والأمر `aipager uninstall` |
+| &lrm;`~/.claude/aipager-tunnel.json`،&rlm; `aipager-cloudflared.log` و`aipager-cloudflared.err` | نفق Mini App الذي يحتفظ به aipager: عمليته ومنافذه المحلية وبصمة عنوانه (لا العنوان نفسه أبدًا)، حتى يتولاه aipager التالي بعد إعادة تشغيل مخطط لها (الصلاحية 600)؛ وتحذيرات cloudflared؛ وآخر مخرجات أخطاء cloudflared (الصلاحية 600)، التي تقول لماذا لم يبدأ النفق ([حل المشكلات](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager؛ ويحذف هذا السجل أيضًا حارس النفق المحفوظ والأمر `aipager uninstall` |
 | &lrm;`~/.claude/aipager-pending-users.json` | الأشخاص الذين خاطبوا البوت في مجموعة لا يخدمها، أو ليسوا أعضاء في مجموعة يخدمها، لكي يضيفهم `aipager config` (الصلاحية 0600، يُستبدل كاملًا عند كل كتابة، أحدث ٢٠٠ شخص ظهروا خلال آخر ٣٠ يومًا) | aipager (يكتب)، `aipager config` (يقرأ) |
 | &lrm;`~/aipager-users/<label>/`&lrm; | [المجلدات الجذرية](groups.md#root-folders) الافتراضية للأعضاء (الصلاحية 0700)، حيث يبدأ أعضاء `user` و`read_only` جلساتهم؛ ويحتفظ بها `aipager uninstall` | aipager (يُنشئها عند أول &lrm;`/new` أو أول «جلسة جديدة» في Mini App لعضو) |
 | &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`) | إعداد الهوكات في Claude Code؛ وهو الملف الذي تقرؤه جلسات aipager، من مجلد إعدادات Claude Code للبيئة التي تحصل عليها ([استكشاف الأخطاء](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` /&rlm; `aipager setup`؛ وعند كل بدء يضيف aipager أي هوك أو سطر حالة لـ aipager ينقص ويضبط `skipDangerousModePermissionPrompt` ([الأمان](security.md#who-decides-whether-a-tool-call-runs))، ومرة أخرى قبل بدء جلسة عندما يكون ذلك الملف جديدًا |
@@ -138,6 +138,7 @@ flowchart LR
 | &lrm;`~/.local/state/aipager/reports.json` | تقارير المشكلات: بصمات الأخطاء المسجّلة، وأعدادها، وحالة العرض (الصلاحية 600)؛ يُنظر [تقارير المشكلات](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | &lrm;`~/.local/state/aipager/report-sends.json` | تقارير المشكلات المرسلة اليوم (الحد اليومي) | aipager،&rlm; `aipager report` |
 | &lrm;`~/.local/state/aipager/languages.json` | حالة اللغة (الصلاحية 600): من استخدم aipager قبل إضافة اللغات، وآخر لغة Telegram رُئيت لكل شخص، وهل أُرسل عرض اللغة الذي يأتي مرة واحدة وسطر الترحيب الأول، وبصمة كل وصف للبوت ضبطه aipager؛ يُنظر [اللغات](commands.md#languages) | aipager |
+| &lrm;`~/.local/state/aipager/tunnel-status.json` | حالة نفق Mini App (يبدأ، أو يعمل، أو لا يعمل مع السبب وموعد المحاولة التالية؛ لا عنوانه أبدًا؛ الصلاحية 600)، لأجل `aipager doctor` ([حل المشكلات](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (يكتبه ويحذفه عند التوقف)، `aipager doctor` (يقرؤه) |
 | &lrm;`~/.config/systemd/user/aipager.service` (Linux)،&rlm; &lrm;`~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS)، ونسخة &lrm;`.bak.<time>`&lrm; من الملف الذي يستبدله التثبيت (على Linux فقط إذا كان مختلفًا) | خدمة الخلفية | `aipager service install` |
 | &lrm;`~/Library/Logs/aipager.log` (macOS) | سجل خدمة launchd، ويقرؤه `aipager logs` | launchd، للخدمة |
 

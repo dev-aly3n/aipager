@@ -1,6 +1,6 @@
 # Pemecahan masalah
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../troubleshooting.md))
 
@@ -188,6 +188,54 @@ Tombol `[📦 Pasang fitur pesan suara]` menjalankan installer dan mengedit pesa
 
 Kalau bot kehilangan koneksi di tengah pemasangan, pemasangan di komputernya sendiri biasanya sudah selesai: mulai ulang aipager dan coba lagi pesan suara.
 
+## <a id="the-mini-app-link-isnt-working"></a>Tautan Mini App tidak berfungsi
+
+Kalau tautan Mini App tidak bisa dibuat, `/app` menyebutkan penyebabnya. Orang yang bisa memperbaiki komputernya (pemilik bot di pemasangan pribadi, admin chat itu di grup) mendapat penyebab dan apa yang harus dilakukan; yang lain mendapat `📱 Mini App sedang tidak tersedia. Coba /app lagi nanti.` `aipager doctor` menyebutkan hal yang sama di baris `miniapp` (sebagai peringatan, tidak pernah gagal), dengan jumlah percobaan yang gagal dan kapan percobaan berikutnya.
+
+aipager terus mencoba sendiri: mula-mula beberapa percobaan cepat, lalu satu kali tiap 10 menit (`TUNNEL_RETRY_SLOW_SECONDS`, tidak pernah kurang dari 60 detik), dan `/app` di fase lambat ini langsung memulai satu percobaan (paling sering sekali semenit). Begitu komputernya diperbaiki, Mini App kembali tanpa mulai ulang.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>Server DNS memberi jawaban yang tidak lengkap
+
+`/app` berkata `server DNS komputer ini memberi jawaban yang tidak lengkap`. Server DNS menjawab pencarian cloudflared atas server Cloudflare dengan sebagian daftarnya saja (satu region, padahal Cloudflare menerbitkan dua), dan dalam kasus itu cloudflared berhenti. Yang salah adalah server DNS yang diberikan ke komputer itu (sering milik router atau jaringan mesin virtual), bukan aipager. Periksa:
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+Hasilnya harus dua record. Kalau hanya satu, atur komputer agar memakai server DNS lain, misalnya 1.1.1.1. Dengan netplan (Ubuntu), pertahankan alamat dari DHCP tapi jangan server DNS-nya, di file kamu di `/etc/netplan/` (`eth0` adalah nama antarmuka jaringan kamu):
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+Lalu jalankan `sudo netplan apply`. Kalau hanya memakai systemd-resolved, tulis file seperti `/etc/systemd/resolved.conf.d/dns.conf`:
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+Lalu jalankan `sudo systemctl restart systemd-resolved`. Periksa lagi dengan `resolvectl`: begitu hasilnya dua record, percobaan berikutnya dari aipager mengembalikan Mini App.
+
+### <a id="what-the-other-answers-mean"></a>Arti jawaban yang lain
+
+- `komputer ini tidak bisa menemukan server Cloudflare di DNS`: pencariannya gagal sama sekali (tidak ada jawaban, atau waktunya habis). Periksa koneksi internet komputer dan server DNS-nya seperti di atas.
+- `cloudflared tidak bisa mendapatkan tautan dari Cloudflare`: cloudflared tidak bisa mencapai `api.trycloudflare.com` untuk meminta tautan. Pastikan komputer bisa membuka https://api.trycloudflare.com (firewall bisa memblokirnya).
+- `komputer ini tidak bisa menjangkau server Cloudflare lewat port 7844 (UDP)`: cloudflared terhubung ke Cloudflare lewat port UDP 7844, dan ada yang memblokirnya. Izinkan UDP 7844 keluar di firewall atau jaringan komputer.
+- `aipager tidak bisa mengunduh atau menjalankan cloudflared`: pertama kali, aipager mengunduh salinan cloudflared yang sudah diperiksa; unduhan, pemeriksaan, atau menjalankannya gagal. Periksa koneksi internet; `aipager logs` menyebutkan langkah yang gagal.
+- `cloudflared sedang berjalan, tapi tautannya tidak pernah menjawab dari internet`: cloudflared punya tautan, tapi tidak ada yang sampai ke aipager lewat tautan itu. aipager menghentikan tunnel itu dan memulai yang baru.
+- `Mini App sedang tidak berfungsi`: penyebab yang tidak dikenali aipager. `aipager logs` menampilkan pesan cloudflared sendiri, dan file-filenya adalah `~/.claude/aipager-cloudflared.log` dan `~/.claude/aipager-cloudflared.err`.
+
+Pesan cloudflared sendiri hanya masuk ke log aipager, tidak pernah ke chat. Kalau `MINIAPP_PUBLIC_URL` diatur, aipager tidak menjalankan tunnel dan semua ini tidak berlaku. Selama tunnel tidak berfungsi di komputer yang juga punya Tailscale, `/app` memberikan alamat Tailscale.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Membuka aplikasi menampilkan “Buka halaman ini dari aplikasi Telegram untuk masuk.”
 
 Halamannya termuat, tapi skrip Mini App SDK dari Telegram (yang memberi `initData`) tidak, jadi halaman tidak punya apa pun untuk masuk dan tidak membuat satu pun panggilan API. Pesan itu terdengar seperti salahmu; sebenarnya penyebabnya jaringan.
@@ -258,7 +306,7 @@ Urutannya penting: setiap pemeriksaan menganggap pemeriksaan sebelumnya sudah lo
 | `daemon` | aipager berjalan dan soketnya menjawab; juga menampilkan keadaan batas Telegram (lihat [di atas](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | Opsional: file layanan ada | `aipager service install` |
 | `service_unit_path` | Hanya Linux: `Environment=PATH=` milik layanan yang *terpasang* benar-benar memuat folder program claude yang ditemukan, dibaca sebagai teks karena doctor tidak bisa melihat PATH systemd dari shell interaktif operator | `aipager service install --yes` |
-| `miniapp` | Apakah Mini App bisa mulai saat dinyalakan. **Tidak pernah gagal**: Mini App opsional | perbaikan yang disebutkannya |
+| `miniapp` | Apakah Mini App bisa mulai saat dinyalakan, dan, selama aipager yang berjalan memegang tunnel untuknya, apakah tunnel itu berfungsi (kalau tidak: penyebabnya, percobaan yang gagal, dan percobaan berikutnya; lihat [di atas](#the-mini-app-link-isnt-working)). **Tidak pernah gagal**: Mini App opsional | perbaikan yang disebutkannya |
 
 `aipager doctor --json` mencetak pemeriksaan yang sama dengan urutan dan kunci ini (lihat [perintah](commands.md#aipager-doctor---json)).
 

@@ -1,6 +1,6 @@
 # Arquitectura
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ El reinicio que se pide desde Telegram depende de que todo este camino termine a
 | `~/.claude/aipager-sessions.json` | El estado duradero de la lista de sesiones | aipager |
 | `~/.claude/aipager-audit.jsonl` | Registro de permitir, rechazar y respuestas | aipager (solo añade) |
 | `~/.claude/aipager-flood-state.json` | El historial de límites de velocidad de Telegram de cada chat, que sobrevive a los reinicios ([solución de problemas](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | El túnel de la Mini App que mantiene aipager: su proceso, sus puertos locales y un hash de su dirección (nunca la dirección), para que el siguiente aipager pueda quedárselo tras un reinicio planificado (permisos 600); los avisos de cloudflared | aipager; el registro también lo borran el guardián del túnel conservado y `aipager uninstall` |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | El túnel de la Mini App que mantiene aipager: su proceso, sus puertos locales y un hash de su dirección (nunca la dirección), para que el siguiente aipager pueda quedárselo tras un reinicio planificado (permisos 600); los avisos de cloudflared; la última salida de error de cloudflared (permisos 600), que dice por qué no pudo arrancar un túnel ([solución de problemas](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; el registro también lo borran el guardián del túnel conservado y `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Personas que llamaron al bot en un grupo donde no trabaja, o que no son miembros de un grupo donde sí trabaja, para que `aipager config` pueda añadirlas (permisos 0600, se reemplaza entero en cada escritura, las 200 más recientes vistas en los últimos 30 días) | aipager (lo escribe), `aipager config` (lo lee) |
 | `~/aipager-users/<label>/` | Las [carpetas raíz](groups.md#root-folders) por defecto de los miembros (permisos 0700), donde los miembros `user` y `read_only` crean sus sesiones; `aipager uninstall` las conserva | aipager (la crea en el primer `/new` o «Nueva sesión» de la Mini App de un miembro) |
 | `~/.claude/settings.json` (o `$CLAUDE_CONFIG_DIR/settings.json`) | La configuración de hooks de Claude Code: el que leen las sesiones del daemon, de la carpeta de configuración de Claude Code para el entorno que reciben ([solución de problemas](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; en cada arranque aipager añade cualquier hook o línea de estado que falte y pone `skipDangerousModePermissionPrompt` ([Modelo de seguridad](security.md#who-decides-whether-a-tool-call-runs)), y otra vez antes de que empiece una sesión cuando ese archivo es nuevo |
@@ -132,6 +132,7 @@ El reinicio que se pide desde Telegram depende de que todo este camino termine a
 | `~/.local/state/aipager/reports.json` | Informes de problemas: los fingerprints de los errores registrados, las cantidades y el estado de las propuestas (permisos 600); mira [informes de problemas](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Los informes enviados hoy (el límite diario) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | El estado de idioma (permisos 600): quién ya usaba aipager antes de que hubiera idiomas, el último idioma de Telegram visto de cada persona, si ya se enviaron la propuesta única de idioma y la línea de primer contacto, y un hash de cada descripción del bot que puso aipager; mira [Idiomas](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | El estado del túnel de la Mini App (arrancando, funcionando, o sin funcionar con la causa y cuándo lo vuelve a intentar; nunca su dirección; permisos 600), para `aipager doctor` ([solución de problemas](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (lo escribe y lo borra al detenerse), `aipager doctor` (lo lee) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS), y una copia `.bak.<time>` del que reemplaza una instalación (en Linux solo si es distinto) | El servicio en segundo plano | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | El log del servicio de launchd, que lee `aipager logs` | launchd, para el servicio |
 

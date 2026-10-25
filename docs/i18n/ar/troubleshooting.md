@@ -2,7 +2,7 @@
 
 # حل المشكلات
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../troubleshooting.md))
 
@@ -206,6 +206,66 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # بالثواني
 
 إذا انقطع اتصال البوت في منتصف التثبيت، فالتثبيت نفسه على الكمبيوتر يكون قد اكتمل عادةً: إعادة تشغيل aipager ثم تجربة رسالة صوتية مرة أخرى.
 
+## <a id="the-mini-app-link-isnt-working"></a>رابط Mini App لا يعمل
+
+عندما يتعذّر إنشاء رابط Mini App، يقول &lrm;`/app` السبب. من يستطيع إصلاح الكمبيوتر (مالك البوت في التثبيت الشخصي، ومشرف الدردشة في المجموعة) يتلقى السبب وما يجب فعله؛ ويتلقى الآخرون `📱 Mini App غير متاح الآن. يمكنك إرسال /app مرة أخرى لاحقًا.` ويقول `aipager doctor` الشيء نفسه في سطر `miniapp` (تحذيرًا، لا فشلًا أبدًا)، مع عدد المحاولات الفاشلة وموعد المحاولة التالية.
+
+يواصل aipager المحاولة من تلقاء نفسه: بضع محاولات سريعة أولًا، ثم محاولة كل ١٠ دقائق (`TUNNEL_RETRY_SLOW_SECONDS`، ولا تقل أبدًا عن ٦٠ ثانية)، و&lrm;`/app` في هذه المرحلة البطيئة يبدأ محاولة فورًا (مرة في الدقيقة على الأكثر). وبعد إصلاح الكمبيوتر، يعود Mini App دون إعادة تشغيل.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>أعطى خادم DNS إجابة ناقصة
+
+يقول &lrm;`/app`: `أعطى خادم DNS في هذا الكمبيوتر إجابة ناقصة`. أجاب خادم DNS عن بحث cloudflared عن خوادم Cloudflare بجزء من القائمة فقط (منطقة واحدة حيث تنشر Cloudflare منطقتين)، ويتوقف cloudflared في هذه الحالة. والخلل في خادم DNS الذي أُعطي للكمبيوتر (غالبًا خادم جهاز التوجيه أو شبكة جهاز افتراضي)، لا في aipager. للتحقق منه:
+
+<div dir="ltr">
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+</div>
+
+يجب أن يظهر سجلان. وإن ظهر سجل واحد، يمكنك ضبط الكمبيوتر على خادم DNS آخر، مثل `1.1.1.1`. مع netplan (في Ubuntu)، يمكنك الإبقاء على العنوان الذي يعطيه DHCP دون خادم DNS الخاص به، في ملفك تحت &lrm;`/etc/netplan/`&lrm; (`eth0` هو اسم واجهة الشبكة لديك):
+
+<div dir="ltr">
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+</div>
+
+ثم تشغيل `sudo netplan apply`. ومع systemd-resolved وحده، يمكنك كتابة ملف مثل &lrm;`/etc/systemd/resolved.conf.d/dns.conf`:
+
+<div dir="ltr">
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+</div>
+
+ثم تشغيل `sudo systemctl restart systemd-resolved`. ثم التحقق مرة أخرى بالأمر `resolvectl`: عندما يظهر سجلان، تعيد محاولة aipager التالية Mini App.
+
+### <a id="what-the-other-answers-mean"></a>معنى الإجابات الأخرى
+
+- `لم يتمكن هذا الكمبيوتر من العثور على خوادم Cloudflare في DNS`: فشل البحث تمامًا (لا إجابة، أو انتهت المهلة). يمكنك التحقق من اتصال الكمبيوتر بالإنترنت ومن خادم DNS الخاص به كما في الأعلى.
+- `لم يتمكن cloudflared من الحصول على رابط من Cloudflare`: لم يصل cloudflared إلى `api.trycloudflare.com` لطلب رابط. يمكنك التحقق من أن الكمبيوتر يستطيع فتح https://api.trycloudflare.com (قد يمنعه جدار الحماية).
+- `لا يصل هذا الكمبيوتر إلى خوادم Cloudflare على المنفذ 7844 (UDP)`: يتصل cloudflared بـ Cloudflare عبر منفذ UDP ‏`7844`، وشيء ما يمنعه. يمكنك السماح باتصال UDP الصادر على المنفذ `7844` في جدار الحماية أو الشبكة في الكمبيوتر.
+- `لم يتمكن aipager من تنزيل cloudflared أو تشغيله`: ينزّل aipager في المرة الأولى نسخة متحققًا منها من cloudflared؛ وقد فشل التنزيل أو التحقق أو التشغيل. يمكنك التحقق من الاتصال بالإنترنت؛ ويذكر `aipager logs` الخطوة التي فشلت.
+- `يعمل cloudflared، لكن رابطه لم يستجب أبدًا من الإنترنت`: لدى cloudflared رابط، لكن لم يصل عبره شيء إلى aipager. يوقف aipager هذا النفق ويبدأ نفقًا جديدًا.
+- `لا يعمل Mini App الآن`: سبب لا يعرفه aipager. يعرض `aipager logs` رسالة cloudflared نفسه، وملفاته هي &lrm;`~/.claude/aipager-cloudflared.log` و&lrm;`~/.claude/aipager-cloudflared.err`.
+
+تذهب رسائل cloudflared نفسه إلى سجل aipager فقط، ولا تصل إلى الدردشة أبدًا. ومع ضبط `MINIAPP_PUBLIC_URL` لا يشغّل aipager أي نفق، ولا ينطبق شيء من هذا. وما دام النفق لا يعمل على كمبيوتر فيه Tailscale أيضًا، يعطي &lrm;`/app` عنوان Tailscale.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>فتح التطبيق يعرض «يُرجى فتح هذه الصفحة من تطبيق Telegram لتسجيل الدخول.»
 
 تحمّلت الصفحة، لكن سكربت Mini App SDK من Telegram (الذي ينتج `initData`) لم يتحمّل، فلا شيء لدى الصفحة لتسجيل الدخول به ولا ترسل أي طلب إلى الواجهة البرمجية. الرسالة تلومك؛ والسبب في الحقيقة يتعلق بالشبكة.
@@ -286,7 +346,7 @@ uv tool install --reinstall aipager
 | `daemon` | aipager يعمل ومقبسه يجيب؛ ويعرض أيضًا حالة حدود السرعة في Telegram (يُنظر [أعلاه](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | اختياري: ملف الخدمة موجود | `aipager service install` |
 | `service_unit_path` | Linux فقط: `Environment=PATH=`&lrm; في الخدمة *المثبّتة* يحتوي فعلًا على مجلد برنامج claude الذي عُثر عليه، مقروءًا كنص، لأن doctor لا يرى PATH الخاص بـ systemd من الطرفية التفاعلية لمالك البوت | `aipager service install --yes` |
-| `miniapp` | هل يمكن لـ Mini App أن يبدأ حين يكون مفعّلًا. **لا يفشل أبدًا**: Mini App اختياري | الإصلاح الذي يذكره |
+| `miniapp` | هل يمكن لـ Mini App أن يبدأ حين يكون مفعّلًا، وما دام aipager العامل يحتفظ بنفق له، هل يعمل هذا النفق (إن لم يعمل: السبب والمحاولات الفاشلة والمحاولة التالية؛ انظر [أعلاه](#the-mini-app-link-isnt-working)). **لا يفشل أبدًا**: Mini App اختياري | الإصلاح الذي يذكره |
 
 يطبع `aipager doctor --json` الفحوص نفسها، بهذا الترتيب، بهذه المفاتيح (يُنظر [الأوامر](commands.md#aipager-doctor---json)).
 

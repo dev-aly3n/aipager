@@ -1,6 +1,6 @@
 # Dépannage
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../troubleshooting.md))
 
@@ -188,6 +188,54 @@ Le bouton `[📦 Installer la fonction vocale]` lance l'installateur et modifie 
 
 Si le bot a perdu la connexion pendant l'installation, l'installation elle-même s'est en général terminée sur l'ordinateur : redémarrez aipager et réessayez un message vocal.
 
+## <a id="the-mini-app-link-isnt-working"></a>Le lien de la Mini App ne marche pas
+
+Quand le lien de la Mini App ne peut pas être créé, `/app` dit pourquoi. La personne qui peut réparer l'ordinateur (le propriétaire du bot dans une installation personnelle, un admin de la discussion dans un groupe) reçoit la cause et quoi faire ; les autres reçoivent `📱 La Mini App n'est pas disponible pour le moment. Réessayez /app plus tard.` `aipager doctor` dit la même chose dans sa ligne `miniapp` (un avertissement, jamais un échec), avec le nombre de tentatives échouées et le moment de la suivante.
+
+aipager continue d'essayer de lui-même : d'abord quelques tentatives rapides, puis une toutes les 10 minutes (`TUNNEL_RETRY_SLOW_SECONDS`, jamais moins de 60 secondes), et un `/app` pendant cette phase lente lance une tentative tout de suite (au plus une fois par minute). Une fois l'ordinateur réparé, la Mini App revient sans redémarrage.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>Le serveur DNS a donné une réponse incomplète
+
+`/app` dit `le serveur DNS de cet ordinateur a donné une réponse incomplète`. Le serveur DNS a répondu à la recherche des serveurs de Cloudflare par cloudflared avec une partie de la liste seulement (une région là où Cloudflare en publie deux), et cloudflared s'arrête dans ce cas. Le problème vient du serveur DNS que l'ordinateur a reçu (souvent celui d'une box ou du réseau d'une machine virtuelle), pas d'aipager. Vérifiez-le :
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+Cela doit afficher deux enregistrements. S'il n'y en a qu'un, réglez l'ordinateur sur un autre serveur DNS, par exemple 1.1.1.1. Avec netplan (Ubuntu), gardez l'adresse donnée par DHCP mais pas son serveur DNS, dans votre fichier sous `/etc/netplan/` (`eth0` est le nom de votre interface réseau) :
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+Lancez ensuite `sudo netplan apply`. Avec systemd-resolved seul, écrivez un fichier comme `/etc/systemd/resolved.conf.d/dns.conf` :
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+Lancez ensuite `sudo systemctl restart systemd-resolved`. Refaites la vérification avec `resolvectl` : dès qu'elle affiche deux enregistrements, la tentative suivante d'aipager ramène la Mini App.
+
+### <a id="what-the-other-answers-mean"></a>Ce que veulent dire les autres réponses
+
+- `cet ordinateur n'a pas pu trouver les serveurs de Cloudflare dans le DNS` : la recherche a complètement échoué (pas de réponse, ou un délai dépassé). Vérifiez la connexion internet de l'ordinateur et son serveur DNS comme ci-dessus.
+- `cloudflared n'a pas pu obtenir de lien auprès de Cloudflare` : cloudflared n'a pas pu joindre `api.trycloudflare.com` pour demander un lien. Vérifiez que l'ordinateur peut ouvrir https://api.trycloudflare.com (un pare-feu peut le bloquer).
+- `cet ordinateur n'atteint pas les serveurs de Cloudflare sur le port 7844 (UDP)` : cloudflared se connecte à Cloudflare par le port UDP 7844, et quelque chose le bloque. Autorisez l'UDP 7844 sortant dans le pare-feu ou le réseau de l'ordinateur.
+- `aipager n'a pas pu télécharger ni lancer cloudflared` : aipager télécharge une copie vérifiée de cloudflared la première fois ; le téléchargement, la vérification ou le lancement a échoué. Vérifiez la connexion internet ; `aipager logs` nomme l'étape qui a échoué.
+- `cloudflared tourne, mais son lien n'a jamais répondu depuis internet` : cloudflared a un lien, mais rien n'est arrivé à aipager par lui. aipager arrête ce tunnel et en lance un nouveau.
+- `La Mini App ne fonctionne pas pour le moment` : une cause qu'aipager ne reconnaît pas. `aipager logs` montre le message de cloudflared lui-même, et ses fichiers sont `~/.claude/aipager-cloudflared.log` et `~/.claude/aipager-cloudflared.err`.
+
+Les messages de cloudflared vont uniquement dans le log d'aipager, jamais dans la discussion. Avec `MINIAPP_PUBLIC_URL` défini, aipager ne lance aucun tunnel et rien de tout cela ne s'applique. Tant que le tunnel ne marche pas sur un ordinateur qui a aussi Tailscale, `/app` donne l'adresse Tailscale.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Ouvrir l'app affiche « Ouvrez cette page depuis l'app Telegram pour vous connecter. »
 
 La page s'est chargée, mais pas le script du SDK Mini App de Telegram (celui qui produit `initData`), donc la page n'a rien pour se connecter et ne fait aucun appel à l'API. Le message laisse croire que c'est votre faute ; la cause vient du réseau.
@@ -258,7 +306,7 @@ L'ordre compte : chaque vérification suppose que les précédentes ont réussi
 | `daemon` | aipager tourne et son socket répond ; affiche aussi l'état des limites de Telegram (voir [plus haut](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | Optionnel : le fichier du service est présent | `aipager service install` |
 | `service_unit_path` | Linux seulement : le `Environment=PATH=` du service *installé* contient bien le dossier de l'exécutable claude trouvé, lu comme du texte, puisque doctor ne peut pas voir le PATH de systemd depuis le shell interactif de l'opérateur | `aipager service install --yes` |
-| `miniapp` | Si la Mini App peut démarrer quand elle est activée. **N'échoue jamais** : la Mini App est optionnelle | la solution qu'elle nomme |
+| `miniapp` | Si la Mini App peut démarrer quand elle est activée et, tant que l'aipager en marche garde un tunnel pour elle, si ce tunnel marche (sinon : la cause, les tentatives échouées et la prochaine tentative ; voir [plus haut](#the-mini-app-link-isnt-working)). **N'échoue jamais** : la Mini App est optionnelle | la solution qu'elle nomme |
 
 `aipager doctor --json` affiche les mêmes vérifications, dans cet ordre, avec ces clés (voir [commandes](commands.md#aipager-doctor---json)).
 

@@ -1,6 +1,6 @@
 # Sorun giderme
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../troubleshooting.md))
 
@@ -188,6 +188,54 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # saniye cinsinden
 
 Bot kurulumun ortasında bağlantıyı kaybettiyse bilgisayardaki kurulumun kendisi genelde tamamlanmıştır: aipager'ı yeniden başlat ve sesli mesajı yeniden dene.
 
+## <a id="the-mini-app-link-isnt-working"></a>Mini App bağlantısı çalışmıyor
+
+Mini App bağlantısı kurulamadığında `/app` nedenini söyler. Bilgisayarı düzeltebilecek kişi (kişisel kurulumda botun sahibi, grupta o sohbetin yöneticisi) nedeni ve ne yapılacağını alır; diğer herkes `📱 Mini App şu an kullanılamıyor. Daha sonra /app komutunu tekrar dene.` mesajını alır. `aipager doctor` da `miniapp` satırında aynı şeyi söyler (uyarı olarak, asla hata olarak değil); başarısız deneme sayısını ve bir sonraki denemenin ne zaman olacağını da gösterir.
+
+aipager kendi kendine denemeye devam eder: önce birkaç hızlı deneme, sonra her 10 dakikada bir (`TUNNEL_RETRY_SLOW_SECONDS`, asla 60 saniyeden kısa değil); bu yavaş aşamada gönderilen bir `/app` hemen bir deneme başlatır (en fazla dakikada bir). Bilgisayar düzeltilince Mini App yeniden başlatmaya gerek kalmadan geri gelir.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>DNS sunucusu eksik bir yanıt verdi
+
+`/app` şunu söyler: `bu bilgisayarın DNS sunucusu eksik bir yanıt verdi`. DNS sunucusu, cloudflared'ın Cloudflare sunucularını aramasına listenin yalnızca bir kısmıyla yanıt verdi (Cloudflare iki bölge yayınlarken bir bölge) ve bu durumda cloudflared durur. Sorun aipager'da değil, bilgisayara verilen DNS sunucusunda (çoğunlukla modemin ya da bir sanal makine ağının sunucusu). Kontrol et:
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+İki kayıt görünmeli. Tek kayıt görünüyorsa bilgisayarı başka bir DNS sunucusuna ayarla, örneğin 1.1.1.1. netplan (Ubuntu) ile `/etc/netplan/` altındaki dosyanda DHCP'nin verdiği adresi koru ama onun DNS sunucusunu kullanma (`eth0` ağ arayüzünün adıdır):
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+Sonra `sudo netplan apply` komutunu çalıştır. Yalnızca systemd-resolved varsa `/etc/systemd/resolved.conf.d/dns.conf` gibi bir dosya yaz:
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+Sonra `sudo systemctl restart systemd-resolved` komutunu çalıştır. `resolvectl` ile tekrar kontrol et: iki kayıt görününce aipager'ın bir sonraki denemesi Mini App'i geri getirir.
+
+### <a id="what-the-other-answers-mean"></a>Diğer yanıtların anlamı
+
+- `bu bilgisayar DNS'te Cloudflare sunucularını bulamadı`: sorgu tamamen başarısız oldu (yanıt yok ya da zaman aşımı). Bilgisayarın internet bağlantısını ve DNS sunucusunu yukarıdaki gibi kontrol et.
+- `cloudflared, Cloudflare'dan bağlantı alamadı`: cloudflared bağlantı istemek için `api.trycloudflare.com` adresine ulaşamadı. Bilgisayarın https://api.trycloudflare.com adresini açabildiğini kontrol et (bir güvenlik duvarı bunu engelleyebilir).
+- `bu bilgisayar, cloudflared'ın ihtiyaç duyduğu 7844 (UDP) portu üzerinden Cloudflare sunucularına ulaşamıyor`: cloudflared Cloudflare'a UDP 7844 portu üzerinden bağlanır ve bir şey bunu engelliyor. Bilgisayarın güvenlik duvarında veya ağında giden UDP 7844'e izin ver.
+- `aipager, Mini App bağlantısını oluşturan program olan cloudflared'ı indiremedi veya başlatamadı`: aipager ilk seferde cloudflared'ın doğrulanmış bir kopyasını indirir; indirme, doğrulama ya da başlatma başarısız oldu. İnternet bağlantısını kontrol et; `aipager logs` başarısız olan adımı söyler.
+- `cloudflared çalışıyor ama bağlantısı internetten hiç yanıt vermedi`: cloudflared'ın bir bağlantısı var ama onun üzerinden aipager'a hiçbir şey ulaşmadı. aipager o tüneli durdurur ve yenisini başlatır.
+- `Mini App şu an çalışmıyor`: aipager'ın tanımadığı bir neden. `aipager logs` cloudflared'ın kendi mesajını gösterir; dosyaları `~/.claude/aipager-cloudflared.log` ve `~/.claude/aipager-cloudflared.err`.
+
+cloudflared'ın kendi mesajları yalnızca aipager'ın log'una gider, asla sohbete gitmez. `MINIAPP_PUBLIC_URL` ayarlıysa aipager tünel açmaz ve bunların hiçbiri geçerli olmaz. Tailscale'i de olan bir bilgisayarda tünel çalışmadığı sürece `/app` Tailscale adresini verir.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Uygulamayı açınca “Giriş yapmak için bu sayfayı Telegram uygulamasından aç.” görünüyor
 
 Sayfa yüklendi ama Telegram'ın Mini App SDK betiği (`initData` veren betik) yüklenmedi, bu yüzden sayfanın giriş yapacak bir şeyi yok ve hiçbir API çağrısı yapmıyor. Mesaj sanki suç sendeymiş gibi konuşuyor; aslında neden ağdır.
@@ -258,7 +306,7 @@ Sıra önemlidir: her kontrol öncekilerin geçtiğini varsayar. Beklenmedik bir
 | `daemon` | aipager çalışıyor ve soketi yanıt veriyor; Telegram sınırlarının durumunu da gösterir (bkz. [yukarısı](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | İsteğe bağlı: hizmet dosyası yerinde | `aipager service install` |
 | `service_unit_path` | Yalnızca Linux: *kurulu* hizmetin `Environment=PATH=` değeri gerçekten bulunan claude programının klasörünü içeriyor; metin olarak okunur, çünkü doctor systemd'nin PATH'ini operatörün etkileşimli shell'inden göremez | `aipager service install --yes` |
-| `miniapp` | Açıksa Mini App başlayabiliyor mu. **Asla başarısız olmaz**: Mini App isteğe bağlıdır | gösterdiği düzeltme |
+| `miniapp` | Açıksa Mini App başlayabiliyor mu ve çalışan aipager onun için bir tünel tuttuğu sürece o tünel çalışıyor mu (çalışmıyorsa: nedeni, başarısız denemeler ve bir sonraki deneme; [yukarıya](#the-mini-app-link-isnt-working) bak). **Asla başarısız olmaz**: Mini App isteğe bağlıdır | gösterdiği düzeltme |
 
 `aipager doctor --json` aynı kontrolleri bu sırayla, bu anahtarlarla yazdırır (bkz. [komutlar](commands.md#aipager-doctor---json)).
 

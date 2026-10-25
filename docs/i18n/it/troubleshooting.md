@@ -1,6 +1,6 @@
 # Risoluzione dei problemi
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../troubleshooting.md))
 
@@ -188,6 +188,54 @@ Il pulsante `[📦 Installa la funzione vocale]` esegue l'installatore e modific
 
 Se il bot ha perso la connessione a metà installazione, l'installazione sul computer di solito è arrivata in fondo: riavvia aipager e riprova con un vocale.
 
+## <a id="the-mini-app-link-isnt-working"></a>Il link della Mini App non funziona
+
+Quando il link della Mini App non si riesce a creare, `/app` dice perché. Chi può sistemare il computer (il proprietario del bot in un'installazione personale, un admin della chat in un gruppo) riceve la causa e cosa fare; tutti gli altri ricevono `📱 La Mini App non è disponibile in questo momento. Riprova /app più tardi.` `aipager doctor` dice lo stesso nella sua riga `miniapp` (un avviso, mai un errore), con il numero di tentativi falliti e quando arriva il prossimo.
+
+aipager continua a riprovare da solo: prima qualche tentativo rapido, poi uno ogni 10 minuti (`TUNNEL_RETRY_SLOW_SECONDS`, mai meno di 60 secondi), e un `/app` in questa fase lenta avvia subito un tentativo (al massimo una volta al minuto). Quando il computer è sistemato, la Mini App torna senza riavvio.
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>Il server DNS ha dato una risposta incompleta
+
+`/app` dice `il server DNS di questo computer ha dato una risposta incompleta`. Il server DNS ha risposto alla ricerca dei server di Cloudflare fatta da cloudflared con solo una parte dell'elenco (una regione dove Cloudflare ne pubblica due), e in quel caso cloudflared si ferma. Il problema è il server DNS che il computer ha ricevuto (spesso quello di un router o della rete di una macchina virtuale), non aipager. Controllalo:
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+Deve mostrare due record. Se ne mostra uno, imposta il computer su un altro server DNS, per esempio 1.1.1.1. Con netplan (Ubuntu), tieni l'indirizzo che dà DHCP ma non il suo server DNS, nel tuo file sotto `/etc/netplan/` (`eth0` è il nome della tua interfaccia di rete):
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+Poi esegui `sudo netplan apply`. Con solo systemd-resolved, scrivi un file come `/etc/systemd/resolved.conf.d/dns.conf`:
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+Poi esegui `sudo systemctl restart systemd-resolved`. Ripeti il controllo con `resolvectl`: quando mostra due record, il prossimo tentativo di aipager riporta la Mini App.
+
+### <a id="what-the-other-answers-mean"></a>Cosa vogliono dire le altre risposte
+
+- `questo computer non è riuscito a trovare i server di Cloudflare nel DNS`: la ricerca è fallita del tutto (nessuna risposta, o tempo scaduto). Controlla la connessione a internet del computer e il suo server DNS come sopra.
+- `cloudflared non è riuscito a ottenere un link da Cloudflare`: cloudflared non è riuscito a raggiungere `api.trycloudflare.com` per chiedere un link. Controlla che il computer possa aprire https://api.trycloudflare.com (un firewall può bloccarlo).
+- `questo computer non raggiunge i server di Cloudflare sulla porta 7844 (UDP)`: cloudflared si collega a Cloudflare sulla porta UDP 7844, e qualcosa la blocca. Consenti l'UDP 7844 in uscita nel firewall o nella rete del computer.
+- `aipager non è riuscito a scaricare o avviare cloudflared`: la prima volta aipager scarica una copia verificata di cloudflared; il download, la verifica o l'avvio non sono riusciti. Controlla la connessione a internet; `aipager logs` dice quale passo non è riuscito.
+- `cloudflared è in esecuzione, ma il suo link non ha mai risposto da internet`: cloudflared ha un link, ma da lì non è arrivato niente ad aipager. aipager chiude quel tunnel e ne avvia uno nuovo.
+- `La Mini App non funziona in questo momento`: una causa che aipager non riconosce. `aipager logs` mostra il messaggio di cloudflared stesso, e i suoi file sono `~/.claude/aipager-cloudflared.log` e `~/.claude/aipager-cloudflared.err`.
+
+I messaggi di cloudflared vanno solo nel log di aipager, mai nella chat. Con `MINIAPP_PUBLIC_URL` impostato, aipager non avvia nessun tunnel e niente di tutto questo vale. Finché il tunnel non funziona su un computer che ha anche Tailscale, `/app` dà l'indirizzo di Tailscale.
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>Aprendo l'app compare «Apri questa pagina dall'app di Telegram per accedere.»
 
 La pagina si è caricata, ma lo script Mini App SDK di Telegram (quello che produce `initData`) no, quindi la pagina non ha niente con cui accedere e non fa nessuna chiamata all'API. Il messaggio sembra dare la colpa a te; la causa è la rete.
@@ -258,7 +306,7 @@ L'ordine conta: ogni controllo dà per scontato che i precedenti siano passati. 
 | `daemon` | aipager è in esecuzione e il suo socket risponde; mostra anche lo stato dei limiti di Telegram (vedi [sopra](#the-bot-slowed-down-a-rate-limit-429)) | `aipager start` |
 | `service_installed` | Facoltativo: il file del servizio esiste | `aipager service install` |
 | `service_unit_path` | Solo Linux: l'`Environment=PATH=` del servizio *installato* contiene davvero la cartella del programma claude trovato, letto come testo, perché doctor non vede il PATH di systemd dalla shell interattiva del proprietario del bot | `aipager service install --yes` |
-| `miniapp` | Se la Mini App può partire quando è attiva. **Non dà mai FAIL**: la Mini App è facoltativa | la soluzione che indica |
+| `miniapp` | Se la Mini App può partire quando è attiva e, finché l'aipager in esecuzione tiene un tunnel per lei, se quel tunnel funziona (se no: la causa, i tentativi falliti e il prossimo tentativo; vedi [sopra](#the-mini-app-link-isnt-working)). **Non dà mai FAIL**: la Mini App è facoltativa | la soluzione che indica |
 
 `aipager doctor --json` stampa gli stessi controlli, in quest'ordine, con queste chiavi (vedi [comandi](commands.md#aipager-doctor---json)).
 

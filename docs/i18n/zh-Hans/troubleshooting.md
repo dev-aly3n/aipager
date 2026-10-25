@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ 33da7624 -->
+<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
@@ -188,6 +188,54 @@ AIPAGER_INTERACTIVE_TIMEOUT=300 aipager start    # 以秒为单位
 
 如果机器人在安装中途断开了连接，电脑上的安装本身通常已经完成：重启 aipager，再试一次语音消息。
 
+## <a id="the-mini-app-link-isnt-working"></a>Mini App 链接无法使用
+
+Mini App 的链接建立不起来时，`/app` 会说明原因。能修好这台电脑的人（个人安装时是机器人主人，群组里是该聊天的管理员）会收到原因和处理方法；其他人收到 `📱 Mini App 现在不可用。请稍后再发送 /app。` `aipager doctor` 在它的 `miniapp` 一行里也会说同样的内容（只是警告，从不算失败），并给出失败的次数和下一次尝试的时间。
+
+aipager 会自己不断重试：先快速试几次，然后每 10 分钟试一次（`TUNNEL_RETRY_SLOW_SECONDS`，从不少于 60 秒），在这个慢速阶段发送 `/app` 会立即开始一次尝试（每分钟最多一次）。电脑修好后，Mini App 不用重启就会回来。
+
+### <a id="the-dns-server-gave-an-incomplete-answer"></a>DNS 服务器给出的回答不完整
+
+`/app` 说 `这台电脑的 DNS 服务器给出的回答不完整`。cloudflared 查找 Cloudflare 服务器时，DNS 服务器只回答了列表的一部分（Cloudflare 发布了两个区域，它只给了一个），遇到这种情况 cloudflared 会停止。问题出在这台电脑拿到的 DNS 服务器上（通常是路由器的，或虚拟机网络的），而不是 aipager。检查一下：
+
+```
+resolvectl query -t SRV _v2-origintunneld._tcp.argotunnel.com
+```
+
+结果应该列出两条记录。如果只有一条，请把电脑改用其他 DNS 服务器，例如 1.1.1.1。用 netplan（Ubuntu）时，在 `/etc/netplan/` 下你的文件里保留 DHCP 分配的地址，但不用它的 DNS 服务器（`eth0` 是你的网络接口名）：
+
+```yaml
+network:
+  ethernets:
+    eth0:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      nameservers:
+        addresses: [1.1.1.1, 1.0.0.1]
+```
+
+然后运行 `sudo netplan apply`。只用 systemd-resolved 时，写一个文件，例如 `/etc/systemd/resolved.conf.d/dns.conf`：
+
+```ini
+[Resolve]
+DNS=1.1.1.1 1.0.0.1
+Domains=~.
+```
+
+然后运行 `sudo systemctl restart systemd-resolved`。再用 `resolvectl` 检查一次：列出两条记录后，aipager 的下一次尝试就会让 Mini App 回来。
+
+### <a id="what-the-other-answers-mean"></a>其他回答的意思
+
+- `这台电脑无法通过 DNS 找到 Cloudflare 的服务器`：查询完全失败了（没有回答，或者超时）。像上面那样检查电脑的网络连接和 DNS 服务器。
+- `cloudflared 无法从 Cloudflare 获取链接`：cloudflared 无法连到 `api.trycloudflare.com` 来申请链接。检查电脑能否打开 https://api.trycloudflare.com （防火墙可能会拦住它）。
+- `这台电脑无法通过 7844 端口（UDP）连接 Cloudflare 的服务器`：cloudflared 通过 UDP 7844 端口连接 Cloudflare，而有东西拦住了它。在电脑的防火墙或网络里放行出站的 UDP 7844。
+- `aipager 无法下载或启动 cloudflared`：aipager 第一次会下载一份经过校验的 cloudflared；下载、校验或启动失败了。检查网络连接；`aipager logs` 会指出失败的那一步。
+- `cloudflared 正在运行，但它的链接从互联网上一直没有响应`：cloudflared 有链接，但没有任何请求通过它到达 aipager。aipager 会停掉这个隧道，再启动一个新的。
+- `Mini App 现在无法使用`：aipager 不认识的原因。`aipager logs` 会显示 cloudflared 自己的消息，它的文件是 `~/.claude/aipager-cloudflared.log` 和 `~/.claude/aipager-cloudflared.err`。
+
+cloudflared 自己的消息只写进 aipager 的日志，从不发到聊天里。设置了 `MINIAPP_PUBLIC_URL` 时，aipager 不启动隧道，以上都不适用。在一台也装了 Tailscale 的电脑上，隧道无法使用期间，`/app` 会给出 Tailscale 地址。
+
 ## <a id="open-app-shows-open-this-page-from-the-telegram-app-to-sign-in"></a>打开应用时显示“请从 Telegram 应用中打开此页面来登录。”
 
 页面加载了，但 Telegram 的 Mini App SDK 脚本（生成 `initData` 的那个脚本）没有加载，所以页面没有任何东西可以用来登录，也完全不会调用 API。这条消息听起来像是你的错；实际原因出在网络上。
@@ -258,7 +306,7 @@ aipager 把它的会话保存在 `~/.claude/aipager-sessions.json` 里，以原�
 | `daemon` | aipager 正在运行，它的套接字有应答；同时显示 Telegram 的限流状态（见[上文](#the-bot-slowed-down-a-rate-limit-429)） | `aipager start` |
 | `service_installed` | 可选：服务文件存在 | `aipager service install` |
 | `service_unit_path` | 仅 Linux：*已安装的*服务的 `Environment=PATH=` 确实包含找到的 claude 程序所在的文件夹，按文本解析，因为 doctor 从机器人主人的交互式 shell 里看不到 systemd 自己的 PATH | `aipager service install --yes` |
-| `miniapp` | Mini App 开启时能否启动。**从不 FAIL**：Mini App 是可选的 | 它给出的修复方法 |
+| `miniapp` | Mini App 开启时能否启动，以及在运行中的 aipager 为它持有隧道期间，这个隧道是否正常（不正常时：原因、失败的尝试和下一次尝试；见[上文](#the-mini-app-link-isnt-working)）。**从不 FAIL**：Mini App 是可选的 | 它给出的修复方法 |
 
 `aipager doctor --json` 以同样的顺序、用这些键打印同样的检查（见[命令](commands.md#aipager-doctor---json)）。
 

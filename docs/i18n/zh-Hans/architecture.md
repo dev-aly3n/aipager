@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -112,7 +112,7 @@ flowchart LR
 | `~/.claude/aipager-sessions.json` | 会话列表的持久状态 | aipager |
 | `~/.claude/aipager-audit.jsonl` | 允许 / 拒绝 / 回答的日志 | aipager（只追加） |
 | `~/.claude/aipager-flood-state.json` | 每个聊天的 Telegram 限流历史，跨重启保留（[故障排除](troubleshooting.md#the-bot-went-quiet-flood-control)） | aipager |
-| `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告 | aipager；保留下来的隧道的看守进程和 `aipager uninstall` 也会删除这条记录 |
+| `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log`、`aipager-cloudflared.err` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告；cloudflared 最后的错误输出（权限 600），说明隧道为什么没能启动（[故障排除](troubleshooting.md#the-mini-app-link-isnt-working)） | aipager；保留下来的隧道的看守进程和 `aipager uninstall` 也会删除这条记录 |
 | `~/.claude/aipager-pending-users.json` | 在机器人不服务的群组里找过它的人，或在它服务的群组里但不是成员的人，供 `aipager config` 添加（权限 0600，每次写入都整个替换，保留最近 30 天里出现过的最新 200 人） | aipager（写入）、`aipager config`（读取） |
 | `~/aipager-users/<label>/` | 成员的默认[根文件夹](groups.md#root-folders)（权限 0700），`user` 和 `read_only` 成员在这里启动会话；`aipager uninstall` 会保留它们 | aipager（在成员第一次 `/new` 或第一次在 Mini App 里“启动会话”时创建） |
 | `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`） | Claude Code 的 hook 配置：守护进程的会话读取的那个文件，位于会话所得环境对应的 Claude Code 配置文件夹中（[故障排查](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)） | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)），当该文件是新文件时，在会话启动前还会再做一次 |
@@ -132,6 +132,7 @@ flowchart LR
 | `~/.local/state/aipager/reports.json` | 问题报告：记录的错误指纹、次数和提议状态（权限 600）；见[问题报告](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | 今天发送的问题报告（每日上限） | aipager、`aipager report` |
 | `~/.local/state/aipager/languages.json` | 语言状态（权限 600）：谁在有语言功能之前就用过 aipager、每个人最近一次被看到的 Telegram 语言、一次性的语言提议和首次接触的那行字是否已发出，以及 aipager 设置的每条机器人描述的哈希；见[语言](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Mini App 隧道的状态（启动中、正常，或不正常及原因和下次尝试的时间；从不保存地址；权限 600），供 `aipager doctor` 读取（[故障排除](troubleshooting.md#the-mini-app-link-isnt-working)） | aipager（写入，停止时删除），`aipager doctor`（读取） |
 | `~/.config/systemd/user/aipager.service`（Linux）、`~/Library/LaunchAgents/com.aipager.daemon.plist`（macOS），以及安装时被替换文件的 `.bak.<time>` 副本（在 Linux 上仅当内容不同时） | 后台服务 | `aipager service install` |
 | `~/Library/Logs/aipager.log`（macOS） | launchd 服务的日志，由 `aipager logs` 读取 | launchd，为服务写入 |
 

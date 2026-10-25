@@ -1,6 +1,6 @@
 # Architektur
 
-<!-- i18n-source: docs/architecture.md @ a7e34bee -->
+<!-- i18n-source: docs/architecture.md @ d4381f41 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../architecture.md))
 
@@ -112,7 +112,7 @@ Der aus Telegram ausgelöste Neustart verlässt sich darauf, dass dieser ganze A
 | `~/.claude/aipager-sessions.json` | Der dauerhafte Zustand der Sitzungsliste | aipager |
 | `~/.claude/aipager-audit.jsonl` | Das Log der Erlauben / Ablehnen / Antworten | aipager (wird nur angehängt) |
 | `~/.claude/aipager-flood-state.json` | Der Verlauf der Telegram-Limits jedes Chats, über Neustarts hinweg ([Fehlerbehebung](troubleshooting.md#the-bot-went-quiet-flood-control)) | aipager |
-| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log` | Der Tunnel der Mini App, den aipager hält: sein Prozess, die lokalen Ports und ein Hash seiner Adresse (nie die Adresse selbst), damit das nächste aipager ihn nach einem geplanten Neustart übernehmen kann (Rechte 600); die Warnungen von cloudflared | aipager; den Eintrag entfernen auch der Wächter des behaltenen Tunnels und `aipager uninstall` |
+| `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | Der Tunnel der Mini App, den aipager hält: sein Prozess, die lokalen Ports und ein Hash seiner Adresse (nie die Adresse selbst), damit das nächste aipager ihn nach einem geplanten Neustart übernehmen kann (Rechte 600); die Warnungen von cloudflared; die letzte Fehlerausgabe von cloudflared (Rechte 600), die sagt, warum ein Tunnel nicht starten konnte ([Fehlerbehebung](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager; den Eintrag entfernen auch der Wächter des behaltenen Tunnels und `aipager uninstall` |
 | `~/.claude/aipager-pending-users.json` | Personen, die den Bot in einer Gruppe angesprochen haben, für die er nicht zuständig ist, oder die nicht Mitglied einer Gruppe sind, für die er zuständig ist, damit `aipager config` sie hinzufügen kann (Rechte 0600, bei jedem Schreiben komplett ersetzt, die neuesten 200 der letzten 30 Tage) | aipager (schreibt), `aipager config` (liest) |
 | `~/aipager-users/<label>/` | Die standardmäßigen [Stammordner](groups.md#root-folders) der Mitglieder (Rechte 0700), in denen Mitglieder mit `user` und `read_only` ihre Sitzungen starten; `aipager uninstall` behält sie | aipager (angelegt beim ersten `/new` eines Mitglieds oder bei seiner ersten „Neue Sitzung“ in der Mini App) |
 | `~/.claude/settings.json` (oder `$CLAUDE_CONFIG_DIR/settings.json`) | Die Hook-Konfiguration von Claude Code: die Datei, die die Sitzungen des Daemons lesen, aus dem Konfigurationsordner von Claude Code für ihre Umgebung ([Fehlerbehebung](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`; bei jedem Start trägt aipager fehlende Hooks oder die Statuszeile von aipager ein und setzt `skipDangerousModePermissionPrompt` ([Sicherheit](security.md#who-decides-whether-a-tool-call-runs)), und noch einmal vor dem Start einer Sitzung, wenn diese Datei neu ist |
@@ -132,6 +132,7 @@ Der aus Telegram ausgelöste Neustart verlässt sich darauf, dass dieser ganze A
 | `~/.local/state/aipager/reports.json` | Problemberichte: die aufgezeichneten Fingerabdrücke der Fehler, ihre Anzahl und der Stand der Angebote (Rechte 600); siehe [Problemberichte](problem-reports.md#what-is-kept-on-your-machine) | aipager |
 | `~/.local/state/aipager/report-sends.json` | Die heute gesendeten Problemberichte (das Tageslimit) | aipager, `aipager report` |
 | `~/.local/state/aipager/languages.json` | Der Stand der Sprachen (Rechte 600): wer aipager schon vor den Sprachen genutzt hat, die zuletzt gesehene Telegram-Sprache jeder Person, ob das einmalige Sprachangebot und die Zeile beim ersten Kontakt schon verschickt wurden, und ein Fingerabdruck jeder Bot-Beschreibung, die aipager gesetzt hat; siehe [Sprachen](commands.md#languages) | aipager |
+| `~/.local/state/aipager/tunnel-status.json` | Der Zustand des Tunnels der Mini App (startet, funktioniert, oder funktioniert nicht, mit dem Grund und wann er es wieder versucht; nie seine Adresse; Rechte 600), für `aipager doctor` ([Fehlerbehebung](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager (geschrieben, beim Beenden entfernt), `aipager doctor` (gelesen) |
 | `~/.config/systemd/user/aipager.service` (Linux), `~/Library/LaunchAgents/com.aipager.daemon.plist` (macOS) und eine Kopie `.bak.<time>` derjenigen, die eine Installation ersetzt (auf Linux nur, wenn sie sich unterscheidet) | Der Hintergrunddienst | `aipager service install` |
 | `~/Library/Logs/aipager.log` (macOS) | Das Log des launchd-Dienstes, gelesen von `aipager logs` | launchd, für den Dienst |
 
