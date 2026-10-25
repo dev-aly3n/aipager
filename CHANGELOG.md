@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.9] - 2026-10-25
+
 ### Added
 - **Bring a session back from Claude Code's background.** When ← on an empty prompt moves a session's conversation into a Claude Code background job, the chat gets one notice, `🌙 x1 moved to Claude Code's background, and your next message brings it back here.`, with a `↩️ Bring it back now` button. Your next message waits (👀), aipager stops the background job, starts the session again on the job's conversation with its own settings, and then sends the message. While the job is still working, or the turn that moved is still running, you are asked first (`Stop and bring back` / `Leave it`), and a message sent in the first seconds after ← waits a moment before aipager decides. `/restart`, `/stop` while it works and the button do the same, and the chat says `↩️ x1 is back from Claude Code's background.` once it is back. Someone whose role cannot restart the session gets a note that the message waits. The Mini App shows such a session as "in the background" (or as needing you while its job waits on a permission prompt you can answer from the chat), with Bring it back on its page, and asks about a working job on the page itself, also for a mode switch. After a mode switch that restarts the session, `Stop and bring back` brings it back in the mode asked for, in the chat as in the Mini App. See [troubleshooting](docs/troubleshooting.md#a-session-moved-to-claude-codes-background).
 

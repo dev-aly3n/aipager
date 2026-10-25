@@ -221,7 +221,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Häng die Ordner, die Claude bearbeiten soll, unter `/workspace` ein. Der Mount von `~/.claude` bringt deine Anmeldedaten für Claude und den Verlauf deiner Unterhaltungen mit: Führ `claude` einmal auf dem Host aus, um dich anzumelden, oder melde dich mit `docker exec -it aipager claude` im Container an.
 
-Tags: `latest`, `1.3`, `1.3.8` (eines pro genauer Version und eines pro Unterversion).
+Tags: `latest`, `1.3`, `1.3.9` (eines pro genauer Version und eines pro Unterversion).
 
 ### <a id="nix"></a>Nix
 
