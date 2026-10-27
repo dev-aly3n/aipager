@@ -61,6 +61,8 @@ def _valid_name(name) -> bool:
 
 def spill_dir(base_dir: str) -> Path:
     """The spill folder beside the control socket in *base_dir*."""
+    # The real uid on purpose, not the ``_getuid`` seam: a test that fakes
+    # a foreign owner must still find the same folder.
     return Path(base_dir) / f"aipager-spill-{os.getuid()}"
 
 

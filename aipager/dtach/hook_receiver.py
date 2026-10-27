@@ -1205,8 +1205,11 @@ class HookReceiver:
         spilled = 0
         name = hook_spill.parse_pointer(data)
         if name is not None:
-            # Runs inside datagram_received: anything raised here would make
-            # asyncio close the socket, and no hook event would arrive again.
+            # Runs inside datagram_received. asyncio would keep the socket
+            # open on an exception here, but the event would be lost all the
+            # same with only an "Exception in callback" traceback for it, and
+            # any local user can send pointers. Caught, a failed read is one
+            # refusal line naming its cause, like every other refused pointer.
             try:
                 body, why = hook_spill.read_spill(_spill_base(), name)
             except Exception as e:

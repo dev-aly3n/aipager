@@ -745,7 +745,7 @@ Inbound:
   created `0600` with a random name. A datagram carries a name, never a
   path: the daemon accepts only its own name pattern, opens the file
   inside the folder without following links, accepts only a regular file
-  of its own user up to 4 MB, and deletes every file it reads or
+  of its own user up to 4 MiB, and deletes every file it reads or
   refuses. Files left by a daemon that stopped are deleted at the next
   start once older than 5 minutes. Restricted turns' file tools are kept
   off the folder, as off the `/tmp/claude-*` control files.

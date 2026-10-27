@@ -315,8 +315,10 @@ def test_spilled_pr_raises_prompt(folder, run_async):
 
 
 def test_read_error_never_raises_at_arrival(folder, run_async, monkeypatch, caplog):
-    """The pointer is resolved inside ``datagram_received``, where an
-    exception would make asyncio close the socket for good."""
+    """The pointer is resolved inside ``datagram_received``: a failed read
+    is one refusal line naming its cause, never an exception (asyncio
+    would log it as a bare "Exception in callback" traceback per datagram,
+    and the event would be lost all the same)."""
     def _boom(base, name):
         raise MemoryError("no room")
 
