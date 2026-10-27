@@ -126,6 +126,18 @@ def presses(from_raw: str, to_mode: str, *, auto_in_cycle: bool = True) -> int |
     return (cycle.index(target) - cycle.index(from_raw)) % len(cycle)
 
 
+def after_presses(from_raw: str, count: int, *, auto_in_cycle: bool = True) -> str:
+    """Claude Code's raw mode *count* Shift+Tab presses after *from_raw*,
+    along the cycle :func:`presses` counts in; "" when *from_raw* is not
+    in it."""
+    cycle = _CYCLE if auto_in_cycle else _CYCLE_NO_AUTO
+    if from_raw == "manual":
+        from_raw = "default"
+    if from_raw not in cycle:
+        return ""
+    return cycle[(cycle.index(from_raw) + count) % len(cycle)]
+
+
 def mode_from_saved(record: object) -> str:
     """A saved session's mode (the state file): a valid ``perm_mode``
     wins; an older file's ``skip_perms`` True was Auto-that-bypassed, so

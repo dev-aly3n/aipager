@@ -33,7 +33,8 @@ def test_in_place_presses_and_records_the_switch(world, run_async, start, target
     sess.perm_mode = start
     out = run_async(bot._mode_switch_core(sess, target))
     assert (out.ok, out.reason, out.in_place, out.mode) == (True, "sent", True, target)
-    press.assert_awaited_once_with("claude-jim", presses)
+    press.assert_awaited_once()
+    assert press.await_args.args == ("claude-jim", presses)
     assert sess.perm_mode == target
     assert sess.mode_switch is not None and sess.mode_switch.target == target
     bot._perms_switch_core.assert_not_awaited()
@@ -44,7 +45,8 @@ def test_counts_from_the_mode_claude_code_reported(world, run_async):
     sess.perm_mode = "ask"
     sess.reported_mode = "plan"
     run_async(bot._mode_switch_core(sess, "auto"))
-    press.assert_awaited_once_with("claude-jim", 1)
+    press.assert_awaited_once()
+    assert press.await_args.args == ("claude-jim", 1)
 
 
 def test_works_while_a_turn_runs(world, run_async):
@@ -191,7 +193,7 @@ def test_already_never_widens(world, run_async):
 def test_the_switch_is_stamped_after_the_presses(world, run_async):
     bot, sess, press = world
 
-    async def _slow_press(name, count):
+    async def _slow_press(name, count, **_kw):
         # The presses waited for the write lock: the stamp taken before
         # them is old by now.
         sess.mode_switch.sent_at = -100.0
@@ -209,7 +211,7 @@ def test_a_failed_write_leaves_a_newer_state_alone(world, run_async):
     bot, sess, press = world
     sess.perm_mode = "ask"
 
-    async def _relaunched_meanwhile(name, count):
+    async def _relaunched_meanwhile(name, count, **_kw):
         # A Full access restart ran while the presses waited for the lock.
         sess.perm_mode = "full"
         sess.reset_mode_tracking()

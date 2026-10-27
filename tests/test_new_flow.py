@@ -757,7 +757,8 @@ def test_switch_to_auto_needs_no_admin_and_no_restart(wbot, mk_cb, run_async):
     with patch("aipager.dtach.inject.press_mode_cycle", AsyncMock(return_value=True)) as press:
         run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_auto"))
 
-    press.assert_awaited_once_with("claude-dev", 3)
+    press.assert_awaited_once()
+    assert press.await_args.args == ("claude-dev", 3)
     assert sess.perm_mode == "auto" and sess.mode_switch is not None
     assert sess.mode_switch.reply == (CHAT, 900, "ready")
     assert "🤖 Auto mode" in _last_edit(bot)["text"]
