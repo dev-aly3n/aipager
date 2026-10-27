@@ -91,6 +91,79 @@ def test_detect_rtl_only_digits_is_false():
     assert detect_rtl("1234567890") is False
 
 
+# The right-to-left letters: Hebrew, Arabic, Arabic Supplement, Arabic
+# Extended-A, and the Hebrew and Arabic presentation forms (both ends of
+# U+FB1D-U+FDFF and U+FE70-U+FEFF).
+RTL_SAMPLES = {
+    "persian": "\u0633\u0644\u0627\u0645 \u062f\u0646\u06cc\u0627",
+    "arabic": "\u0645\u0631\u062d\u0628\u0627 \u0628\u0627\u0644\u0639\u0627\u0644\u0645",
+    "hebrew": "\u05e9\u05dc\u05d5\u05dd \u05e2\u05d5\u05dc\u05dd",
+    "arabic-supplement": "\u0750\u077f",
+    "arabic-extended-a": "\u08a0\u08ff",
+    "hebrew-presentation-fb1d": "\ufb1d\ufb1d",
+    "arabic-presentation-a-fdff": "\ufdfc\ufdff",
+    "arabic-presentation-b-fe70": "\ufe70\ufefc",
+    "arabic-presentation-b-feff": "\ufe8d\ufeff",
+}
+
+#: Left to right or no direction: Chinese, Japanese, Korean, box drawing
+#: (an editor's decomposed U+FB1D once made U+05B4-U+FDFF one RTL range).
+NOT_RTL_SAMPLES = {
+    "chinese": "\u4f60\u597d\uff0c\u4e16\u754c\u3002\u8fd9\u662f\u4e00\u4e2a\u6d4b\u8bd5",
+    "japanese": "\u3053\u3093\u306b\u3061\u306f\u4e16\u754c\u3002\u30c6\u30b9\u30c8\u3067\u3059",
+    "korean": "\uc548\ub155\ud558\uc138\uc694",
+    "box-drawing": "\u250c\u2500\u2500\u252c\u2500\u2500\u2510\n\u2502 a\u2502 b\u2502\n\u2514\u2500\u2500\u2534\u2500\u2500\u2518",
+    "tree": "\u251c\u2500\u2500 src\n\u2502   \u2514\u2500\u2500 main.py\n\u2514\u2500\u2500 README.md",
+    "latin": "hello world",
+    "digits": "1234567890",
+    "arrows": "\u2190\u2192\u21d2\u2026\u3000",
+}
+
+
+@pytest.mark.parametrize("name", sorted(RTL_SAMPLES))
+def test_rtl_scripts_are_right_to_left(name):
+    text = RTL_SAMPLES[name]
+    assert rm._RTL_RE.search(text)
+    assert detect_rtl(text) is True
+
+
+@pytest.mark.parametrize("name", sorted(NOT_RTL_SAMPLES))
+def test_cjk_box_drawing_latin_and_digits_are_not_right_to_left(name):
+    text = NOT_RTL_SAMPLES[name]
+    assert rm._RTL_RE.findall(text) == []
+    assert detect_rtl(text) is False
+
+
+def test_rtl_class_has_exactly_the_documented_ranges():
+    inside = {cp for cp in range(0x110000) if rm._RTL_RE.match(chr(cp))}
+    want = set()
+    for lo, hi in ((0x0590, 0x05FF), (0x0600, 0x06FF), (0x0750, 0x077F),
+                   (0x08A0, 0x08FF), (0xFB1D, 0xFDFF), (0xFE70, 0xFEFF)):
+        want.update(range(lo, hi + 1))
+    assert inside == want
+
+
+def test_rtl_class_survives_unicode_normalization():
+    """Written in escapes, so no editor's normalization can split a
+    character and stretch a range (U+FB1D has no NFC composition)."""
+    import unicodedata
+    pattern = rm._RTL_RE.pattern
+    assert pattern.isascii()
+    for form in ("NFC", "NFD", "NFKC", "NFKD"):
+        assert unicodedata.normalize(form, pattern) == pattern
+
+
+def test_english_box_table_answer_is_left_to_right():
+    table = "\n".join(
+        ["\u250c" + "\u2500" * 30 + "\u252c" + "\u2500" * 30 + "\u2510"]
+        + ["\u2502 row %02d" % i + " " * 23 + "\u2502 ok" + " " * 27 + "\u2502"
+           for i in range(20)]
+        + ["\u2514" + "\u2500" * 30 + "\u2534" + "\u2500" * 30 + "\u2518"])
+    answer = "Here is the result:\n\n```\n" + table + "\n```\n"
+    assert detect_rtl(answer) is False
+    assert rm.message_rtl(True, answer) is False
+
+
 # ── send_rich_message: success ────────────────────────────────────────────────
 
 def test_send_rich_message_ok_returns_result(run_async, monkeypatch):

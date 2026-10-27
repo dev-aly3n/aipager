@@ -32,7 +32,7 @@
  "aipager/bot/update_flow.py": 7,
  "aipager/bot/voice.py": 1,
  "aipager/claude_bootstrap.py": 6,
- "aipager/claude_launch.py": 3,
+ "aipager/claude_launch.py": 4,
  "aipager/claude_resolve.py": 31,
  "aipager/cli/__init__.py": 57,
  "aipager/cli/daemon.py": 31,

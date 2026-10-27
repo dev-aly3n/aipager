@@ -9,9 +9,11 @@ than one it must load first. aipager sets it on every launch (the daemon's
 every file in the PreToolUse hook (``aipager.send_check``) and delivers it
 to the session's chat (``aipager.bot.outbox``).
 
-The system prompt every launch appends starts with the session's name and,
-for a Claude Code that has the tool (or one whose version is unknown),
-tells Claude it can send files. Claude-facing English, pinned in
+The system prompt every launch appends starts with the session's name,
+then a note on how Telegram shows Claude's answers (rich Markdown, native
+tables, no drawn ones) that, for a Claude Code that has the tool (or one
+whose version is unknown), also tells Claude to send images and files
+with it. Claude-facing English, pinned in
 ``tests/test_claude_facing_golden.py``.
 
 Since 2.1.267 Claude Code records a conversation's system prompt on its first
@@ -43,11 +45,30 @@ MIN_SNAPSHOT_FLAG_VERSION = (2, 1, 259)
 #: The flag and value that render the system prompt fresh on every request.
 SNAPSHOT_OFF_ARGS = ("--system-prompt-snapshot", "off")
 
-#: What Claude reads about the tool (no em dashes; English only).
-SEND_FILES_NOTE = (
-    "You can send files and images (screenshots, PDFs, videos, anything) to the "
-    "person in Telegram with the SendUserFile tool; if it is not in your tool list, "
-    "load it with ToolSearch. Never say you cannot send files."
+#: What Claude reads about Telegram, for a Claude Code that has SendUserFile
+#: (no em dashes; English only; never translated).
+TELEGRAM_NOTE = (
+    "Your answers are shown in Telegram as rich text. Markdown renders (headings, "
+    "lists, links, code blocks). When a table helps, use a Markdown table, or an "
+    "HTML <table> for a caption or merged cells: Telegram draws it natively and it "
+    "scrolls sideways. Never draw tables or diagrams with box characters or spaces "
+    "in a code block; Mermaid is not drawn. Images in Markdown are not shown: send "
+    "images and files (screenshots, PDFs, anything) with the SendUserFile tool; if "
+    "it is not in your tool list, load it with ToolSearch, and never say you cannot "
+    "send files. A table over 20 columns or a few hundred rows goes as a CSV file "
+    "instead. Side details can fold in <details><summary>\u2026</summary>\u2026</details>."
+)
+
+#: The same note for a Claude Code without SendUserFile: no sentence about
+#: the tool, and a big table is split instead of sent as a file.
+TELEGRAM_NOTE_NO_SEND = (
+    "Your answers are shown in Telegram as rich text. Markdown renders (headings, "
+    "lists, links, code blocks). When a table helps, use a Markdown table, or an "
+    "HTML <table> for a caption or merged cells: Telegram draws it natively and it "
+    "scrolls sideways. Never draw tables or diagrams with box characters or spaces "
+    "in a code block; Mermaid is not drawn. A table over 20 columns or a few "
+    "hundred rows: split it. Side details can fold in "
+    "<details><summary>\u2026</summary>\u2026</details>."
 )
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)\.(\d+)")
@@ -61,7 +82,7 @@ def _name_prompt(name: str) -> str:
 
 def has_send_tool(claude_version: str | None) -> bool:
     """Whether a Claude Code of *claude_version* offers SendUserFile.
-    Unknown or unreadable: assumed yes (the note is harmless there)."""
+    Unknown or unreadable: assumed yes (the send sentence is harmless there)."""
     m = _VERSION_RE.match(claude_version or "")
     if not m:
         return True
@@ -80,13 +101,16 @@ def snapshot_off_args(claude_version: str | None) -> tuple[str, ...]:
     return SNAPSHOT_OFF_ARGS
 
 
+def telegram_note(claude_version: str | None) -> str:
+    """The Telegram note for a Claude Code of *claude_version*: the one
+    that sends files with SendUserFile when it has the tool."""
+    return TELEGRAM_NOTE if has_send_tool(claude_version) else TELEGRAM_NOTE_NO_SEND
+
+
 def base_system_prompt(name: str, claude_version: str | None) -> str:
-    """The prompt every launch appends: the session's name, then the send
-    note when this Claude Code has the tool."""
-    prompt = _name_prompt(name)
-    if has_send_tool(claude_version):
-        prompt = f"{prompt}\n\n{SEND_FILES_NOTE}"
-    return prompt
+    """The prompt every launch appends: the session's name, then the
+    Telegram note (:func:`telegram_note`)."""
+    return f"{_name_prompt(name)}\n\n{telegram_note(claude_version)}"
 
 
 # -- why a session ended (the exit record) -----------------------------------

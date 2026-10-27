@@ -32,7 +32,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 GOLDEN = Path(__file__).parent / "golden" / "claude_facing.json"
-#: What Claude reads about files it sends (SendUserFile), kept apart so
+#: What Claude reads about files it sends (SendUserFile) and the Telegram
+#: note every launch appends, kept apart so
 #: the corpus above stays byte-identical to the feature bases that pin it
 #: (tests/integration/*: answer-agents-status-line, multilingual-phase-5,
 #: three-modes-auto-default).
@@ -164,7 +165,8 @@ def send_corpus() -> dict[str, str]:
     out["pretool.soft_deny"] = enforce.soft_deny_json(
         sc.refusal_reason([sc.Refusal("a.png", "missing", sc._why("missing"))]))
     from aipager import claude_launch
-    out["send_files_note"] = claude_launch.SEND_FILES_NOTE
+    out["telegram_note"] = claude_launch.telegram_note("2.1.302")
+    out["telegram_note.no_send"] = claude_launch.telegram_note("2.1.300")
     out["base_prompt.new"] = claude_launch.base_system_prompt("x1", "2.1.302")
     out["base_prompt.old"] = claude_launch.base_system_prompt("x1", "2.1.300")
     return out

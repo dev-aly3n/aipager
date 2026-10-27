@@ -86,10 +86,15 @@ _rate_limiter = None
 # asyncio.sleep, which is the global module (see CLAUDE.md).
 _sleep = asyncio.sleep
 
-# RTL / LTR letter ranges (Unicode script blocks).
+# RTL / LTR letter ranges (Unicode script blocks): Hebrew, Arabic, Arabic
+# Supplement, Arabic Extended-A, and the Hebrew and Arabic presentation
+# forms (U+FB1D-U+FDFF, U+FE70-U+FEFF). Written as escapes, never as the
+# characters themselves: U+FB1D has a canonical decomposition that NFC does
+# not recompose, so an editor once turned it into U+05D9 U+05B4 and the
+# class ran from U+05B4 to U+FDFF, counting CJK and box drawing as RTL.
 _RTL_RE = re.compile(
-    r"[֐-׿؀-ۿݐ-ݿ"
-    r"ࢠ-ࣿיִ-﷿ﹰ-﻿]"
+    r"[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF"
+    r"\uFB1D-\uFDFF\uFE70-\uFEFF]"
 )
 _LTR_RE = re.compile(r"[A-Za-z]")
 

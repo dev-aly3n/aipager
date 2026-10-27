@@ -707,27 +707,28 @@ def test_launch_exports_attachments_by_path(tmp_path, monkeypatch, run_async):
     assert bash_cmd.index("CLAUDE_CODE_ATTACHMENTS_BY_PATH") < bash_cmd.index("/opt/claude")
 
 
-def test_personal_mode_prompt_carries_the_send_note(tmp_path, monkeypatch, run_async):
-    from aipager.claude_launch import SEND_FILES_NOTE
+def test_personal_mode_prompt_carries_the_telegram_note(tmp_path, monkeypatch, run_async):
+    from aipager.claude_launch import TELEGRAM_NOTE
     prompt = _prompt_of(_send_launch_cmd(tmp_path, monkeypatch, run_async))
     assert prompt == ('Your session name is "jim". When users address you by this name, '
                       'respond naturally -- it is your name in this session.\n\n'
-                      + SEND_FILES_NOTE)
+                      + TELEGRAM_NOTE)
 
 
 def test_scoped_prompt_has_the_note_once_before_session_md(tmp_path, monkeypatch,
                                                            run_async):
-    from aipager.claude_launch import SEND_FILES_NOTE
+    from aipager.claude_launch import TELEGRAM_NOTE
     prompt = _prompt_of(_send_launch_cmd(tmp_path, monkeypatch, run_async,
                                     extra="# SESSION.md\nrules"))
-    assert prompt.count(SEND_FILES_NOTE) == 1
-    assert prompt.index(SEND_FILES_NOTE) < prompt.index("# SESSION.md")
+    assert prompt.count(TELEGRAM_NOTE) == 1
+    assert prompt.index(TELEGRAM_NOTE) < prompt.index("# SESSION.md")
 
 
-def test_an_old_claude_gets_no_note(tmp_path, monkeypatch, run_async):
-    from aipager.claude_launch import SEND_FILES_NOTE
+def test_an_old_claude_gets_the_no_send_note(tmp_path, monkeypatch, run_async):
+    from aipager.claude_launch import TELEGRAM_NOTE, TELEGRAM_NOTE_NO_SEND
     bash_cmd = _send_launch_cmd(tmp_path, monkeypatch, run_async, version="2.1.299")
-    assert SEND_FILES_NOTE not in _prompt_of(bash_cmd)
+    assert TELEGRAM_NOTE not in _prompt_of(bash_cmd)
+    assert _prompt_of(bash_cmd).endswith("\n\n" + TELEGRAM_NOTE_NO_SEND)
     # The switch is set whatever the version: it does nothing on an older one.
     assert "export CLAUDE_CODE_ATTACHMENTS_BY_PATH=1; " in bash_cmd
 

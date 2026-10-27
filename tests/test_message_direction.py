@@ -348,6 +348,27 @@ def test_an_answer_in_the_chats_script_reads_right_to_left(code, mk_bot, run_asy
     assert sess.agents_lines[0]["is_rtl"] is True
 
 
+#: An English answer that is mostly a box-drawn table, and a Chinese one:
+#: left to right (box drawing and CJK once counted as right-to-left).
+BOX_TABLE_ANSWER = "Here is the result:\n\n```\n" + "\n".join(
+    ["\u250c" + "\u2500" * 24 + "\u252c" + "\u2500" * 24 + "\u2510"]
+    + ["\u2502 row %02d" % i + " " * 17 + "\u2502 ok" + " " * 21 + "\u2502"
+       for i in range(16)]
+    + ["\u2514" + "\u2500" * 24 + "\u2534" + "\u2500" * 24 + "\u2518"]) + "\n```"
+CHINESE_ANSWER = "\u4f60\u597d\uff0c\u8fd9\u662f\u7ed3\u679c\u3002"
+
+
+@pytest.mark.parametrize("code", ["en", "fa"])
+@pytest.mark.parametrize("answer", ["box-table", "chinese"])
+def test_a_box_table_or_cjk_answer_is_sent_left_to_right(code, answer, mk_bot, run_async,
+                                                         monkeypatch):
+    env = surf.Env(mk_bot, run_async, monkeypatch, code)
+    env.store(surf.CHAT)
+    summary = BOX_TABLE_ANSWER if answer == "box-table" else CHINESE_ANSWER
+    _text, is_rtl, _ = _answer(env, summary, prompt=ENGLISH)
+    assert is_rtl is False
+
+
 @pytest.mark.parametrize("code", RTL_LANGS)
 def test_a_letterless_answer_follows_the_prompt(code, mk_bot, run_async, monkeypatch):
     env = surf.Env(mk_bot, run_async, monkeypatch, code)
