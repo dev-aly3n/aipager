@@ -1534,6 +1534,21 @@ def _isolate_typing_gate(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_hook_spill(tmp_path, monkeypatch):
+    """The hook spill folder (roadmap 8.138), normally beside the daemon's
+    control socket in $XDG_RUNTIME_DIR or /tmp, goes to ``tmp_path/spill``
+    for every test, on the hook's side and the daemon's alike: a real one
+    holds a real session's events. Not created here; a test creates it
+    with ``hook_spill.ensure_dir`` or ``HookReceiver.start()``."""
+    from aipager.dtach import hook_spill
+
+    base = tmp_path / "spill"
+    real = hook_spill.spill_dir
+    monkeypatch.setattr(hook_spill, "spill_dir", lambda _base_dir: base)
+    return real
+
+
+@pytest.fixture(autouse=True)
 def _never_clamp_the_test_process(monkeypatch):
     """Keep a hook's ``RLIMIT_AS`` clamp inside the hook, out of pytest.
 

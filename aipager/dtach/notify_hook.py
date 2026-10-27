@@ -10,6 +10,7 @@ piggyback accurate token data on every PreToolUse event. The statusLine
 fires right before PreToolUse, so the file is always current.
 """
 
+import errno
 import json
 import os
 import re
@@ -126,6 +127,84 @@ def _debug(msg: str) -> None:
     """
     if _DEBUG:
         print(f"[aipager-hook] {msg}", file=sys.stderr)
+
+
+# Big events (roadmap 8.138). An event above this is never sent inline: it
+# keeps every inline datagram under the daemon's asyncio receive size
+# (256 KiB), past which a datagram arrives cut short. Below it, an event
+# the OS refuses for its size (EMSGSIZE; ENOBUFS on macOS and BSD, where
+# the daemon's receive buffer is full or too small) spills too: see
+# aipager/dtach/hook_spill.py.
+_INLINE_MAX_BYTES = 240 * 1024
+_SPILL_ERRNOS = frozenset({errno.EMSGSIZE, errno.ENOBUFS})
+# macOS gives a Unix datagram socket a 2 KiB send limit by default
+# (net.local.dgram.maxdgram) that one SO_SNDBUF raises, up to
+# kern.ipc.maxsockbuf, with no privilege. Linux's default limit is already
+# about 208 KiB, so it is left alone there.
+_RAISE_SNDBUF = not sys.platform.startswith("linux")
+
+
+def _dgram_socket() -> socket.socket:
+    """A fresh socket for one send (a seam for tests)."""
+    return socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+
+
+def _send_datagram(data: bytes, path: str) -> None:
+    """Send *data* as one datagram to *path*; raises OSError on failure."""
+    s = _dgram_socket()
+    try:
+        if _RAISE_SNDBUF:
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, _INLINE_MAX_BYTES)
+            except OSError:
+                pass
+        s.sendto(data, path)
+    finally:
+        s.close()
+
+
+def _forward(data: bytes) -> bool:
+    """Send one encoded event to the daemon: inline when it fits, else
+    through a spill file and a pointer datagram. True only when the inline
+    datagram or the pointer was sent (the sendto itself, not delivery)."""
+    if len(data) <= _INLINE_MAX_BYTES:
+        try:
+            _send_datagram(data, SOCKET_PATH)
+            return True
+        except OSError as e:
+            if e.errno not in _SPILL_ERRNOS:
+                _debug(f"daemon socket {SOCKET_PATH} unreachable: {e}")
+                # daemon not running — session_monitor catches it
+                return False
+            _debug(f"event of {len(data)} bytes refused inline ({e}); spilling")
+    return _spill(data)
+
+
+def _spill(data: bytes) -> bool:
+    """Write *data* to a spill file and send its pointer. The file is
+    removed again whenever the pointer was not sent."""
+    base = os.path.dirname(SOCKET_PATH) or "/tmp"
+    name = None
+    sent = False
+    hook_spill = None
+    try:
+        from aipager.dtach import hook_spill
+
+        name = hook_spill.write_spill(base, data)
+        if name is None:
+            _debug(f"event of {len(data)} bytes not spilled "
+                   "(over the cap, or no usable spill folder)")
+            return False
+        _send_datagram(hook_spill.pointer(name), SOCKET_PATH)
+        sent = True
+    except MemoryError:
+        raise
+    except Exception as e:
+        _debug(f"spilled event not sent: {e}")
+    finally:
+        if name is not None and not sent and hook_spill is not None:
+            hook_spill.remove_spill(base, name)
+    return sent
 
 
 def _read_statusline_tokens(session: str) -> dict | None:
@@ -907,26 +986,20 @@ def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
         if tokens:
             data["sl_tokens"] = tokens
 
-    # Fire-and-forget UDP datagram. Returns whether the sendto() itself
+    # Fire-and-forget datagram. Returns whether the sendto() itself
     # succeeded (a listener existed at SOCKET_PATH) — NOT delivery/
     # processing confirmation. Every pre-existing call site below ignores
     # this; the new PermissionRequest branch is the only caller that
     # reads it, to skip the reply wait outright when the daemon is
-    # provably down rather than blocking for the full deadline.
+    # provably down rather than blocking for the full deadline. An event
+    # too big for one datagram travels through a spill file, and then
+    # this says whether its pointer datagram was sent (_forward).
     def _udp(payload: dict) -> bool:
         if bg_job:
             # Every datagram of a linked worker says which job it came
             # from: the daemon drops one whose job is not linked.
             payload["bg_job"] = bg_job
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            s.sendto(json.dumps(payload).encode(), SOCKET_PATH)
-            s.close()
-            return True
-        except OSError as e:
-            _debug(f"daemon socket {SOCKET_PATH} unreachable: {e}")
-            # daemon not running — session_monitor catches it
-            return False
+        return _forward(json.dumps(payload).encode())
 
     hook_event_name = data.get("hook_event_name")
 

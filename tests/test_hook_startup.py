@@ -286,3 +286,30 @@ def test_an_unknown_name_still_fails():
         dtach.no_such_name
     with pytest.raises(ImportError):
         exec("from aipager.dtach import no_such_name", {})
+
+
+# ---- big events (roadmap 8.138) ----------------------------------------------------------
+
+def test_small_event_no_spill_import(tmp_path):
+    """An event that fits one datagram goes inline: the spill module is
+    never imported and no spill folder appears."""
+    root = tmp_path
+    (root / "home").mkdir()
+    daemon = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    daemon.bind(str(root / "aipager.sock"))
+    try:
+        payload = {"hook_event_name": "Notification", "session_id": "s-lean",
+                   "notification_type": "idle_prompt", "message": "m" * 50_000}
+        proc = subprocess.run([sys.executable, "-c", _RUN_AND_DUMP.format(module="notify_hook")],
+                              input=json.dumps(payload), capture_output=True, text=True,
+                              env=_env(root), cwd=str(root), timeout=60)
+        got = _received(daemon)
+    finally:
+        daemon.close()
+    assert proc.returncode == 0, proc.stderr
+    line = [x for x in proc.stdout.splitlines() if x.startswith("MODS=")][-1]
+    loaded = json.loads(line[len("MODS="):])
+    assert "aipager.dtach.notify_hook" in loaded          # not vacuous
+    assert "aipager.dtach.hook_spill" not in loaded
+    assert [g["message"] for g in got] == [payload["message"]]
+    assert not list(root.glob("aipager-spill-*"))
