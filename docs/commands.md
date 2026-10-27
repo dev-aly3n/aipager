@@ -400,9 +400,13 @@ waits up to 20 seconds for it. A prompt that came before the busy
 message (it is then sent as its own message, with Allow and Deny only)
 is answered the same way.
 Once that wait is over, the buttons type the answer into Claude Code's
-own dialog instead; Deny then picks the dialog's last row ("No, and tell
-Claude what to do differently"), which ends Claude's turn like Stop, and
-the card says `🚫 jim · Denied`.
+own dialog instead; Deny then presses Escape ("No, and tell Claude what
+to do differently"), which ends Claude's turn like Stop, and the card
+says `🚫 jim · Denied`. On the question Claude Code asks in Auto mode
+before the first read outside the project, a late Allow is not typed:
+its Enter would pick "Yes, and keep allowing any reads outside the
+working directories", so the tap says to answer it in the terminal
+(Deny still works).
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:

@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} está trabajando. Cambia cuando termine o usa /mode."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} no está haciendo nada ahora"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Abre el chat para responder"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "Escrito ahora, «Permitir» seguiría permitiendo cualquier lectura fuera del proyecto, así que responde esta en la terminal."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Esta tarjeta es de {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Esta tarjeta es de {owner}. Envía {command} para tener la tuya."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "El Modo Acceso total es solo para admins."}

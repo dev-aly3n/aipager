@@ -324,6 +324,14 @@ PROMPT_SETTLING = Msg(
     note="Pop-up: Claude just ended its turn while an agent's prompt is still open; "
          "for a moment the tap cannot be matched to it, nothing was typed and the "
          "buttons stay")
+OUTSIDE_READS_TYPED_ALLOW = Msg(
+    "toast.outside_reads_typed_allow",
+    "An Allow typed now would keep allowing every read outside the project, so answer "
+    "this one in the terminal.",
+    note="Pop-up: the permission prompt's own wait is over, so an answer is typed into "
+         "Claude Code's terminal; on its question before the first read outside the "
+         "project, a typed Allow would pick 'keep allowing any reads outside', so nothing "
+         "was typed (Deny still works)")
 PROMPT_ORDER_UNKNOWN = Msg(
     "toast.prompt_order_unknown",
     "aipager can't tell which prompt Claude Code is showing first, so answer this one "
@@ -2170,6 +2178,8 @@ class CallbackDispatchMixin:
             else:
                 if await self._keys_refused(query, person, sess, perm):
                     return
+                if await self._typed_allow_refused(query, person, sess, perm):
+                    return
                 via = "keystroke_fallback"
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow_always":
@@ -2222,6 +2232,8 @@ class CallbackDispatchMixin:
                              perm_info.get("always_available"))
                     report_store.record_counter("allow_always_degraded")
             elif await self._keys_refused(query, person, sess, perm):
+                return
+            elif await self._typed_allow_refused(query, person, sess, perm):
                 return
             elif perm_info.get("always_available") is True:
                 via = "keystroke_fallback"
@@ -2448,6 +2460,21 @@ class CallbackDispatchMixin:
                     answered_at=answered_at)
         else:
             await self._safe_answer(query, person.text(SEND_FAILED, session=session_name))
+
+    async def _typed_allow_refused(self, query, person, sess, perm) -> bool:
+        """Refuse an Allow that would be typed into Claude Code's Auto-mode
+        question before the first read outside the working directories
+        (roadmap 8.142): its first row, which Enter takes, keeps allowing
+        every such read from then on, much wider than the one Allow tapped.
+        Nothing is typed and the buttons stay (a Deny still types Escape,
+        "No, and ask again next time"). True when refused."""
+        info = perm.get("tool_info") if isinstance(perm, dict) else None
+        if not (isinstance(info, dict) and info.get("outside_reads_question")):
+            return False
+        log.info("[%s] typed Allow refused: it would answer the outside-reads "
+                 "question with \"keep allowing\"", sess.label)
+        await self._safe_answer(query, person.text(OUTSIDE_READS_TYPED_ALLOW))
+        return True
 
     async def _keys_refused(self, query, person, sess, perm) -> bool:
         """Refuse a tap whose keys could land in another dialog (roadmap

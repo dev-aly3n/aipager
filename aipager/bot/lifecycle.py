@@ -1095,6 +1095,9 @@ class LifecycleMixin:
                              always_available=perm["always_available"],
                              standing_rule_suggestion=perm["standing_rule_suggestion"],
                              detail=bidi_guard.reveal(perm["detail"]))
+            if perm.get("outside_reads_question") is True:
+                # A typed Allow must still not answer it (roadmap 8.142).
+                tool_info["outside_reads_question"] = True
         # Its message holds an open prompt again (8.102).
         sess.reopen_prompt_surface(rec["card_msg_id"] if rec["kind"] == "inline"
                                    else rec["msg_id"])

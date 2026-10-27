@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} работает. Смени, когда она закончит, или используй /mode."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} сейчас ничего не делает"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Открой чат, чтобы ответить"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "Если сейчас ввести «Разрешить», будут разрешены все чтения вне проекта, поэтому ответь на этот запрос в терминале."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Это карточка {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Это карточка {owner}. Отправь {command}, чтобы получить свою."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "Режим «Полный доступ» только для админов."}

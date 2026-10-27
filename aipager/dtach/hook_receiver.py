@@ -591,6 +591,23 @@ def _read_outside_working_dir(tool_name: str, tool_input: object, cwd: str) -> b
     return _outside_working_dir(path, cwd)
 
 
+def _may_be_outside_reads_question(tool_name: str, tool_input: object, cwd: str,
+                                   mode: object) -> bool:
+    """Whether a prompt for this call may be Claude Code's Auto-mode question
+    before the first read outside the working directories, whose first row
+    keeps allowing every such read: a typed Allow (Enter) must not answer
+    it (roadmap 8.142). Only Ask mode is known to draw the ordinary dialog
+    there (Full access draws none); any other or unknown mode counts as
+    Auto. A read whose input is not known (the Notification fallback) may
+    be outside."""
+    if perm_modes.from_claude(mode) in (perm_modes.ASK, perm_modes.FULL):
+        return False
+    if not tool_input and (tool_name in _OUTSIDE_READ_TOOLS
+                           or tool_name == send_check.SEND_TOOL):
+        return True
+    return _read_outside_working_dir(tool_name, tool_input, cwd)
+
+
 def _outside_working_dir(path: object, cwd: str) -> bool:
     """True when a file ``path`` is NOT under the session's working
     directory — lexically (no symlink resolution: Claude compares the
@@ -1308,7 +1325,8 @@ class HookReceiver:
                 # one (see _read_outside_working_dir) — its slot 2 is a
                 # persistent BLOCK, and the hook cannot tell the two
                 # dialogs apart. Never offer Allow-always for it.
-                if _read_outside_working_dir(tool_name, tool_input, sess_ref.cwd):
+                outside_read = _read_outside_working_dir(tool_name, tool_input, sess_ref.cwd)
+                if outside_read:
                     always = False
                     standing_rule_suggestion = None
                 tool_info = {
@@ -1320,6 +1338,9 @@ class HookReceiver:
                     "tool_use_id": _permission_tool_use_id(
                         msg, tool_name, sess_ref),
                 }
+                if _may_be_outside_reads_question(tool_name, tool_input, sess_ref.cwd,
+                                                  msg.get("permission_mode")):
+                    tool_info["outside_reads_question"] = True
                 # The whole input's digest: only the ending call with the
                 # very same input closes this prompt (_finishes_open_prompt).
                 digest = _input_digest(tool_input)
@@ -1340,7 +1361,10 @@ class HookReceiver:
                 reply_request_id = msg.get("aipager_request_id")
                 if (isinstance(reply_addr, str) and reply_addr
                         and isinstance(reply_request_id, str) and reply_request_id):
-                    hook_reply_ctx = {"addr": reply_addr, "request_id": reply_request_id}
+                    # The session: an answer sent through it is stamped
+                    # (hook_reply.last_answer_at, roadmap 8.142).
+                    hook_reply_ctx = {"addr": reply_addr, "request_id": reply_request_id,
+                                      "session": session_name}
                 else:
                     hook_reply_ctx = None
                 context = {
@@ -1430,6 +1454,10 @@ class HookReceiver:
             # transcript goes by the prompt's time alone.
             if tool_info:
                 tool_info["tool_use_id"] = ""
+                if _may_be_outside_reads_question(
+                        tool_info.get("name", ""), tool_info.get("input"),
+                        sess_ref.cwd, msg.get("permission_mode")):
+                    tool_info["outside_reads_question"] = True
                 # Whose dialog it is, so another agent's tool call does
                 # not close it (an agent's own prompt: its id).
                 if msg.get("agent_id"):

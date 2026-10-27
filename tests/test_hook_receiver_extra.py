@@ -754,8 +754,10 @@ def test_hook_reply_present_when_both_keys_present(receiver, run_async):
                   aipager_reply_addr="/run/user/1000/aipager-reply-abc.sock",
                   aipager_request_id="abc")
     _, _, ctx = notify_fn.await_args.args
+    # With the session: an answer sent through it is stamped (roadmap 8.142).
     assert ctx["hook_reply"] == {
         "addr": "/run/user/1000/aipager-reply-abc.sock", "request_id": "abc",
+        "session": "claude-jim",
     }
 
 

@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} arbeitet. Wechsle, wenn sie fertig ist, oder nutze /mode."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} macht gerade nichts"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Öffne den Chat, um zu antworten"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "Jetzt getippt, würde „Erlauben“ jedes Lesen außerhalb des Projekts dauerhaft erlauben. Beantworte diese Anfrage deshalb im Terminal."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Das ist die Karte von {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Das ist die Karte von {owner}. Sende {command} für deine eigene."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "Der Vollzugriff-Modus ist nur für Admins."}
