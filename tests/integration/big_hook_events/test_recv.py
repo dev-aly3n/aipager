@@ -18,6 +18,8 @@ from aipager.dtach import hook_receiver, hook_spill
 from aipager.state import SessionRegistry, Status
 from tests.integration.big_hook_events._kit import (
     SECRET,
+    bounded,
+    fifos_in,
     foreign_fstat,
     make_receiver,
     names,
@@ -240,6 +242,13 @@ def _case(kind, tmp_path, monkeypatch):
     raise AssertionError(kind)
 
 
+def _arrive(recv, ptr, tmp_path):
+    """The datagram callback under a deadline: a FIFO named by a pointer must
+    never block it; if it does, the FIFO is released and the test fails."""
+    return bounded(recv._on_datagram_counted, ptr,
+                   fifos=lambda: fifos_in(spill(tmp_path), tmp_path))
+
+
 KINDS = ["dotdot", "abs", "badname", "noname", "intname", "missing", "symlink",
          "foreign", "overcap", "fifo", "loosedir", "foreigndir", "nodir"]
 
@@ -248,7 +257,7 @@ KINDS = ["dotdot", "abs", "badname", "noname", "intname", "missing", "symlink",
 def test_refused_not_handled(tmp_path, monkeypatch, run_async, kind):
     recv, got = make_receiver(monkeypatch, tmp_path)
     ptr = _case(kind, tmp_path, monkeypatch)
-    run_async(_await(recv._on_datagram_counted(ptr)))
+    run_async(_await(_arrive(recv, ptr, tmp_path)))
     assert got == []
 
 
@@ -257,7 +266,7 @@ def test_refused_warns(tmp_path, monkeypatch, run_async, caplog, kind):
     caplog.set_level(logging.DEBUG, logger=LOG)
     recv, _got = make_receiver(monkeypatch, tmp_path)
     ptr = _case(kind, tmp_path, monkeypatch)
-    run_async(_await(recv._on_datagram_counted(ptr)))
+    run_async(_await(_arrive(recv, ptr, tmp_path)))
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
@@ -266,7 +275,7 @@ def test_refused_no_content(tmp_path, monkeypatch, run_async, caplog, kind):
     caplog.set_level(logging.DEBUG)
     recv, _got = make_receiver(monkeypatch, tmp_path)
     ptr = _case(kind, tmp_path, monkeypatch)
-    run_async(_await(recv._on_datagram_counted(ptr)))
+    run_async(_await(_arrive(recv, ptr, tmp_path)))
     assert SECRET not in caplog.text
 
 
@@ -274,7 +283,7 @@ def test_refused_no_content(tmp_path, monkeypatch, run_async, caplog, kind):
 def test_refused_no_count(tmp_path, monkeypatch, run_async, kind):
     recv, _got = make_receiver(monkeypatch, tmp_path)
     ptr = _case(kind, tmp_path, monkeypatch)
-    aw = recv._on_datagram_counted(ptr)
+    aw = _arrive(recv, ptr, tmp_path)
     pending = hook_receiver.dialog_datagram_pending("claude-dc")
     run_async(_await(aw))
     assert pending is False
@@ -284,21 +293,21 @@ def test_refused_no_count(tmp_path, monkeypatch, run_async, kind):
 def test_refused_deleted(tmp_path, monkeypatch, run_async, kind):
     recv, _got = make_receiver(monkeypatch, tmp_path)
     ptr = _case(kind, tmp_path, monkeypatch)
-    run_async(_await(recv._on_datagram_counted(ptr)))
+    run_async(_await(_arrive(recv, ptr, tmp_path)))
     assert names(tmp_path) == []
 
 
 def test_refused_outside_kept(tmp_path, monkeypatch, run_async):
     recv, _got = make_receiver(monkeypatch, tmp_path)
     ptr = _case("dotdot", tmp_path, monkeypatch)
-    run_async(_await(recv._on_datagram_counted(ptr)))
+    run_async(_await(_arrive(recv, ptr, tmp_path)))
     assert (tmp_path / "x.json").read_bytes() == _pr()
 
 
 def test_refused_link_target_kept(tmp_path, monkeypatch, run_async):
     recv, _got = make_receiver(monkeypatch, tmp_path)
     ptr = _case("symlink", tmp_path, monkeypatch)
-    run_async(_await(recv._on_datagram_counted(ptr)))
+    run_async(_await(_arrive(recv, ptr, tmp_path)))
     assert (tmp_path / "t.json").read_bytes() == _pr()
 
 

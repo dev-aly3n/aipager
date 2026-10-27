@@ -13,6 +13,8 @@ import asyncio
 import errno
 import json
 import os
+import stat
+import threading
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -100,6 +102,77 @@ def make_receiver(monkeypatch, tmp_path, *, record=True):
 
         monkeypatch.setattr(recv, "_on_datagram", rec)
     return recv, got
+
+
+def _unblock_fifos(fifos):
+    """Open each FIFO for writing without blocking, so a reader stuck in
+    open() on it returns; ENXIO (no reader) and a vanished path are fine."""
+    for p in fifos:
+        try:
+            if stat.S_ISFIFO(os.lstat(p).st_mode):
+                os.close(os.open(p, os.O_WRONLY | os.O_NONBLOCK))
+        except OSError:
+            pass
+
+
+def fifos_in(*dirs) -> list[Path]:
+    out = []
+    for d in dirs:
+        d = Path(d)
+        if d.is_dir() and not d.is_symlink():
+            out += [d / n for n in os.listdir(d)
+                    if stat.S_ISFIFO(os.lstat(d / n).st_mode)]
+    return out
+
+
+def bounded(fn, *args, timeout=5.0, fifos=()):
+    """Call ``fn(*args)`` in a daemon thread and return its result. If it is
+    still running after *timeout* seconds (e.g. blocked opening a FIFO), the
+    FIFOs in *fifos* are opened for writing (O_WRONLY|O_NONBLOCK) to release
+    it and the test fails instead of hanging the suite."""
+    out: dict = {}
+
+    def run():
+        try:
+            out["r"] = fn(*args)
+        except BaseException as e:  # re-raised in the test thread
+            out["e"] = e
+
+    th = threading.Thread(target=run, daemon=True)
+    th.start()
+    th.join(timeout)
+    if th.is_alive():
+        _unblock_fifos(fifos() if callable(fifos) else fifos)
+        th.join(timeout)
+        raise AssertionError(f"{getattr(fn, '__name__', fn)} still blocked after {timeout}s")
+    if "e" in out:
+        raise out["e"]
+    return out.get("r")
+
+
+async def in_thread(fn, *args, timeout=30.0):
+    """``asyncio.to_thread`` with a deadline: the call runs in a daemon thread
+    (never a pool thread the interpreter would join at exit) and the test
+    fails when it is still running after *timeout* seconds."""
+    loop = asyncio.get_running_loop()
+    out: dict = {}
+
+    def run():
+        try:
+            out["r"] = fn(*args)
+        except BaseException as e:
+            out["e"] = e
+
+    th = threading.Thread(target=run, daemon=True)
+    th.start()
+    end = loop.time() + timeout
+    while th.is_alive():
+        if loop.time() > end:
+            raise AssertionError(f"{getattr(fn, '__name__', fn)} still running after {timeout}s")
+        await asyncio.sleep(0.01)
+    if "e" in out:
+        raise out["e"]
+    return out.get("r")
 
 
 async def wait_for(pred, timeout=10.0):

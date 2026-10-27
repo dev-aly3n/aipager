@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import os
 import stat
-import threading
 import time
 
 import pytest
@@ -14,6 +13,7 @@ import pytest
 from aipager.dtach import hook_spill
 from tests.integration.big_hook_events._kit import (
     SECRET,
+    bounded,
     foreign_fstat,
     own_dir,
     plant,
@@ -434,17 +434,7 @@ def _fifo(tmp_path):
 
 def _read_with_deadline(name, path):
     """read_spill on a FIFO must not block; if it does, unblock it and fail."""
-    out = {}
-    t = threading.Thread(target=lambda: out.setdefault("r", hook_spill.read_spill(B, name)),
-                         daemon=True)
-    t.start()
-    t.join(5)
-    if t.is_alive():
-        fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
-        os.close(fd)
-        t.join(5)
-        pytest.fail("read_spill blocked on a FIFO")
-    return out["r"]
+    return bounded(hook_spill.read_spill, B, name, fifos=[path])
 
 
 def test_read_fifo(tmp_path):
@@ -644,7 +634,7 @@ def test_sweep_link_target_kept(tmp_path):
 
 def test_sweep_fresh_fifo(tmp_path):
     p = _fifo(tmp_path)
-    hook_spill.sweep(B)
+    bounded(hook_spill.sweep, B, fifos=[p])
     assert not os.path.lexists(p)
 
 

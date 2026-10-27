@@ -19,6 +19,7 @@ from aipager.dtach import notify_hook
 from tests.integration.big_hook_events._kit import (
     BIG,
     event,
+    in_thread,
     make_receiver,
     names,
     own_dir,
@@ -78,7 +79,7 @@ def _big_pre(tmp_path, monkeypatch, run_async):
     go = _run_main(monkeypatch, _write_payload(tmp_path, "PreToolUse"))
 
     async def body():
-        await asyncio.to_thread(go)
+        await in_thread(go)
         await wait_for(lambda: _of(got, "PreToolUse"))
 
     run_async(_serve(recv, body))
@@ -107,7 +108,7 @@ def _big_pr(tmp_path, monkeypatch, run_async, capsys):
     go = _run_main(monkeypatch, _write_payload(tmp_path, "PermissionRequest"))
 
     async def body():
-        await asyncio.wait_for(asyncio.to_thread(go), 30)
+        await in_thread(go)
 
     run_async(_serve(recv, body))
     return got, capsys.readouterr().out
@@ -162,7 +163,7 @@ def test_order_small_big_small(tmp_path, monkeypatch, run_async):
             assert notify_hook._forward(d)
 
     async def body():
-        await asyncio.to_thread(seq)
+        await in_thread(seq)
         await wait_for(lambda: len(got) >= 3)
 
     run_async(_serve(recv, body))
@@ -178,7 +179,7 @@ def test_order_alternating(tmp_path, monkeypatch, run_async):
             notify_hook._forward(d)
 
     async def body():
-        await asyncio.to_thread(seq)
+        await in_thread(seq)
         await wait_for(lambda: len(got) >= 8)
 
     run_async(_serve(recv, body))
@@ -194,7 +195,7 @@ def _bsd(tmp_path, monkeypatch, run_async, size, err=errno.EMSGSIZE):
     data = event(size)
 
     async def body():
-        ok = await asyncio.to_thread(notify_hook._forward, data)
+        ok = await in_thread(notify_hook._forward, data)
         await wait_for(lambda: got)
         return ok
 
@@ -251,7 +252,7 @@ def _real(tmp_path, monkeypatch, run_async, size):
     async def body():
         d = spill(tmp_path)
         os.utime(d, (1_000_000, 1_000_000))
-        ok = await asyncio.to_thread(notify_hook._forward, data)
+        ok = await in_thread(notify_hook._forward, data)
         await wait_for(lambda: got)
         return ok, os.stat(d).st_mtime
 
@@ -307,7 +308,7 @@ def test_concurrent_spills(tmp_path, monkeypatch, run_async):
     datas = [event(260_000, seq=str(i), session=f"claude-c{i}") for i in range(8)]
 
     async def body():
-        await asyncio.gather(*(asyncio.to_thread(notify_hook._forward, d) for d in datas))
+        await asyncio.gather(*(in_thread(notify_hook._forward, d) for d in datas))
         await wait_for(lambda: len(got) >= 8)
 
     run_async(_serve(recv, body))
@@ -319,7 +320,7 @@ def test_concurrent_dir_empty(tmp_path, monkeypatch, run_async):
     datas = [event(260_000, seq=str(i)) for i in range(8)]
 
     async def body():
-        await asyncio.gather(*(asyncio.to_thread(notify_hook._forward, d) for d in datas))
+        await asyncio.gather(*(in_thread(notify_hook._forward, d) for d in datas))
         await wait_for(lambda: len(got) >= 8)
 
     run_async(_serve(recv, body))
