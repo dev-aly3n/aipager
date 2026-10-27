@@ -458,8 +458,21 @@ def _summary_text(name: str, inp: dict) -> str:
         return questions[0].get("question", "")[:120] if questions else "AskUserQuestion"
     if name in ("Read", "Write", "Edit"):
         return f"{name}: {inp.get('file_path', '')}"
-    if name == "Task":
-        return f"Task: {inp.get('description', inp.get('prompt', '')[:80])}"
+    if name in ("Agent", "Task"):
+        # Claude's own short description and the agent's type, never the
+        # prompt (it can carry the person's own text). A malformed input
+        # (not a dict) gives the bare name.
+        fields = inp if isinstance(inp, dict) else {}
+        desc = _one_line(fields.get("description"), 80)
+        kind = _one_line(fields.get("subagent_type"), 40)
+        if desc and kind:
+            return f"{name}: {desc} ({kind})"
+        return f"{name}: {desc or kind}" if desc or kind else name
+    if name == "Skill":
+        # The skill's name as given ("design", "plugin:skill"), never its
+        # args: they can hold the person's own text.
+        skill = _one_line(inp.get("skill") if isinstance(inp, dict) else None, 80)
+        return f"{name}: {skill}" if skill else name
     if name == "Glob":
         pattern = inp.get("pattern", "")
         path = inp.get("path", "")
@@ -478,6 +491,15 @@ def _summary_text(name: str, inp: dict) -> str:
         files = _send_files(inp)
         return send_check.sending_row(len(files)) if files else name
     return name
+
+
+def _one_line(value, limit: int) -> str:
+    """*value* as one short line for a summary: a string only, whitespace
+    collapsed, at most *limit* characters ("" for anything else). Direction
+    controls are revealed by :func:`_summarize_tool` afterwards."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split())[:limit]
 
 
 _SEND_PAYLOAD_LOGGED = False
