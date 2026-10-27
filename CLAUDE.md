@@ -31,6 +31,11 @@ ruff check aipager tests
 one process); when two full suites run at once, give each `-n 3` and keep
 the 4G cap. A single file or a few targets need no `-n`.
 Always cap the memory: an unbounded mock loop has OOM-killed this machine.
+Never leave a `--basetemp` behind: a full suite writes about 3 GB there and
+nothing removes it, and a new name per run once filled the disk (99 GB). Use
+a few fixed names you reuse (pytest wipes the folder at the start of a run;
+runs at the same time need different names) and delete the folder when the
+run ends, or run without `--basetemp` (pytest keeps only its last three).
 Never patch `asyncio.sleep` or `create_task` through a module path —
 `aipager.bot.notify.asyncio` IS the global module, and doing so has hung the
 suite twice. No test may reach the real Telegram API, spawn a real `claude`
