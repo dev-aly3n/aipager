@@ -1118,10 +1118,13 @@ def test_allow_sends_enter(mk_bot, mk_query, run_async, monkeypatch):
     assert sent.await_args.args[1] == "Enter"
 
 
-def test_deny_overshoots_then_enters(mk_bot, mk_query, run_async, monkeypatch):
-    """Deny walks past the end of the menu, which clamps on the refusal.
+def test_deny_types_one_escape(mk_bot, mk_query, run_async, monkeypatch):
+    """Deny typed into the dialog is ONE Escape, never Downs + Enter.
 
-    A single Down would land on "Yes, and always allow …" instead.
+    Claude Code's menus wrap (2.1.296 and 2.1.310, measured): five Downs
+    from the top of the four-row Bash prompt land on "Yes, and always allow
+    access to <dir> from this project", which ran the refused command.
+    Escape refuses in every dialog shape (roadmap 8.126).
     """
     bot = mk_bot()
     _setup_alive_session(bot, monkeypatch)
@@ -1134,11 +1137,7 @@ def test_deny_overshoots_then_enters(mk_bot, mk_query, run_async, monkeypatch):
     update, query = mk_query("claude-jim:deny")
     run_async(bot._handle_callback(update, MagicMock()))
     keys_sent = [c.args[1] for c in sent.await_args_list]
-    assert keys_sent[-1] == "Enter"
-    assert set(keys_sent[:-1]) == {"Down"}
-    assert len(keys_sent) - 1 >= 3, (
-        f"too few Downs to clamp past a three-item menu; got {keys_sent}"
-    )
+    assert keys_sent == ["Escape"], keys_sent
 
 
 def test_continue_sends_enter(mk_bot, mk_query, run_async, monkeypatch):

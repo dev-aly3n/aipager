@@ -245,8 +245,7 @@ def test_deny_tap_with_dead_hook_reply_falls_back_to_keystrokes(
     pending = {"tool_summary": "Bash: rm -rf x", "tool_info": {"name": "Bash"},
                "hook_reply": _dead_hook_reply(short_dir)}
     keys, _sess, _query = _run_callback(mk_bot(), mk_query, run_async, "deny", pending)
-    assert keys, "deny fallback must still send some keys"
-    assert keys[-1] == "Enter"
+    assert keys == ["Escape"], "the deny fallback is one Escape (roadmap 8.126)"
     rec = _read_last_audit_record()
     assert (rec["via"], rec["denied"]) == ("keystroke_fallback", True)  # roadmap 8.100
 

@@ -127,7 +127,7 @@ def test_allow_on_restored_separate_prompt_is_audited(replay, vloop, tmp_path):
         "Allowed", "keystroke_fallback", "owner")
 
 
-def test_deny_on_restored_separate_prompt_types_five_downs_then_enter(
+def test_deny_on_restored_separate_prompt_types_one_escape(
         replay, vloop, tmp_path):
     r = replay
 
@@ -139,7 +139,7 @@ def test_deny_on_restored_separate_prompt_types_five_downs_then_enter(
         return before
 
     before = _run(vloop, scenario())
-    assert r.pty.keys[len(before):] == ["Down"] * 5 + ["Enter"]
+    assert r.pty.keys[len(before):] == ["Escape"]
 
 
 def test_deny_on_restored_separate_prompt_is_audited_denied(

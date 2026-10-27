@@ -1,9 +1,9 @@
 """A tool refused by a role's rules is denied by aipager itself (fixes-2,
-rev-iter1-003): the keys it types are the Deny button's keys, not a single
-Down (which lands on row 2, "Yes, and don't ask again" or "switch to auto
-mode", of a three-row dialog). An extra prompt whose hook is parked is
-denied through the hook and types nothing; one without a hook waits until
-its dialog is on top, then types the Deny keys.
+rev-iter1-003; roadmap 8.126): through its waiting hook when there is one
+(it types nothing), else with the Deny button's key, one Escape (never a
+count of Downs: Claude Code's menus wrap, so Downs land on an allow row of
+some dialog shape). An extra prompt without a hook waits until its dialog
+is on top, then types that key.
 
 The oracle for "the Deny button's keys" is what a Deny tap types on a
 lone keystroke-answered prompt in the same rig.
@@ -73,17 +73,29 @@ def test_auto_deny_is_not_a_single_down(drig):
     assert drig.keys != ["Down", "Enter"]
 
 
-def test_auto_deny_moves_past_row_two(drig):
-    """Boundary: a three-row dialog needs at least two Downs to reach No."""
+def test_auto_deny_moves_no_cursor(drig):
+    """Claude Code's menus wrap: any count of Downs lands on an allow row of
+    some dialog shape (five reach "always allow" on a four-row Bash prompt).
+    The refusal moves no cursor (roadmap 8.126)."""
     users_turn(drig)
     write_request(drig)
-    assert drig.keys.count("Down") >= 2
+    assert "Down" not in drig.keys and "Up" not in drig.keys
 
 
-def test_auto_deny_ends_with_enter(drig):
+def test_auto_deny_is_one_escape(drig):
     users_turn(drig)
     write_request(drig)
-    assert drig.keys[-1:] == ["Enter"]
+    assert drig.keys == ["Escape"]
+
+
+def test_auto_deny_with_a_waiting_hook_denies_by_hook_and_types_nothing(drig):
+    """The lone prompt's hook still waits: the refusal goes through it, as
+    the Deny button's does, and no key reaches the screen."""
+    users_turn(drig)
+    write_request(drig, hook=True)
+    assert ([(r["request_id"], d["behavior"]) for r, d in drig.decisions], drig.keys) == (
+        [("req-w", "deny")], [])
+    assert drig.sess.status == Status.BUSY
 
 
 def test_owners_turn_is_not_auto_denied(drig):

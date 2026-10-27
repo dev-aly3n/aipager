@@ -84,13 +84,11 @@ def test_allow_button_injects_enter_on_the_right_session(prompt, helpers):
     sent.assert_awaited_with(sess.name, "Enter")
 
 
-def test_deny_button_injects_downs_then_enter_on_the_right_session(prompt, helpers):
+def test_deny_button_injects_one_escape_on_the_right_session(prompt, helpers):
     bot, sess, kb, sent = prompt
     _tap(bot, kb, "deny", helpers)
     calls = [c.args for c in sent.await_args_list]
-    assert calls[-1] == (sess.name, "Enter")
-    assert all(c == (sess.name, "Down") for c in calls[:-1])
-    assert len(calls) >= 2, "expected at least one Down before the final Enter"
+    assert calls == [(sess.name, "Escape")]
 
 
 def test_allow_always_button_injects_down_then_enter_on_the_right_session(

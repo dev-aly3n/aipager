@@ -381,10 +381,10 @@ def turn_tail_since(transcript_path: str, since: float) -> str | None:
       own text): something happened that is not that end;
     - ``None``: nothing written since then, or no transcript.
 
-    Pinned Claude Code behaviour (roadmap 8.99): choosing the dialog's last
-    row, "No, and tell Claude what to do differently (esc)", ends the turn
-    like Escape does, which writes ``[Request interrupted by user for tool
-    use]``. The live 2.1.291 run (2026-10-07) showed the rest: no
+    Pinned Claude Code behaviour (roadmap 8.99, 8.126): Escape in the
+    dialog (aipager's typed refusal), like its "No, and tell Claude what to
+    do differently (esc)" row, ends the turn and writes ``[Request
+    interrupted by user for tool use]``. The live 2.1.291 run (2026-10-07) showed the rest: no
     PostToolUse and no Stop after the typed Deny, and a transcript that
     read as a finished turn while the tool was still counted in flight.
 

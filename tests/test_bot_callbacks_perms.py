@@ -261,14 +261,12 @@ def test_allow_always_falls_back_to_existing_keystrokes_when_hook_fails(mk_bot, 
     assert via == "keystroke_fallback"
 
 
-def test_deny_falls_back_to_existing_overshoot_when_hook_fails(mk_bot, mk_query, run_async):
+def test_deny_falls_back_to_one_escape_when_hook_fails(mk_bot, mk_query, run_async):
     pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"},
                "hook_reply": _HOOK_REPLY}
     keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "deny", pending=pending,
                                     send_decision_result=False)
-    assert keys[-1] == "Enter"
-    assert set(keys[:-1]) == {"Down"}
-    assert len(keys) - 1 >= 4
+    assert keys == ["Escape"]
     assert via == "keystroke_fallback"
 
 
@@ -335,27 +333,19 @@ def test_allow_always_never_echoes_setmode_even_if_it_slips_through(mk_bot, mk_q
     assert via == "hook_decision"
 
 
-def test_deny_overshoots_to_the_last_option(mk_bot, mk_query, run_async):
-    """Deny must overshoot, not step to a fixed index.
+def test_deny_is_one_escape_never_a_count_of_downs(mk_bot, mk_query, run_async):
+    """Deny must not move the cursor at all.
 
-    The menu clamps at its last item rather than wrapping, so pushing Down
-    past the end lands on the refusal whatever the menu's length. Stepping
-    a fixed number of times selects whatever happens to sit at that index —
-    which for one Down is "Yes, and always allow".
+    Claude Code's menus wrap (measured on 2.1.296 and 2.1.310): on the
+    four-row Bash prompt (Yes / Yes, and always allow access to <dir> /
+    Yes, and switch to auto mode / No) five Downs land on row 2 and four on
+    row 1, both running the refused command; on the outside-reads question
+    the last row is "Yes, but ask again next time". Escape refuses in every
+    shape (roadmap 8.126).
     """
     keys = _keys_for(mk_bot(), mk_query, run_async, "deny")
 
-    assert keys[-1] == "Enter", f"deny must confirm a selection; got {keys}"
-    downs = keys[:-1]
-    assert set(downs) == {"Down"}, f"deny must only move down; got {keys}"
-    # 2.1.259 menus are up to four rows (Yes / don't-ask-again / switch to
-    # auto mode / No): two Downs from the top stop ON the auto-mode row,
-    # which is far worse than an affirmative; four is the margin we pin.
-    assert len(downs) >= 4, (
-        f"deny sent {len(downs)} Down(s) — too few to clamp past a "
-        f"four-row menu, so it can select 'switch to auto mode' instead of "
-        f"the refusal; got {keys}"
-    )
+    assert keys == ["Escape"], f"deny must be one Escape; got {keys}"
 
 
 # ---- perms_confirm: executes mode switch -----------------------------------

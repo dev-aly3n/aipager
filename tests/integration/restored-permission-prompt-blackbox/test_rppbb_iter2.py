@@ -315,7 +315,7 @@ def test_concurrent_double_tap_types_one_answer(replay, vloop, tmp_path):
 
     before = _run(vloop, scenario())
     typed = r.pty.keys[len(before):]
-    assert typed in (["Enter"], ["Down"] * 5 + ["Enter"]), typed
+    assert typed in (["Enter"], ["Escape"]), typed
 
 
 def test_stranger_tap_on_restored_card_types_nothing(replay, vloop, tmp_path):

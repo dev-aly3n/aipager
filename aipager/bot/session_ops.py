@@ -1597,8 +1597,8 @@ class SessionOpsMixin:
     async def _claude_queue_before_typed_refusal(self, sess: TrackedSession) -> list[dict]:
         """What Claude Code holds in its own queue, read BEFORE a refusal
         is typed into its dialog, as `_stop_session_core` reads it before
-        its Escapes: the refusal row ("(esc)") ends the turn like Escape,
-        which pulls the queue into the input box and writes `popAll`, after
+        its Escapes: the typed refusal (Escape) ends the turn, which
+        pulls the queue into the input box and writes `popAll`, after
         which the transcript no longer shows what was held. Best effort:
         ``[]`` on any failure."""
         from aipager.policy_snapshot import list_outstanding_notes
@@ -1617,18 +1617,19 @@ class SessionOpsMixin:
         """Start watching a turn whose permission prompt was answered by
         typing into Claude Code's dialog (the hook was no longer waiting).
 
-        Pinned Claude Code behaviour (roadmap 8.99): the Deny fallback's
-        overshoot (``callbacks._DENY_OVERSHOOT``) lands on the dialog's
-        last row, "No, and tell Claude what to do differently (esc)", which
-        ends the turn the way Escape does: Claude Code writes
+        Pinned Claude Code behaviour (roadmap 8.99, 8.126): the Deny
+        fallback types one Escape (``callbacks._type_refusal``), which on
+        a tool prompt does what the "No, and tell Claude what to do
+        differently (esc)" row does: Claude Code writes
         ``[Request interrupted by user for tool use]`` and waits for input.
         What the live 2.1.291 run (2026-10-07) showed: no PostToolUse and
         no Stop after the typed Deny, and the session kept BUSY ("tool
-        still in flight") until the 900 s cap. The row choice itself is
-        unchanged: the last row is the only one that is a refusal in every
-        dialog shape.
+        still in flight") until the 900 s cap. On the auto-mode
+        outside-reads question the Escape takes "No, and ask again next
+        time": the read fails and the turn goes on (2.1.310), which the
+        watch below leaves to the turn's own hooks.
 
-        *refusal*: the typed answer chose that refusal row (a tool's Deny;
+        *refusal*: the typed answer was that refusal (a tool's Deny;
         never a question's, whose rows are its options). Any other typed
         answer is watched too, but only the transcript's interrupt marker
         may end its turn (a wrong guess about the row, or an Escape in the

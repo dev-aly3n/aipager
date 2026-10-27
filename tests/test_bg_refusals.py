@@ -114,7 +114,7 @@ def test_an_auto_deny_is_not_typed_while_parked(world, run_async):
 def test_an_auto_deny_is_typed_when_not_parked(world, run_async):
     sess = world.session()
     assert run_async(world.bot._type_auto_deny(sess, "Bash")) is True
-    assert world.keys[-1] == "Enter"
+    assert world.keys == ["Escape"]
 
 
 def test_a_mode_switch_retry_presses_nothing_while_parked():

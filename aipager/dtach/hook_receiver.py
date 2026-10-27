@@ -598,13 +598,17 @@ def _outside_working_dir(path: object, cwd: str) -> bool:
     unknown cwd or path counting as outside (the conservative answer for
     what this gates).
 
-    Why it matters: Claude Code 2.1.259 asks a one-time question on the
-    FIRST read-only file access outside the working directories whose
-    dialog is ``Yes, keep allowing … / No, BLOCK reads outside the working
-    directories from now on / No, ask again next time`` — the standing
-    "don't ask again" row is suppressed, and slot 2 is a persistent,
-    every-project setting change. The hook payload does not say which
-    dialog was drawn, but the trigger is computable here.
+    Why it matters: in auto mode Claude Code asks a question on the FIRST
+    read-only file access outside the working directories (and again
+    after "ask again next time"). Its rows on 2.1.310 (2.1.259 had the
+    first three): ``Yes, and keep allowing any reads outside the working
+    directories / No, and block reads outside the working directories
+    from now on / No, and ask again next time / Yes, but ask again next
+    time``. Slot 2 is a persistent, every-project setting change, so an
+    Allow-always (one Down) must never be typed into it, and the last row
+    is an allow, so a Deny is an Escape (callbacks._type_refusal). The hook
+    payload does not say which dialog was drawn, but the trigger is
+    computable here.
     """
     if not isinstance(path, str) or not path or not cwd:
         return True
