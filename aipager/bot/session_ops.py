@@ -24,7 +24,7 @@ from telegram import (
     Update,
 )
 
-from aipager import i18n, perm_modes
+from aipager import i18n, invisible, perm_modes
 from aipager.config import RESUME_GUARD_SECONDS
 from aipager.i18n import Command, Msg, Safe, Span
 from aipager.dtach import inject
@@ -272,6 +272,20 @@ def _terminal_card_text(label: str, *, refused: bool, tr=None) -> str:
 KEYSTROKE_ANSWER_WATCH_SECONDS: float = 10.0
 #: How often the watch above reads the transcript's end.
 KEYSTROKE_ANSWER_POLL_SECONDS: float = 0.5
+
+#: How long after typing a message that may hold a context-dependent
+#: invisible character aipager waits for it to be picked up before
+#: pressing Enter once more (roadmap 8.124). An accepted prompt fires
+#: UserPromptSubmit within ~0.15 s.
+HELD_BACK_ENTER_AFTER_SECONDS: float = 3.0
+#: After pressing a held-back message's Enter, before typing the next one.
+HELD_BACK_SETTLE_SECONDS: float = 0.3
+#: How many times the held-back check runs while a dialog may be on top
+#: (ten minutes: a permission dialog can wait that long for its answer).
+HELD_BACK_TRIES: int = 200
+#: session name -> the note of the last message that may still sit held
+#: back in Claude Code's input box (waiting for its second Enter).
+_HELD_BACK: dict[str, Path] = {}
 
 #: session name -> the running watch (one per session; a newer answer
 #: replaces it). Also keeps a reference so the task is not collected.
@@ -877,6 +891,16 @@ def queued_chars(sess: TrackedSession, held: list[dict]) -> int:
                sum(len(_candidate_text(c)) + 1 for c in held))
 
 
+def _drop_held_back(sess: TrackedSession, notes: list[dict]) -> list[dict]:
+    """Forget the second Enter a message held back in Claude Code's input
+    box still waits for (roadmap 8.124), and return its note among *notes*
+    (``[]`` when it was picked up meanwhile): Stop wipes its text."""
+    note_path = _HELD_BACK.pop(sess.name, None)
+    if note_path is None:
+        return []
+    return [n for n in notes if n.get("_path") == Path(note_path)]
+
+
 def held_by_claude(sess: TrackedSession, candidates: list[dict]) -> list[dict]:
     """The *candidates* (outstanding notes, queued targets) that Claude
     Code's transcript shows it still holding in its queue: each needs an
@@ -900,10 +924,13 @@ def held_by_claude(sess: TrackedSession, candidates: list[dict]) -> list[dict]:
     if not queued:
         return []
 
+    # A message sent by a second Enter (roadmap 8.124) was queued without
+    # the invisible character Claude Code removed: those do not count.
+    queued = [invisible.without_context_dependent(q) for q in queued]
     held: set[int] = set()
     for i in sorted(range(len(candidates)),
                     key=lambda k: -len(_candidate_text(candidates[k]))):
-        text = _candidate_text(candidates[i])
+        text = invisible.without_context_dependent(_candidate_text(candidates[i]))
         if not text:
             continue
         for j, content in enumerate(queued):
@@ -1253,10 +1280,24 @@ class SessionOpsMixin:
         A session parked on a Claude Code background job takes nothing:
         False, before any note is written (text typed there can start a
         stray background job).
+
+        The text is first cleaned of the invisible characters Claude Code
+        removes on Enter (an Enter that removed one sends nothing; roadmap
+        8.124, :mod:`aipager.invisible`), so the note's body is what Claude
+        Code receives. When a context-dependent one is still there, Enter
+        is pressed once more if the message is not picked up
+        (:meth:`_enter_again_if_held_back`; never for a slash command, whose
+        note a local command never consumes). A message that is nothing
+        but such characters is not sent (False).
         """
         if self._parked(sess):
             log.info("[%s] Not sending a prompt: parked on a Claude Code "
                      "background job", sess.label)
+            return False
+        text = invisible.clean(text)
+        if not text.strip():
+            log.info("[%s] Not sending a message that is blank once its invisible "
+                     "characters are removed", sess.label)
             return False
         explicit_driver_user_id = driver_user_id
         # Roadmap 8.73 (D-A): the sender's role is the one in the chat
@@ -1290,7 +1331,9 @@ class SessionOpsMixin:
             body = text
             marker = self._prompt_marker(sess, sender)
             if marker:
-                body = f"{marker}\n{text}"
+                # A member's label comes from their Telegram name, which can
+                # hold invisible characters too.
+                body = invisible.clean(f"{marker}\n{text}")
         # Write a per-message policy note for this turn (design.md "queue
         # handoff") — replaces the old one-slot write_snapshot() call at
         # send time. Every message gets its own note now; the
@@ -1307,6 +1350,7 @@ class SessionOpsMixin:
         # THE critical path per design.md — a caller here that bypassed
         # it would make the per-session settings feature do nothing.
         # Best-effort.
+        note_path = None
         try:
             from aipager import member_root
             from aipager import preferences as prefs_mod
@@ -1338,7 +1382,7 @@ class SessionOpsMixin:
                 )
             )
             sender_key = (sess.scope_chat_id or 0, driver_user_id or 0)
-            write_note(
+            note_path = write_note(
                 sess.name, role, scope, member,
                 msg_id=msg_id, chat_id=chat_id, sender_key=sender_key,
                 # Only the explicitly passed sender is the author: the
@@ -1354,6 +1398,9 @@ class SessionOpsMixin:
             )
         except Exception:
             log.debug("policy note write failed", exc_info=True)
+        # An earlier message may still sit held back in Claude Code's box:
+        # it goes first, or this one would be typed onto it.
+        await self._enter_held_back_now(sess)
         # Read BEFORE the send: every caller flips the session to BUSY
         # right after this returns, and the "prompt not taken" watchdog
         # (session_monitor.prompt_not_taken) only judges a send that
@@ -1386,7 +1433,88 @@ class SessionOpsMixin:
                 (msg_id, chat_id)
                 if msg_id is not None and chat_id is not None else None
             )
+        if (ok and note_path is not None and not reactions.is_slash_command(text)
+                and invisible.may_hold_back(body)):
+            _HELD_BACK[sess.name] = note_path
+            _spawn(self._enter_again_if_held_back(sess, note_path))
         return ok
+
+    async def _enter_held_back_now(self, sess: TrackedSession) -> None:
+        """Before another message is typed: the second Enter of an earlier
+        one that may still sit held back (:meth:`_held_back_verdict`),
+        now rather than after its wait, so the two are not glued into one
+        prompt. The messages a dialog held may be what is being typed (its
+        release): that alone does not stop it."""
+        note_path = _HELD_BACK.get(sess.name)
+        if note_path is None:
+            return
+        verdict = self._held_back_verdict(sess, note_path, releasing=True)
+        if verdict == "wait":
+            return                      # its own watch tries again
+        del _HELD_BACK[sess.name]
+        if verdict == "press" and await self._press_held_back_enter(sess):
+            await _sleep(HELD_BACK_SETTLE_SECONDS)
+
+    async def _enter_again_if_held_back(self, sess: TrackedSession, note_path) -> None:
+        """Press Enter once more when Claude Code held the message back.
+
+        Its cleaner removes some invisible characters only in some contexts
+        (:func:`aipager.invisible.may_hold_back`); when it removed one, the
+        Enter sent nothing and the text waits in its input box ("review and
+        press Enter to send"), cleaned. A second Enter sends it, once; its
+        note still matches what Claude Code sent (the matching leaves those
+        characters out: ``policy_snapshot.match_notes_prefix_run``). Checked
+        every :data:`HELD_BACK_ENTER_AFTER_SECONDS`, at most
+        :data:`HELD_BACK_TRIES` times, while a dialog may be on top (after
+        that the next message's flush presses it); given up when a later
+        message already pressed it, or Stop, /clearqueue, a typed refusal
+        or a kill dropped it."""
+        for _ in range(HELD_BACK_TRIES):
+            await _sleep(HELD_BACK_ENTER_AFTER_SECONDS)
+            if _HELD_BACK.get(sess.name) is not note_path:
+                return
+            verdict = self._held_back_verdict(sess, note_path)
+            if verdict == "wait":
+                continue
+            del _HELD_BACK[sess.name]
+            if verdict == "press":
+                await self._press_held_back_enter(sess)
+            return
+        if _HELD_BACK.get(sess.name) is note_path:
+            # Kept: the next message's flush presses it before typing.
+            log.info("[%s] a held-back message waits for the next message: a dialog "
+                     "stayed open", sess.label)
+
+    def _held_back_verdict(self, sess: TrackedSession, note_path, *,
+                           releasing: bool = False) -> str:
+        """``"press"``, ``"wait"`` (a dialog may be on top: the Enter would
+        answer it, row 1, with nobody's consent) or ``"drop"`` (picked up:
+        its UserPromptSubmit consumed the note, also for a message queued
+        behind a running turn; or the session ended, was replaced or is
+        parked on a Claude Code background job). A dialog may be on top
+        while the session is INTERACTIVE, while a prompt is open or carried
+        (``dialog_is_open``, ``pending_permission``), while the new turn's
+        events are held behind the old turn's card (``turn_state_held``,
+        as the send-now chord checks), and while the messages a dialog held
+        go out (unless that is what is being typed: *releasing*)."""
+        try:
+            if not Path(note_path).exists():
+                return "drop"
+        except OSError:
+            return "drop"
+        if (self.registry.get(sess.name) is not sess or sess.status == Status.GONE
+                or self._parked(sess)):
+            return "drop"
+        if (sess.status == Status.INTERACTIVE or sess.dialog_is_open()
+                or sess.pending_permission is not None or sess.turn_state_held()
+                or (sess.dialog_release_pending() and not releasing)):
+            return "wait"
+        return "press"
+
+    async def _press_held_back_enter(self, sess: TrackedSession) -> bool:
+        log.info("[%s] the message was held back by Claude Code's invisible-character "
+                 "check: pressing Enter once more", sess.label)
+        return await inject.send_keys(sess.name, "Enter")
 
     def _build_reply_context(
         self, msg, sess, *, bot_id: int, allow_file: bool,
@@ -1604,8 +1732,11 @@ class SessionOpsMixin:
         from aipager.policy_snapshot import list_outstanding_notes
         try:
             await self._settle_queued_targets(sess, reanchor=False)
-            return held_by_claude(
-                sess, list_outstanding_notes(sess.name) + self._queued_candidates(sess))
+            outstanding = list_outstanding_notes(sess.name)
+            held = held_by_claude(sess, outstanding + self._queued_candidates(sess))
+            # A message still held back in the input box (roadmap 8.124)
+            # goes with the turn, as on /stop: wiped, never sent after.
+            return held + [n for n in _drop_held_back(sess, outstanding) if n not in held]
         except Exception:
             log.debug("[%s] reading Claude's queue before a typed refusal failed",
                       sess.label, exc_info=True)
@@ -1832,8 +1963,11 @@ class SessionOpsMixin:
         # Only what the transcript shows Claude holding counts (roadmap
         # 8.37): a note left by a command that already ran is not queued,
         # and the queue wipe below must not be typed for it.
-        held = held_by_claude(
-            sess, list_outstanding_notes(sess.name) + self._queued_candidates(sess))
+        outstanding = list_outstanding_notes(sess.name)
+        held = held_by_claude(sess, outstanding + self._queued_candidates(sess))
+        # A message still held back in the input box (its second Enter not
+        # pressed, roadmap 8.124) is wiped with the queue, never sent.
+        held += [n for n in _drop_held_back(sess, outstanding) if n not in held]
         # Counted now too: the Escapes below make Claude Code write
         # `popAll`, and the transcript then no longer shows the text.
         held_chars = queued_chars(sess, held) if held else 0
@@ -2211,6 +2345,7 @@ class SessionOpsMixin:
             return KillOutcome(
                 result="resuming", label=label, session_name=session_name,
             )
+        _HELD_BACK.pop(session_name, None)  # no second Enter for the dead
         if sess:
             # A self-woken turn's deferred card (roadmap 8.32) dies with the
             # session: the entry is dropped from the registry below, out of
@@ -3462,6 +3597,12 @@ class SessionOpsMixin:
         # types Escape, and an Escape into Claude Code's empty queue
         # interrupts the running turn.
         held = held_by_claude(sess, notes + self._queued_candidates(sess))
+        if held:
+            # The wipe below also clears the input box: a message held back
+            # there (roadmap 8.124) goes with the queue, never sent after.
+            # With nothing queued it is left to its own second Enter (an
+            # Escape into an empty queue would interrupt the turn).
+            held += [n for n in _drop_held_back(sess, notes) if n not in held]
         dropped = len(sess.pending_queue) + len(held)
         if not dropped:
             return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)

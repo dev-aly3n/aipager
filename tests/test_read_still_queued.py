@@ -190,3 +190,20 @@ def test_queued_chars_falls_back_to_the_held_texts_once_their_fate_is_written(tm
                  ("popAll",))
     held = [{"body": "[m]\nfirst"}, {"raw_text": "second"}]
     assert queued_chars(sess, held) == len("[m]\nfirst") + 1 + len("second") + 1
+
+
+def test_a_message_sent_by_a_second_enter_is_still_found_in_the_queue(tmp_path):
+    """Claude Code removed an invisible mark before queueing it (roadmap
+    8.124): Stop and /clearqueue still find it, as its note did."""
+    from aipager.bot.session_ops import held_by_claude
+    sess = _sess(tmp_path, ("enqueue", "[marker]\nسلامدنیا"))
+    target = {"raw_text": "سلام\u200fدنیا"}
+    assert held_by_claude(sess, [target]) == [target]
+
+
+def test_a_queued_message_that_kept_its_marks_is_found(tmp_path):
+    """The ordinary Persian case: Claude Code kept the half-space."""
+    from aipager.bot.session_ops import held_by_claude
+    sess = _sess(tmp_path, ("enqueue", "[marker]\nمی\u200cخواهم"))
+    target = {"raw_text": "می\u200cخواهم"}
+    assert held_by_claude(sess, [target]) == [target]

@@ -336,3 +336,20 @@ def test_absorption_matcher_tie_breaks_oldest_and_skips_empty_text():
     assert _pop_queued_target(sess, PREFIX + "same")["msg_id"] == 3
     assert _pop_queued_target(sess, PREFIX + "same") is None
     assert [t["msg_id"] for t in sess.queued_targets] == [1]
+
+
+def test_a_queued_target_sent_by_a_second_enter_is_popped():
+    """Claude Code removed an invisible mark from it (roadmap 8.124)."""
+    from aipager.bot.animation import _pop_queued_target
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-q", label="q")
+    sess.queued_targets = [{"raw_text": "سلام\u200fدنیا", "msg_id": 7}]
+    assert _pop_queued_target(sess, "[via Telegram · @alice]\nسلامدنیا")["msg_id"] == 7
+
+
+def test_a_queued_target_that_kept_its_marks_is_popped():
+    from aipager.bot.animation import _pop_queued_target
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-q", label="q")
+    sess.queued_targets = [{"raw_text": "می\u200cخواهم", "msg_id": 8}]
+    assert _pop_queued_target(sess, "[via Telegram · @alice]\nمی\u200cخواهم")["msg_id"] == 8

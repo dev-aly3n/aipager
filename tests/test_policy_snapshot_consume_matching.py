@@ -182,3 +182,30 @@ def test_consume_notes_matching_note_deleted_out_of_band_yields_empty():
     consumed = ps.consume_notes_matching(SESSION, "absorbed already")
 
     assert consumed == []
+
+
+# ---- a message Claude Code held back for an invisible character (8.124) ------
+
+def test_a_note_matches_the_text_claude_code_sent_once_it_removed_a_mark():
+    """Claude Code removes an RLM between two Persian letters (aipager
+    keeps it: the line is RTL); the second Enter sends the cleaned text,
+    which still consumes the note, so later notes are not blocked."""
+    held = {"body": "[via Telegram · @alice]\nسلام\u200fدنیا"}
+    later = {"body": "[via Telegram · @alice]\nthen this"}
+    prompt = "[via Telegram · @alice]\nسلامدنیا[via Telegram · @alice]\nthen this"
+    assert ps.match_notes_prefix_run([held, later], prompt) == [held, later]
+    assert ps.match_notes_for_prompt([held], "[via Telegram · @alice]\nسلامدنیا") == [held]
+
+
+def test_visible_text_still_has_to_match():
+    note = {"body": "[via Telegram · @alice]\nسلام\u200fدنیا"}
+    assert ps.match_notes_prefix_run([note], "[via Telegram · @alice]\nسلام دنیا") == []
+
+
+def test_a_note_still_matches_a_prompt_that_kept_its_marks():
+    """The ordinary case: Claude Code kept the Persian half-space (and the
+    RLM at a script boundary), so prompt and note both carry them."""
+    body = "[via Telegram · @alice]\nمی\u200cخواهم\u200f ok"
+    note = {"body": body}
+    assert ps.match_notes_prefix_run([note], body) == [note]
+    assert ps.match_notes_for_prompt([note], body) == [note]
