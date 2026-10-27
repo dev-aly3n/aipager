@@ -192,12 +192,20 @@ def test_a_writer_behind_a_prompt_waits_at_most_its_settle_and_writes(
     text = b"x" * 1000
     pieces = [text[i:i + inject.TYPE_CHUNK_CHARS]
               for i in range(0, len(text), inject.TYPE_CHUNK_CHARS)]
-    # the text's writes and gaps + 0.5 s settle + Enter write + the Escape's
-    # own write, with room for a slow CI runner's scheduling (these are real
-    # sleeps): still well under a second prompt's worth.
-    gaps = (len(pieces) - 1) * inject.TYPE_CHUNK_GAP_SECONDS
-    assert waited <= 0.5 + gaps + (len(pieces) + 2) * WRITE + 0.35
     assert term.writes == [*pieces, b"\r", ESC]
+    # These are real sleeps, and a loaded CI runner stretches them (once
+    # 0.4 s over the sum), so the bound is measured against this run's own
+    # prompt: the Escape starts as soon as the prompt's Enter is written.
+    (_, _, piece_end), (_, enter_start, enter_end), (_, esc_start, _) = term.log[-3:]
+    assert esc_start - enter_end <= 0.25
+    # The settle before the Enter is one sleep (and a quick gate look), so
+    # it is pinned closely.
+    assert enter_start - piece_end <= 0.5 + 0.3
+    # And the whole wait is that one prompt: the text's writes and gaps +
+    # 0.5 s settle + Enter write + the Escape's own write, with wide room
+    # for the runner (a settle grown far past 0.5 s still fails).
+    gaps = (len(pieces) - 1) * inject.TYPE_CHUNK_GAP_SECONDS
+    assert waited <= 0.5 + gaps + (len(pieces) + 2) * WRITE + 0.8
 
 
 def test_the_lock_is_per_session(term, run_async):
