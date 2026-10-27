@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A Deny tapped after a permission prompt had waited a while no longer lets the command run.** Once the prompt had waited about 20 seconds, aipager answered it by moving the cursor down to the "No" row, but Claude Code's menus now wrap around, so the cursor came back to "Yes, and always allow" and the command ran. On the question Claude Code asks before reading outside the project in Auto mode, the same keys chose "No, and block reads outside the working directories from now on", a lasting setting. The same happened when a role rule refused a tool. aipager now refuses with Escape, which says no in every dialog, and a refusal by a role rule is now given to Claude Code's waiting permission check when it can (nothing is typed), so the session no longer stays "Working" after it.
+- **A resumed session now gets aipager's current instructions.** Claude Code now keeps the system prompt a conversation started with and sends it again after a resume, so a session that was brought back, restarted or switched to another mode kept its old name, members, roles and rules until it compacted. aipager now starts Claude Code with `--system-prompt-snapshot off` (Claude Code 2.1.259 and later), so every launch sends the current ones. `aipager session` leaves the flag out when you pass it yourself.
 
 ## [1.3.10] - 2026-10-25
 

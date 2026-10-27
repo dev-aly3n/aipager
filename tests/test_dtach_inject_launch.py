@@ -732,6 +732,129 @@ def test_an_old_claude_gets_no_note(tmp_path, monkeypatch, run_async):
     assert "export CLAUDE_CODE_ATTACHMENTS_BY_PATH=1; " in bash_cmd
 
 
+# ---- the recorded system prompt is not replayed (8.125) ---------------------
+
+def _claude_install(tmp_path, version):
+    """A claude link in tmp_path pointing at a file for *version*, as the
+    native installer lays it out: (link path, real path)."""
+    versions = tmp_path / "versions"
+    versions.mkdir(exist_ok=True)
+    target = versions / version
+    target.write_text("")
+    link = tmp_path / "claude"
+    if link.is_symlink():
+        link.unlink()
+    link.symlink_to(target)
+    return str(link), str(target)
+
+
+def _snapshot_launch_words(tmp_path, monkeypatch, run_async, *, version, resume_id=None,
+                           resolve=True, installed=None, refreshed="same"):
+    """The words of claude's command line for a launch whose resolver
+    remembers *version*; *installed* (a version) moves the link to that
+    build first, and *refreshed* is what probing it again returns ("same":
+    the install as it is now, None: it does not verify, "other": another
+    file answers for 2.1.311, "raise": the probe fails with an error)."""
+    import shlex as _shlex
+
+    from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
+    captured, refreshes = {}, []
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+    monkeypatch.setattr(dtach_inject, "_create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    monkeypatch.setattr(dtach_inject, "_conversation_exists",
+                        lambda sid, projects=None: True)
+    path, real = _claude_install(tmp_path, version)
+    resolved = ResolvedClaude(chosen=ClaudeInstall(path=path, realpath=real, version=version))
+    if installed is not None:
+        path, real = _claude_install(tmp_path, installed)
+
+    def _reprobe():
+        import threading
+        refreshes.append(threading.get_ident())
+        if refreshed == "raise":
+            raise ValueError("embedded null byte")
+        if refreshed is None:
+            return None
+        if refreshed == "other":
+            other = str(tmp_path / "elsewhere-claude")
+            return ClaudeInstall(path=other, realpath=other, version="2.1.311")
+        return ClaudeInstall(path=path, realpath=real, version=installed or version)
+    monkeypatch.setattr(dtach_inject.claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: resolved if resolve else None)
+    monkeypatch.setattr(dtach_inject.claude_resolve, "reprobe_chosen", _reprobe)
+    ok, err = run_async(dtach_inject.launch_session(
+        "jim", mode="ask", cwd=str(tmp_path), resume_id=resume_id,
+        system_prompt_extra="# SESSION.md\nroles"))
+    assert ok, err
+    words = _shlex.split(captured["args"][-1])
+    return words[:words.index("--append-system-prompt") + 2], path, refreshes
+
+
+@pytest.mark.parametrize("resume_id", [None, "e4f739a9-e19a-4d17-a8c2-12ba1b288907"],
+                         ids=["fresh", "resume"])
+def test_launch_turns_the_prompt_snapshot_off(tmp_path, monkeypatch, run_async, resume_id):
+    words, path, refreshes = _snapshot_launch_words(
+        tmp_path, monkeypatch, run_async, version="2.1.310", resume_id=resume_id)
+    at = words.index("--system-prompt-snapshot")
+    assert words[at + 1] == "off"
+    assert words.count("--system-prompt-snapshot") == 1
+    # On claude's own command line, with the prompt it would otherwise not send.
+    assert words.index(path) < at
+    assert words[-1].endswith("# SESSION.md\nroles")
+    if resume_id:
+        assert words[words.index("--resume") + 1] == resume_id
+    assert refreshes == []        # the binary did not move: no second probe
+
+
+def test_launch_after_claude_updated_itself_keeps_the_flag(tmp_path, monkeypatch, run_async):
+    """Claude Code's installer points the link at each new version's file:
+    the daemon reads the version again (in a worker thread: ``--version``
+    may take seconds, never on the event loop) and passes the flag."""
+    import threading
+    words, path, refreshes = _snapshot_launch_words(
+        tmp_path, monkeypatch, run_async, version="2.1.310", installed="2.1.311",
+        resume_id="e4f739a9-e19a-4d17-a8c2-12ba1b288907")
+    assert len(refreshes) == 1 and refreshes[0] != threading.get_ident()
+    assert words[words.index("--system-prompt-snapshot") + 1] == "off"
+    assert path in words
+
+
+@pytest.mark.parametrize("version, resolve, installed, refreshed", [
+    ("2.1.258", True, None, "same"),
+    ("2.1.310", False, None, "same"),
+    # The link now leads to an older build than the flag.
+    ("2.1.310", True, "2.1.250", "same"),
+    # It moved and reading it again fails: not known.
+    ("2.1.310", True, "2.1.311", None),
+    # It moved to an older build, and another file answers the probe for a
+    # newer one: that version is not the launched binary's.
+    ("2.1.310", True, "2.1.250", "other"),
+    # The probe itself fails with an error: the session still starts.
+    ("2.1.310", True, "2.1.311", "raise"),
+], ids=["older-claude", "unknown-claude", "moved-to-older", "moved-unreadable",
+        "moved-other-answer", "moved-probe-raises"])
+def test_launch_never_passes_the_flag_to_a_claude_that_may_refuse_it(
+        tmp_path, monkeypatch, run_async, version, resolve, installed, refreshed):
+    words, _path, probes = _snapshot_launch_words(
+        tmp_path, monkeypatch, run_async, version=version,
+        resume_id="e4f739a9-e19a-4d17-a8c2-12ba1b288907", resolve=resolve,
+        installed=installed, refreshed=refreshed)
+    assert len(probes) == (1 if installed else 0)
+    assert "--system-prompt-snapshot" not in words
+    assert "--resume" in words
+    if resolve:
+        assert _path in words                # still the binary it was
+
+
 # ---- why the session ends: claude's exit is recorded (step 4, T4.1) ---------
 
 def _exit_launch_cmd(tmp_path, monkeypatch, run_async, claude_path="/opt/claude"):

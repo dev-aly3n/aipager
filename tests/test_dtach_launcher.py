@@ -181,7 +181,8 @@ def test_dtach_works_recognizes_usage_output(monkeypatch):
 
 # ----- files Claude sends: the switch and the note ---------------------------
 
-def _spawn_argv(monkeypatch, *, claude_bin="/opt/claude", version="2.1.302"):
+def _spawn_argv(monkeypatch, *, claude_bin="/opt/claude", version="2.1.302",
+                claude_args=None):
     from aipager import claude_resolve
     from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
     monkeypatch.setattr(dtach_launcher, "_resolve_dtach", lambda: "/fake/dtach")
@@ -203,7 +204,7 @@ def _spawn_argv(monkeypatch, *, claude_bin="/opt/claude", version="2.1.302"):
         seen["argv"] = argv
         return _Fake()
     monkeypatch.setattr(dtach_launcher.subprocess, "run", _run)
-    assert dtach_launcher.launch("dev", claude_bin=claude_bin) == 1
+    assert dtach_launcher.launch("dev", claude_args, claude_bin=claude_bin) == 1
     return seen["argv"]
 
 
@@ -230,3 +231,49 @@ def test_terminal_prompt_has_no_note_for_an_old_claude(monkeypatch):
     # Another binary than the one resolved: its version is unknown.
     argv = _spawn_argv(monkeypatch, claude_bin="/elsewhere/claude", version="2.1.300")
     assert SEND_FILES_NOTE in argv[argv.index("--append-system-prompt") + 1]
+
+
+# ----- the recorded system prompt is not replayed (8.125) --------------------
+
+def _claude_argv(argv):
+    return argv[argv.index("/opt/claude") + 1:]
+
+
+@pytest.mark.parametrize("claude_args", [None, ["--resume", "abc"]], ids=["fresh", "resume"])
+def test_terminal_session_turns_the_prompt_snapshot_off(monkeypatch, claude_args):
+    monkeypatch.setattr(dtach_launcher, "_prepare_resume_args", lambda a: (a, 0))
+    args = _claude_argv(_spawn_argv(monkeypatch, version="2.1.310", claude_args=claude_args))
+    at = args.index("--system-prompt-snapshot")
+    assert args[at + 1] == "off"
+    assert args.count("--system-prompt-snapshot") == 1
+    if claude_args:
+        assert args[args.index("--resume") + 1] == "abc"
+
+
+def test_terminal_session_never_passes_the_flag_to_a_claude_that_may_refuse_it(monkeypatch):
+    assert "--system-prompt-snapshot" not in _claude_argv(
+        _spawn_argv(monkeypatch, version="2.1.258"))
+    # Another binary than the one resolved: its version is unknown.
+    argv = _spawn_argv(monkeypatch, claude_bin="/elsewhere/claude", version="2.1.310")
+    assert "--system-prompt-snapshot" not in argv
+
+
+def test_terminal_session_flag_words_after_the_double_dash_are_not_the_users_choice(
+        monkeypatch):
+    """After ``--`` an argument is the prompt, not a flag: aipager's own
+    "off" stays."""
+    args = _claude_argv(_spawn_argv(monkeypatch, version="2.1.310",
+                                    claude_args=["--", "explain --system-prompt-snapshot"]))
+    at = args.index("--system-prompt-snapshot")
+    assert args[at + 1] == "off"
+    args = _claude_argv(_spawn_argv(monkeypatch, version="2.1.310",
+                                    claude_args=["--", "--system-prompt-snapshot"]))
+    assert args[args.index("--system-prompt-snapshot") + 1] == "off"
+
+
+@pytest.mark.parametrize("own", [["--system-prompt-snapshot", "on"],
+                                 ["--system-prompt-snapshot=on"]], ids=["spaced", "equals"])
+def test_terminal_session_keeps_the_users_own_snapshot_choice(monkeypatch, own):
+    args = _claude_argv(_spawn_argv(monkeypatch, version="2.1.310", claude_args=own))
+    assert [a for a in args if a.startswith("--system-prompt-snapshot")] == own[:1]
+    assert "off" not in args

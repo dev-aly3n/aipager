@@ -329,6 +329,19 @@ def _with_mode_flag(claude_args: list[str]) -> list[str]:
     return [*perm_modes.launch_args(perm_modes.AUTO), *claude_args]
 
 
+def _snapshot_args(claude_version: str | None, claude_args: list[str]) -> tuple[str, ...]:
+    """``--system-prompt-snapshot off`` for a Claude Code that takes it
+    (:func:`claude_launch.snapshot_off_args`), so a resumed conversation
+    gets the prompt appended now rather than the one it recorded, unless
+    the user's own args set the flag."""
+    for arg in claude_args:
+        if arg == "--":
+            break
+        if arg == "--system-prompt-snapshot" or arg.startswith("--system-prompt-snapshot="):
+            return ()
+    return claude_launch.snapshot_off_args(claude_version)
+
+
 def _claude_version(claude_bin: str | None) -> str | None:
     """The version of *claude_bin* when it is the binary aipager resolves
     (already probed, no new run), else None (unknown)."""
@@ -471,7 +484,8 @@ def launch(name: str, claude_args: list[str] | None = None,
         )
         return 1
 
-    sys_prompt = claude_launch.base_system_prompt(name, _claude_version(claude_bin))
+    claude_version = _claude_version(claude_bin)
+    sys_prompt = claude_launch.base_system_prompt(name, claude_version)
 
     sock_path = Path(sock)
 
@@ -525,6 +539,7 @@ def launch(name: str, claude_args: list[str] | None = None,
              f"{claude_launch.ATTACHMENTS_ENV}=1",
              claude_bin or "claude",
              "--append-system-prompt", sys_prompt,
+             *_snapshot_args(claude_version, claude_args),
              *_with_mode_flag(claude_args)],
             capture_output=True, text=True, check=False,
             env=daemon_secrets.build_session_env(),
