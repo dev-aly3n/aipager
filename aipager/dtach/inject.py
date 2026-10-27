@@ -34,8 +34,9 @@ _KILL_POLL_INTERVAL: float = 0.02
 # (``inject.asyncio`` IS the global module; patching it reaches every
 # coroutine in the process, CLAUDE.md). Both default to the real functions.
 # ``_key_gap_sleep`` is the pause between two writes of one key sequence
-# (``send_text_and_enter``'s text-to-Enter gap, ``discard_queued_input``'s
-# Escape-to-Ctrl+U gap and the gaps between its Ctrl+U writes).
+# (``send_text_and_enter``'s gaps between the pieces of a long prompt and
+# its text-to-Enter gap, ``discard_queued_input``'s Escape-to-Ctrl+U gap
+# and the gaps between its Ctrl+U writes).
 _create_subprocess_exec = asyncio.create_subprocess_exec
 _key_gap_sleep = asyncio.sleep
 
@@ -319,8 +320,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # after writing), so writes are delivered one at a time and in order, not
 # merely started in order:
 # - ``send_keys``: one hold per key write;
-# - ``send_text_and_enter``: ONE hold across the text, its settle delay and
-#   the Enter, so nothing can land between them;
+# - ``send_text_and_enter``: ONE hold across the text (its pieces and the
+#   gaps between them, for a long prompt), its settle delay and the Enter,
+#   so nothing can land between them;
 # - ``discard_queued_input``: ONE hold across its Escape, the settle gap and
 #   every Ctrl+U write (about 0.3 s for a short queue, one more write per
 #   40 characters queued, at most 512 writes), so no prompt's text lands in a
@@ -335,10 +337,13 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # Waiting is FIFO. The bound on any writer's wait (Stop's Escape
 # included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
 # then the lock hold in progress: one ``dtach -p`` write, a prompt's
-# text + its settle delay (at most 0.5 s) + Enter, or a discard's Escape
+# text (for a long one its pieces and their gaps: a full 4,096-character
+# Telegram message is 21 writes and 0.6 s of gaps) + its settle delay (at
+# most 0.5 s) + Enter, or a discard's Escape
 # and Ctrl+U writes (about 0.3 s for a short queue, longer only for a long
 # one, see above). So one writer ahead costs at most ~0.5 s plus the
-# writes in flight, or a long discard. (A chord never starts
+# writes and gaps in flight (about 1.2 s behind a full-length message), or
+# a long discard. (A chord never starts
 # while a prompt is typed: bot/send_now.py refuses then. Several writers
 # queued at once on one session would add up, but Telegram updates are
 # handled one at a time.) Each ``dtach -p`` is capped by ``_run``'s
@@ -516,15 +521,34 @@ async def send_keys(session: str, keys: str) -> bool:
     return ok
 
 
+# A long prompt is typed in pieces (roadmap 8.123). Claude Code takes a
+# burst of input as a paste: one write of a few thousand characters lost
+# words (with its paste marking on, the first ~900 characters, aipager's
+# "[via Telegram" line among them) and the rest came wrapped in
+# <pasted_content> tags. Pieces of TYPE_CHUNK_CHARS characters,
+# TYPE_CHUNK_GAP_SECONDS apart, arrive as typed text, exactly as sent
+# (2.1.310/2.1.311: 6,000 characters, 40 lines, Persian, idle and while
+# Claude works; 64 to 512 characters with 20 to 50 ms gaps all held). The
+# margin assumes Claude Code reads its input within about 100 ms: four
+# pieces read together reach the ~800 characters it takes as a paste.
+# A permission dialog that opens while a prompt is being typed (a busy
+# session) takes the rest of it, as it took the Enter before (roadmap
+# 8.143).
+TYPE_CHUNK_CHARS: int = 200
+TYPE_CHUNK_GAP_SECONDS: float = 0.03
+
+
 async def send_text_and_enter(session: str, text: str) -> bool:
     """Send literal text followed by Enter.
 
     Text and Enter must be separate dtach -p calls — Claude Code's TUI
     treats a single chunk (text + CR) as all-text input. A separate CR
-    write is needed to trigger the submit keypress event. Both are written
-    under one hold of the session's write lock, so no other write (a Stop's
-    Escape, a send-now chord's check and Ctrl+S) can land between them; it
-    is counted once, for the pair.
+    write is needed to trigger the submit keypress event. Text longer than
+    :data:`TYPE_CHUNK_CHARS` goes in pieces (see the note above). All of it
+    is written under one hold of the session's write lock, so no other
+    write (a Stop's Escape, a send-now chord's check and Ctrl+S) can land
+    between the pieces or before the Enter; it is counted once, for the
+    whole. A piece that fails stops the send: no Enter.
     """
     if _refuse_parked(session):
         return False
@@ -534,9 +558,13 @@ async def send_text_and_enter(session: str, text: str) -> bool:
         if _refuse_parked(session):
             return False
         _note_write(session)
-        ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
-        if not ok:
-            return False
+        for start in range(0, max(len(text), 1), TYPE_CHUNK_CHARS):
+            if start:
+                await _key_gap_sleep(TYPE_CHUNK_GAP_SECONDS)
+            piece = text[start:start + TYPE_CHUNK_CHARS]
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=piece.encode())
+            if not ok:
+                return False
         # Claude Code's Ink TUI needs time to process text input before
         # Enter is recognized as "submit". Too short → \r is swallowed.
         # Scale with text length: longer text = more rendering time needed.

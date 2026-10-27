@@ -175,7 +175,8 @@ def test_no_write_between_the_chords_check_and_its_ctrl_s(term, monkeypatch,
 def test_a_writer_behind_a_prompt_waits_at_most_its_settle_and_writes(
         term, run_async):
     """The documented bound: behind a long prompt, an Escape waits for the
-    prompt's text, its settle delay (at most 0.5 s) and its Enter."""
+    prompt's text (its pieces and their gaps, roadmap 8.123), its settle
+    delay (at most 0.5 s) and its Enter."""
     async def scenario():
         loop = asyncio.get_running_loop()
         prompt = asyncio.ensure_future(
@@ -188,11 +189,15 @@ def test_a_writer_behind_a_prompt_waits_at_most_its_settle_and_writes(
         return waited
 
     waited = run_async(scenario())
-    # text write + 0.5 s settle + Enter write + the Escape's own write, with
-    # room for a slow CI runner's scheduling (these are real sleeps): still
-    # well under a second prompt's worth (another 0.5 s settle).
-    assert waited <= 0.5 + 3 * WRITE + 0.35
-    assert term.writes == [b"x" * 1000, b"\r", ESC]
+    text = b"x" * 1000
+    pieces = [text[i:i + inject.TYPE_CHUNK_CHARS]
+              for i in range(0, len(text), inject.TYPE_CHUNK_CHARS)]
+    # the text's writes and gaps + 0.5 s settle + Enter write + the Escape's
+    # own write, with room for a slow CI runner's scheduling (these are real
+    # sleeps): still well under a second prompt's worth.
+    gaps = (len(pieces) - 1) * inject.TYPE_CHUNK_GAP_SECONDS
+    assert waited <= 0.5 + gaps + (len(pieces) + 2) * WRITE + 0.35
+    assert term.writes == [*pieces, b"\r", ESC]
 
 
 def test_the_lock_is_per_session(term, run_async):
