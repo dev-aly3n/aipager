@@ -9,7 +9,8 @@ and, while a switch waits, dispatches ``mode_reported`` here.
 - The reported mode is the target: confirmed.
 - It is not, the first time: one more round of presses, counted from the
   mode Claude Code reported (never on a dialog event or while a dialog is
-  open: the presses would answer it; the switch waits for the next hook).
+  open, nor past the typing gate's dialog check before each press: the
+  presses would answer it; the switch waits for the next hook).
 - It is still not: the person is told the real mode. Asked for Auto and
   told Manual means Auto is not available for this session ("model or
   plan"); the session is then shown as Ask with that said.
@@ -87,6 +88,21 @@ TOAST_MODE_DIALOG_OPEN = Msg("toast.mode_dialog_open",
                                   "a question or permission prompt", eg={"session": "x1"})
 
 _TASKS: set = set()
+# Each session's in-place switch lock (:func:`switch_lock`).
+_SWITCH_LOCKS: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Lock]] = {}
+
+
+def switch_lock(session: str) -> asyncio.Lock:
+    """*session*'s in-place switch lock, for the running event loop: one
+    switch's or retry's presses at a time, each counted from the state the
+    one before left (the typing gate can hold presses for seconds, and a
+    switch that waited would else count from a mode not reached yet)."""
+    loop = asyncio.get_running_loop()
+    entry = _SWITCH_LOCKS.get(session)
+    if entry is None or entry[0] is not loop:
+        entry = (loop, asyncio.Lock())
+        _SWITCH_LOCKS[session] = entry
+    return entry[1]
 
 
 def _spawn(coro) -> asyncio.Task:
@@ -158,13 +174,30 @@ def _retry_may_press(sess: TrackedSession, pending: ModeSwitch) -> bool:
     hook must not get stray Shift+Tabs in the new process, and a dialog
     would read them as an answer. Never into a session parked on a
     Claude Code background job."""
+    return _retry_still_wanted(sess, pending) and not sess.dialog_is_open()
+
+
+def _retry_still_wanted(sess: TrackedSession, pending: ModeSwitch) -> bool:
+    """:func:`_retry_may_press` without the dialog: asked again before
+    each press, after the typing gate's wait (which looks for dialogs
+    itself), so a relaunch or End begun meanwhile gets no Shift+Tab."""
     return (sess.mode_switch is pending and not sess.relaunch_in_flight
-            and sess.status != Status.GONE and not sess.dialog_is_open()
+            and sess.status != Status.GONE
             and not sess.parked_job and not inject.is_parked(sess.name))
 
 
 async def _retry(bot, sess: TrackedSession, pending: ModeSwitch, count: int,
                  reported: str) -> None:
+    async with switch_lock(sess.name):
+        unconfirmed = await _retry_locked(sess, pending, count, reported)
+    if unconfirmed:
+        await settle(bot, sess, pending, "unconfirmed")
+
+
+async def _retry_locked(sess: TrackedSession, pending: ModeSwitch, count: int,
+                        reported: str) -> bool:
+    """The retry's presses, under the switch lock. True when the switch is
+    to be settled as unconfirmed."""
     if not _retry_may_press(sess, pending):
         if sess.mode_switch is pending:
             # The retry is not spent: the next hook decides (a relaunch
@@ -172,18 +205,45 @@ async def _retry(bot, sess: TrackedSession, pending: ModeSwitch, count: int,
             pending.retried = False
             if not sess.reported_mode:
                 sess.reported_mode = reported
-        return
-    if await inject.press_mode_cycle(sess.name, count):
+        return False
+    pending.pressing = True
+    try:
+        pressed = await inject.press_mode_cycle(
+            sess.name, count, still_wanted=lambda: _retry_still_wanted(sess, pending))
+    finally:
+        pending.pressing = False
+    if pressed is inject.DIALOG_BEFORE_TYPING or pressed is inject.DIALOG_WHILE_TYPING:
+        # The typing gate saw a dialog (roadmap 8.146): as for one seen
+        # above, the next hook decides. After some presses the mode is
+        # somewhere along the cycle: that hook's reported mode counts.
+        if sess.mode_switch is pending:
+            pending.retried = False
+            if pressed is inject.DIALOG_WHILE_TYPING:
+                # Settled from the last key, as after a full round (the
+                # reported mode stays the "" on_reported set).
+                pending.sent_at = time.monotonic()
+            elif not sess.reported_mode:
+                sess.reported_mode = reported
+        return False
+    if pressed:
         if sess.mode_switch is pending:
             # The settle window runs from the last key, not from when the
             # retry was decided (the presses may have waited for the lock).
             pending.sent_at = time.monotonic()
-        return
-    if sess.mode_switch is pending:
-        sess.mode_switch = None
-        if not sess.reported_mode:
-            sess.reported_mode = reported
-        await settle(bot, sess, pending, "unconfirmed")
+        return False
+    if sess.mode_switch is not pending:
+        return False
+    if sess.relaunch_in_flight or sess.status == Status.GONE:
+        # Stopped for a relaunch or End begun meanwhile: it resets the
+        # switch itself; should it not, the next hook decides (the mode
+        # reported stays "": presses may have gone in).
+        pending.retried = False
+        return False
+    # A press failed, or the session parked meanwhile.
+    sess.mode_switch = None
+    if not sess.reported_mode:
+        sess.reported_mode = reported
+    return True
 
 
 def _notes(tr, sess: TrackedSession, pending: ModeSwitch, outcome: str) -> tuple[str, str]:

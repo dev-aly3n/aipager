@@ -33,7 +33,7 @@ def world(monkeypatch):
     presses: list = []
     press_ok = {"ok": True}
 
-    async def _press(name, count):
+    async def _press(name, count, **_kw):
         presses.append((name, count))
         return press_ok["ok"]
 
@@ -241,7 +241,7 @@ def test_retry_is_stamped_after_its_presses(world, run_async, monkeypatch):
     sess.status = Status.IDLE
     sess.mode_switch = pending = _pending(retried=True)
 
-    async def _slow_press(name, count):
+    async def _slow_press(name, count, **_kw):
         pending.sent_at = -100.0  # the presses waited for the write lock
         return True
 

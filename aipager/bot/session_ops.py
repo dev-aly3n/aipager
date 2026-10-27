@@ -3557,16 +3557,37 @@ class SessionOpsMixin:
         from) is a restart through :meth:`_perms_switch_core`. Ask <->
         Auto is in place: Shift+Tab pressed in the terminal, counted from
         the session's current mode, refused while a dialog or question is
-        open (the presses would answer it), fine while a turn runs. Its
+        open (the presses would answer it), fine while a turn runs. Also
+        refused when the typing gate sees a dialog before or between the
+        presses (roadmap 8.146); after some presses the session is shown in
+        the mode they reached until the next hook reports it. Its
         outcome is ``"sent"``: the next main-agent hook confirms it
         (aipager/bot/mode_switch.py).
 
         Reasons besides the restart ones: ``"not_live"``, ``"starting"``,
         ``"already_restarting"``, ``"already"``, ``"dialog_open"``,
         ``"send_failed"``, ``"sent"``."""
-        label = sess.label
         if not perm_modes.is_mode(target):
             raise ValueError(target)
+        from aipager.bot import mode_switch  # local: import cycle
+        # One in-place switch (or retry) at a time per session: each counts
+        # its presses from the state the one before left, and the typing
+        # gate can hold presses for seconds (roadmap 8.146).
+        async with mode_switch.switch_lock(sess.name):
+            outcome = await self._mode_switch_locked(sess, target)
+        if outcome is not None:
+            return outcome
+        # *force*: only a restart has a background job to stop.
+        if force:
+            return await self._perms_switch_core(sess, target, force=True)
+        return await self._perms_switch_core(sess, target)
+
+    async def _mode_switch_locked(self, sess: TrackedSession,
+                                  target: str) -> RestartOutcome | None:
+        """:meth:`_mode_switch_core` under the session's switch lock: the
+        outcome, or None when the switch is a restart (done by the caller,
+        outside the lock)."""
+        label = sess.label
         if sess.status == Status.GONE:
             return RestartOutcome(ok=False, reason="not_live", label=label)
         if sess.status == Status.UNKNOWN:
@@ -3576,10 +3597,7 @@ class SessionOpsMixin:
         if self._already_in_mode(sess, target):
             return RestartOutcome(ok=True, reason="already", label=label, mode=target)
         if sess.mode_switch_restarts(target):
-            # *force*: only a restart has a background job to stop.
-            if force:
-                return await self._perms_switch_core(sess, target, force=True)
-            return await self._perms_switch_core(sess, target)
+            return None
         if self._parked(sess):
             # Shift+Tab would go to a client parked on a background job.
             return RestartOutcome(ok=False, reason="parked", label=label,
@@ -3588,22 +3606,68 @@ class SessionOpsMixin:
             return RestartOutcome(ok=False, reason="dialog_open", label=label,
                                   mode=target, in_place=True)
         from aipager.state import ModeSwitch
-        count = perm_modes.presses(sess.mode_raw(), target,
+        start_raw = sess.mode_raw()
+        count = perm_modes.presses(start_raw, target,
                                    auto_in_cycle=not sess.auto_unavailable)
         previous = (sess.perm_mode, sess.reported_mode, sess.mode_switch)
         # Recorded BEFORE the write: a hook racing the presses is
         # "settling", never read as their result.
-        record = ModeSwitch(target=target, presses=count or 0, sent_at=time.monotonic())
+        record = ModeSwitch(target=target, presses=count or 0, sent_at=time.monotonic(),
+                            pressing=True)
         sess.mode_switch = record
         sess.reported_mode = ""
         sess.perm_mode = target
         self.registry.mark_dirty()
-        if not await inject.press_mode_cycle(sess.name, count or 0):
-            # Only this call's own switch: a relaunch or another switch
-            # that started while the presses waited for the write lock
-            # has set state that is newer than *previous*.
+        went_in = [0]
+
+        def _still_wanted() -> bool:
+            # A relaunch or the session's end (which resets the switch) may
+            # have begun while the presses waited for the typing gate: no
+            # stray Shift+Tab then. (A newer switch waits for this one.)
+            return (sess.mode_switch is record and not sess.relaunch_in_flight
+                    and sess.status != Status.GONE)
+
+        def _pressed() -> None:
+            went_in[0] += 1
+
+        try:
+            pressed = await inject.press_mode_cycle(sess.name, count or 0,
+                                                    still_wanted=_still_wanted,
+                                                    on_press=_pressed)
+        finally:
+            record.pressing = False
+        if pressed is inject.DIALOG_BEFORE_TYPING or pressed is inject.DIALOG_WHILE_TYPING:
+            # A dialog opened before or during the presses (the typing
+            # gate stopped them, roadmap 8.146): refused as for a dialog
+            # seen above. Never the target claimed.
             if sess.mode_switch is record:
-                sess.perm_mode, sess.reported_mode, sess.mode_switch = previous
+                if pressed is inject.DIALOG_BEFORE_TYPING:
+                    # Nothing pressed: as before.
+                    sess.perm_mode, sess.reported_mode, sess.mode_switch = previous
+                else:
+                    # Some presses went in: the mode is that many steps
+                    # along the cycle (shown so, never as the target nor
+                    # as the mode before), until the next hook reports it.
+                    sess.perm_mode, sess.mode_switch = previous[0], None
+                    sess.reported_mode = perm_modes.after_presses(
+                        start_raw, went_in[0], auto_in_cycle=not sess.auto_unavailable)
+                    log.info("[%s] mode switch to %s stopped by a dialog after %d of %d "
+                             "Shift+Tab press(es)", label, target, went_in[0], count or 0)
+                self.registry.mark_dirty()
+            return RestartOutcome(ok=False, reason="dialog_open", label=label,
+                                  mode=target, in_place=True)
+        if not pressed:
+            # Only this call's own switch: a relaunch that started while
+            # the presses waited has set state that is newer than
+            # *previous*. After some presses (a write failed, or a
+            # relaunch began between them) the mode is that many steps on.
+            if sess.mode_switch is record:
+                if went_in[0]:
+                    sess.perm_mode, sess.mode_switch = previous[0], None
+                    sess.reported_mode = perm_modes.after_presses(
+                        start_raw, went_in[0], auto_in_cycle=not sess.auto_unavailable)
+                else:
+                    sess.perm_mode, sess.reported_mode, sess.mode_switch = previous
                 self.registry.mark_dirty()
             return RestartOutcome(ok=False, reason="send_failed", label=label,
                                   mode=target, in_place=True)

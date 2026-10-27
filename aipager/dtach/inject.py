@@ -334,8 +334,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 #   Ctrl+S write, so a foreign write falls before the check (and the
 #   Ctrl+S is skipped) or after the Ctrl+S, never between them.
 # - ``press_mode_cycle``: ONE hold across its Shift+Tab presses and the
-#   gaps between them (at most 3 writes + 2 x ``MODE_PRESS_GAP``, 0.3 s),
-#   so no prompt's text lands between two presses.
+#   gaps between them (at most 3 writes + 2 x ``MODE_PRESS_GAP``, 0.3 s,
+#   plus the typing gate's look before each press, bounded as a prompt's
+#   are), so no prompt's text lands between two presses.
 # Waiting is FIFO. The bound on any writer's wait (Stop's Escape
 # included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
 # then the lock hold in progress: one ``dtach -p`` write, a prompt's
@@ -345,7 +346,11 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # and Ctrl+U writes (about 0.3 s for a short queue, longer only for a long
 # one, see above). So one writer ahead costs at most ~0.5 s plus the
 # writes and gaps in flight (about 1.2 s behind a full-length message), or
-# a long discard. (A chord never starts
+# a long discard. A prompt or a mode switch also looks at the typing gate
+# under the lock before each piece, Enter or press; that look waits only
+# when a tool call passed its hook while the marker was up (one held past
+# its hook's cap), at most ``GATE_WAIT_HARD_LIMIT`` per look, so such a
+# hold can grow by a few seconds in that rare case. (A chord never starts
 # while a prompt is typed: bot/send_now.py refuses then. Several writers
 # queued at once on one session would add up, but Telegram updates are
 # handled one at a time.) Each ``dtach -p`` is capped by ``_run``'s
@@ -937,7 +942,10 @@ async def discard_queued_input(session: str, chars: int = 0) -> bool:
     return True
 
 
-async def press_mode_cycle(session: str, presses: int) -> bool:
+async def press_mode_cycle(session: str, presses: int, *,
+                           still_wanted: Callable[[], bool] | None = None,
+                           on_press: Callable[[], None] | None = None,
+                           ) -> bool | _SendStopped:
     """Press Shift+Tab *presses* times in *session*: Claude Code moves one
     step along its permission-mode cycle per press (an Ask<->Auto switch
     without a restart, aipager/bot/session_ops.py ``_mode_switch_core``).
@@ -947,7 +955,19 @@ async def press_mode_cycle(session: str, presses: int) -> bool:
     same reason ``send_text_and_enter`` splits text and Enter), and a
     partly read chunk would land in a mode nobody can count. All presses
     under one hold of the write lock, counted once. Stops at the first
-    failed write and returns False; ``presses <= 0`` writes nothing."""
+    failed write and returns False; ``presses <= 0`` writes nothing.
+
+    Through the typing gate, as a prompt is (roadmap 8.146; the gate note
+    above): in Claude Code's file-edit permission dialog Shift+Tab allows
+    the edit and every edit after it for the session (2.1.311, live). The
+    whole gate is looked at before every press: a dialog open before the
+    first returns :data:`DIALOG_BEFORE_TYPING` (nothing pressed); one that
+    opened after some presses stops the rest and returns
+    :data:`DIALOG_WHILE_TYPING` (the mode is then somewhere along the
+    cycle). *on_press* is called after each press that went in, so the
+    caller knows how far. *still_wanted*, asked under the lock before each
+    press: False (a relaunch or the session's end began while the gate
+    waited) stops the presses and returns False."""
     if presses <= 0:
         return True
     if _refuse_parked(session):
@@ -955,17 +975,45 @@ async def press_mode_cycle(session: str, presses: int) -> bool:
     await _await_chord(session)
     sock = _sock_path(session)
     seq = KEYS["BackTab"].encode()
-    async with _write_lock(session):
-        if _refuse_parked(session):
-            return False
-        _note_write(session)
-        for i in range(presses):
-            if i:
-                await _key_gap_sleep(perm_modes.MODE_PRESS_GAP)
-            ok, _ = await _run([_DTACH, "-p", sock], stdin=seq)
-            if not ok:
-                log.warning("Shift+Tab %d/%d → %s failed", i + 1, presses, session)
+    _gate_begin(session)
+    ok = False
+    try:
+        if not await _await_quiet_gate(session):
+            log.info("Not pressing Shift+Tab in %s: a dialog is open", session)
+            return DIALOG_BEFORE_TYPING
+        async with _write_lock(session):
+            if _refuse_parked(session):
                 return False
+            for i in range(presses):
+                if i:
+                    await _key_gap_sleep(perm_modes.MODE_PRESS_GAP)
+                # The whole gate before every press (renewing the marker):
+                # a tool call held at the marker past its hook's cap goes
+                # on with a fresh stamp, and its dialog may be drawing now.
+                # The first one is also the look again after the lock wait.
+                if not await _await_quiet_gate(session, renew=True):
+                    ok = False
+                    if not i:
+                        log.info("Not pressing Shift+Tab in %s: a dialog is open", session)
+                        return DIALOG_BEFORE_TYPING
+                    log.warning("A dialog opened in %s during a mode switch: stopped "
+                                "after %d of %d Shift+Tab presses", session, i, presses)
+                    return DIALOG_WHILE_TYPING
+                if still_wanted is not None and not still_wanted():
+                    ok = False
+                    log.info("Mode switch in %s no longer wanted after %d of %d "
+                             "Shift+Tab presses", session, i, presses)
+                    return False
+                if not i:
+                    _note_write(session)
+                ok, _ = await _run([_DTACH, "-p", sock], stdin=seq)
+                if not ok:
+                    log.warning("Shift+Tab %d/%d → %s failed", i + 1, presses, session)
+                    return False
+                if on_press is not None:
+                    on_press()
+    finally:
+        _gate_finish(session, ok)
     log.info("Pressed Shift+Tab x%d → %s", presses, session)
     return True
 

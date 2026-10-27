@@ -258,7 +258,8 @@ def test_perms_ask_to_auto_is_sent_in_place_for_anyone(server, run_async, monkey
             assert resp.status == 200
             assert await resp.json() == {"status": "sent", "label": "dev", "mode": "auto",
                                          "pending": True}
-            press.assert_awaited_once_with("claude-dev", 3)
+            press.assert_awaited_once()
+            assert press.await_args.args == ("claude-dev", 3)
             assert sess.perm_mode == "auto"
             assert sess.mode_switch.reply == (SCOPE_CHAT_ID, 321, "mirror")
             text = server.bot._app.bot.send_message.await_args.kwargs["text"]

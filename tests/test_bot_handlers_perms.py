@@ -128,7 +128,8 @@ def test_perms_ask_auto_switches_in_place(mk_bot, mk_update, run_async, monkeypa
     update = mk_update(f"/perms {target}", chat_id=12345)
     update.message.reply_text = AsyncMock(return_value=reply)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
-    press.assert_awaited_once_with("claude-dev", presses)
+    press.assert_awaited_once()
+    assert press.await_args.args == ("claude-dev", presses)
     assert "claude-dev" not in bot._perms_pending          # no busy/confirm card
     text = update.message.reply_text.await_args[0][0]
     assert "without a restart" in text

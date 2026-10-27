@@ -487,6 +487,10 @@ class ModeSwitch:
     presses: int
     sent_at: float
     retried: bool = False
+    # While its presses are being written (they may wait for the typing
+    # gate, longer than the settle window): a hook then is never read as
+    # their result.
+    pressing: bool = False
     reply: tuple[int, int, str] | None = None
     by: str = ""
 
@@ -3075,8 +3079,9 @@ class TrackedSession:
 
         ``"ignored"`` for a value that is not a mode Claude Code has;
         ``"settling"`` (nothing recorded) while a switch's presses are
-        younger than ``MODE_SETTLE_SECONDS`` (the hook was very likely
-        fired before Claude Code read them); else ``"recorded"``. Never
+        being written or are younger than ``MODE_SETTLE_SECONDS`` (the
+        hook was very likely fired before Claude Code read them); else
+        ``"recorded"``. Never
         touches ``perm_mode``: a hook never widens a launch flag."""
         mapped = _perm_modes.from_claude(raw)
         if mapped is None:
@@ -3086,7 +3091,8 @@ class TrackedSession:
             # this process's cycle.
             self.bypass_seen = True
         pending = self.mode_switch
-        if pending is not None and now - pending.sent_at < _perm_modes.MODE_SETTLE_SECONDS:
+        if pending is not None and (pending.pressing
+                                    or now - pending.sent_at < _perm_modes.MODE_SETTLE_SECONDS):
             return "settling"
         self.reported_mode = raw  # type: ignore[assignment]
         if self.mode_launch_unchecked and pending is None:

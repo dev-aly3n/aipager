@@ -628,6 +628,10 @@ class CallbackDispatchMixin:
             note = tr.html(MODE_STILL_STOPPING, session=sess.label)
         elif outcome.reason == "launch_failed":
             note = tr.html(MODE_SWITCH_FAILED, error=outcome.err)
+        elif outcome.reason == "dialog_open":
+            # In place after all, and a prompt is open (roadmap 8.146).
+            from aipager.bot.handlers import MODE_DIALOG_OPEN  # local: import cycle
+            note = tr.html(MODE_DIALOG_OPEN, session=sess.label)
         else:
             # not_live / already_restarting / a background job in the way:
             # never silence (a refused switch used to leave its card and
