@@ -299,11 +299,11 @@ async def _deny_after_restore(r, tmp_path, *, marker: bool = True):
     return card, before
 
 
-def test_deny_on_restored_card_types_five_downs_then_enter(
+def test_deny_on_restored_card_types_one_escape(
         replay, vloop, tmp_path):
     r = replay
     _card, before = _run(vloop, _deny_after_restore(r, tmp_path))
-    assert r.pty.keys[len(before):] == ["Down"] * 5 + ["Enter"]
+    assert r.pty.keys[len(before):] == ["Escape"]
 
 
 def test_deny_on_restored_card_is_audited_as_denied_keystroke(

@@ -237,7 +237,7 @@ def test_deny_on_the_restored_card_ends_the_turn_like_a_typed_refusal(
         return card
 
     _run(vloop, scenario())
-    assert r.keys == ["Down"] * 5 + ["Enter"]
+    assert r.keys == ["Escape"]
     record = _audit()
     assert (record["via"], record["action"], record["denied"]) == (
         "keystroke_fallback", "Denied", True)

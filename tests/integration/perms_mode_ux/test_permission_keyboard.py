@@ -3,8 +3,9 @@
 SC16: Permission keyboard has exactly 2 rows; row 0 = [Allow, Deny], row 1 = [Allow always, Stop].
 SC17: Tapping "Allow always" sends exactly Down, Enter with 0.1s delays —
 the always-allow option is item 2 of "1. Yes / 2. Yes, and always allow … /
-3. No". Deny does not step to a fixed index; it overshoots so the menu
-clamps on the last item, which is the refusal at every menu length.
+3. Yes, and switch to auto mode / 4. No" (2.1.310). Deny moves no cursor
+at all: it is one Escape, which refuses in every dialog shape (Claude
+Code's menus wrap, so no count of Downs does; roadmap 8.126).
 """
 
 from __future__ import annotations
@@ -315,13 +316,12 @@ def test_allow_sends_only_enter():
     assert "Enter" in key_calls, f"Allow must send Enter; got {key_calls}"
 
 
-def test_deny_has_more_down_presses_than_allow_always():
-    """Deny must travel past Allow-always, never stop short of it.
+def test_deny_never_moves_the_cursor_onto_allow_always():
+    """Deny must never reach the Allow-always row (item 2).
 
-    Allow-always sits at item 2 and the refusal is last. If Deny ever sent
-    the same number of Downs or fewer, it would select the always-allow
-    option — running the tool the operator refused and widening permissions
-    for the rest of the session.
+    Selecting it would run the tool the operator refused. Claude Code's
+    menus wrap, so five Downs from the top of a four-row prompt land exactly
+    there: Deny is one Escape, no Down and no Enter (roadmap 8.126).
     """
     bot = _make_bot()
 
@@ -346,6 +346,7 @@ def test_deny_has_more_down_presses_than_allow_always():
     # Allow always key calls
     sess2 = TrackedSession(name="claude-ben2", label="ben2", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben2"] = sess2
+    sess2.pending_permission = _WITH_RULE
     aa_keys = []
 
     async def mock_send_aa(session_name, key):
@@ -357,9 +358,5 @@ def test_deny_has_more_down_presses_than_allow_always():
          patch("aipager.dtach.inject.is_alive", side_effect=mock_is_alive):
         _run(bot._handle_callback(update2, MagicMock()))
 
-    deny_downs = deny_keys.count("Down")
-    aa_downs = aa_keys.count("Down")
-    assert deny_downs > aa_downs, (
-        f"Deny must send more Down presses than Allow always, or it selects "
-        f"the always-allow option; deny={deny_downs}, allow_always={aa_downs}"
-    )
+    assert deny_keys == ["Escape"], deny_keys
+    assert aa_keys == ["Down", "Enter"], aa_keys

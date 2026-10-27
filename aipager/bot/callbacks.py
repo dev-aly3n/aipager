@@ -433,34 +433,38 @@ async def _send_empty_answer(query) -> None:
 
 
 # Claude Code renders its permission prompt as a cursor menu whose shape
-# depends on the tool. Observed on v2.1.220 for a Bash call:
+# depends on the tool, and the daemon cannot read the labels: the
+# PermissionRequest hook payload carries only tool_name/tool_input
+# (dtach/hook_receiver.py), never the rendered options. Measured on
+# 2.1.310 (and 2.1.296), a Bash prompt in ask mode:
 #
 #     > 1. Yes
-#       2. Yes, and always allow access to <dir>/ from this project
-#       3. No
+#       2. Yes, and always allow access to <dir> from this project
+#       3. Yes, and switch to auto mode
+#       4. No
 #
-# A tool with no directory scope to widen shows only Yes/No, so the index
-# of "No" is NOT fixed. The daemon cannot read the labels: the
-# PermissionRequest hook payload carries only tool_name/tool_input
-# (dtach/hook_receiver.py), never the rendered options. So a deny has to
-# be expressed as cursor movement that is correct for every shape.
+# and the first read outside the working directories in auto mode:
 #
-# The invariant that makes that possible: the menu CLAMPS at the last
-# item, it does not wrap. Verified by pushing Down five times at a
-# three-item prompt — the cursor stopped on "3. No" rather than cycling
-# back to "Yes". Overshooting therefore always lands on the last option,
-# which is the negative one in every shape observed.
+#     > 1. Yes, and keep allowing any reads outside the working directories
+#       2. No, and block reads outside the working directories from now on
+#       3. No, and ask again next time
+#       4. Yes, but ask again next time
 #
-# Getting this wrong is not symmetric. Until this constant existed, deny
-# sent a single Down and selected "Yes, and always allow" — it ran the
-# tool the operator had just refused AND widened permissions for the rest
-# of the session, while reporting "Denied" to the user and to the audit
-# log. Overshooting can only ever land on a refusal, so it fails safe.
-# Claude Code 2.1.259 added "Yes, and switch to auto mode" as the row just
-# above "No" on Bash prompts (Yes / [don't ask again] / [switch to auto] /
-# No), so the menu can be four rows deep: two Downs from the top would stop
-# ON the auto-mode row; five clamp onto "No" whatever the length.
-_DENY_OVERSHOOT = 5
+# The menus WRAP: Down on the last row goes back to the first. So no count
+# of Downs lands on a refusal in every shape, and the old "overshoot to the
+# last row" (5 Downs, which clamped on 2.1.220) ran the refused Bash command
+# by selecting row 2 ("Yes, and always allow ...") and chose the persistent
+# "block" row of the outside-reads question. Escape is the one key that
+# refuses in every shape: on a tool prompt it does what the "No" row does
+# ("No, and tell Claude what to do differently (esc)"), on the outside-reads
+# question it takes the question's default ("No, and ask again next time").
+# On a question it is expected to decline it (not measured live).
+
+
+async def _type_refusal(session_name: str) -> bool:
+    """Refuse the dialog on top of Claude Code's screen: one Escape."""
+    return await inject.send_keys(session_name, "Escape")
+
 
 # Mirrors aipager.dtach.hook_receiver._STANDING_RULE_SUGGESTION_TYPES —
 # deliberately duplicated, not imported, so this decision-building code
@@ -2282,14 +2286,8 @@ class CallbackDispatchMixin:
                 if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
                     claude_held = await self._claude_queue_before_typed_refusal(sess)
                     answered_at = time.time()
-                # Overshoot to the last item — see _DENY_OVERSHOOT.
-                for _ in range(_DENY_OVERSHOOT):
-                    if not await inject.send_keys(session_name, "Down"):
-                        ok = False
-                        break
-                    await _sleep(0.1)
-                if ok:
-                    ok = await inject.send_keys(session_name, "Enter")
+                # Escape, never Downs: the menus wrap (see _type_refusal).
+                ok = await _type_refusal(session_name)
         elif action == "continue":
             verb = ACTION_VERBS[action]
             decision = "continue"
@@ -2433,12 +2431,12 @@ class CallbackDispatchMixin:
                 # 8.112). A question is always typed: not counted.
                 if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
                     report_store.record_counter("keystroke_fallback")
-                # Typed into Claude Code's dialog: a refusal row ends the
-                # turn like an interrupt, with no Stop hook (roadmap 8.99).
+                # Typed into Claude Code's dialog: a refusal (Escape) ends
+                # the turn like an interrupt, with no Stop hook (roadmap 8.99).
                 person = getattr(query, "from_user", None)
                 self._watch_keystroke_answer(
                     sess,
-                    # Only a tool's Deny chose the dialog's refusal row; a
+                    # Only a tool's Deny typed the dialog's refusal; a
                     # question's rows are its options (the degraded
                     # "AskUserQuestion (loading...)" prompt has Deny too).
                     refusal=(action == "deny" and (perm.get("tool_info") or {})

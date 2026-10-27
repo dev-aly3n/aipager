@@ -4784,14 +4784,16 @@ class NotifyMixin:
                     # AuthMixin._auto_deny_decision.
                     denied, whose = self._auto_deny_decision(sess, tool_name)
                     if denied:
-                        await self._auto_deny(sess, tool_info, whose)
+                        await self._auto_deny(sess, tool_info, whose,
+                                              context.get("hook_reply"))
                         return
                 elif self.team is not None and self.team.rules.deny_tools:
                     # Legacy team.yaml mode: its ``rules.deny_tools``, for
                     # the session's last Telegram sender (admins bypass).
                     triggerer = self._driver_user(sess)
                     if self.team.rules.tool_is_denied(tool_name, triggerer):
-                        await self._auto_deny(sess, tool_info, triggerer)
+                        await self._auto_deny(sess, tool_info, triggerer,
+                                              context.get("hook_reply"))
                         return
 
             # Can we inline into the existing busy message?

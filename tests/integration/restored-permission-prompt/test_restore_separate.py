@@ -90,7 +90,7 @@ def test_deny_on_restored_separate_prompt(replay, vloop, tmp_path):
         await asyncio.sleep(1)
 
     _run(vloop, scenario())
-    assert r.keys == ["Down"] * 5 + ["Enter"]
+    assert r.keys == ["Escape"]
     record = _audit()
     assert (record["via"], record["denied"]) == ("keystroke_fallback", True)
 

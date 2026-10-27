@@ -290,7 +290,7 @@ def test_answering_a_separate_prompt_types_the_refusal_behind_it(
     assert len(rig.sess.open_prompts()) == 2
     rig.tap(first, "allow")
     assert [d["behavior"] for _r, d in rig.decisions] == ["allow"]
-    assert rig.keys == ["Down"] * 5 + ["Enter"]
+    assert rig.keys == ["Escape"]
     assert rig.sess.open_prompts() == []
 
 

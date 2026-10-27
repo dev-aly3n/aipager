@@ -77,7 +77,7 @@ def suppressed(monkeypatch):
 
 @pytest.mark.parametrize("verb, keys", [
     ("allow", ["Enter"]),
-    ("deny", ["Down"] * 5 + ["Enter"]),
+    ("deny", ["Escape"]),
 ])
 def test_watchdog_demoted_prompt_in_a_suppressed_chat_still_answers(
         replay, vloop, tmp_path, suppressed, verb, keys):

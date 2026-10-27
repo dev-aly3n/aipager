@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 from aipager.state import Status, TrackedSession
 from aipager.team import Role, Rules, Team, User as TeamUser
@@ -180,9 +181,9 @@ def test_authorize_swallows_pending_record_failure(mk_bot, mk_update, run_async,
 # ---- _auto_deny ----------------------------------------------------------
 
 def test_auto_deny_types_the_deny_buttons_keys_and_marks_busy(mk_bot, run_async, monkeypatch):
-    """The Deny button's keys: five Downs clamp onto the last row ("No")
-    whatever the dialog's length. One Down stopped on row 2 of a three-row
-    Bash dialog ("Yes, and don't ask again" / "switch to auto mode")."""
+    """The Deny button's key: one Escape. Claude Code's menus wrap, so any
+    count of Downs lands on an allow row of some dialog shape (five Downs
+    ran a denied Bash command through "always allow"; roadmap 8.126)."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
     sess.pending_permission = {"x": "y"}  # should be cleared
@@ -194,7 +195,7 @@ def test_auto_deny_types_the_deny_buttons_keys_and_marks_busy(mk_bot, run_async,
 
     run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "git push --force"}, _admin()))
     keys = [c.args[1] for c in sent.await_args_list]
-    assert keys == ["Down"] * 5 + ["Enter"]
+    assert keys == ["Escape"]
     # Session transitioned to BUSY
     assert sess.status == Status.BUSY
     assert sess.pending_permission is None
@@ -263,6 +264,371 @@ def test_auto_deny_writes_audit_record(mk_bot, run_async, monkeypatch):
     assert audit_calls[0]["session"] == "claude-jim"
     assert audit_calls[0]["tool"] == "Bash"
     assert audit_calls[0]["user_id"] == 42
+
+
+def test_auto_deny_answers_a_waiting_hook_and_types_nothing(mk_bot, run_async, monkeypatch):
+    """While the PermissionRequest hook waits, the refusal goes through it
+    (the button's way): no key reaches a dialog Claude Code has not drawn
+    yet, and the turn goes on, so nothing watches it."""
+    from aipager.bot.callbacks import DENIED_VIA_AIPAGER
+    from aipager.dtach import hook_reply
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", sent)
+    decisions = []
+    monkeypatch.setattr(hook_reply, "send_decision",
+                        lambda reply, decision: decisions.append((reply, decision)) or True)
+    bot._watch_keystroke_answer = MagicMock()
+    reply = {"addr": "/nonexistent/reply.sock", "request_id": "req-1"}
+
+    run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "rm -rf /"}, None, reply))
+    assert decisions == [(reply, hook_reply.deny_decision(message=DENIED_VIA_AIPAGER,
+                                                          interrupt=False))]
+    assert sent.await_count == 0
+    bot._watch_keystroke_answer.assert_not_called()
+    assert sess.status == Status.BUSY
+
+
+def test_a_typed_auto_deny_is_watched_like_a_typed_deny(mk_bot, run_async, monkeypatch):
+    """No hook waits: the Escape refuses in the dialog, which ends the turn
+    with no Stop hook. The turn is watched (roadmap 8.99), from BUSY, so the
+    card does not say Working until the cap."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", sent)
+    held = [{"text": "queued"}]
+    bot._claude_queue_before_typed_refusal = AsyncMock(return_value=held)
+    seen = []
+    bot._watch_keystroke_answer = MagicMock(
+        side_effect=lambda s, **kw: seen.append((s.status, kw)))
+
+    run_async(bot._auto_deny(sess, {"name": "Bash", "summary": "rm -rf /"}, None, None))
+    assert [c.args[1] for c in sent.await_args_list] == ["Escape"]
+    assert len(seen) == 1
+    status, kw = seen[0]
+    assert status == Status.BUSY
+    assert kw["refusal"] is True and kw["held"] == held
+    assert kw["answered_at"] > 0
+
+
+def test_an_auto_deny_whose_key_failed_is_not_watched(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=False))
+    bot._watch_keystroke_answer = MagicMock()
+    run_async(bot._auto_deny(sess, {"name": "Bash", "summary": ""}, None, None))
+    bot._watch_keystroke_answer.assert_not_called()
+
+
+def test_an_auto_denied_question_is_typed_and_watched_as_no_refusal(mk_bot, run_async,
+                                                                    monkeypatch):
+    """A question is always typed, as on the button; its Escape is not a
+    tool's refusal, so only the interrupt marker may end its turn."""
+    from aipager.dtach import hook_reply
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", sent)
+    decide = MagicMock(return_value=True)
+    monkeypatch.setattr(hook_reply, "send_decision", decide)
+    bot._watch_keystroke_answer = MagicMock()
+    run_async(bot._auto_deny(sess, {"name": "AskUserQuestion", "summary": ""}, None,
+                             {"addr": "/nonexistent/reply.sock", "request_id": "req-1"}))
+    decide.assert_not_called()
+    assert [c.args[1] for c in sent.await_args_list] == ["Escape"]
+    assert bot._watch_keystroke_answer.call_args.kwargs["refusal"] is False
+
+
+def _two_due_refusals(sess, tools=("Write", "Edit")):
+    sess.extra_prompts = [
+        {"text": "", "perm": {"tool_info": {"name": tool}}, "auto_deny_due": True}
+        for tool in tools]
+
+
+def _stamping_keys(events):
+    from aipager.dtach import inject
+
+    async def _keys(name, key):
+        inject._note_write(name)
+        events.append(key)
+        return True
+    return _keys
+
+
+def test_two_due_auto_denies_are_not_typed_back_to_back(mk_bot, run_async, monkeypatch):
+    """Two Escapes in a row are Claude Code's double Escape (it interrupts
+    the turn): the second waits out the settle time from the first."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    events = []
+
+    async def _pause(seconds):
+        events.append(("pause", round(seconds, 1)))
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+    _two_due_refusals(sess)
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == ["Escape", ("pause", auth.AUTO_DENY_SETTLE_SECONDS), "Escape"]
+    assert auth.AUTO_DENY_SETTLE_SECONDS >= 0.3
+    assert sess.open_prompts() == []
+
+
+def test_a_due_auto_deny_waits_after_a_persons_typed_answer(mk_bot, run_async, monkeypatch):
+    """A person's answer typed into the dialog above (an Enter for Allow, an
+    Escape for Deny) just now: the refusal below waits before its Escape."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")          # the person's key, just now
+    events = []
+
+    async def _pause(seconds):
+        events.append("pause")
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+    _two_due_refusals(sess, tools=("Write",))
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == ["pause", "Escape"]
+
+
+def test_a_due_auto_deny_no_longer_on_top_after_the_pause_waits(mk_bot, run_async,
+                                                               monkeypatch):
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    events = []
+    verdicts = iter(["yes", "yes", "behind"])
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: next(verdicts, "behind"))
+
+    async def _pause(seconds):
+        pass
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+    _two_due_refusals(sess)
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == ["Escape"]
+    assert [rec["auto_deny_due"] for rec in sess.extra_prompts] == [True]
+    assert sess.status == Status.INTERACTIVE
+
+
+def test_a_refusal_waiting_out_the_pause_is_never_promoted(mk_bot, run_async, monkeypatch):
+    """The prompt above closes during the pause: the refusal waiting to be
+    typed stays a waiting refusal (never the primary prompt, which would
+    show nothing and type nothing) and is typed once the pause is over."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    primary = {"tool_info": {"name": "AskUserQuestion"}}
+    sess.pending_permission = primary
+    _two_due_refusals(sess, tools=("Write",))
+    refusal = sess.extra_prompts[0]
+    events = []
+
+    async def _pause(seconds):
+        # The person answers the question above meanwhile.
+        sess.close_prompts(lambda p: p is primary)
+        events.append(("promoted", sess.pending_prompt_msg is refusal))
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == [("promoted", False), "Escape"]
+    assert sess.open_prompts() == []
+
+
+def test_a_refusal_left_waiting_after_the_pause_is_typed_by_a_later_run(mk_bot, run_async,
+                                                                        monkeypatch):
+    """No longer on top once the pause is over: it waits for a later run,
+    unmarked (a mark left behind would make every later run skip it, and
+    the session would sit on a dialog nobody refuses)."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    _two_due_refusals(sess, tools=("Write",))
+    events = []
+    verdicts = iter(["yes", "behind"])
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: next(verdicts, "yes"))
+
+    async def _pause(seconds):
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == []
+    assert "auto_deny_typing" not in sess.extra_prompts[0]
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == ["Escape"]
+
+
+def test_a_refusal_whose_pause_was_cancelled_is_typed_by_a_later_run(mk_bot, run_async,
+                                                                     monkeypatch):
+    import asyncio
+
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    _two_due_refusals(sess, tools=("Write",))
+    events = []
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+    cancelled = []
+
+    async def _pause(seconds):
+        if not cancelled:
+            cancelled.append(True)
+            raise asyncio.CancelledError
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+
+    with pytest.raises(asyncio.CancelledError):
+        run_async(bot._run_due_auto_denies(sess))
+    assert sess.extra_prompts[0].get("auto_deny_due") is True
+    assert "auto_deny_typing" not in sess.extra_prompts[0]
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == ["Escape"]
+
+
+def test_a_refusal_is_not_typed_once_the_session_stopped_waiting(mk_bot, run_async,
+                                                                 monkeypatch):
+    """The session left its prompts during the pause (a Stop, /stop): no
+    Escape into whatever Claude Code shows next."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    _two_due_refusals(sess, tools=("Write",))
+    events = []
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+
+    async def _pause(seconds):
+        sess.status = Status.BUSY
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == []
+
+
+def test_a_key_typed_during_the_pause_is_waited_out_too(mk_bot, run_async, monkeypatch):
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    _two_due_refusals(sess, tools=("Write",))
+    events = []
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+
+    async def _pause(seconds):
+        events.append("pause")
+        if events.count("pause") == 1:
+            inject._note_write("claude-jim")              # someone's key, now
+        else:
+            inject._LAST_WRITE_AT["claude-jim"] -= seconds
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == ["pause", "pause", "Escape"]
+
+
+def test_a_refusal_closed_during_the_pause_is_not_typed(mk_bot, run_async, monkeypatch):
+    """Its dialog went away meanwhile (answered in the terminal, its agent
+    stopped): no Escape for a prompt that is no longer there."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    sess.pending_permission = {"tool_info": {"name": "AskUserQuestion"}}
+    _two_due_refusals(sess, tools=("Write",))
+    gone = sess.extra_prompts[0]["perm"]
+    events = []
+
+    async def _pause(seconds):
+        sess.close_prompts(lambda p: p is gone)
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+
+    run_async(bot._run_due_auto_denies(sess))
+    assert events == []
+
+
+def test_a_refusal_waiting_out_the_pause_is_not_typed_twice(mk_bot, run_async, monkeypatch):
+    """Another run during the pause (an event, a tap) skips the refusal
+    the first run is about to type."""
+    from aipager.bot import auth
+    from aipager.dtach import inject
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(inject, "_LAST_WRITE_AT", {})
+    inject._note_write("claude-jim")
+    _two_due_refusals(sess, tools=("Write",))
+    events = []
+    nested = []
+
+    async def _pause(seconds):
+        if not nested:
+            nested.append(True)
+            await bot._run_due_auto_denies(sess)
+            events.append("other run done")
+        inject._LAST_WRITE_AT["claude-jim"] -= seconds     # the time passes
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _stamping_keys(events))
+    monkeypatch.setattr(auth, "_sleep", _pause)
+    monkeypatch.setattr(sess, "keys_verdict", lambda perm, now: "yes")
+
+    run_async(bot._run_due_auto_denies(sess))
+    # The other run left it alone; the first typed it once, after its pause.
+    assert events == ["other run done", "Escape"]
 
 
 # ---- _mark_driver --------------------------------------------------------

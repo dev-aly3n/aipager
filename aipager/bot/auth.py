@@ -19,7 +19,6 @@ from telegram import (
 )
 
 from aipager.bot import group_intake, tap_gate
-from aipager.dtach import inject
 from aipager.i18n import Command, Msg, Span
 
 from aipager.state import (
@@ -131,6 +130,10 @@ def _stranger_tr(user):
 # Seam: tests replace THIS, never ``asyncio.sleep`` (``aipager.bot.auth.
 # asyncio`` IS the global module; CLAUDE.md). Defaults to the real function.
 _sleep = asyncio.sleep
+
+#: How long after a key typed into a session a waiting auto-deny is typed:
+#: a second Escape right after another is Claude Code's double Escape.
+AUTO_DENY_SETTLE_SECONDS = 0.4
 
 
 def _is_person_id(value) -> bool:
@@ -711,9 +714,17 @@ class AuthMixin:
         sess: TrackedSession,
         tool_info: dict,
         triggerer: TeamUser | None,
+        hook_reply: dict | None = None,
     ) -> None:
-        """Auto-deny a tool prompt via the same key-injection path the
-        ``[❌ Deny]`` button uses. Called when a team rule matches.
+        """Auto-deny a tool prompt the way the ``[❌ Deny]`` button does.
+        Called when a team rule matches.
+
+        Through the PermissionRequest hook while it waits (*hook_reply*):
+        the refusal reaches that very request, nothing is typed, and the
+        turn goes on. Otherwise the Deny button's key goes into the dialog
+        (:meth:`_type_auto_deny`), which ends the turn like an interrupt
+        with no Stop hook, so the turn is watched as a typed Deny is
+        (roadmap 8.99), never left BUSY until the cap.
 
         Posts a one-line notice in the chat naming the tool and who it
         was blocked for, with their role ("⛔ x1 · Edit blocked for @bob
@@ -721,12 +732,38 @@ class AuthMixin:
         record. Returns the session to BUSY so the next claude tick
         proceeds normally.
         """
+        import time as _time
+
+        from aipager.bot.callbacks import DENIED_VIA_AIPAGER
+        from aipager.dtach import hook_reply as _hook_reply
         tool_name = tool_info.get("name", "?")
-        await self._type_auto_deny(sess, tool_name)
+        question = tool_name == "AskUserQuestion"
+        answered = False
+        if not question:
+            # A question is always typed, as on the button.
+            try:
+                answered = _hook_reply.send_decision(
+                    hook_reply, _hook_reply.deny_decision(message=DENIED_VIA_AIPAGER,
+                                                          interrupt=False))
+            except Exception:  # noqa: BLE001 - the key below is the fallback
+                answered = False
+        typed, held, answered_at = False, [], 0.0
+        if not answered:
+            # No hook waits for an answer (an older hook, a reply channel
+            # that failed to open): the key goes in now, as the old keys
+            # did, perhaps before Claude Code draws the dialog. Its Escape
+            # then interrupts the turn, which the watch below ends too.
+            if not question:
+                held = await self._claude_queue_before_typed_refusal(sess)
+            answered_at = _time.time()
+            typed = await self._type_auto_deny(sess, tool_name)
 
         # Restore BUSY (claude is proceeding past the denied prompt).
         self.registry.transition(sess.name, Status.BUSY)
         sess.pending_permission = None
+        if typed:
+            self._watch_keystroke_answer(sess, refusal=not question, held=held,
+                                         answered_at=answered_at)
         await self._auto_deny_notice(sess, tool_info, triggerer)
 
     async def _say_answer_refused(self, sess: TrackedSession) -> None:
@@ -745,12 +782,11 @@ class AuthMixin:
                       exc_info=True)
 
     async def _type_auto_deny(self, sess: TrackedSession, tool_name: str) -> bool:
-        """The Deny button's own keys, into the dialog on top: Down
-        ``_DENY_OVERSHOOT`` times, then Enter, so the cursor stops on the
-        last row ("No") however many rows the dialog has. A single Down
-        stopped on row 2 of a three-row dialog ("Yes, and don't ask again"
-        or "switch to auto mode"): a tool the rules deny was allowed."""
-        from aipager.bot.callbacks import _DENY_OVERSHOOT, _parked
+        """The Deny button's own key, into the dialog on top: one Escape
+        (callbacks._type_refusal). Claude Code's menus wrap, so no count of
+        Downs lands on "No" in every shape: the old five Downs ran the tool
+        the rules deny through its "always allow" row."""
+        from aipager.bot.callbacks import _parked, _type_refusal
         if _parked(sess):
             # Parked on a Claude Code background job: no key goes to the
             # parked client. The chat is told the prompt needs the session
@@ -759,14 +795,7 @@ class AuthMixin:
                         "background job", sess.label, tool_name)
             await self._say_answer_refused(sess)
             return False
-        ok = True
-        for _ in range(_DENY_OVERSHOOT):
-            if not await inject.send_keys(sess.name, "Down"):
-                ok = False
-                break
-            await _sleep(0.1)
-        if ok:
-            ok = await inject.send_keys(sess.name, "Enter")
+        ok = await _type_refusal(sess.name)
         if not ok:
             log.warning(
                 "[%s] auto-deny key injection failed for %s",
@@ -808,13 +837,24 @@ class AuthMixin:
     async def _run_due_auto_denies(self, sess: TrackedSession) -> None:
         """Type each waiting auto-deny whose dialog is now certainly on top
         (:meth:`TrackedSession.keys_verdict`), one at a time: answering
-        one uncovers the next. BUSY once no prompt is left open."""
+        one uncovers the next. BUSY once no prompt is left open.
+
+        Never right after a key aipager typed into this session (another
+        refusal, a person's answer to the prompt above): two Escapes in a
+        row are Claude Code's double Escape, and an Escape before the next
+        dialog is drawn interrupts the tool just allowed. The refusal
+        waits out :data:`AUTO_DENY_SETTLE_SECONDS` from that key, still
+        waiting (so it never becomes the primary prompt, which would show
+        nothing) and marked so another run does not type it meanwhile."""
         import time as _time
+
+        from aipager.dtach import inject
         for _ in range(len(sess.extra_prompts) + 1):
             if sess.status != Status.INTERACTIVE:
                 return
             due = [rec for rec in sess.extra_prompts
-                   if isinstance(rec, dict) and rec.get("auto_deny_due")]
+                   if isinstance(rec, dict) and rec.get("auto_deny_due")
+                   and not rec.get("auto_deny_typing")]
             ready = next((rec for rec in due
                           if sess.keys_verdict(rec.get("perm"), _time.monotonic())
                           == "yes"), None)
@@ -822,6 +862,20 @@ class AuthMixin:
                 return
             perm = ready["perm"]
             info = perm.get("tool_info") or {}
+            ready["auto_deny_typing"] = True
+            try:
+                for _wait in range(3):
+                    wait = AUTO_DENY_SETTLE_SECONDS - (
+                        _time.monotonic() - inject.last_write_at(sess.name))
+                    if wait <= 0:
+                        break
+                    await _sleep(wait)
+            finally:
+                ready.pop("auto_deny_typing", None)
+            if (sess.status != Status.INTERACTIVE
+                    or not any(rec is ready for rec in sess.extra_prompts)
+                    or sess.keys_verdict(perm, _time.monotonic()) != "yes"):
+                return
             ready["auto_deny_due"] = False
             await self._type_auto_deny(sess, info.get("name", "?"))
             sess.close_prompts(lambda p, perm=perm: p is perm)

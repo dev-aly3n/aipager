@@ -269,7 +269,7 @@ def test_once_the_hook_gave_up_the_answer_is_typed_and_still_named(
 
     world.tap(run_async, GROUP, BOB, "deny")
     assert world.decisions == []
-    assert world.keys == ["Down"] * 5 + ["Enter"]     # overshoot, unchanged
+    assert world.keys == ["Escape"]     # the typed refusal (roadmap 8.126)
     assert world.lines(GROUP) == [
         ("🚫 <b>api</b> · Denied · @bob · Bash: rm -rf build/", PROMPT_ID)]
     rec = _audit()[-1]

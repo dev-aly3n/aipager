@@ -314,7 +314,7 @@ def test_a_typed_deny_on_the_card_ends_the_turn_and_a_hook_deny_does_not(
         assert NAME not in session_ops._KEYSTROKE_WATCHES
         assert sess.status is Status.BUSY             # Claude goes on; Stop ends it
     else:
-        assert keys == ["Down"] * 5 + ["Enter"]
+        assert keys == ["Escape"]
         assert read_at == [0]                         # Claude's queue, before any key
         assert sess.status is Status.IDLE
         assert _card_texts(bot)[-1] == "🚫 <b>dev</b> · Denied"
