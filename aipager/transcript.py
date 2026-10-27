@@ -42,8 +42,9 @@ def is_no_response_entry(entry: dict) -> bool:
 
     ``isApiErrorMessage`` true
         Rate limits, expired auth, "Prompt is too long", 5xx. These must
-        keep flowing through to the notify path — ``_detect_api_error``
-        turns them into the error card and the retry button. Filtering
+        keep flowing through to the notify path — the turn's error check
+        (``transport._turn_api_error``, roadmap 8.145) turns them into the
+        error card and the retry button. Filtering
         them would silence every API-failure notification.
     ``isApiErrorMessage`` false
         Only ever ``NO_RESPONSE_TEXT``, recorded when a turn ended without
@@ -202,12 +203,30 @@ def extract_last_response_entry(
     entry carries no usable timestamp). The already-IDLE late-answer path
     needs it to tell an answer written before the last confirmed delivery
     from a genuinely undelivered one (roadmap 8.39)."""
+    text, stamp, _api_error = _last_response(transcript_path, since)
+    return text, stamp
+
+
+def extract_last_response_flagged(
+    transcript_path: str, *, since: float | None = None,
+) -> tuple[str | None, bool]:
+    """``extract_last_response`` plus whether the text is Claude Code's own
+    API error record (``isApiErrorMessage``): the one transcript signal
+    that a turn ended in an API error (roadmap 8.145). An answer that
+    only mentions an error is not one."""
+    text, _stamp, api_error = _last_response(transcript_path, since)
+    return text, api_error
+
+
+def _last_response(
+    transcript_path: str, since: float | None,
+) -> tuple[str | None, float | None, bool]:
     try:
         with open(transcript_path, "r") as f:
             tail = deque(f, maxlen=20)
     except (FileNotFoundError, PermissionError, OSError) as e:
         log.debug("Cannot read transcript %s: %s", transcript_path, e)
-        return None, None
+        return None, None, False
 
     for line in reversed(tail):
         line = line.strip()
@@ -222,7 +241,7 @@ def extract_last_response_entry(
             continue
 
         if is_no_response_entry(entry):
-            return "", None
+            return "", None, False
 
         message = entry.get("message")
         content = message.get("content", []) if isinstance(message, dict) else []
@@ -246,11 +265,11 @@ def extract_last_response_entry(
                     "turn — treating the turn as having produced none",
                     entry.get("timestamp"),
                 )
-                return "", None
+                return "", None, False
             return (_strip_leaked_tool_xml("\n\n".join(texts)),
-                    _entry_timestamp(entry))
+                    _entry_timestamp(entry), entry.get("isApiErrorMessage") is True)
 
-    return None, None
+    return None, None, False
 
 
 def _content_text(content) -> str:

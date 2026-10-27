@@ -1563,10 +1563,22 @@ def test_an_api_error_turn_keeps_its_toolless_card(mk_bot, run_async, wire):
     deleted."""
     bot = _wire_bot(mk_bot, wire)
     sess = _sess()
-    _finish(run_async, bot, sess, summary="API Error: 500 internal server error")
+    _finish(run_async, bot, sess, summary="API Error: 500 internal server error",
+            api_error="message_start")
     assert "delete_message" not in wire.methods(), wire.calls
     (final,) = _done_renders(wire)
     assert final["message_id"] == CARD
+
+
+def test_an_answer_that_mentions_an_error_drops_its_toolless_card(mk_bot, run_async, wire):
+    """Roadmap 8.145: an answer that only mentions an error ("overloaded",
+    "internal server error") is an answer, so the tool-less card goes as
+    for any answer, and the answer is sent."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    answer = "Fixed: the server was overloaded, so it returned 500 Internal Server Error"
+    _finish(run_async, bot, sess, summary=answer, raw_md=answer)
+    assert wire.methods() == ["delete_message", "sendRichMessage"]
 
 
 def test_a_dropped_card_attaches_no_full_log_for_a_live_frames_cut(

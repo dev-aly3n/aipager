@@ -92,6 +92,7 @@ from aipager.bot.transport import (  # noqa: F401
     TruncationFailed,
     _build_diff_block,
     _detect_api_error,
+    _turn_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
     _ERROR_PATTERNS,
@@ -3804,9 +3805,8 @@ class NotifyMixin:
                 sess.stream_consumed_notes = []
                 # An API error ends the run with nothing processed: the queue
                 # is left for the next finish, as before.
-                taken = (None if _detect_api_error(
-                    context.get("raw_md") or context.get("summary") or "")
-                    else self._take_next_prompt(sess))
+                taken = (None if _turn_api_error(context, sess=sess)
+                         else self._take_next_prompt(sess))
                 popped_turn = sess.turn_seq
                 # What the sync above absorbed (or popAll dropped) and what
                 # the pop just took have left Claude's queue: their "⏳
@@ -4080,7 +4080,7 @@ class NotifyMixin:
                     # An API error is not an answer: its notice goes out
                     # without the stats, so the card stays the record of
                     # the turn, as before.
-                    if _candidate and not _detect_api_error(_candidate):
+                    if _candidate and not _turn_api_error(context, sess=sess):
                         _cand_digest = hashlib.md5(
                             _candidate.encode("utf-8")).hexdigest()
                         drop_empty_card = not (
@@ -4248,8 +4248,12 @@ class NotifyMixin:
                 # ── API error detection → friendly message + retry button ──
                 error_source = raw_md or summary or ""
                 error_tr = i18n.for_sess(sess)
-                error_detection = _detect_api_error(error_source, tr=error_tr)
+                error_detection = _turn_api_error(context, sess=sess, tr=error_tr)
                 if error_detection:
+                    # Never silent (roadmap 8.145): the answer is not shown.
+                    log.warning("[%s] The turn ended in an API error (%s): an error "
+                                "notice goes in its place: %r", label,
+                                context.get("api_error"), error_source[:120])
                     if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                         # This branch returns before the merged-delivery attempt
                         # below ever runs — clean up here so the busy card isn't

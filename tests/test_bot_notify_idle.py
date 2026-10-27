@@ -378,7 +378,7 @@ def test_idle_detects_api_error_and_sends_friendly_message(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": "API Error: 429 rate_limit_error",
+        "summary": "API Error: 429 rate_limit_error", "api_error": "stop_failure",
     }))
     text = bot._app.bot.send_message.await_args.args[1]
     assert "Rate limit" in text or "rate limit" in text.lower()
@@ -394,7 +394,7 @@ def test_idle_api_error_no_last_prompt_no_retry_button(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": "API Error: 500 internal server error",
+        "summary": "API Error: 500 internal server error", "api_error": "stop_failure",
     }))
     kb = bot._app.bot.send_message.await_args.kwargs.get("reply_markup")
     assert kb is None
@@ -407,7 +407,7 @@ def test_idle_api_error_swallows_send_failure(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(side_effect=BadRequest("nope"))
     # MUST NOT raise
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": "API Error: 429 rate_limit",
+        "summary": "API Error: 429 rate_limit", "api_error": "stop_failure",
     }))
 
 

@@ -110,9 +110,9 @@ async def _send_files(bot, sess, paths, *, tool_use_id="toolu_1", caption=None,
         "tool_response": {"attachments": [{"path": str(p), "size": 1} for p in paths]}})
 
 
-async def _finish(bot, sess, answer):
+async def _finish(bot, sess, answer, **extra):
     bot.registry.transition(sess.name, Status.IDLE)
-    await bot.notify(sess, "idle_prompt", {"summary": answer})
+    await bot.notify(sess, "idle_prompt", {"summary": answer, **extra})
     await outbox.OUTBOX.settled(sess.name)
 
 
@@ -253,7 +253,8 @@ def test_files_reply_to_the_prompt_after_an_api_error(mk_bot, files_bot, rich,
 
     async def go():
         await _send_files(bot, sess, [_pic(tmp_path)])
-        await _finish(bot, sess, "API Error: 500 internal server error")
+        await _finish(bot, sess, "API Error: 500 internal server error",
+                      api_error="message_start")
     run_async(go())
     error = _index(files_bot, "send_message")
     [photo] = files_bot.file_calls()

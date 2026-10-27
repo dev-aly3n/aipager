@@ -34,7 +34,7 @@ from aipager.state import (
     TrackedSession,
 )
 from aipager.transcript import (
-    extract_last_response,
+    extract_last_response_flagged,
     last_assistant_preview,
     saved_prompt_evidence,
     turn_appears_complete,
@@ -1740,6 +1740,7 @@ class SessionMonitor:
                     recovered = self.registry.transition(name, Status.IDLE)
                     if recovered:
                         summary = None
+                        api_error = False
                         try:
                             # Only text written during THIS turn: the
                             # newest text in the file is the previous
@@ -1747,7 +1748,7 @@ class SessionMonitor:
                             # busy_started_wall is the wrong anchor here —
                             # a background-job re-entry keeps the job's
                             # original stamp on purpose.
-                            summary = extract_last_response(
+                            summary, api_error = extract_last_response_flagged(
                                 tp, since=sess.turn_entered_wall or None,
                             )
                         except Exception:
@@ -1765,6 +1766,9 @@ class SessionMonitor:
                         # previous turn's cached summary.
                         if summary == "":
                             ctx["no_response"] = True
+                        if api_error:
+                            # Claude Code's own error record (roadmap 8.145).
+                            ctx["api_error"] = "transcript"
                         try:
                             await self.notify_fn(recovered, "idle_prompt", ctx)
                         except Exception:

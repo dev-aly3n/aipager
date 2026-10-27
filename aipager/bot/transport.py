@@ -1038,6 +1038,45 @@ def _extract_retry_after(text: str) -> int | None:
     return None
 
 
+def _turn_api_error(context: dict, *, sess=None, tr=None) -> tuple[str, int | None] | None:
+    """The error notice for a turn that ended in an API error, as Claude Code
+    itself said (roadmap 8.145), else None.
+
+    Its signals: ``context["api_error"]``, set by the hook receiver and the
+    session monitor from StopFailure, a transcript record with
+    ``isApiErrorMessage`` or "API Error: NNN" at the start of the final
+    message; and, for an answer that looks like an error with none of
+    those (a Stop that carries Claude Code's error in other words), the
+    transcript's last record asked once (*sess*'s, flagged in *context*
+    for the next call). The text then only chooses the notice's words
+    (:func:`_detect_api_error`): a flagged turn whose text matches no known
+    error is delivered as it is. An answer that only mentions an error
+    word is never an error."""
+    text = context.get("raw_md") or context.get("summary") or ""
+    found = _detect_api_error(text, tr=tr)
+    if context.get("api_error"):
+        return found
+    if found is None or sess is None or context.get("api_error_checked"):
+        return None
+    context["api_error_checked"] = True
+    path = getattr(sess, "transcript_path", "") or ""
+    if not path:
+        return None
+    try:
+        from aipager.transcript import extract_last_response_flagged
+        _text, flagged = extract_last_response_flagged(
+            path, since=getattr(sess, "turn_entered_wall", None) or None)
+    except Exception:  # noqa: BLE001 - no evidence: not an error
+        log.debug("API error check of the transcript failed", exc_info=True)
+        return None
+    if not flagged or (_text or "").strip() != text.strip():
+        # Its error record must be this very text: an older turn's record
+        # (within the timestamp slack) says nothing about this answer.
+        return None
+    context["api_error"] = "transcript"
+    return found
+
+
 def _detect_api_error(text: str, *, tr=None) -> tuple[str, int | None] | None:
     """Check if text contains a known API error pattern.
 
