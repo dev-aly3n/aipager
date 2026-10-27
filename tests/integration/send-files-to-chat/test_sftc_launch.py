@@ -14,9 +14,17 @@ from aipager.bot.held import HELD
 from aipager.dtach import inject, launcher
 
 kit = sys.modules["_sftc_kit"]
-NOTE = ("You can send files and images (screenshots, PDFs, videos, anything) to the "
-        "person in Telegram with the SendUserFile tool; if it is not in your tool "
-        "list, load it with ToolSearch. Never say you cannot send files.")
+# Changed 2026-10-27: the send note became part of the Telegram note.
+NOTE = ("Your answers are shown in Telegram as rich text. Markdown renders (headings, "
+        "lists, links, code blocks). When a table helps, use a Markdown table, or an "
+        "HTML <table> for a caption or merged cells: Telegram draws it natively and it "
+        "scrolls sideways. Never draw tables or diagrams with box characters or spaces "
+        "in a code block; Mermaid is not drawn. Images in Markdown are not shown: send "
+        "images and files (screenshots, PDFs, anything) with the SendUserFile tool; if "
+        "it is not in your tool list, load it with ToolSearch, and never say you cannot "
+        "send files. A table over 20 columns or a few hundred rows goes as a CSV file "
+        "instead. Side details can fold in "
+        "<details><summary>\u2026</summary>\u2026</details>.")
 NAME_LINE = ('Your session name is "frontend". When users address you by this name, '
              'respond naturally -- it is your name in this session.')
 
@@ -26,11 +34,11 @@ def test_env_name():
 
 
 def test_send_note_text():
-    assert claude_launch.SEND_FILES_NOTE == NOTE
+    assert claude_launch.TELEGRAM_NOTE == NOTE
 
 
 def test_send_note_has_no_em_dash():
-    assert "—" not in claude_launch.SEND_FILES_NOTE
+    assert "—" not in claude_launch.TELEGRAM_NOTE
 
 
 @pytest.mark.parametrize("version", [None, "", "garbage", "2.1.301", "2.1.302",
@@ -44,8 +52,10 @@ def test_note_is_added_for_unknown_or_new_claude(version):
 
 @pytest.mark.parametrize("version", ["2.1.300", "2.1.30", "2.0.999", "1.9.0"],
                          ids=["300", "30", "2.0", "1.x"])
-def test_note_is_omitted_for_claude_before_2_1_301(version):
-    assert claude_launch.base_system_prompt("frontend", version) == NAME_LINE
+def test_send_sentence_is_omitted_for_claude_before_2_1_301(version):
+    prompt = claude_launch.base_system_prompt("frontend", version)
+    assert prompt == NAME_LINE + "\n\n" + claude_launch.TELEGRAM_NOTE_NO_SEND
+    assert "SendUserFile" not in prompt
 
 
 # ---- /new and friends: inject.launch_session -------------------------------------

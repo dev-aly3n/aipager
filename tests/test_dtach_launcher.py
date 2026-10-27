@@ -215,22 +215,23 @@ def test_terminal_session_sets_attachments_by_path(monkeypatch):
     assert env_at < argv.index("CLAUDE_CODE_ATTACHMENTS_BY_PATH=1") < argv.index("/opt/claude")
 
 
-def test_terminal_prompt_carries_the_send_note(monkeypatch):
-    from aipager.claude_launch import SEND_FILES_NOTE
+def test_terminal_prompt_carries_the_telegram_note(monkeypatch):
+    from aipager.claude_launch import TELEGRAM_NOTE
     argv = _spawn_argv(monkeypatch)
     prompt = argv[argv.index("--append-system-prompt") + 1]
     assert prompt.startswith('Your session name is "dev". ')
-    assert prompt.endswith("\n\n" + SEND_FILES_NOTE)
+    assert prompt.endswith("\n\n" + TELEGRAM_NOTE)
 
 
-def test_terminal_prompt_has_no_note_for_an_old_claude(monkeypatch):
-    from aipager.claude_launch import SEND_FILES_NOTE
+def test_terminal_prompt_has_the_no_send_note_for_an_old_claude(monkeypatch):
+    from aipager.claude_launch import TELEGRAM_NOTE, TELEGRAM_NOTE_NO_SEND
     argv = _spawn_argv(monkeypatch, version="2.1.300")
     prompt = argv[argv.index("--append-system-prompt") + 1]
-    assert SEND_FILES_NOTE not in prompt
+    assert TELEGRAM_NOTE not in prompt
+    assert prompt.endswith("\n\n" + TELEGRAM_NOTE_NO_SEND)
     # Another binary than the one resolved: its version is unknown.
     argv = _spawn_argv(monkeypatch, claude_bin="/elsewhere/claude", version="2.1.300")
-    assert SEND_FILES_NOTE in argv[argv.index("--append-system-prompt") + 1]
+    assert TELEGRAM_NOTE in argv[argv.index("--append-system-prompt") + 1]
 
 
 # ----- the recorded system prompt is not replayed (8.125) --------------------
