@@ -51,3 +51,15 @@ def test_strip_own_marks_touches_only_its_three():
         "a" + RLO + "\u200e\u061c")
     assert bidi_guard.strip_own_marks(None) is None
     assert bidi_guard.strip_own_marks("می‌خواهم") == "می‌خواهم"
+
+
+def test_a_restored_outside_reads_question_keeps_its_flag(mk_bot):
+    """Roadmap 8.142: after a restart a typed Allow must still not answer
+    Claude Code's outside-reads question."""
+    record = _record("🔐 <b>jim</b>", "Read: /etc/hosts")
+    record["perm"]["tool_name"] = "Read"
+    record["perm"]["outside_reads_question"] = True
+    msg = _restore(mk_bot, record)
+    assert msg["perm"]["tool_info"]["outside_reads_question"] is True
+    plain = _restore(mk_bot, _record("🔐 <b>jim</b>", "Read: /etc/hosts"))
+    assert "outside_reads_question" not in plain["perm"]["tool_info"]

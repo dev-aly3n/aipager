@@ -582,3 +582,48 @@ def test_a_failing_snapshot_does_not_stop_the_save(monkeypatch, caplog):
     data = json.loads(state.SESSION_STATE_FILE.read_text())
     assert NAME in data["sessions"]
     assert "open_prompt" not in data["sessions"][NAME]
+
+
+# ── roadmap 8.142: the hook's session and the outside-reads flag ─────────
+
+def test_a_hook_channel_with_its_session_survives_a_save_and_load():
+    reg = SessionRegistry()
+    sess = _inline(_waiting(reg))
+    sess.pending_permission["hook_reply"] = dict(HOOK, session=NAME)
+    reg.save()
+    rec = _reload().get(NAME).restored_open_prompt
+    assert rec["perm"]["hook_reply"] == dict(HOOK, session=NAME)
+
+
+@pytest.mark.parametrize("session", ["", 7, None, "x" * 500])
+def test_a_hook_channel_with_a_bad_session_is_saved_as_none(session):
+    reg = SessionRegistry()
+    sess = _inline(_waiting(reg))
+    sess.pending_permission["hook_reply"] = dict(HOOK, session=session)
+    reg.save()
+    assert _saved()["perm"]["hook_reply"] is None
+
+
+def test_the_outside_reads_flag_survives_a_save_and_load():
+    reg = SessionRegistry()
+    _inline(_waiting(reg), outside_reads_question=True)
+    reg.save()
+    rec = _reload().get(NAME).restored_open_prompt
+    assert rec["perm"]["outside_reads_question"] is True
+
+
+def test_no_flag_saves_no_key():
+    reg = SessionRegistry()
+    _inline(_waiting(reg))
+    reg.save()
+    assert "outside_reads_question" not in _saved()["perm"]
+
+
+def test_a_flag_that_is_not_true_spoils_the_record():
+    from aipager import open_prompt
+    reg = SessionRegistry()
+    _inline(_waiting(reg), outside_reads_question=True)
+    reg.save()
+    raw = copy.deepcopy(_saved())
+    raw["perm"]["outside_reads_question"] = "yes"
+    assert open_prompt.validate(raw, busy_msg_id=77, now_wall=time.time()) is None

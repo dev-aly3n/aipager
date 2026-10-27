@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} đang làm việc. Hãy đổi sau khi nó xong, hoặc dùng /mode."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} hiện không làm gì"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Mở chat để trả lời"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "Nếu gõ “Cho phép” lúc này, mọi lần đọc ngoài dự án sẽ được cho phép luôn, nên hãy trả lời yêu cầu này trong terminal."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Đây là thẻ của {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Đây là thẻ của {owner}. Gửi {command} để có thẻ của riêng bạn."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "Chế độ Toàn quyền chỉ dành cho quản trị viên."}

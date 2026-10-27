@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} 세션이 작업 중이에요. 끝난 뒤에 바꾸거나 /mode를 쓰세요."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} 세션은 지금 아무 작업도 하지 않아요"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "답하려면 채팅을 여세요"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "지금 “허용”을 입력하면 프로젝트 밖의 모든 읽기가 계속 허용돼요. 이 요청은 터미널에서 답해 주세요."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "{owner} 님의 카드예요."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "{owner} 님의 카드예요. 본인 카드를 받으려면 {command} 명령을 보내세요."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "전체 권한 모드는 관리자만 쓸 수 있어요."}

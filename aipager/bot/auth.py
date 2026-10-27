@@ -840,15 +840,19 @@ class AuthMixin:
         one uncovers the next. BUSY once no prompt is left open.
 
         Never right after a key aipager typed into this session (another
-        refusal, a person's answer to the prompt above): two Escapes in a
-        row are Claude Code's double Escape, and an Escape before the next
-        dialog is drawn interrupts the tool just allowed. The refusal
-        waits out :data:`AUTO_DENY_SETTLE_SECONDS` from that key, still
+        refusal, a person's answer to the prompt above) or an answer it
+        gave a waiting hook (roadmap 8.142: Claude Code may still be
+        closing that dialog): two Escapes in a row are Claude Code's double
+        Escape, and an Escape before the next dialog is drawn interrupts
+        the tool just allowed, or refuses it. The refusal waits out
+        :data:`AUTO_DENY_SETTLE_SECONDS` from that key or answer, still
         waiting (so it never becomes the primary prompt, which would show
-        nothing) and marked so another run does not type it meanwhile."""
+        nothing) and marked so another run does not type it meanwhile.
+        When it closes the last open prompt, the turn it may have ended is
+        watched, as a lone prompt's refusal is (:meth:`_auto_deny`)."""
         import time as _time
 
-        from aipager.dtach import inject
+        from aipager.dtach import hook_reply, inject
         for _ in range(len(sess.extra_prompts) + 1):
             if sess.status != Status.INTERACTIVE:
                 return
@@ -865,8 +869,9 @@ class AuthMixin:
             ready["auto_deny_typing"] = True
             try:
                 for _wait in range(3):
-                    wait = AUTO_DENY_SETTLE_SECONDS - (
-                        _time.monotonic() - inject.last_write_at(sess.name))
+                    last = max(inject.last_write_at(sess.name),
+                               hook_reply.last_answer_at(sess.name))
+                    wait = AUTO_DENY_SETTLE_SECONDS - (_time.monotonic() - last)
                     if wait <= 0:
                         break
                     await _sleep(wait)
@@ -876,12 +881,40 @@ class AuthMixin:
                     or not any(rec is ready for rec in sess.extra_prompts)
                     or sess.keys_verdict(perm, _time.monotonic()) != "yes"):
                 return
+            question = info.get("name") == "AskUserQuestion"
+            last_open = all(p is perm for p in sess.open_prompts())
+            held = []
+            if last_open and not question:
+                from aipager.bot import session_ops
+                # The read forgets a held-back message's second Enter
+                # (roadmap 8.124): kept to give back if nothing is typed.
+                held_back = session_ops._HELD_BACK.get(sess.name)
+                # Marked while Claude's queue is read, as during the pause.
+                ready["auto_deny_typing"] = True
+                try:
+                    held = await self._claude_queue_before_typed_refusal(sess)
+                finally:
+                    ready.pop("auto_deny_typing", None)
+                # That read can wait: the same checks again, right before
+                # the key.
+                if (sess.status != Status.INTERACTIVE
+                        or not any(rec is ready for rec in sess.extra_prompts)
+                        or sess.keys_verdict(perm, _time.monotonic()) != "yes"):
+                    if held_back is not None:
+                        session_ops._HELD_BACK.setdefault(sess.name, held_back)
+                    return
             ready["auto_deny_due"] = False
-            await self._type_auto_deny(sess, info.get("name", "?"))
+            answered_at = _time.time()
+            typed = await self._type_auto_deny(sess, info.get("name", "?"))
             sess.close_prompts(lambda p, perm=perm: p is perm)
             await self._auto_deny_notice(sess, info, ready.get("auto_deny_by"))
             if not sess.open_prompts():
                 self.registry.transition(sess.name, Status.BUSY)
+                if typed and last_open:
+                    # Its Escape may have ended the turn (a main-agent
+                    # dialog): watched as a lone prompt's refusal is.
+                    self._watch_keystroke_answer(sess, refusal=not question, held=held,
+                                                 answered_at=answered_at)
 
     async def _auto_deny_notice(self, sess: TrackedSession, tool_info: dict,
                                 triggerer: TeamUser | None) -> None:

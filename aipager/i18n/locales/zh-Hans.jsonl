@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} 正在工作。请等它完成后再更换，或使用 /mode。"}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} 现在没有在处理任何事"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "打开聊天来回复"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "现在输入“允许”会一直允许读取项目以外的任何内容，请在终端中回答这个请求。"}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "这是 {owner} 的卡片。"}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "这是 {owner} 的卡片。发送 {command} 获取你自己的卡片。"}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "完全访问模式仅限管理员。"}

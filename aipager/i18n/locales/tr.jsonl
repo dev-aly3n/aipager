@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} çalışıyor. Bitince değiştir ya da /mode kullan."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} şu an bir şey yapmıyor"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Yanıtlamak için sohbeti aç"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "Şimdi yazılan bir “İzin ver”, proje dışındaki her okumaya izin vermeyi sürdürür; bu yüzden bunu terminalde yanıtla."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Bu kart {owner} adlı kişiye ait."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Bu kart {owner} adlı kişiye ait. Kendi kartın için {command} gönder."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "Tam erişim modu yalnızca yöneticiler için."}

@@ -37,11 +37,25 @@ from __future__ import annotations
 import json
 import os
 import socket
+import time
 import uuid
 
 PROTOCOL_VERSION = 1
 
 _VALID_BEHAVIORS = frozenset({"allow", "deny"})
+
+# Daemon side: when an answer last went to a session's waiting hook
+# (``time.monotonic()``), by session name (roadmap 8.142). An answer through
+# the hook types nothing, so ``inject.last_write_at`` cannot see it: a
+# refusal typed for the next prompt waits from this too, so it never lands
+# on the dialog this answer is still closing.
+_ANSWERED_AT: dict[str, float] = {}
+
+
+def last_answer_at(session: str) -> float:
+    """When an answer last went to *session*'s waiting hook
+    (``time.monotonic()``), or 0.0 when none has in this process."""
+    return _ANSWERED_AT.get(session, 0.0)
 
 
 def new_request_id() -> str:
@@ -191,7 +205,8 @@ def deny_decision(message: str, *, interrupt: bool = False) -> dict:
 
 def send_decision(hook_reply: dict | None, decision: dict) -> bool:
     """Deliver *decision* to the hook described by *hook_reply*
-    (``{"addr": str, "request_id": str}``, or ``None``/incomplete).
+    (``{"addr": str, "request_id": str}``, or ``None``/incomplete; with a
+    ``"session"`` name, the delivery is stamped for :func:`last_answer_at`).
 
     Returns ``True`` iff the kernel accepted the datagram (a listener
     existed at that path) — not delivery/processing confirmation.
@@ -210,6 +225,9 @@ def send_decision(hook_reply: dict | None, decision: dict) -> bool:
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         sock.sendto(encode_reply(request_id, decision), addr)
+        session = hook_reply.get("session")
+        if isinstance(session, str) and session:
+            _ANSWERED_AT[session] = time.monotonic()
         return True
     except Exception:
         return False

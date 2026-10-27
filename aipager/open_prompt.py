@@ -72,6 +72,12 @@ _PERM_KEYS = frozenset({"tool_name", "tool_summary", "detail",
                         "always_available", "standing_rule_suggestion",
                         "hook_reply", "question"})
 _HOOK_REPLY_KEYS = frozenset({"addr", "request_id"})
+#: Optional keys: the hook reply's session (its answers are stamped,
+#: roadmap 8.142) and the perm's "may be the outside-reads question" flag
+#: (a typed Allow must not answer it). Records written without them read
+#: back as before.
+_HOOK_REPLY_OPTIONAL = frozenset({"session"})
+_PERM_OPTIONAL = frozenset({"outside_reads_question"})
 _QUESTION_KEYS = frozenset({"question", "options"})
 _OPTION_KEYS = frozenset({"label", "description"})
 
@@ -126,11 +132,18 @@ def _question_record(questions) -> dict | None:
 
 def _hook_reply_record(hr) -> dict | None:
     """The parked hook's reply channel as is, or None when it is not the
-    exact two-key shape (a malformed channel answers by keystrokes)."""
-    if (isinstance(hr, dict) and set(hr) == _HOOK_REPLY_KEYS
+    exact two-key shape, with or without its session (a malformed channel
+    answers by keystrokes)."""
+    if (isinstance(hr, dict)
+            and _HOOK_REPLY_KEYS <= set(hr) <= _HOOK_REPLY_KEYS | _HOOK_REPLY_OPTIONAL
             and _str_within(hr["addr"], MAX_HOOK_ADDR, non_empty=True)
-            and _str_within(hr["request_id"], MAX_REQUEST_ID, non_empty=True)):
-        return {"addr": hr["addr"], "request_id": hr["request_id"]}
+            and _str_within(hr["request_id"], MAX_REQUEST_ID, non_empty=True)
+            and ("session" not in hr
+                 or _str_within(hr["session"], MAX_REQUEST_ID, non_empty=True))):
+        record = {"addr": hr["addr"], "request_id": hr["request_id"]}
+        if "session" in hr:
+            record["session"] = hr["session"]
+        return record
     return None
 
 
@@ -267,6 +280,9 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
             "hook_reply": _hook_reply_record(src.get("hook_reply")),
             "question": None,
         }
+        if tool_info.get("outside_reads_question") is True:
+            # Kept across a restart: a typed Allow must not answer it.
+            record["perm"]["outside_reads_question"] = True
     # The record must read back: what would not pass the loader is not
     # written (a suggestion that is not JSON, say).
     return validate(record, busy_msg_id=sess.busy_msg_id, now_wall=now_wall)
@@ -315,7 +331,9 @@ def _valid_json(x, depth: int = 0) -> bool:
 
 
 def _valid_perm(p) -> dict | None:
-    if not (isinstance(p, dict) and set(p) == _PERM_KEYS):
+    if not (isinstance(p, dict) and _PERM_KEYS <= set(p) <= _PERM_KEYS | _PERM_OPTIONAL):
+        return None
+    if "outside_reads_question" in p and p["outside_reads_question"] is not True:
         return None
     name = p["tool_name"]
     if not _str_within(name, MAX_TOOL_NAME, non_empty=True):
@@ -348,11 +366,14 @@ def _valid_perm(p) -> dict | None:
         return None
     if question is not None and hr is not None:
         return None
-    return {"tool_name": name, "tool_summary": p["tool_summary"],
-            "detail": p["detail"], "always_available": always,
-            "standing_rule_suggestion": rule,
-            "hook_reply": _hook_reply_record(hr) if hr is not None else None,
-            "question": question}
+    out = {"tool_name": name, "tool_summary": p["tool_summary"],
+           "detail": p["detail"], "always_available": always,
+           "standing_rule_suggestion": rule,
+           "hook_reply": _hook_reply_record(hr) if hr is not None else None,
+           "question": question}
+    if p.get("outside_reads_question") is True:
+        out["outside_reads_question"] = True
+    return out
 
 
 def validate(raw, *, busy_msg_id, now_wall: float) -> dict | None:

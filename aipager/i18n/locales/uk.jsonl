@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} працює. Зміни, коли вона закінчить, або скористайся /mode."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} зараз нічого не робить"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "Відкрий чат, щоб відповісти"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "Якщо зараз ввести «Дозволити», буде дозволено всі читання поза проєктом, тож дай відповідь на цей запит у терміналі."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "Це картка {owner}."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "Це картка {owner}. Надішли {command}, щоб отримати свою."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "Режим «Повний доступ» лише для адмінів."}

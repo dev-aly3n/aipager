@@ -1474,6 +1474,8 @@ def _fresh_terminal_write_stamps(monkeypatch):
     so a key one test typed would otherwise read, in the next, as aipager
     having typed into that test's dialog (roadmap 8.113)."""
     monkeypatch.setattr("aipager.dtach.inject._LAST_WRITE_AT", {})
+    # The answers given through a waiting hook (roadmap 8.142), likewise.
+    monkeypatch.setattr("aipager.dtach.hook_reply._ANSWERED_AT", {})
 
 
 @pytest.fixture(autouse=True)

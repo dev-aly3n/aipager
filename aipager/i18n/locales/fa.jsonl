@@ -962,6 +962,7 @@
 {"k": "toast.new_working_use_mode", "src": "2c2886f1", "v": "{session} در حال کار است. پس از تمام شدنش تغییر دهید، یا از /mode استفاده کنید."}
 {"k": "toast.not_working", "src": "1ec204d3", "v": "{session} الان کاری انجام نمی‌دهد"}
 {"k": "toast.open_chat", "src": "202c3e06", "v": "برای جواب دادن، چت را باز کنید"}
+{"k": "toast.outside_reads_typed_allow", "src": "2f2abf44", "v": "اگر الان «اجازه بده» تایپ شود، از این به بعد خواندن هر چیزی بیرون از پروژه مجاز می‌شود؛ این یکی را در ترمینال جواب بدهید."}
 {"k": "toast.owner_card", "src": "80b06bcd", "v": "این کارت مال {owner} است."}
 {"k": "toast.owner_card_send", "src": "7b051dc9", "v": "این کارت مال {owner} است. برای کارت خودتان {command} بفرستید."}
 {"k": "toast.perms_needs_admin", "src": "20f8f3e6", "v": "مود دسترسی کامل فقط برای ادمین است."}
