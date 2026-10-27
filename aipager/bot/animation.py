@@ -516,10 +516,14 @@ def _pop_queued_target(sess: TrackedSession, content: str) -> dict | None:
     one ("ok let's go with plan B") and a bare first-match would pop
     the wrong target and strand the real one (review rev-iter1-001).
     Pure apart from the pop."""
+    from aipager import invisible
+    # A message sent by a second Enter (roadmap 8.124) was queued without
+    # the invisible character Claude Code removed: those do not count.
+    content = invisible.without_context_dependent(content)
     best: int | None = None
     best_len = 0
     for i, target in enumerate(sess.queued_targets):
-        text = target.get("raw_text") or ""
+        text = invisible.without_context_dependent(target.get("raw_text") or "")
         if text and text in content and len(text) > best_len:
             best, best_len = i, len(text)
     return sess.queued_targets.pop(best) if best is not None else None

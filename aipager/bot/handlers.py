@@ -36,7 +36,7 @@ from aipager.bot.mode_labels import mode_label
 from aipager.dtach import inject
 
 from aipager import statusline_file
-from aipager import i18n, perm_modes
+from aipager import i18n, invisible, perm_modes
 from aipager.i18n import Command, Msg, Plural, Safe, Span
 from aipager.bot import (
     card_owner,
@@ -2819,7 +2819,10 @@ class CommandHandlersMixin:
         elif msg.document:
             media = msg.document
             raw_name = msg.document.file_name or "document"
-            display_name = Path(raw_name).name or "document"
+            # Saved under the name the prompt gives Claude: one without the
+            # invisible characters Claude Code removes from it (8.124).
+            display_name = invisible.clean(Path(raw_name).name).replace("\n", " ").strip() \
+                or "document"
         else:
             return
 

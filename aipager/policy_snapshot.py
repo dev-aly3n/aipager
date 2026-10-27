@@ -19,7 +19,7 @@ import stat
 import time
 from pathlib import Path
 
-from aipager import instance, safety
+from aipager import instance, invisible, safety
 
 log = logging.getLogger(__name__)
 
@@ -794,10 +794,17 @@ def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:
       2026-10-09). Passed over, it stays outstanding: it can still only
       make a fallback merge stricter.
     """
+    # A message Claude Code held back for an invisible character it removes
+    # only in some contexts was sent cleaned (roadmap 8.124): those
+    # characters do not count on either side. Only here, where a note is
+    # consumed: the later body checks (_only_note_bodies,
+    # snapshot_for_unattributed_prompt, enforce._command_from_telegram)
+    # compare raw text and fail closed (a stricter merge or the floor).
+    content = invisible.without_context_dependent(content)
     matched: list[dict] = []
     cursor = 0
     for note in outstanding:
-        body = note.get("body") or ""
+        body = invisible.without_context_dependent(note.get("body") or "")
         if not body:
             break
         if body.lstrip().startswith("/"):
@@ -844,6 +851,7 @@ def match_notes_for_prompt(outstanding: list[dict], prompt: str) -> list[dict]:
     the bodies :func:`snapshot_for_prompt` carries forward. Pure.
     """
     matched = match_notes_prefix_run(outstanding, prompt)
+    prompt = invisible.without_context_dependent(prompt)
     name = _first_token(prompt)
     if not name.startswith("/"):
         return matched
@@ -852,7 +860,7 @@ def match_notes_for_prompt(outstanding: list[dict], prompt: str) -> list[dict]:
     for note in outstanding:
         if note in matched:
             continue
-        body = note.get("body") or ""
+        body = invisible.without_context_dependent(note.get("body") or "")
         if body and _first_token(body) == name and body.strip() in prompt:
             return [*matched, note]
     return matched

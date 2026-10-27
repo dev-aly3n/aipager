@@ -129,6 +129,23 @@ def test_timed_out_twice_then_success_injects_once(
     assert "attempt 2/3" in retries[1]
 
 
+def test_a_file_name_is_saved_as_the_prompt_names_it(
+    mk_bot, mk_update, run_async, monkeypatch, tmp_path,
+):
+    """Claude Code removes invisible characters from the prompt (8.124):
+    the file is saved under the cleaned name, so the path Claude reads
+    exists."""
+    bot = mk_bot()
+    _sess, sent = _wire(bot, monkeypatch, tmp_path)
+    downloads = _Downloads()
+    update, _doc, _f = _doc_update(mk_update, downloads, file_name="re\u200bport\ufeff.pdf")
+
+    run_async(bot._handle_file(update, MagicMock()))
+
+    assert Path(downloads.written[0]).name.endswith("report.pdf")
+    assert downloads.written[0] in sent.await_args.args[1]
+
+
 def test_network_error_on_every_attempt_replies_once_naming_file(
     mk_bot, mk_update, run_async, monkeypatch, tmp_path,
 ):
