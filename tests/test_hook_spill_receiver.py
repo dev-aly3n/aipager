@@ -111,6 +111,21 @@ def test_spilled_info_line(folder, run_async, caplog):
     assert SECRET not in caplog.text
 
 
+def test_spilled_info_line_names_the_label(folder, run_async, caplog):
+    """A tracked session is named by its label, as the "hook" lines do."""
+    caplog.set_level(logging.INFO, logger=LOGGER)
+    registry = SessionRegistry()
+    registry.get_or_create(SESSION).label = "frontend"
+    recv = hr.HookReceiver(registry, None)
+    event = {"hook_event_name": "Notification", "notification_type": "auth_success",
+             "session": SESSION}
+    run_async(recv._on_datagram_counted(_spill(event)))
+    lines = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO
+             and "arrived through a spill file" in r.getMessage()]
+    size = len(json.dumps(event).encode())
+    assert lines == [f"[frontend] auth_success arrived through a spill file ({size} bytes)"]
+
+
 def test_inline_event_logs_no_spill_line(run_async, caplog):
     caplog.set_level(logging.INFO, logger=LOGGER)
     recv = hr.HookReceiver(SessionRegistry(), None)

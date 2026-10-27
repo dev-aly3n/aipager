@@ -1264,8 +1264,9 @@ class HookReceiver:
         if not session_name or not event:
             return
         if spilled:
+            tracked = self.registry.get(session_name)
             log.info("[%s] %s arrived through a spill file (%d bytes)",
-                     session_name, event, spilled)
+                     tracked.label if tracked else session_name, event, spilled)
 
         hook_version = msg.get("aipager_version")
         on_hook_version = getattr(self, "on_hook_version", None)
