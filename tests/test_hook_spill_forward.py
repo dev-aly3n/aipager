@@ -320,12 +320,15 @@ def test_pr_pointer_fail_no_wait(sock_path, folder, monkeypatch, capsys):
 
 
 class _FakeSocket:
-    def __init__(self, fail: int = 0):
+    def __init__(self, fail: int = 0, setsockopt_fail: int = 0):
         self.calls: list[tuple] = []
         self.fail = fail
+        self.setsockopt_fail = setsockopt_fail
 
     def setsockopt(self, *args):
         self.calls.append(("setsockopt", *args))
+        if self.setsockopt_fail:
+            raise OSError(self.setsockopt_fail, os.strerror(self.setsockopt_fail))
 
     def sendto(self, data, path):
         self.calls.append(("sendto", len(data), path))
@@ -346,6 +349,21 @@ def test_sndbuf_only_off_linux(monkeypatch, raise_it):
     if raise_it:
         expected.insert(0, ("setsockopt", socket.SOL_SOCKET, socket.SO_SNDBUF, 245_760))
     assert fake.calls == expected
+
+
+def test_sndbuf_failure_still_sends(monkeypatch):
+    """A refused SO_SNDBUF (macOS above kern.ipc.maxsockbuf) is ignored:
+    the event is still sent, never reported as an unreachable daemon."""
+    fake = _FakeSocket(setsockopt_fail=errno.EINVAL)
+    monkeypatch.setattr(notify_hook, "_dgram_socket", lambda: fake)
+    monkeypatch.setattr(notify_hook, "_RAISE_SNDBUF", True)
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", "/nowhere/s.sock")
+    assert notify_hook._forward(b"{}") is True
+    assert fake.calls == [
+        ("setsockopt", socket.SOL_SOCKET, socket.SO_SNDBUF, 245_760),
+        ("sendto", 2, "/nowhere/s.sock"),
+        ("close",),
+    ]
 
 
 def test_send_closes_on_failure(monkeypatch):

@@ -15,6 +15,7 @@ from __future__ import annotations
 import errno
 import os
 import stat
+import threading
 import time
 from types import SimpleNamespace
 
@@ -221,10 +222,30 @@ def test_refuse_symlink(folder, tmp_path):
 
 
 def test_refuse_fifo(folder):
-    os.mkfifo(folder / NAME, 0o600)
-    body, why = hook_spill.read_spill(BASE, NAME)
-    assert (body, why) == (None, "not-regular")
-    assert not os.path.lexists(folder / NAME)
+    """A FIFO planted at a spill name is refused at once: the daemon's
+    open must never wait for a writer (``O_NONBLOCK``), or the event loop
+    would hang on it. Run in a daemon thread so a regression fails here
+    instead of hanging the suite; a stuck open is released by opening the
+    FIFO for writing."""
+    fifo = folder / NAME
+    os.mkfifo(fifo, 0o600)
+    result = []
+    worker = threading.Thread(
+        target=lambda: result.append(hook_spill.read_spill(BASE, NAME)), daemon=True)
+    worker.start()
+    worker.join(5)
+    stuck = worker.is_alive()
+    if stuck:
+        try:
+            wfd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+        except OSError:
+            pass
+        else:
+            os.close(wfd)
+        worker.join(5)
+    assert not stuck, "read_spill blocked opening a FIFO"
+    assert result == [(None, "not-regular")]
+    assert not os.path.lexists(fifo)
 
 
 def test_refuse_foreign_file(folder, monkeypatch):
