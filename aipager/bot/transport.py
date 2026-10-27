@@ -206,6 +206,25 @@ class _PromptRefused:
 PROMPT_REFUSED = _PromptRefused()
 
 
+class _PromptDialog:
+    """``_inject_prompt``'s result for a message that met a dialog (a
+    permission prompt, a question) while it was being typed: nothing of it
+    reached Claude and its keys answered nothing (roadmap 8.143). Falsy,
+    like :data:`PROMPT_REFUSED`; a caller holds the message, as one sent
+    while a dialog is open, and compares it with ``is PROMPT_DIALOG``."""
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "PROMPT_DIALOG"
+
+
+PROMPT_DIALOG = _PromptDialog()
+
+
 def driver_id_from_update(update) -> int | None:
     """The raw Telegram user id of whoever sent ``update``, or ``None``.
 

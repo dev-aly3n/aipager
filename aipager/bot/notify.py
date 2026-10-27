@@ -112,6 +112,7 @@ from aipager.bot.transport import (  # noqa: F401
     resolve_chat_id_int,
     send_text,
     NEEDS_ADMIN_REPLY,
+    PROMPT_DIALOG,
     PROMPT_REFUSED,
 )
 
@@ -2382,10 +2383,11 @@ class NotifyMixin:
         # the terminal ended) claims that release above: one site ever
         # releases, so a later own SessionStart or the backstop adds
         # nothing to the turn this message starts.
+        entry = sess.pending_queue.pop(0)
         (
             queued_text, queued_trigger, _queued_at,
             queued_reply_context, queued_driver_user_id,
-        ) = sess.pending_queue.pop(0)
+        ) = entry
         # A drain at an idle moment starts the turn and owns its target.
         # When a turn is already running (the finish path just started
         # one for a message Claude had queued — R8), the drained message
@@ -2414,6 +2416,18 @@ class NotifyMixin:
             msg_id=queued_trigger, chat_id=resolve_chat_id_int(sess),
             driver_user_id=queued_driver_user_id,
         )
+        if ok is PROMPT_DIALOG:
+            # It met a dialog while it was typed (roadmap 8.143): back at
+            # the head, it goes out once that dialog is answered (or at the
+            # turn's end, when the dialog is not on record yet).
+            sess.pending_queue.insert(0, entry)
+            if sess.dialog_is_open():
+                from aipager.bot.handlers import _claim_dialog_hold
+                _claim_dialog_hold(sess)
+            self.registry.mark_dirty()
+            log.info("[%s] Held again (a prompt opened while it was typed): %s",
+                     sess.label, queued_text[:80])
+            return
         if ok and starts_turn:
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)

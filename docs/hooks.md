@@ -40,7 +40,9 @@ also load aipager's rule code: before a tool call (the safety check, see
 [PreToolUse](#pretooluse)) about 70 ms, at the end of a turn (to clear
 the turn's open mark) about 55 ms, and `UserPromptSubmit` (which writes
 the turn's rules). A `PermissionRequest` deliberately waits for your
-tap, up to 20 seconds.
+tap, up to 20 seconds, and a tool call waits while aipager types a
+message into its session (at most 5 seconds, see
+[PreToolUse](#pretooluse)).
 
 The hook caps its own memory at 1 GB. A hook that hits the cap exits
 with an error (for `PreToolUse`, the exit code Claude Code reads as a
@@ -153,6 +155,15 @@ in the hook, before Claude Code looks at its permission rules:
 - A `SendUserFile` call (Claude sending files to the chat) is checked for every turn, the owner's and a terminal prompt's included: the send floor, the file checks and the turn's own rules ([security](security.md#files-claude-sends)). A refused call gets a `deny` without the "aipager safety policy" mark: Claude reads why and tells you, the turn goes on, and the hook sends the daemon `send_files_refused`, naming each file, for the audit log.
 - A check that fails denies, unless the session's rules could be read
   and grant the owner's bypass.
+- Last, for a call it lets through, the hook leaves a short-lived stamp
+  in a folder beside the daemon's socket and, while aipager is typing a
+  message into that session, waits until the typing is done (at most 5
+  seconds). Claude Code shows a permission prompt the moment this hook
+  returns, and keys typed into it would answer it: a message's Enter
+  picks "Yes". The daemon in turn waits out a call that passed just
+  before it began typing, and a message that meets a prompt anyway is
+  not typed: it waits (👀) and goes to Claude once the prompt is
+  answered.
 
 On the daemon side, the call becomes a row on the busy card (a
 subagent's call goes on that agent's row), and a `Write` or `Edit`
@@ -174,13 +185,15 @@ real rule to remember.
 
 The hook answers the prompt itself when it can. It opens a short-lived
 reply socket, sends its address with the event, and waits up to 20
-seconds for your tap. A tap in time comes back as a `PermissionRequest`
-decision (allow, allow with the rule, or deny), so Claude Code never
-shows its own dialog. If no tap comes in time, the hook tells the
-daemon the wait is over (`permission_reply_timeout`) and prints
-nothing; it also prints nothing when the daemon cannot be reached or
-anything on that path fails. Claude Code then shows its own dialog in
-the terminal, and a later tap answers it by typing the keys. The audit log
+seconds for your tap. Claude Code shows its own dialog in the terminal
+at the same time (for a subagent's call, only once the hook is done). A
+tap in time comes back as a `PermissionRequest` decision (allow, allow
+with the rule, or deny), which closes that dialog. If no tap comes in
+time, the hook tells the daemon the wait is over
+(`permission_reply_timeout`) and prints nothing; it also prints nothing
+when the daemon cannot be reached or anything on that path fails. The
+dialog then waits in the terminal, and a later tap answers it by typing
+the keys. The audit log
 (`~/.claude/aipager-audit.jsonl`) records which way each tap answered,
 `"via": "hook_decision"` or `"via": "keystroke_fallback"`.
 

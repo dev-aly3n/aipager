@@ -87,6 +87,7 @@ from aipager.state import QUEUE_CAP, Status, TrackedSession
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    PROMPT_DIALOG,
     PROMPT_REFUSED,
     MUTED,
     reply_text,
@@ -971,6 +972,34 @@ class CommandHandlersMixin:
             await self._tell_held_for_dialog(update, sess)
         if for_park:
             await self._after_park_hold(update, sess)
+        return True
+
+    async def _hold_met_dialog(self, update: Update, sess, text: str,
+                               reply_context: str = "") -> bool:
+        """Hold a message that met a dialog while it was typed
+        (``PROMPT_DIALOG``, roadmap 8.143) as one sent while a dialog is
+        open: 👀, the "answer it first" notice once per person, and out
+        when the dialog is answered. ``_inject_prompt`` has waited for that
+        dialog to be on record (``_dialog_on_record``); one still not on
+        record (its event waits long behind an older turn's finish) leaves
+        the message for the turn's end, like any held one. True when held;
+        False when the queue was full (the sender is told)."""
+        if not sess.queue_prompt(text, update.message.message_id, reply_context,
+                                 driver_id_from_update(update)):
+            await reply_text(update.message,
+                i18n.for_update(update).n(QUEUE_FULL, QUEUE_CAP, session=sess.label),
+                parse_mode="HTML",
+            )
+            return False
+        self.registry.mark_dirty()
+        open_now = sess.dialog_is_open()
+        if open_now:
+            _claim_dialog_hold(sess)
+        await self._react(update, reactions.HANDED_OFF)
+        log.info("[%s] Held (a prompt opened while it was typed): %s",
+                 sess.label, text[:80])
+        if open_now:
+            await self._tell_held_for_dialog(update, sess)
         return True
 
     async def _look_for_park(self, sess) -> bool:
@@ -2596,6 +2625,8 @@ class CommandHandlersMixin:
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
             return True
+        if ok is PROMPT_DIALOG:
+            return await self._hold_met_dialog(update, sess, text, reply_context)
         if ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
@@ -2777,6 +2808,8 @@ class CommandHandlersMixin:
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
             return True
+        if ok is PROMPT_DIALOG:
+            return await self._hold_met_dialog(update, sess, transcript, reply_context)
         if ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
@@ -2953,6 +2986,8 @@ class CommandHandlersMixin:
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] File sent: %s", sess.label, log_name)
             return True
+        if ok is PROMPT_DIALOG:
+            return await self._hold_met_dialog(update, sess, prompt, reply_context)
         if ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
@@ -3091,6 +3126,8 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
+        elif ok is PROMPT_DIALOG:
+            await self._hold_met_dialog(update, sess, prompt_text)
         elif ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
@@ -3219,7 +3256,16 @@ class CommandHandlersMixin:
         else:
             if is_model_switch:
                 clear_model_switch_pending(sess)
-            if ok is PROMPT_REFUSED:
+            if ok is PROMPT_DIALOG and is_model_switch:
+                # Never held (see above): refused as with a prompt open.
+                from aipager.miniapp.sessions import MODEL_SWITCH_PROMPT_OPEN_REASON
+                await reply_text(update.message, tr.text(
+                    REFUSAL_FRAME, session=sess.label,
+                    reason=Safe(model_refusal_text(
+                        tr, "prompt_open", MODEL_SWITCH_PROMPT_OPEN_REASON))))
+            elif ok is PROMPT_DIALOG:
+                await self._hold_met_dialog(update, sess, command_text)
+            elif ok is PROMPT_REFUSED:
                 await self._reply_needs_admin(update)
             else:
                 await reply_text(update.message, tr.text(SEND_FAILED, session=sess.label))
@@ -3323,6 +3369,8 @@ class CommandHandlersMixin:
                 self.registry.transition(name, Status.BUSY)
                 await self._card_for_injected(sess, was_busy=was_busy)
                 log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
+            elif ok is PROMPT_DIALOG:
+                await self._hold_met_dialog(update, sess, prompt_text)
             elif ok is PROMPT_REFUSED:
                 await self._reply_needs_admin(update)
             else:
@@ -3365,6 +3413,8 @@ class CommandHandlersMixin:
                 await self._react(update, reactions.HANDED_OFF)
                 self.registry.transition(session_name, Status.BUSY)
                 await self._send_busy_and_animate(new_sess)
+            elif ok is PROMPT_DIALOG:
+                await self._hold_met_dialog(update, new_sess, prompt_text)
             elif ok is PROMPT_REFUSED:
                 await self._reply_needs_admin(update)
             else:

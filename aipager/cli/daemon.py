@@ -317,6 +317,27 @@ def _wire_parked_state(registry, hook_receiver, session_monitor, bot) -> None:
     bot.parked_check = session_monitor.check_parked_async
 
 
+def _wire_dialog_probe(registry, hook_receiver) -> None:
+    """Roadmap 8.143: dtach/inject.py asks before every prompt it types,
+    and before each piece and the Enter, whether a dialog is open in the
+    session, so no prompt's keys answer one. Open: the session waits on a
+    prompt (INTERACTIVE, a carried or recorded one, another open prompt),
+    or a datagram telling of one has arrived and is not handled yet (it
+    can wait behind an older turn's finish while its dialog is on screen)."""
+    from aipager.dtach import inject
+
+    def dialog_open(name: str) -> bool:
+        if hook_receiver.dialog_datagram_pending(name):
+            return True
+        sess = registry.get(name)
+        if sess is None:
+            return False
+        return bool(sess.dialog_is_open() or sess.pending_permission is not None
+                    or sess.extra_prompts)
+
+    inject.set_dialog_probe(dialog_open)
+
+
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import (
@@ -359,6 +380,8 @@ async def _run_daemon(bot_username: str) -> None:
     hook_receiver.on_hook_version = bot.updates.note_hook_version
     session_monitor = SessionMonitor(registry, bot.notify)
     _wire_parked_state(registry, hook_receiver, session_monitor, bot)
+    from aipager.dtach import hook_receiver as hook_receiver_mod
+    _wire_dialog_probe(registry, hook_receiver_mod)
 
     # Resolved BEFORE bot.start(), because start() ends by sending the
     # first persistent keyboard and that keyboard has to know whether

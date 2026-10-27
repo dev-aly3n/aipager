@@ -37,6 +37,7 @@ def typed(monkeypatch, tmp_path):
         coro.close()
     monkeypatch.setattr(inject, "send_text_and_enter", _text)
     monkeypatch.setattr(inject, "send_keys", _keys)
+    monkeypatch.setattr(inject, "press_enter_gated", lambda name: _keys(name, "Enter"))
     monkeypatch.setattr(session_ops, "_spawn", _spawn)
     return out
 
@@ -233,6 +234,7 @@ def test_stop_wipes_a_held_back_message_and_never_sends_it(mk_bot, run_async, mo
         wiped.append(chars)
         return True
     monkeypatch.setattr(inject, "send_keys", _keys)
+    monkeypatch.setattr(inject, "press_enter_gated", lambda name: _keys(name, "Enter"))
     monkeypatch.setattr(inject, "discard_queued_input", _discard)
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
@@ -320,6 +322,7 @@ def test_a_held_back_message_goes_before_the_next_one_is_typed(
         return True
     monkeypatch.setattr(inject, "send_text_and_enter", _text)
     monkeypatch.setattr(inject, "send_keys", _keys)
+    monkeypatch.setattr(inject, "press_enter_gated", lambda name: _keys(name, "Enter"))
     monkeypatch.setattr(session_ops, "_spawn", lambda coro: coro.close())
     bot, sess = _bot(mk_bot)
     run_async(bot._inject_prompt(sess, f"می{ZWNJ}خواهم", msg_id=11, chat_id=CHAT))
@@ -364,3 +367,43 @@ def test_the_marker_is_cleaned_too(mk_bot, run_async, typed, monkeypatch):
     run_async(bot._inject_prompt(sess, "hello", msg_id=13, chat_id=CHAT))
     assert typed["text"] == ["[via Telegram · @alice]\nhello"]
     assert [n["body"] for n in ps.list_outstanding_notes(NAME)] == typed["text"]
+
+
+# ---- roadmap 8.143: the second Enter never goes into a dialog --------------------
+
+def test_a_second_enter_a_dialog_came_before_is_kept_for_later(mk_bot, run_async, no_wait,
+                                                               monkeypatch, tmp_path):
+    """The gated Enter found a dialog (nothing pressed): the message stays
+    held back, for its own watch to press once the dialog is gone."""
+    monkeypatch.setattr(ps, "notes_dir", lambda name: tmp_path / f"notes-{name}")
+    bot, sess = _bot(mk_bot)
+    sess.status = Status.BUSY
+    note = ps.write_note(NAME, None, None, None, msg_id=9, chat_id=1, sender_key=(1, 1),
+                         body="x", raw_text="x")
+    session_ops._HELD_BACK[NAME] = note
+
+    async def gated(_name):
+        return inject.DIALOG_BEFORE_TYPING
+    monkeypatch.setattr(inject, "press_enter_gated", gated)
+    run_async(bot._enter_held_back_now(sess))
+    assert session_ops._HELD_BACK.get(NAME) is note
+
+
+def test_the_watch_tries_again_after_a_dialog_came_first(mk_bot, run_async, no_wait,
+                                                         monkeypatch, tmp_path):
+    monkeypatch.setattr(ps, "notes_dir", lambda name: tmp_path / f"notes-{name}")
+    bot, sess = _bot(mk_bot)
+    sess.status = Status.BUSY
+    note = ps.write_note(NAME, None, None, None, msg_id=9, chat_id=1, sender_key=(1, 1),
+                         body="x", raw_text="x")
+    session_ops._HELD_BACK[NAME] = note
+    results = [inject.DIALOG_BEFORE_TYPING, True]
+    presses = []
+
+    async def gated(name):
+        presses.append(name)
+        return results.pop(0)
+    monkeypatch.setattr(inject, "press_enter_gated", gated)
+    run_async(bot._enter_again_if_held_back(sess, note))
+    assert presses == [NAME, NAME]
+    assert NAME not in session_ops._HELD_BACK
