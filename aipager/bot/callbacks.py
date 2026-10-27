@@ -1967,7 +1967,7 @@ class CallbackDispatchMixin:
         answered_at = time.time()
         # What Claude's own queue held before a refusal was typed (the
         # watch's /stop-like end needs it; read before the keys).
-        claude_held: list[dict] = []
+        held_before: list[dict] = []
         answer_text = None  # a branch may override the "<verb> [label]" toast
         shared = i18n.for_sess(sess)
         # design.md "answer PermissionRequest hooks with a decision
@@ -2281,7 +2281,7 @@ class CallbackDispatchMixin:
                     return
                 via = "keystroke_fallback"
                 if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
-                    claude_held = await self._claude_queue_before_typed_refusal(sess)
+                    held_before = await self._claude_queue_before_typed_refusal(sess)
                     answered_at = time.time()
                 # Escape, never Downs: the menus wrap (see _type_refusal).
                 ok = await _type_refusal(session_name)
@@ -2438,7 +2438,7 @@ class CallbackDispatchMixin:
                     # "AskUserQuestion (loading...)" prompt has Deny too).
                     refusal=(action == "deny" and (perm.get("tool_info") or {})
                              .get("name") != "AskUserQuestion"),
-                    held=claude_held,
+                    held=held_before,
                     by=self._actor_label(
                         getattr(person, "id", None),
                         _message_chat_id(getattr(query, "message", None)), person),

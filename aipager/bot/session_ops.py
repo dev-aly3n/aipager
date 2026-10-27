@@ -294,6 +294,9 @@ MET_DIALOG_TRIES: int = 2
 #: session name -> the note of the last message that may still sit held
 #: back in Claude Code's input box (waiting for its second Enter).
 _HELD_BACK: dict[str, Path] = {}
+#: The key marking such a message's note among what Claude's queue held
+#: before a typed refusal (roadmap 8.144).
+HELD_BACK_KEY = "_held_back"
 
 #: session name -> the running watch (one per session; a newer answer
 #: replaces it). Also keeps a reference so the task is not collected.
@@ -1802,7 +1805,10 @@ class SessionOpsMixin:
             held = held_by_claude(sess, outstanding + self._queued_candidates(sess))
             # A message still held back in the input box (roadmap 8.124)
             # goes with the turn, as on /stop: wiped, never sent after.
-            return held + [n for n in _drop_held_back(sess, outstanding) if n not in held]
+            # Marked: it is not in Claude's queue, so Claude cannot run it
+            # as the next turn (the watch's test, roadmap 8.144).
+            return held + [{**n, HELD_BACK_KEY: True}
+                           for n in _drop_held_back(sess, outstanding) if n not in held]
         except Exception:
             log.debug("[%s] reading Claude's queue before a typed refusal failed",
                       sess.label, exc_info=True)
@@ -1879,6 +1885,9 @@ class SessionOpsMixin:
                     or sess.turn_seq != turn
                     or sess.pending_tool_started_at != tool_stamp)
 
+        # Only Claude's own queue can start a next turn; a message held
+        # back in the input box cannot (roadmap 8.144). Both are wiped.
+        claude_held = [n for n in held if not n.get(HELD_BACK_KEY)]
         confirmed = False
         while True:
             await _sleep(KEYSTROKE_ANSWER_POLL_SECONDS)
@@ -1889,11 +1898,11 @@ class SessionOpsMixin:
                 confirmed = True
                 break
             if time.monotonic() >= deadline:
-                if not refusal or held or tail is not None:
+                if not refusal or claude_held or tail is not None:
                     log.info("[%s] typed answer: the turn did not end at the "
                              "dialog (%s) - left to its hooks", sess.label,
                              "not a refusal" if not refusal
-                             else "Claude had queued messages" if held
+                             else "Claude had queued messages" if claude_held
                              else "the transcript moved on")
                     return
                 log.warning("[%s] typed refusal: no interrupt marker within "
@@ -1970,8 +1979,9 @@ class SessionOpsMixin:
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
         if held:
-            # Only ever with the marker seen (the grace stands down when
-            # Claude's queue held anything).
+            # With the marker seen, or at the grace when the only thing held
+            # was a message held back in the input box (roadmap 8.144: the
+            # grace stands down when Claude's own queue held anything).
             try:
                 await inject.discard_queued_input(sess.name,
                                                   queued_chars(sess, held))
@@ -3663,12 +3673,17 @@ class SessionOpsMixin:
         # types Escape, and an Escape into Claude Code's empty queue
         # interrupts the running turn.
         held = held_by_claude(sess, notes + self._queued_candidates(sess))
+        keep = ()
         if held:
             # The wipe below also clears the input box: a message held back
             # there (roadmap 8.124) goes with the queue, never sent after.
-            # With nothing queued it is left to its own second Enter (an
-            # Escape into an empty queue would interrupt the turn).
             held += [n for n in _drop_held_back(sess, notes) if n not in held]
+        elif _HELD_BACK.get(sess.name) is not None:
+            # With nothing queued it is left to its own second Enter (an
+            # Escape into an empty queue would interrupt the turn): its
+            # note stays, or its watch would take it as picked up and the
+            # next message would be typed onto it (roadmap 8.144).
+            keep = (_HELD_BACK[sess.name],)
         dropped = len(sess.pending_queue) + len(held)
         if not dropped:
             return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)
@@ -3677,7 +3692,7 @@ class SessionOpsMixin:
         sess.pending_queue.clear()
         # Its "answer it first" notices promised a send that will not come.
         await self._drop_dialog_hold(sess)
-        clear_notes_dir(sess.name)
+        clear_notes_dir(sess.name, keep=keep)
         if held:
             await inject.discard_queued_input(sess.name, queued_chars(sess, held))
         self._discard_queued_targets(sess)

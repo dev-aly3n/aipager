@@ -17,6 +17,7 @@ import os
 import secrets
 import stat
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 from aipager import instance, invisible, safety
@@ -981,22 +982,28 @@ async def expire_notes_after_turn_end(
     return len(survivors)
 
 
-def clear_notes_dir(session_name: str) -> int:
+def clear_notes_dir(session_name: str, *, keep: Iterable[str | Path] = ()) -> int:
     """Delete every outstanding note for a session (best-effort).
 
     Called by Stop, ``/clearqueue`` (and the Mini App's equivalent
     route), and session GONE/kill cleanup — so nothing lingers to
     restrict an unrelated future turn for the rest of its TTL. Returns
     the number of note files actually removed. The turn-open file is not
-    a note and stays (:func:`clear_turn_open` removes it).
+    a note and stays (:func:`clear_turn_open` removes it), as does every
+    path in *keep* (exact paths: ``/clearqueue`` keeps the note of a
+    message Claude Code still holds back in its input box when it does
+    not wipe that box, roadmap 8.144).
     """
     d = notes_dir(session_name)
     try:
         entries = list(d.iterdir())
     except OSError:
         return 0
+    kept = {Path(k) for k in keep}
     removed = 0
     for p in entries:
+        if p in kept:
+            continue
         if p.name == TURN_OPEN_FILE:
             # Not a note: clearing the queue mid-turn must not make the
             # running turn look over (roadmap 8.77). Session teardown

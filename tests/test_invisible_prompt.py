@@ -4,6 +4,8 @@ and presses Enter once more when Claude Code held a message back."""
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 from aipager import policy_snapshot as ps
@@ -303,7 +305,46 @@ def test_a_typed_refusal_takes_a_held_back_message_with_the_turn(
     session_ops._HELD_BACK[NAME] = note
     held = run_async(bot._claude_queue_before_typed_refusal(sess))
     assert [n["body"] for n in held] == [body]
+    # Marked: it is no queued message Claude could run next (roadmap 8.144).
+    assert [n.get(session_ops.HELD_BACK_KEY) for n in held] == [True]
     assert NAME not in session_ops._HELD_BACK
+
+
+def test_clearqueue_of_only_held_messages_keeps_the_held_back_note(
+        mk_bot, run_async, monkeypatch, tmp_path, no_wait):
+    """Roadmap 8.144: with nothing in Claude's queue the box is not wiped, so
+    the held-back message is left to its own second Enter, and its note must
+    stay for that: gone, its watch would take it as picked up, and the next
+    message would be typed onto it."""
+    monkeypatch.setattr(ps, "notes_dir", lambda name: tmp_path / f"notes-{name}")
+    bot, sess = _bot(mk_bot)
+    sess.status = Status.BUSY
+    body = "سلام\u200fدنیا"
+    note = ps.write_note(NAME, None, None, None, msg_id=9, chat_id=1, sender_key=(1, 1),
+                         body=body, raw_text=body)
+    other = ps.write_note(NAME, None, None, None, msg_id=10, chat_id=1, sender_key=(1, 1),
+                          body="a command that ran", raw_text="/cost")
+    session_ops._HELD_BACK[NAME] = note
+    sess.queue_prompt("held for a dialog", 11)
+    bot._mark_not_delivered = AsyncMock()
+    outcome = run_async(bot._clear_queue_core(sess))
+    assert outcome.ok is True and outcome.dropped == 1
+    assert sess.pending_queue == []
+    assert note.exists() and not other.exists()
+    assert session_ops._HELD_BACK[NAME] == note
+    assert bot._held_back_verdict(sess, note) == "press"
+
+
+def test_clear_notes_dir_keeps_exactly_the_named_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda name: tmp_path / f"notes-{name}")
+    a = ps.write_note(NAME, None, None, None, msg_id=1, chat_id=1, sender_key=(1, 1),
+                      body="a", raw_text="a")
+    b = ps.write_note(NAME, None, None, None, msg_id=2, chat_id=1, sender_key=(1, 1),
+                      body="b", raw_text="b")
+    assert ps.clear_notes_dir(NAME, keep=[str(a)]) == 1
+    assert a.exists() and not b.exists()
+    assert ps.clear_notes_dir(NAME) == 1
+    assert not a.exists()
 
 
 def test_a_held_back_message_goes_before_the_next_one_is_typed(
