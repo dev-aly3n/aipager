@@ -254,7 +254,7 @@ def test_merged_layout_api_error_does_not_strand_the_busy_card(
     sess = _sess()
     prefs.set_preference(sess.scope_chat_id, "layout", "merged")
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": "Claude AI usage limit reached|1700000000",
+        "summary": "Claude AI usage limit reached|1700000000", "api_error": "stop_failure",
     }))
     bot._app.bot.delete_message.assert_awaited_once()
     assert sess.busy_msg_id is None

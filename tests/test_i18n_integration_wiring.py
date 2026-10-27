@@ -88,7 +88,7 @@ def _api_error_line(env, summary="API Error: 529 overloaded"):
     from aipager.state import Status
     x1.last_prompt = "go"
     x1.status = Status.IDLE
-    env.run(bot.notify(x1, "idle_prompt", {"summary": summary}))
+    env.run(bot.notify(x1, "idle_prompt", {"summary": summary, "api_error": "stop_failure"}))
     lines = [t for t in tg.out if "⚠️" in t]
     assert len(lines) == 1, tg.out
     return lines[0], tg.out

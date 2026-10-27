@@ -15,6 +15,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import socket
 import time
 from pathlib import Path
@@ -50,8 +51,8 @@ from aipager.state import (
 )
 from aipager.transcript import (
     _strip_leaked_tool_xml,
-    extract_last_response,
     extract_last_response_entry,
+    extract_last_response_flagged,
     NO_RESPONSE_TEXT,
 )
 
@@ -85,6 +86,13 @@ _BOUNDARY_EVENTS = frozenset({
 # journal otherwise has no trace of either; at most one line each per
 # dialog.
 _DIALOG_EVENTS = frozenset({"permission_prompt", "permission_reply_timeout"})
+
+# Claude Code's own wording of a failed API request, at the very start of the
+# message it records for it: "API Error: 529 Overloaded. ..." (2.1.311). One
+# of the three signals of a turn that ended in an API error (roadmap 8.145);
+# the error words anywhere else in an answer are not one. (\x20 is the
+# space: Claude Code's wording, never aipager's text to translate.)
+_API_ERROR_START = re.compile(r"\s*API\x20Error:\x20\d{3}\b")
 
 # A Stop hook landing on an already-IDLE session within this many seconds
 # of an explicit /stop (or safety halt) is Claude finalising the turn the
@@ -916,18 +924,19 @@ class HookReceiver:
             sess.prompt_wait_carry = False
 
     async def _finalize_failed_turn(self, session_name: str, transcript_path: str,
-                                    sess_ref) -> None:
+                                    sess_ref, *, failure: dict | None = None) -> None:
         """End the turn that is running, with no Stop to say how: a
-        StopFailure, or the SessionEnd of the linked background job that
-        ran it (D3). Always finalizes (see below)."""
+        StopFailure (*failure*, its payload: the turn ended in an API
+        error), or the SessionEnd of the linked background job that ran it
+        (D3; an API error only when the transcript's last record is
+        Claude Code's own error record). Always finalizes (see below)."""
         carry = self._carry_agent_prompts(session_name)
         try:
             # The turn is over, whatever step it was in (see the Stop branch).
             sess_ref.parent_tool_started_at = None
             # A turn ended in failure — no Stop is emitted, so we must
-            # finalize here or the session strands in BUSY. Unlike the
-            # Stop handler, StopFailure never carries last_assistant_message,
-            # so the debounce bypass that requires it cannot fire. We always
+            # finalize here or the session strands in BUSY. The debounce
+            # bypass the Stop handler has cannot fire here. We always
             # finalize: call transition() and fall back to get() if the
             # session was already IDLE (race or duplicate). This is the
             # exact stranding bug being fixed — do not gate on debounce.
@@ -959,30 +968,47 @@ class HookReceiver:
             if sess is None:
                 return
 
-            # Build summary from transcript only — no last_assistant_message
-            # on StopFailure. An empty summary is acceptable.
+            # The summary: StopFailure's own message when it carries one
+            # (Claude Code 2.1.311: "API Error: 529 Overloaded. ..."), else
+            # the transcript's last record. An empty summary is acceptable.
             notify_ctx: dict = {"summary": ""}
+            api_error = "stop_failure" if failure is not None else ""
+            md = None
+            if failure is not None:
+                own = failure.get("last_assistant_message")
+                if isinstance(own, str) and own.strip():
+                    md = _strip_leaked_tool_xml(own)
             tracked = self.registry.get(session_name)
             tp = transcript_path or (tracked.transcript_path if tracked else "")
-            if tp:
+            if md is None and tp:
                 try:
-                    md = extract_last_response(
+                    md, flagged = extract_last_response_flagged(
                         tp, since=sess.turn_entered_wall or None,
                     )
-                    if md and RICH_SUMMARIES and "```" in md:
-                        html_summary = markdown_to_telegram_html(md)
-                        notify_ctx = {
-                            "summary": html_summary,
-                            "html_summary": True,
-                            "raw_md": md,
-                        }
-                    elif md:
-                        notify_ctx = {"summary": md}
-                    elif md == "":
-                        notify_ctx["no_response"] = True
+                    if flagged and not api_error:
+                        api_error = "transcript"
                 except Exception:
                     log.info("[%s] StopFailure: transcript summary failed",
                              session_name)
+            if md and RICH_SUMMARIES and "```" in md:
+                try:
+                    notify_ctx = {
+                        "summary": markdown_to_telegram_html(md),
+                        "html_summary": True,
+                        "raw_md": md,
+                    }
+                except Exception:
+                    # The turn must still end: plain text, as the Stop path.
+                    log.info("[%s] StopFailure: rich summary failed", session_name)
+                    notify_ctx = {"summary": md}
+            elif md:
+                notify_ctx = {"summary": md}
+            elif md == "":
+                notify_ctx["no_response"] = True
+            if api_error:
+                # Claude Code said so (roadmap 8.145): notify may put an
+                # error notice in the answer's place.
+                notify_ctx["api_error"] = api_error
             log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
             await self.notify_fn(sess, "idle_prompt", notify_ctx)
             await expire_notes_after_turn_end(session_name, pre_notes)
@@ -2460,7 +2486,8 @@ class HookReceiver:
             return  # no further notification — animation reads cached values
 
         elif event == "StopFailure":
-            await self._finalize_failed_turn(session_name, transcript_path, sess_ref)
+            await self._finalize_failed_turn(session_name, transcript_path, sess_ref,
+                                             failure=msg)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             if event.lower() == "stop":
@@ -2606,6 +2633,9 @@ class HookReceiver:
                 no_response = last_msg.strip() == NO_RESPONSE_TEXT
                 if no_response:
                     last_msg = ""
+                # Claude Code's own error wording at the start, never error
+                # words elsewhere in an answer (roadmap 8.145).
+                api_error = "message_start" if _API_ERROR_START.match(last_msg) else ""
 
                 if last_msg and RICH_SUMMARIES and "```" in last_msg:
                     # Rich HTML formatting for code-heavy responses
@@ -2630,9 +2660,11 @@ class HookReceiver:
                             # The turn-start guard: a turn that ended on tool
                             # calls has no text of its own, and the newest
                             # text in the file is then the previous answer.
-                            md = extract_last_response(
+                            md, flagged = extract_last_response_flagged(
                                 tp, since=sess.turn_entered_wall or None,
                             )
+                            if flagged:
+                                api_error = "transcript"
                             if md and RICH_SUMMARIES and "```" in md:
                                 html_summary = markdown_to_telegram_html(md)
                                 notify_ctx = {
@@ -2649,6 +2681,10 @@ class HookReceiver:
 
                 if no_response:
                     notify_ctx["no_response"] = True
+                if api_error:
+                    # Claude Code said so (roadmap 8.145): notify may put an
+                    # error notice in the answer's place.
+                    notify_ctx["api_error"] = api_error
 
                 await self.notify_fn(sess, "idle_prompt", notify_ctx)
                 await expire_notes_after_turn_end(session_name, pre_notes)

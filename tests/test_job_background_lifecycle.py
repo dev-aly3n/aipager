@@ -894,7 +894,8 @@ def test_no_close_path_sends_the_interim_again(
         sess.job_continuation_active = True
         sess.last_prompt = "go"
         run_async(bot.notify(sess, "idle_prompt",
-                             {"summary": "API Error: 529 overloaded"}))
+                             {"summary": "API Error: 529 overloaded",
+                              "api_error": "stop_failure"}))
     elif close == "session_end":
         run_async(bot.notify(sess, "session_end", {"source": "disappeared"}))
     else:
