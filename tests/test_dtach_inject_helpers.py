@@ -122,16 +122,19 @@ def test_send_keys_translates_logical_names(monkeypatch, run_async):
     assert "-p" in captured["args"]
 
 
-def test_send_keys_passes_raw_text(monkeypatch, run_async):
-    captured = {}
+@pytest.mark.parametrize("keys", ["C-c", "hello", "x", "enter", ""])
+def test_send_keys_refuses_what_is_not_a_key_name(monkeypatch, run_async, keys):
+    """A name missing from KEYS is never typed as text (roadmap 8.137:
+    "C-c" put C, -, c into Claude Code's input box): nothing is written."""
+    writes = []
 
     async def _fake_run(args, stdin=b"", timeout=5):
-        captured["stdin"] = stdin
+        writes.append(stdin)
         return True, ""
 
     monkeypatch.setattr(inject, "_run", _fake_run)
-    run_async(inject.send_keys("claude-jim", "hello"))
-    assert captured["stdin"] == b"hello"
+    assert run_async(inject.send_keys("claude-jim", keys)) is False
+    assert writes == []
 
 
 def test_send_keys_returns_false_on_dtach_failure(monkeypatch, run_async):
@@ -139,7 +142,7 @@ def test_send_keys_returns_false_on_dtach_failure(monkeypatch, run_async):
         return False, ""
 
     monkeypatch.setattr(inject, "_run", _fake_run)
-    assert run_async(inject.send_keys("claude-jim", "x")) is False
+    assert run_async(inject.send_keys("claude-jim", "Enter")) is False
 
 
 # ---- send_text_and_enter -------------------------------------------------
@@ -788,3 +791,14 @@ def test_kill_session_warns_when_the_socket_cannot_be_removed(
     assert ok is True
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert any("could not remove socket" in w and "re-adopt" in w for w in warnings), warnings
+
+
+def test_the_suite_never_kills_a_session_at_a_real_socket_path(caplog, run_async):
+    """conftest's ``_never_kill_a_live_dtach_session``: a kill aimed at the
+    real socket folder (the operator's sessions) is refused, so a switch
+    test that forgets to replace ``kill_session`` can never end a running
+    session named like its fixture."""
+    caplog.set_level("WARNING")
+    assert inject._sock_path("claude-guard-probe").startswith("/tmp/claude-dtach-")
+    assert run_async(inject.kill_session("claude-guard-probe")) is False
+    assert "test guard: refused to kill claude-guard-probe" in caplog.text

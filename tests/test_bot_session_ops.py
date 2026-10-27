@@ -11,6 +11,8 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 
 from aipager.state import Status, TrackedSession
 
@@ -727,27 +729,120 @@ def test_kill_and_relaunch_core_refuses_when_already_restarting(
     assert outcome.reason == "already_restarting"
 
 
-def test_kill_and_relaunch_core_interrupt_first_sends_ctrl_c_not_kill(
+def _terminal_capture(monkeypatch, *, kill_ok=True, socket_gone=True, on_write=None):
+    """The real ``inject.send_keys`` writing into a fake dtach: every
+    write's bytes, the waits, the kill and the relaunch, in order.
+
+    ``socket_gone``: what the socket poll after the kill sees (False: the
+    session did not die)."""
+    from aipager.dtach import inject
+    events: list = []
+
+    async def _run(args, stdin=b"", timeout=5):
+        events.append(("write", bytes(stdin)))
+        if on_write is not None:
+            on_write(bytes(stdin))
+        return True, ""
+
+    async def _kill(name):
+        events.append(("kill", name))
+        return kill_ok
+
+    async def _launch(short_name, **kw):
+        events.append(("launch", short_name, kw.get("mode"), kw.get("resume_id")))
+        return True, ""
+
+    async def _sleep(secs):
+        events.append(("sleep", secs))
+
+    monkeypatch.setattr(inject, "_run", _run)
+    monkeypatch.setattr(inject, "kill_session", _kill)
+    monkeypatch.setattr(inject, "launch_session", _launch)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _sleep)
+    monkeypatch.setattr("aipager.bot.session_ops.Path",
+                        _fake_path_cls(not socket_gone))
+    return events
+
+
+def _writes(events) -> list:
+    return [e[1] for e in events if e[0] == "write"]
+
+
+def _assert_no_text_typed(events) -> None:
+    for w in _writes(events):
+        assert b"C-c" not in w, w
+        assert not any(0x20 <= b < 0x7f for b in w), f"printable text typed: {w!r}"
+
+
+def test_kill_and_relaunch_core_interrupt_first_escapes_then_kills(
     mk_bot, run_async, monkeypatch,
 ):
+    """Stop & switch on a busy session (roadmap 8.137): Escape twice into
+    the terminal (Stop's interrupt, never "C-c" typed as text), a wait
+    for the interrupt record, then the hard kill and the relaunch."""
+    from aipager.bot import session_ops
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.claude_session_id = "uuid-1"
     bot.registry._sessions["claude-jim"] = sess
-    _neuter_sleep(monkeypatch)
-    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
-    send_keys = AsyncMock(return_value=True)
-    kill_session = AsyncMock(return_value=True)
-    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
-    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
-    monkeypatch.setattr("aipager.dtach.inject.launch_session",
-                        AsyncMock(return_value=(True, "")))
+    events = _terminal_capture(monkeypatch)
 
     outcome = run_async(bot._kill_and_relaunch_core(
         sess, target_mode="full", interrupt_first=True,
     ))
     assert outcome.ok is True
-    send_keys.assert_awaited_once_with("claude-jim", "C-c")
-    kill_session.assert_not_awaited()
+    assert outcome.reason == "done"
+    _assert_no_text_typed(events)
+    head = [e for e in events if e[0] != "sleep" or e[1] != session_ops._PERMS_POLL_INTERVAL]
+    assert head[:6] == [
+        ("write", b"\x1b"), ("sleep", 0.15), ("write", b"\x1b"),
+        ("sleep", session_ops._INTERRUPT_SETTLE_SECONDS),
+        ("kill", "claude-jim"), ("launch", "jim", "full", "uuid-1"),
+    ], events
+    assert session_ops._INTERRUPT_SETTLE_SECONDS > 0
+    assert sess.perm_mode == "full"
+    assert sess.status == Status.IDLE
+
+
+def test_kill_and_relaunch_core_interrupt_first_survivor_still_stopping(
+    mk_bot, run_async, monkeypatch,
+):
+    """A busy session that outlives the kill (its socket stays): no
+    relaunch, ``still_stopping``, mode unchanged."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.perm_mode = "ask"
+    bot.registry._sessions["claude-jim"] = sess
+    events = _terminal_capture(monkeypatch, socket_gone=False)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_mode="full", interrupt_first=True,
+    ))
+    assert outcome.ok is False
+    assert outcome.reason == "still_stopping"
+    assert ("kill", "claude-jim") in events
+    assert not [e for e in events if e[0] == "launch"]
+    assert sess.perm_mode == "ask"
+
+
+def test_kill_and_relaunch_core_interrupt_first_failed_kill_not_success(
+    mk_bot, run_async, monkeypatch,
+):
+    """A kill that signalled nothing (False, socket kept) is never
+    reported as a switch."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.perm_mode = "ask"
+    bot.registry._sessions["claude-jim"] = sess
+    events = _terminal_capture(monkeypatch, kill_ok=False, socket_gone=False)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_mode="full", interrupt_first=True,
+    ))
+    assert outcome.ok is False
+    assert outcome.reason == "still_stopping"
+    assert not [e for e in events if e[0] == "launch"]
+    assert sess.perm_mode == "ask"
 
 
 def test_kill_and_relaunch_core_hard_kill_not_ctrl_c(mk_bot, run_async, monkeypatch):
@@ -913,24 +1008,142 @@ def test_resume_keeps_the_launch_model(mk_bot, run_async, monkeypatch):
     assert launch.await_args.kwargs.get("model") == "haiku"
 
 
-def test_perms_switch_core_busy_interrupts_first(mk_bot, run_async, monkeypatch):
-    """The perms wrapper's interrupt_first=True derivation for BUSY."""
+def _busy_with_a_held_message(bot, tmp_path):
+    """A busy session whose Claude Code queue holds two Telegram messages:
+    msg 9 by its note, msg 7 as a queued target (a message sent while the
+    turn ran), each with the transcript's ``enqueue`` line."""
+    from aipager import policy_snapshot as ps
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.perm_mode = "ask"
+    bot.registry._sessions["claude-jim"] = sess
+    ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
+                  sender_key=(1, 1), body="note text", raw_text="note text")
+    sess.queued_targets = [{"msg_id": 7, "chat_id": 1, "raw_text": "later"}]
+    _claude_holds(sess, tmp_path, "note text", "later")
+    return sess
+
+
+def _record_wipes_and_marks(bot, monkeypatch, events):
+    async def _discard(name, chars=0):
+        events.append(("discard", chars))
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", _discard)
+    marked: list = []
+
+    async def _mark(sess, entries):
+        events.append(("not_delivered", sorted(e.get("msg_id") for e in entries)))
+        marked.extend(entries)
+    bot._mark_not_delivered = _mark
+    return marked
+
+
+@pytest.mark.parametrize("dies", [True, False], ids=["killed", "outlives_the_kill"])
+def test_busy_switch_reads_claudes_queue_before_the_escapes(
+    mk_bot, run_async, monkeypatch, tmp_path, dies,
+):
+    """Messages Claude Code held when Stop & switch was tapped: after the
+    Escapes the transcript no longer shows them held (here the fake
+    terminal writes ``popAll``; Claude Code 2.1.311 took the message as a
+    turn the second Escape cut), so they are read before the Escapes (as
+    Stop reads them), wiped from the input box and forgotten after them,
+    and marked not delivered (🤷) after the kill, as the hard kill's
+    session end marks them. Also when the process outlives the kill: the
+    text must not join the next message, nor come back as a turn
+    (roadmap 8.137)."""
+    import json
+    bot = mk_bot()
+    sess = _busy_with_a_held_message(bot, tmp_path)
+
+    def _claude_code(data):
+        # Claude Code's answer to an Escape while it holds a queue: the
+        # queue goes to the input box, and the transcript says so.
+        if data == b"\x1b":
+            with open(sess.transcript_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"type": "queue-operation",
+                                     "operation": "popAll"}) + "\n")
+    events = _terminal_capture(monkeypatch, socket_gone=dies, on_write=_claude_code)
+    _record_wipes_and_marks(bot, monkeypatch, events)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_mode="full", interrupt_first=True,
+    ))
+    from aipager import policy_snapshot as ps
+    assert outcome.ok is dies
+    assert outcome.reason == ("done" if dies else "still_stopping")
+    steps = [e for e in events if e[0] in ("write", "discard", "not_delivered", "kill")]
+    assert steps == [
+        ("write", b"\x1b"), ("write", b"\x1b"),
+        ("discard", len("note text") + 1 + len("later") + 1),
+        ("kill", "claude-jim"),
+        ("not_delivered", [7, 9]),
+    ], events
+    # Forgotten, also when the session lives on: neither comes back as a
+    # turn of its own later.
+    assert sess.queued_targets == []
+    assert ps.list_outstanding_notes("claude-jim") == []
+
+
+def test_busy_switch_with_nothing_held_wipes_and_marks_nothing(
+    mk_bot, run_async, monkeypatch,
+):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     bot.registry._sessions["claude-jim"] = sess
-    _neuter_sleep(monkeypatch)
-    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
-    send_keys = AsyncMock(return_value=True)
-    kill_session = AsyncMock(return_value=True)
-    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
-    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
-    monkeypatch.setattr("aipager.dtach.inject.launch_session",
-                        AsyncMock(return_value=(True, "")))
+    events = _terminal_capture(monkeypatch)
+    _record_wipes_and_marks(bot, monkeypatch, events)
 
-    outcome = run_async(bot._perms_switch_core(sess, True))
+    assert run_async(bot._kill_and_relaunch_core(
+        sess, target_mode="full", interrupt_first=True)).ok is True
+    assert not [e for e in events if e[0] in ("discard", "not_delivered")], events
+
+
+def test_idle_switch_never_reads_or_wipes_claudes_queue(
+    mk_bot, run_async, monkeypatch, tmp_path,
+):
+    """The hard kill alone (not busy): no wipe, no 🤷 here; the session
+    end's teardown marks what died with the process, as before."""
+    bot = mk_bot()
+    sess = _busy_with_a_held_message(bot, tmp_path)
+    sess.status = Status.IDLE
+    events = _terminal_capture(monkeypatch)
+    _record_wipes_and_marks(bot, monkeypatch, events)
+
+    assert run_async(bot._kill_and_relaunch_core(
+        sess, target_mode="full", interrupt_first=False)).ok is True
+    assert not [e for e in events if e[0] in ("write", "discard", "not_delivered")], events
+
+
+def test_perms_switch_core_busy_interrupts_first(mk_bot, run_async, monkeypatch):
+    """The perms wrapper's interrupt_first=True derivation for BUSY: the
+    terminal gets two Escapes and nothing else, then the kill."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    bot.registry._sessions["claude-jim"] = sess
+    events = _terminal_capture(monkeypatch)
+
+    outcome = run_async(bot._perms_switch_core(sess, "full"))
     assert outcome.ok is True
-    send_keys.assert_awaited_once_with("claude-jim", "C-c")
-    kill_session.assert_not_awaited()
+    assert _writes(events) == [b"\x1b", b"\x1b"]
+    _assert_no_text_typed(events)
+    kinds = [e[0] for e in events if e[0] != "sleep"]
+    assert kinds == ["write", "write", "kill", "launch"], events
+
+
+def test_perms_switch_core_idle_writes_nothing_to_the_terminal(
+    mk_bot, run_async, monkeypatch,
+):
+    """A switch on a session that is not busy is the hard kill alone: no
+    Escape reaches its terminal."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    events = _terminal_capture(monkeypatch)
+
+    outcome = run_async(bot._perms_switch_core(sess, "full"))
+    assert outcome.ok is True
+    assert _writes(events) == []
+    kinds = [e[0] for e in events if e[0] != "sleep"]
+    assert kinds == ["kill", "launch"], events
 
 
 def test_perms_switch_core_idle_hard_kills(mk_bot, run_async, monkeypatch):

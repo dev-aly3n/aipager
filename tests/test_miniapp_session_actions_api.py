@@ -308,24 +308,42 @@ def test_perms_already_in_that_mode(server, run_async, monkeypatch):
     run_async(_run())
 
 
-def test_perms_busy_session_sends_ctrl_c_not_kill(server, run_async, monkeypatch):
+def test_perms_busy_session_escapes_then_kills(server, run_async, monkeypatch):
+    """The Mini App's switch on a busy session (roadmap 8.137): two
+    Escapes reach the terminal (never "C-c" typed as text), then the hard
+    kill and the relaunch in the new mode."""
+    events: list = []
+
+    async def _run_dtach(args, stdin=b"", timeout=5):
+        events.append(("write", bytes(stdin)))
+        return True, ""
+
+    async def _kill(name):
+        events.append(("kill", name))
+        return True
+
+    async def _launch(short_name, **kw):
+        events.append(("launch", kw.get("mode")))
+        return True, ""
+
     async def _run():
+        from aipager.dtach import inject
+        real_send_keys = inject.send_keys
         _mk_session(server, "dev", status=Status.BUSY, mode="ask")
         _neuter_kill_relaunch(monkeypatch)
-        monkeypatch.setattr(
-            "aipager.dtach.inject.launch_session",
-            AsyncMock(return_value=(True, "")),
-        )
+        monkeypatch.setattr(inject, "send_keys", real_send_keys)
+        monkeypatch.setattr(inject, "_run", _run_dtach)
+        monkeypatch.setattr(inject, "kill_session", _kill)
+        monkeypatch.setattr(inject, "launch_session", _launch)
         client = await _client_for(server)
         try:
             resp = await _perms(client, ADMIN_ID, "full")
             assert resp.status == 200
         finally:
             await client.close()
-        from aipager.dtach import inject
-        inject.send_keys.assert_awaited_once_with("claude-dev", "C-c")
-        inject.kill_session.assert_not_awaited()
     run_async(_run())
+    assert events == [("write", b"\x1b"), ("write", b"\x1b"),
+                      ("kill", "claude-dev"), ("launch", "full")], events
 
 
 def test_perms_not_live_returns_409(server, run_async):

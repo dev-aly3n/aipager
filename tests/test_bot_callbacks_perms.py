@@ -450,10 +450,15 @@ def test_resume_mode_cancel_edits_to_cancelled(mk_bot, mk_query, run_async):
     assert "claude-dev" not in bot._resume_mode_pending
 
 
-# ---- perms_stop_switch: sends Ctrl-C then relaunches -----------------------
+# ---- perms_stop_switch: interrupts, kills, then relaunches -----------------
 
-def test_perms_stop_switch_sends_ctrl_c(mk_bot, mk_query, run_async):
-    """Tapping 'Stop task & switch' sends Ctrl-C and then relaunches."""
+def test_perms_stop_switch_escapes_kills_and_relaunches(
+    mk_bot, mk_query, run_async, monkeypatch,
+):
+    """Tapping 'Stop task & switch' (roadmap 8.137): the terminal gets two
+    Escapes and no text ("C-c" was typed into the input box), then the
+    hard kill, then the relaunch in the new mode."""
+    from aipager.dtach import inject
     bot = mk_bot()
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.BUSY)
     sess.perm_mode = "ask"
@@ -465,31 +470,33 @@ def test_perms_stop_switch_sends_ctrl_c(mk_bot, mk_query, run_async):
         "msg_id": 42,
         "label": "dev",
     }
+    events: list = []
 
-    ctrl_c_calls = []
-    launch_calls = []
-
-    async def mock_send_keys(session_name, key):
-        ctrl_c_calls.append(key)
-        return True
-
-    async def mock_launch_session(short_name, *, mode, **kw):
-        launch_calls.append({"short_name": short_name, "mode": mode})
+    async def _run_dtach(args, stdin=b"", timeout=5):
+        events.append(("write", bytes(stdin)))
         return True, ""
 
+    async def _kill(name):
+        events.append(("kill", name))
+        return True
+
+    async def _launch(short_name, *, mode, **kw):
+        events.append(("launch", short_name, mode))
+        return True, ""
+
+    async def _no_sleep(_secs):
+        pass
+
+    monkeypatch.setattr(inject, "_run", _run_dtach)
+    monkeypatch.setattr(inject, "kill_session", _kill)
+    monkeypatch.setattr(inject, "launch_session", _launch)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", MagicMock(
+        return_value=MagicMock(is_socket=MagicMock(return_value=False))))
+
     update, query = mk_query("claude-dev:perms_stop_switch")
+    run_async(bot._handle_callback(update, MagicMock()))
 
-
-    with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
-         patch("aipager.dtach.inject.launch_session", side_effect=mock_launch_session), \
-         patch("aipager.bot.callbacks.Path") as mock_path_cls:
-        # Make the socket appear gone immediately
-        mock_path_cls.return_value.is_socket.return_value = False
-        run_async(bot._handle_callback(update, MagicMock()))
-
-    # Ctrl-C should have been sent
-    assert "C-c" in ctrl_c_calls
-    # Launch should have been called with mode="full"
-    assert any(c["mode"] == "full" for c in launch_calls), launch_calls
-    # Session should be updated
+    assert events == [("write", b"\x1b"), ("write", b"\x1b"),
+                      ("kill", "claude-dev"), ("launch", "dev", "full")], events
     assert sess.perm_mode == "full"
