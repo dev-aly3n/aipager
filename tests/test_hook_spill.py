@@ -337,6 +337,13 @@ def test_sweep_removes_a_fresh_non_file(folder):
     assert not os.path.lexists(folder / NAME)
 
 
+def test_sweep_counts_only_what_it_removed(folder):
+    """A spill name it cannot delete (a folder) is not counted as gone."""
+    os.mkdir(folder / NAME)
+    assert hook_spill.sweep(BASE) == 0
+    assert (folder / NAME).is_dir()
+
+
 def test_sweep_leaves_a_foreign_folder_alone(folder, monkeypatch):
     old = _plant(folder)
     os.utime(old, (1, 1))

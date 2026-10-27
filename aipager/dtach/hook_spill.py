@@ -104,11 +104,13 @@ def _open_own_dir(base_dir: str) -> tuple[int | None, str]:
     return fd, ""
 
 
-def _unlink_at(dir_fd: int, name: str) -> None:
+def _unlink_at(dir_fd: int, name: str) -> bool:
+    """Remove *name* from the folder; False when that failed."""
     try:
         os.unlink(name, dir_fd=dir_fd)
     except OSError:
-        pass
+        return False
+    return True
 
 
 def ensure_dir(base_dir: str) -> str:
@@ -291,8 +293,8 @@ def sweep(base_dir: str, now: float | None = None) -> int:
             except OSError:
                 continue
             if not stat.S_ISREG(st.st_mode) or now - st.st_mtime > SWEEP_AGE_SECONDS:
-                _unlink_at(dfd, name)
-                removed += 1
+                if _unlink_at(dfd, name):
+                    removed += 1
     finally:
         os.close(dfd)
     return removed
