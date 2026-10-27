@@ -1,6 +1,7 @@
 """Shared pytest fixtures."""
 
 import asyncio
+import logging
 import os
 import resource
 from importlib import import_module
@@ -1465,6 +1466,39 @@ def _no_live_dtach_sockets_at_load(monkeypatch):
     sockets through its own helper and is not touched."""
     monkeypatch.setattr("aipager.dtach.inject.live_session_names",
                         lambda: set())
+
+
+_REAL_DTACH_PREFIXES = ("/tmp/claude-dtach-",)
+
+
+@pytest.fixture(autouse=True)
+def _never_kill_a_live_dtach_session(monkeypatch):
+    """``inject.kill_session`` SIGTERMs whatever holds the session's socket,
+    and the default socket folder is the operator's own (``/tmp``): a test
+    session named like a running one (``claude-dev``) would end it. Every
+    switch and restart reaches the kill, a busy one's "Stop & switch" too
+    since roadmap 8.137, so a test that forgets to replace it must never
+    reach a real socket. A socket under the real prefix is refused (False,
+    nothing signalled, a warning logged); one a test put in its own
+    folder (``_sock_path`` or ``SOCK_PREFIX`` patched) is killed for real.
+    Tests that replace ``kill_session`` themselves still win."""
+    from aipager.dtach import inject
+    real = inject.kill_session
+    prefixes = tuple({*_REAL_DTACH_PREFIXES, inject.instance.dtach_sock_prefix()})
+
+    async def _guarded(session, *a, **kw):
+        sock = inject._sock_path(session)
+        if sock.startswith(prefixes):
+            # What kill_session does before it looks at the socket still
+            # happens: the session's pending input-box wipe is forgotten.
+            inject._PENDING_WIPE.pop(session, None)
+            logging.getLogger("tests.conftest").warning(
+                "test guard: refused to kill %s (a real dtach socket path: %s)",
+                session, sock)
+            return False
+        return await real(session, *a, **kw)
+
+    monkeypatch.setattr(inject, "kill_session", _guarded)
 
 
 @pytest.fixture(autouse=True)

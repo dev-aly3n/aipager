@@ -338,46 +338,65 @@ def test_sc8_perms_not_now_message_contains_retry_hint():
 
 
 # --------------------------------------------------------------------------- #
-# SC9 — BUSY: [Stop & switch] sends Ctrl-C then relaunches                    #
+# SC9 — BUSY: [Stop & switch] interrupts, kills, then relaunches            #
 # --------------------------------------------------------------------------- #
 
-def test_sc9_stop_switch_sends_ctrl_c():
-    """SC9a: Tapping [Stop task & switch] must send Ctrl-C before relaunching."""
+def _dead_on_kill(monkeypatch, events=None):
+    """The busy session's terminal (real ``inject.send_keys`` into a fake
+    dtach), a kill that ends it, and no real waits."""
+    from aipager.dtach import inject
+    events = [] if events is None else events
+
+    async def _run_dtach(args, stdin=b"", timeout=5):
+        events.append(("write", bytes(stdin)))
+        return True, ""
+
+    async def _kill(name):
+        events.append(("kill", name))
+        return True
+
+    async def _no_sleep(_secs):
+        pass
+
+    monkeypatch.setattr(inject, "_run", _run_dtach)
+    monkeypatch.setattr(inject, "kill_session", _kill)
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", MagicMock(
+        return_value=MagicMock(is_socket=MagicMock(return_value=False))))
+    return events
+
+
+def test_sc9_stop_switch_interrupts_with_escape(monkeypatch):
+    """SC9a: Tapping [Stop task & switch] interrupts the turn with two
+    Escapes (no text typed: "C-c" used to land in the input box), then
+    kills the session before relaunching (roadmap 8.137)."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
     sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
-    sess.cwd = "/home/aly"
+    sess.cwd = "/home/alice"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
         "target_mode": "full",
         "msg_id": 42,
         "label": "ben",
     }
-
-    ctrl_c_received = []
-
-    async def mock_send_keys(session_name, key):
-        ctrl_c_received.append(key)
-        return True
+    events = _dead_on_kill(monkeypatch)
 
     async def mock_launch(short_name, *, mode, **kw):
+        events.append(("launch", mode))
         return True, ""
 
     update, query = _make_query("claude-ben:perms_stop_switch")
-    with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
-         patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
-         patch("aipager.bot.callbacks.Path") as mock_path_cls:
-        mock_path_cls.return_value.is_socket.return_value = False
+    with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch):
         _run(bot._handle_callback(update, MagicMock()))
 
-    assert any("C-c" in k or "ctrl" in k.lower() for k in ctrl_c_received), (
-        f"Ctrl-C must be sent; got keys: {ctrl_c_received}"
-    )
+    assert events == [("write", b"\x1b"), ("write", b"\x1b"),
+                      ("kill", "claude-ben"), ("launch", "full")], events
 
 
-def test_sc9_stop_switch_relaunches_with_the_target_mode():
-    """SC9b: After Ctrl-C and socket disappears, session relaunches with the
+def test_sc9_stop_switch_relaunches_with_the_target_mode(monkeypatch):
+    """SC9b: After the interrupt, the kill and the socket gone, session relaunches with the
     target mode (Full access)."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
@@ -393,18 +412,14 @@ def test_sc9_stop_switch_relaunches_with_the_target_mode():
 
     launch_calls = []
 
-    async def mock_send_keys(session_name, key):
-        return True
+    _dead_on_kill(monkeypatch)
 
     async def mock_launch(short_name, *, mode, resume_id=None, cwd=None, **kw):
         launch_calls.append({"mode": mode})
         return True, ""
 
     update, query = _make_query("claude-ben:perms_stop_switch")
-    with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
-         patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
-         patch("aipager.bot.callbacks.Path") as mock_path_cls:
-        mock_path_cls.return_value.is_socket.return_value = False
+    with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch):
         _run(bot._handle_callback(update, MagicMock()))
 
     assert len(launch_calls) > 0, "Session must be relaunched"
@@ -413,7 +428,7 @@ def test_sc9_stop_switch_relaunches_with_the_target_mode():
     )
 
 
-def test_sc9_stop_switch_edits_message_to_new_mode():
+def test_sc9_stop_switch_edits_message_to_new_mode(monkeypatch):
     """SC9c: After [Stop & switch] completes, the message must be edited to
     show the new mode (Full access in this case)."""
     bot = _make_bot()
@@ -428,17 +443,13 @@ def test_sc9_stop_switch_edits_message_to_new_mode():
         "label": "ben",
     }
 
-    async def mock_send_keys(session_name, key):
-        return True
+    _dead_on_kill(monkeypatch)
 
     async def mock_launch(short_name, *, mode, **kw):
         return True, ""
 
     update, query = _make_query("claude-ben:perms_stop_switch")
-    with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
-         patch("aipager.dtach.inject.launch_session", side_effect=mock_launch), \
-         patch("aipager.bot.callbacks.Path") as mock_path_cls:
-        mock_path_cls.return_value.is_socket.return_value = False
+    with patch("aipager.dtach.inject.launch_session", side_effect=mock_launch):
         _run(bot._handle_callback(update, MagicMock()))
 
     text = query.edit_message_text.await_args[0][0]

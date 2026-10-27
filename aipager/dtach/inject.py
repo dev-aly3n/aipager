@@ -543,14 +543,22 @@ async def send_now(session: str) -> bool:
 
 
 async def send_keys(session: str, keys: str) -> bool:
-    """Send a key sequence to the dtach session.
+    """Send one key to the dtach session.
 
-    `keys` can be a logical name ("Enter", "Down") or raw text.
+    `keys` is a logical name from :data:`KEYS` ("Enter", "Down"). Anything
+    else is refused (logged, False, nothing written): a name missing from
+    KEYS used to be typed as text, and "C-c" put the three characters
+    C, -, c into Claude Code's input box, where they joined the next
+    prompt (roadmap 8.137). Text goes through :func:`send_text_and_enter`.
     """
+    seq = KEYS.get(keys)
+    if seq is None:
+        log.warning("send_keys: %r is not a key name; nothing sent to %s",
+                    keys, session)
+        return False
     if _refuse_parked(session):
         return False
     await _await_chord(session)
-    seq = KEYS.get(keys, keys)
     sock = _sock_path(session)
     async with _write_lock(session):
         if _refuse_parked(session):

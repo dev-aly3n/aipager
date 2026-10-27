@@ -100,6 +100,14 @@ log = logging.getLogger(__name__)
 # in the process and has hung this suite twice (CLAUDE.md). Both default
 # to the real functions; production behaviour is unchanged.
 _sleep = asyncio.sleep
+#: How long a busy mode switch ("Stop & switch") waits after its Escapes
+#: before the hard kill, for Claude Code to write the interrupt record
+#: ("[Request interrupted by user for tool use]") to the transcript, so the
+#: relaunched session resumes knowing its turn was cut (roadmap 8.137).
+#: Measured live on Claude Code 2.1.311 during a long Bash call: the record
+#: was there 30 to 42 ms after the second Escape (5 runs, machine under a
+#: full test suite's load); half a second is more than ten times that.
+_INTERRUPT_SETTLE_SECONDS = 0.5
 #: How long a safety halt waits for a bring-back already running before
 #: it stops a Claude Code background job itself, and how often it looks.
 _HALT_WAIT_SECONDS = 30.0
@@ -2895,7 +2903,7 @@ class SessionOpsMixin:
 
         THE single seam every kill-then-relaunch sequence in this
         codebase goes through now — chat's own ``/perms`` (both its BUSY
-        Ctrl-C-first branch and its IDLE hard-kill branch, in
+        interrupt-then-kill branch and its IDLE hard-kill branch, in
         callbacks.py) and the Mini App's perms-switch and restart
         routes. This sequence has the worst bug history in the codebase
         (roadmap 8.1, two separate causes) — see design.md's
@@ -2912,7 +2920,7 @@ class SessionOpsMixin:
         A session parked on a Claude Code background job is brought back
         instead (:meth:`_bring_back_core`, keeping *target_mode*), before
         anything is killed or typed: its conversation lives in the job,
-        and a Ctrl-C typed into the parked client could start a stray
+        and a key typed into the parked client could start a stray
         job. *force* stops a busy job (otherwise ``bg_busy``); for a
         session that is not parked it is the same answer to a live
         background holder of its conversation (:meth:`_resume_target`).
@@ -2993,13 +3001,45 @@ class SessionOpsMixin:
         # a send already in flight is past the point a cancel can reach.
         self._cancel_lazy_card(sess)
 
+        held: list[dict] = []
         if interrupt_first:
-            await inject.send_keys(session_name, "C-c")
-            # Short pause to let the Ctrl-C signal be processed before
-            # the poll loop starts checking for the socket.
-            await _sleep(0.5)
-        else:
-            await inject.kill_session(session_name)
+            # A busy session's turn is interrupted first, the way Stop does
+            # it (Escape twice): Claude Code records the turn as
+            # interrupted in the transcript, so the relaunched session's
+            # resumed conversation knows it was cut. Then the same hard
+            # kill as any other switch: an interrupt never ends the
+            # process (roadmap 8.137).
+            # What Claude holds in its own queue is read BEFORE the
+            # Escapes, as Stop reads it: after them the transcript no
+            # longer shows it held (Claude Code 2.1.311 live: the first
+            # Escape cuts the tool call, Claude Code then takes the queued
+            # message as a new turn, which the second Escape cuts unanswered;
+            # Stop's notes describe a `popAll` into the input box). Either
+            # way the session's end would leave the message at 👀, not the
+            # hard kill's 🤷.
+            held = await self._claude_queue_before_typed_refusal(sess)
+            held_chars = queued_chars(sess, held) if held else 0
+            await inject.send_keys(session_name, "Escape")
+            await _sleep(0.15)
+            await inject.send_keys(session_name, "Escape")
+            if held:
+                # Wiped as Stop wipes it, and forgotten: should the process
+                # outlive the kill (still_stopping), that text must not join
+                # the next message typed there, nor a target or note of it
+                # come back as a turn later.
+                await inject.discard_queued_input(session_name, held_chars)
+                self._discard_queued_targets(sess)
+                from aipager.policy_snapshot import clear_notes_dir
+                clear_notes_dir(sess.name)
+            await _sleep(_INTERRUPT_SETTLE_SECONDS)
+        # A kill that fails leaves the socket, and the poll below answers
+        # still_stopping: never a relaunch beside a live process.
+        await inject.kill_session(session_name)
+        if held:
+            # Wiped, then killed with the process (or cut and wiped in one
+            # that lives on): never taken. Marked after the kill so the
+            # reactions do not hold it up.
+            await self._mark_not_delivered(sess, held)
 
         # Poll for socket disappearance (up to 3 s).
         for _ in range(_PERMS_POLL_COUNT):
@@ -3484,8 +3524,9 @@ class SessionOpsMixin:
         ``interrupt_first`` mirrors chat's own ``/mode`` branching
         exactly (``handlers._perms_flow`` /
         ``callbacks._handle_callback``'s ``perms_stop_switch``): BUSY
-        gets a courtesy Ctrl-C first — one more chance to finish
-        cleanly before the hard kill; anything else — including
+        gets its turn interrupted first (Escape twice, as Stop does, so
+        the resumed conversation records the cut), then the same hard
+        kill; anything else — including
         INTERACTIVE, which chat's own command folds into the same IDLE
         flow — goes straight to :meth:`_kill_and_relaunch_core`'s hard
         kill. So the outcome for a given starting status is identical
@@ -3507,10 +3548,10 @@ class SessionOpsMixin:
         ``perm_mode`` unchanged — a restart is not a mode switch.
 
         Always a hard kill, regardless of status: deliberately does
-        NOT reuse perms' busy-only Ctrl-C-first courtesy, which exists
-        to give a MODE SWITCH one soft chance. A user-invoked restart
-        means "stop it and bring it back" — the same hard-kill
-        semantics Kill already applies.
+        NOT reuse perms' busy-only interrupt-first step, which exists
+        so a MODE SWITCH's resumed conversation records its cut turn.
+        A user-invoked restart means "stop it and bring it back" — the
+        same hard-kill semantics Kill already applies.
 
         A session parked on a Claude Code background job is brought back
         (:meth:`_bring_back_core`); *force* also stops a busy job (the busy
