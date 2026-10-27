@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Long messages reach Claude whole.** A message of a few thousand characters was typed into Claude Code in one burst, which Claude Code took as a paste: part of the text was lost (sometimes the first lines, with the line that tells Claude who sent it) and the rest arrived marked as pasted text. aipager now types a long message in short pieces, so it arrives exactly as sent.
+
 ## [1.3.10] - 2026-10-25
 
 ### Fixed

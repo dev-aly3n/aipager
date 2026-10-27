@@ -174,6 +174,84 @@ def test_send_text_and_enter_aborts_on_text_failure(monkeypatch, run_async):
     assert calls == [b"hi"]
 
 
+# ---- a long prompt is typed in pieces (roadmap 8.123) ------------------
+
+def _record_writes(monkeypatch, fail_at=None):
+    """Every write and every pause of send_text_and_enter, in order."""
+    events = []
+
+    async def _fake_run(args, stdin=b"", timeout=5):
+        events.append(("write", stdin))
+        writes = [e for e in events if e[0] == "write"]
+        return (fail_at is None or len(writes) <= fail_at), ""
+
+    async def _pause(seconds):
+        events.append(("pause", seconds))
+    monkeypatch.setattr(inject, "_run", _fake_run)
+    monkeypatch.setattr(inject, "_key_gap_sleep", _pause)
+    return events
+
+
+def test_a_long_prompt_is_typed_in_paced_pieces_then_one_enter(monkeypatch, run_async):
+    """One burst of a few thousand characters is a paste to Claude Code
+    (words lost, the marker line among them): pieces of at most
+    TYPE_CHUNK_CHARS characters with a pause between, then the Enter."""
+    events = _record_writes(monkeypatch)
+    text = "[via Telegram · @alice]\n" + " ".join(f"w{i:04d}" for i in range(1000))
+    text += "x" * (inject.TYPE_CHUNK_CHARS + 7 - len(text) % inject.TYPE_CHUNK_CHARS)
+    assert len(text) % inject.TYPE_CHUNK_CHARS == 7    # a short last piece
+    assert run_async(inject.send_text_and_enter("claude-jim", text)) is True
+    writes = [e[1] for e in events if e[0] == "write"]
+    pieces, enter = writes[:-1], writes[-1]
+    assert enter == b"\r"
+    assert b"".join(pieces).decode() == text
+    assert len(pieces) == -(-len(text) // inject.TYPE_CHUNK_CHARS)
+    assert all(len(p.decode()) <= inject.TYPE_CHUNK_CHARS for p in pieces)
+    assert inject.TYPE_CHUNK_CHARS <= 400           # far under Claude Code's 800
+    # A pause between every two pieces; the settle pause before the Enter.
+    kinds = [e[0] for e in events]
+    assert kinds == ["write"] + ["pause", "write"] * (len(pieces) - 1) + ["pause", "write"]
+    *gaps, settle = [e[1] for e in events if e[0] == "pause"]
+    assert gaps and all(g == inject.TYPE_CHUNK_GAP_SECONDS > 0 for g in gaps)
+    # The settle before the Enter scales with the whole text, not its last
+    # piece: too short, and Claude Code swallows the Enter.
+    assert settle == max(0.15, min(0.5, len(text) * 0.003)) == 0.5
+
+
+def test_a_short_prompt_is_one_write(monkeypatch, run_async):
+    events = _record_writes(monkeypatch)
+    text = "x" * inject.TYPE_CHUNK_CHARS
+    assert run_async(inject.send_text_and_enter("claude-jim", text)) is True
+    assert [e[1] for e in events if e[0] == "write"] == [text.encode(), b"\r"]
+
+
+def test_pieces_never_split_a_character(monkeypatch, run_async):
+    """Cut by characters: every piece is whole UTF-8 (Persian, emoji)."""
+    events = _record_writes(monkeypatch)
+    text = ("سلام دنیا، این یک آزمایش است 🙂 " * 40).strip()
+    assert run_async(inject.send_text_and_enter("claude-jim", text)) is True
+    pieces = [e[1] for e in events if e[0] == "write"][:-1]
+    assert len(pieces) > 1
+    assert "".join(p.decode("utf-8") for p in pieces) == text
+
+
+def test_a_failed_piece_stops_the_send_with_no_enter(monkeypatch, run_async):
+    events = _record_writes(monkeypatch, fail_at=2)
+    text = "y" * (inject.TYPE_CHUNK_CHARS * 4)
+    assert run_async(inject.send_text_and_enter("claude-jim", text)) is False
+    writes = [e[1] for e in events if e[0] == "write"]
+    assert len(writes) == 3 and b"\r" not in writes
+
+
+def test_a_long_prompt_is_counted_as_one_write(monkeypatch, run_async):
+    """The pieces and the Enter are one send (the send-now chord compares
+    write counts around its own keys)."""
+    _record_writes(monkeypatch)
+    before = inject._WRITES.get("claude-jim", 0)
+    assert run_async(inject.send_text_and_enter("claude-jim", "z" * 1000)) is True
+    assert inject._WRITES.get("claude-jim", 0) == before + 1
+
+
 # ---- is_alive -----------------------------------------------------------
 
 def test_is_alive_true_for_real_socket(tmp_path, run_async):
