@@ -445,3 +445,60 @@ def test_all_call_sites_resolve_the_same_binary_from_the_same_candidates(
     info = claude_bootstrap.bootstrap_claude_settings("/workspace")
     assert info is not None
     assert info.lines[0].startswith(f"claude: {fx} (2.1.235)")
+
+
+# ---- probing the remembered choice again (roadmap 8.125) -------------------
+
+def _remember(monkeypatch, chosen, others=()):
+    resolved = claude_resolve.ResolvedClaude(chosen=chosen, others=tuple(others))
+    monkeypatch.setattr(claude_resolve, "_memo", resolved)
+    monkeypatch.setattr(claude_resolve, "_memo_error", None)
+    return resolved
+
+
+def test_reprobe_learns_the_new_version_and_keeps_the_choice(monkeypatch):
+    old = claude_resolve.ClaudeInstall(path="/x/claude", realpath="/x/v/2.1.310", version="2.1.310")
+    npm = claude_resolve.ClaudeInstall(path="/y/claude", realpath="/y/claude", version="2.1.300")
+    _remember(monkeypatch, old, [npm])
+    new = claude_resolve.ClaudeInstall(path="/x/claude", realpath="/x/v/2.1.311", version="2.1.311")
+    seen = []
+    monkeypatch.setattr(claude_resolve, "_verify_candidate", lambda p: (seen.append(p), (new, ""))[1])
+    assert claude_resolve.reprobe_chosen() == new
+    assert seen == ["/x/claude"]                     # only the chosen path
+    assert claude_resolve._memo.chosen == new and claude_resolve._memo.others == (npm,)
+
+
+def test_reprobe_failure_leaves_the_memo_and_remembers_no_failure(monkeypatch):
+    """An update still swapping files: the daemon keeps its choice (never
+    another install), and a later probe can still succeed."""
+    old = claude_resolve.ClaudeInstall(path="/x/claude", realpath="/x/v/2.1.310", version="2.1.310")
+    remembered = _remember(monkeypatch, old)
+    monkeypatch.setattr(claude_resolve, "_verify_candidate", lambda p: (None, "--version timed out"))
+    assert claude_resolve.reprobe_chosen() is None
+    assert claude_resolve._memo is remembered and claude_resolve._memo_error is None
+
+
+def test_reprobe_with_nothing_remembered_probes_nothing(monkeypatch):
+    monkeypatch.setattr(claude_resolve, "_memo", None)
+    monkeypatch.setattr(claude_resolve, "_verify_candidate",
+                        lambda p: pytest.fail("probed with nothing remembered"))
+    assert claude_resolve.reprobe_chosen() is None
+
+
+def test_reprobe_never_undoes_a_newer_choice(monkeypatch):
+    """Another refresh (an update through aipager) replaced the memo while
+    this probe ran: the newer choice stays."""
+    old = claude_resolve.ClaudeInstall(path="/x/claude", realpath="/x/v/2.1.310",
+                                       version="2.1.310")
+    _remember(monkeypatch, old)
+    newer = claude_resolve.ResolvedClaude(chosen=claude_resolve.ClaudeInstall(
+        path="/z/claude", realpath="/z/claude", version="2.1.320"))
+    probed = claude_resolve.ClaudeInstall(path="/x/claude", realpath="/x/v/2.1.311",
+                                          version="2.1.311")
+
+    def _verify(path):
+        claude_resolve._memo = newer
+        return probed, ""
+    monkeypatch.setattr(claude_resolve, "_verify_candidate", _verify)
+    assert claude_resolve.reprobe_chosen() == probed
+    assert claude_resolve._memo is newer

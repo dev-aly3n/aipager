@@ -14,6 +14,14 @@ for a Claude Code that has the tool (or one whose version is unknown),
 tells Claude it can send files. Claude-facing English, pinned in
 ``tests/test_claude_facing_golden.py``.
 
+Since 2.1.267 Claude Code records a conversation's system prompt on its first
+request and sends that record again on every later request and every
+``--resume``, until the conversation is compacted, even when the launch
+appends different text. The appended text changes (a new name, a changed
+roster, roles or rules, the note after an upgrade), so both launch paths
+pass ``--system-prompt-snapshot off``: the prompt is rendered fresh, as it
+was before. Its cost is a prompt-cache miss when the text did change.
+
 Daemon and launcher only.
 """
 
@@ -26,6 +34,14 @@ ATTACHMENTS_ENV = "CLAUDE_CODE_ATTACHMENTS_BY_PATH"
 
 #: The first Claude Code release with SendUserFile behind that switch.
 MIN_SEND_VERSION = (2, 1, 301)
+
+#: The first Claude Code release that takes ``--system-prompt-snapshot``
+#: (its --help has it in 2.1.259, before the recording that replays an old
+#: prompt began; an unknown flag stops a launch).
+MIN_SNAPSHOT_FLAG_VERSION = (2, 1, 259)
+
+#: The flag and value that render the system prompt fresh on every request.
+SNAPSHOT_OFF_ARGS = ("--system-prompt-snapshot", "off")
 
 #: What Claude reads about the tool (no em dashes; English only).
 SEND_FILES_NOTE = (
@@ -50,6 +66,18 @@ def has_send_tool(claude_version: str | None) -> bool:
     if not m:
         return True
     return tuple(int(g) for g in m.groups()) >= MIN_SEND_VERSION
+
+
+def snapshot_off_args(claude_version: str | None) -> tuple[str, ...]:
+    """The arguments that keep a Claude Code of *claude_version* from
+    replaying an old system prompt: :data:`SNAPSHOT_OFF_ARGS` when the
+    version is known and takes the flag, else none (unknown or unreadable:
+    an older Claude Code would refuse the flag and the session would not
+    start)."""
+    m = _VERSION_RE.match(claude_version or "")
+    if not m or tuple(int(g) for g in m.groups()) < MIN_SNAPSHOT_FLAG_VERSION:
+        return ()
+    return SNAPSHOT_OFF_ARGS
 
 
 def base_system_prompt(name: str, claude_version: str | None) -> str:

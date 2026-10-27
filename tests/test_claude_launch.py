@@ -25,3 +25,17 @@ def test_note_follows_the_name(version):
 @pytest.mark.parametrize("version", ["2.1.300", "2.1.235", "1.9.999"])
 def test_note_omitted_for_claude_before_2_1_301(version):
     assert cl.base_system_prompt("x1", version) == NAME_PROMPT
+
+
+# ---- the recorded system prompt is not replayed (8.125) ---------------------
+
+@pytest.mark.parametrize("version", ["2.1.259", "2.1.267", "2.1.310", "2.2.0", "3.0.0",
+                                     "2.1.310 (Claude Code)"])
+def test_snapshot_off_for_a_claude_that_takes_the_flag(version):
+    assert cl.snapshot_off_args(version) == ("--system-prompt-snapshot", "off")
+
+
+@pytest.mark.parametrize("version", ["2.1.258", "2.1.235", "1.9.999", None, "", "unknown"])
+def test_no_snapshot_flag_before_2_1_259_or_when_unknown(version):
+    """An older Claude Code refuses an unknown flag and never starts."""
+    assert cl.snapshot_off_args(version) == ()

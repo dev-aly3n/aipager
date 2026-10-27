@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A resumed session now gets aipager's current instructions.** Claude Code now keeps the system prompt a conversation started with and sends it again after a resume, so a session that was brought back, restarted or switched to another mode kept its old name, members, roles and rules until it compacted. aipager now starts Claude Code with `--system-prompt-snapshot off` (Claude Code 2.1.259 and later), so every launch sends the current ones. `aipager session` leaves the flag out when you pass it yourself.
+
 ## [1.3.10] - 2026-10-25
 
 ### Fixed

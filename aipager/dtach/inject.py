@@ -1066,10 +1066,28 @@ async def launch_session(
     # launch has never been gated on resolution and stays that way.
     resolved = claude_resolve.try_resolve_claude_binary()
     claude_bin = resolved.chosen.path if resolved else "claude"
+    claude_version = getattr(resolved.chosen, "version", None) if resolved else None
+    if resolved is not None and os.path.realpath(claude_bin) != getattr(
+            resolved.chosen, "realpath", None):
+        # The path leads to another file than the one whose version the
+        # daemon read: Claude Code updated itself (its installer points the
+        # link at the new version's file) or was replaced. That path's
+        # version is read again; when that fails it is not known.
+        try:
+            fresh = await asyncio.to_thread(claude_resolve.reprobe_chosen)
+        except Exception:  # noqa: BLE001 - unknown is the safe answer
+            log.debug("[%s] probing claude again failed", name, exc_info=True)
+            fresh = None
+        same = fresh is not None and fresh.realpath == os.path.realpath(claude_bin)
+        claude_version = fresh.version if same else None
     # The session's name, and (for a Claude Code with SendUserFile, or one
     # whose version is unknown) that Claude can send files to the chat.
-    sys_prompt = claude_launch.base_system_prompt(
-        name, getattr(resolved.chosen, "version", None) if resolved else None)
+    sys_prompt = claude_launch.base_system_prompt(name, claude_version)
+    # The prompt appended below, not the one this conversation recorded on
+    # its first request (Claude Code 2.1.267+ replays that on --resume);
+    # never for a version not known (an older Claude Code refuses the flag
+    # and the session would not start).
+    snapshot_flag = " ".join(claude_launch.snapshot_off_args(claude_version))
     if system_prompt_extra:
         # SESSION.md roster + rules (Phase D) appended so claude knows
         # who can address it and what's blocked from Telegram.
@@ -1125,7 +1143,7 @@ async def launch_session(
         # shutil.which(). Once it can come from config (claude_path) or
         # AIPAGER_CLAUDE_BIN, an unquoted value is a shell-injection sink
         # into this `bash -c` string.
-        f"{shlex.quote(claude_bin)} {perms} {resume} {model_flag} "
+        f"{shlex.quote(claude_bin)} {perms} {resume} {model_flag} {snapshot_flag} "
         f"--append-system-prompt {shlex.quote(sys_prompt)} ; "
         f"{exit_suffix}"
     )

@@ -308,6 +308,27 @@ def refresh_claude_binary() -> ResolvedClaude | None:
     return try_resolve_claude_binary()
 
 
+def reprobe_chosen() -> ClaudeInstall | None:
+    """Probe the remembered choice's path again (``--version``): Claude
+    Code's installer points its link at each new version's file, so the
+    version read at resolve time can be stale. On success the memo keeps
+    its choice with the fresh version and real path, and the install is
+    returned; on failure (or with nothing remembered) None, and the memo is
+    left as it was. Never a full re-resolve: an update still in progress
+    must not switch the daemon to another install or leave a remembered
+    failure behind. Runs a subprocess: never on the event loop."""
+    global _memo
+    memo = _memo
+    if memo is None:
+        return None
+    install, _why = _verify_candidate(memo.chosen.path)
+    if install is None:
+        return None
+    if _memo is memo:
+        _memo = ResolvedClaude(chosen=install, others=memo.others)
+    return install
+
+
 def try_resolve_claude_binary(*, force: bool = False) -> ResolvedClaude | None:
     """Same as :func:`resolve_claude_binary` but returns ``None`` instead
     of raising."""
@@ -627,6 +648,6 @@ __all__ = [
     "AuthStatus", "ClaudeInstall", "ClaudeNotFoundError", "ResolvedClaude",
     "CredentialCheck", "detect_auth",
     "format_provenance", "validate_credential",
-    "refresh_claude_binary", "resolve_claude_binary",
+    "refresh_claude_binary", "reprobe_chosen", "resolve_claude_binary",
     "try_resolve_claude_binary",
 ]
