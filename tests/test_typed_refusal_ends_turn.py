@@ -434,3 +434,34 @@ def test_a_typed_deny_on_a_degraded_question_is_not_a_refusal(
     run_async(_run())
     assert sess.status is Status.BUSY
     assert _card_texts(bot)[-1] != "🚫 <b>dev</b> · Denied"
+
+
+def test_a_message_held_back_in_the_box_is_no_queued_message(world, run_async, monkeypatch):
+    """Roadmap 8.144: only Claude's own queue can start a next turn. With
+    only a message held back in the input box (8.124), the refusal still
+    ends the turn at the grace, and that message is wiped and marked not
+    delivered, as /stop does."""
+    bot, sess = world
+    held_back = {"msg_id": 9, "chat_id": -100, "body": "held back",
+                 session_ops.HELD_BACK_KEY: True}
+    wiped = AsyncMock(return_value=True)
+    monkeypatch.setattr(inject, "discard_queued_input", wiped)
+    bot._mark_not_delivered = AsyncMock()
+    bot._discard_queued_targets = MagicMock()
+    run_async(bot._keystroke_answer_watch(sess, refusal=True, by="",
+                                          answered_at=time.time(), held=[held_back]))
+    assert sess.status is Status.IDLE
+    from aipager.bot.session_ops import queued_chars
+    wiped.assert_awaited_once_with(NAME, queued_chars(sess, [held_back]))
+    bot._mark_not_delivered.assert_awaited_once_with(sess, [held_back])
+
+
+def test_a_held_back_message_beside_claudes_queue_still_waits_for_the_marker(
+        world, run_async):
+    bot, sess = world
+    held = [{"msg_id": 7, "chat_id": -100, "text": "queued"},
+            {"msg_id": 9, "chat_id": -100, "body": "held back",
+             session_ops.HELD_BACK_KEY: True}]
+    run_async(bot._keystroke_answer_watch(sess, refusal=True, by="",
+                                          answered_at=time.time(), held=held))
+    assert sess.status is Status.BUSY                 # Claude may run the queued one
