@@ -1475,8 +1475,8 @@ def _status_line(
             # their tool calls are counted on the agent's own row, not the
             # parent's tally ("agent activity rows on the busy card"
             # requirement 3). The parent's own Task/Agent tool call is a
-            # different summary shape ("Task: <description>", no 🤖
-            # prefix) and keeps tallying normally.
+            # different summary shape ("Agent: <description> (<type>)",
+            # no 🤖 prefix) and keeps tallying normally.
             if summary.startswith(_SUBAGENT_MARK):
                 continue
             # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
