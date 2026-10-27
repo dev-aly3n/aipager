@@ -90,6 +90,7 @@ from aipager.bot.transport import (  # noqa: F401
     driver_id_from_update,
     mixed_sender_note_outstanding,
     NEEDS_ADMIN_REPLY,
+    PROMPT_DIALOG,
     PROMPT_REFUSED,
     RETRY_OTHERS_COMMAND_REPLY,
     _detect_api_error,
@@ -1235,21 +1236,8 @@ class CallbackDispatchMixin:
                 # be typing the old prompt somewhere it doesn't belong.
                 # Refuse rather than queue: the operator is looking at the
                 # prompt, and tapping Retry again after answering is one tap.
-                await self._safe_answer(query, person.text(TOAST_RETRY_PROMPT_OPEN))
-                # A toast is gone the moment the operator looks away, and
-                # tapping Retry is exactly the sort of thing done on the way
-                # out. Leave the reason on the card itself, keeping the
-                # button so it can be tapped again once the prompt is
-                # answered. `last_prompt` is untouched, so nothing is lost.
-                try:
-                    await edit_message(query.message,
-                        f"{original_text}\n\n"
-                        + i18n.for_update(update).text(RETRY_NOTE_PROMPT),
-                        reply_markup=query.message.reply_markup,
-                    )
-                except Exception:
-                    log.debug("[%s] could not annotate the retry card",
-                              sess.label, exc_info=True)
+                await self._refuse_retry_prompt_open(query, person, update,
+                                                     original_text, sess)
                 return
             # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
             prompt = sess.last_prompt
@@ -1282,6 +1270,11 @@ class CallbackDispatchMixin:
                 self.registry.transition(session_name, Status.BUSY)
                 await self._card_for_injected(sess, was_busy=was_busy)
                 log.info("[%s] Retry: %s", sess.label, prompt[:80])
+            elif ok is PROMPT_DIALOG:
+                # A prompt opened while it was typed (roadmap 8.143): nothing
+                # went out, so the same answer as for one open before.
+                await self._refuse_retry_prompt_open(query, person, update,
+                                                     original_text, sess)
             elif ok is PROMPT_REFUSED:
                 # A slash command that may not be resent (roadmap 8.74).
                 # Someone else's text runs with no sender, which may send
@@ -1335,6 +1328,10 @@ class CallbackDispatchMixin:
                 except Exception:
                     pass
                 log.info("[%s] Compact triggered by user", sess.label)
+            elif ok is PROMPT_DIALOG:
+                # A prompt opened while it was typed (roadmap 8.143): it is
+                # not sent; the button stays for after the prompt.
+                await self._safe_answer(query, person.text(TOAST_RETRY_PROMPT_OPEN))
             elif ok is PROMPT_REFUSED:
                 await self._safe_answer(query, shown(person, NEEDS_ADMIN_REPLY))
             else:
@@ -2448,6 +2445,25 @@ class CallbackDispatchMixin:
                     answered_at=answered_at)
         else:
             await self._safe_answer(query, person.text(SEND_FAILED, session=session_name))
+
+    async def _refuse_retry_prompt_open(self, query, person, update,
+                                        original_text: str, sess) -> None:
+        """Retry refused because a prompt is open (or another sender's
+        message is outstanding). A toast is gone the moment the operator
+        looks away, and tapping Retry is exactly the sort of thing done on
+        the way out: the reason also goes on the card itself, keeping the
+        button so it can be tapped again once the prompt is answered.
+        ``last_prompt`` is untouched, so nothing is lost."""
+        await self._safe_answer(query, person.text(TOAST_RETRY_PROMPT_OPEN))
+        try:
+            await edit_message(query.message,
+                f"{original_text}\n\n"
+                + i18n.for_update(update).text(RETRY_NOTE_PROMPT),
+                reply_markup=query.message.reply_markup,
+            )
+        except Exception:
+            log.debug("[%s] could not annotate the retry card",
+                      sess.label, exc_info=True)
 
     async def _keys_refused(self, query, person, sess, perm) -> bool:
         """Refuse a tap whose keys could land in another dialog (roadmap

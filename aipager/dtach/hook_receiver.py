@@ -94,6 +94,37 @@ _DIALOG_EVENTS = frozenset({"permission_prompt", "permission_reply_timeout"})
 # space: Claude Code's wording, never aipager's text to translate.)
 _API_ERROR_START = re.compile(r"\s*API\x20Error:\x20\d{3}\b")
 
+# Datagrams that tell of a dialog Claude Code is drawing, per session, from
+# their arrival until they have been handled (roadmap 8.143): one can wait
+# behind an older turn's finish (`_hold_for_turn_state`) while its dialog
+# is already on screen, and no prompt may be typed into that.
+_DIALOG_DATAGRAMS: dict[str, int] = {}
+_DIALOG_DATAGRAM_HINTS = (b"PermissionRequest", b"permission_prompt",
+                          b"Elicitation", b"AskUserQuestion")
+
+
+def _dialog_datagram_session(data: bytes) -> str:
+    """The session a datagram tells of a drawn dialog for, else ``""``."""
+    if not any(hint in data for hint in _DIALOG_DATAGRAM_HINTS):
+        return ""
+    try:
+        msg = json.loads(data)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        return ""
+    if not isinstance(msg, dict):
+        return ""
+    event = msg.get("notification_type") or msg.get("hook_event_name") or ""
+    opens = (event in ("PermissionRequest", "permission_prompt", "Elicitation")
+             or (event == "PreToolUse" and msg.get("tool_name") == "AskUserQuestion"))
+    session = msg.get("session")
+    return session if opens and isinstance(session, str) else ""
+
+
+def dialog_datagram_pending(session: str) -> bool:
+    """Whether a datagram telling of a dialog in *session* has arrived and
+    is not handled yet."""
+    return _DIALOG_DATAGRAMS.get(session, 0) > 0
+
 # A Stop hook landing on an already-IDLE session within this many seconds
 # of an explicit /stop (or safety halt) is Claude finalising the turn the
 # operator just interrupted — its partial answer must not be delivered
@@ -750,7 +781,7 @@ class HookReceiver:
 
         loop = asyncio.get_running_loop()
         transport, _ = await loop.create_datagram_endpoint(
-            lambda: _Protocol(self._on_datagram),
+            lambda: _Protocol(self._on_datagram_counted),
             local_addr=SOCKET_PATH,
             family=socket.AF_UNIX,
         )
@@ -1075,6 +1106,26 @@ class HookReceiver:
             return
         sess.claude_pid = raw
         sess.claude_pid_start = start or 0
+
+    def _on_datagram_counted(self, data: bytes):
+        """:meth:`_on_datagram`, counting a dialog's datagram as pending
+        from the moment it arrives (synchronously, in ``datagram_received``)
+        until it is handled (:func:`dialog_datagram_pending`)."""
+        session = _dialog_datagram_session(data)
+        if session:
+            _DIALOG_DATAGRAMS[session] = _DIALOG_DATAGRAMS.get(session, 0) + 1
+        return self._handle_counted(data, session)
+
+    async def _handle_counted(self, data: bytes, session: str) -> None:
+        try:
+            await self._on_datagram(data)
+        finally:
+            if session:
+                left = _DIALOG_DATAGRAMS.get(session, 0) - 1
+                if left > 0:
+                    _DIALOG_DATAGRAMS[session] = left
+                else:
+                    _DIALOG_DATAGRAMS.pop(session, None)
 
     async def _on_datagram(self, data: bytes) -> None:
         try:

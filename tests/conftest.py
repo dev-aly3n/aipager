@@ -1477,6 +1477,27 @@ def _fresh_terminal_write_stamps(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_typing_gate(tmp_path, monkeypatch):
+    """The typing gate (roadmap 8.143): its folders, normally beside the
+    daemon's control socket in $XDG_RUNTIME_DIR or /tmp, go to ``tmp_path``
+    (a real marker there would hold a real session's tool calls), and its
+    daemon-side state, the dialog probe and the receiver's dialog-datagram
+    counts start fresh in every test."""
+    from aipager.dtach import hook_receiver, inject, typing_gate
+
+    base = tmp_path / "typing-gate"
+    base.mkdir(exist_ok=True)
+    real = typing_gate.gate_dir
+    monkeypatch.setattr(typing_gate, "gate_dir",
+                        lambda _base_dir, session: base / f"aipager-gate-{session}")
+    monkeypatch.setattr(inject, "_dialog_probe", inject._never_in_dialog)
+    monkeypatch.setattr(inject, "_GATE_HOLDS", {})
+    monkeypatch.setattr(inject, "_PENDING_WIPE", {})
+    monkeypatch.setattr(hook_receiver, "_DIALOG_DATAGRAMS", {})
+    return real
+
+
+@pytest.fixture(autouse=True)
 def _never_clamp_the_test_process(monkeypatch):
     """Keep a hook's ``RLIMIT_AS`` clamp inside the hook, out of pytest.
 

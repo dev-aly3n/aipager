@@ -80,6 +80,7 @@ from aipager.bot.transport import (  # noqa: F401
     calling_user_id,
     driver_id_from_update,
     NEEDS_ADMIN_REPLY,
+    PROMPT_DIALOG,
     PROMPT_REFUSED,
     resolve_chat_id_int,
 )
@@ -283,6 +284,13 @@ HELD_BACK_SETTLE_SECONDS: float = 0.3
 #: How many times the held-back check runs while a dialog may be on top
 #: (ten minutes: a permission dialog can wait that long for its answer).
 HELD_BACK_TRIES: int = 200
+#: A message that met a dialog while it was typed (roadmap 8.143): how long
+#: to wait for that dialog to be on record before holding the message
+#: anyway, how often to look, and how many times it is typed again when the
+#: dialog is gone without being recorded.
+MET_DIALOG_WAIT_SECONDS: float = 2.0
+MET_DIALOG_POLL_SECONDS: float = 0.1
+MET_DIALOG_TRIES: int = 2
 #: session name -> the note of the last message that may still sit held
 #: back in Claude Code's input box (waiting for its second Enter).
 _HELD_BACK: dict[str, Path] = {}
@@ -1289,6 +1297,11 @@ class SessionOpsMixin:
         (:meth:`_enter_again_if_held_back`; never for a slash command, whose
         note a local command never consumes). A message that is nothing
         but such characters is not sent (False).
+
+        Never typed into a dialog (roadmap 8.143): when one is open, or
+        opens while the message is typed, nothing reaches Claude, the note
+        is removed and :data:`PROMPT_DIALOG` (falsy) comes back for the
+        caller to hold the message (:func:`aipager.dtach.inject.send_text_and_enter`).
         """
         if self._parked(sess):
             log.info("[%s] Not sending a prompt: parked on a Claude Code "
@@ -1409,17 +1422,38 @@ class SessionOpsMixin:
         # earlier from-idle send Claude Code may still be ignoring
         # (review rev-iter1-001). A failed send stamps nothing either:
         # there is no turn to watch for.
-        was_idle = sess.status != Status.BUSY
+        was_idle = sess.status != Status.BUSY  # read again before each try below
         # Typed but not yet submitted, the text would be submitted by a
         # send-now chord: /now and the "⚡ Send now" button refuse while
         # this is above zero (bot/send_now.py). Raised with no await
         # before the injection starts.
-        sess.prompt_injecting += 1
-        typed_wall = time.time()
-        try:
-            ok = await inject.send_text_and_enter(sess.name, body)
-        finally:
-            sess.prompt_injecting -= 1
+        for _try in range(MET_DIALOG_TRIES):
+            was_idle = sess.status != Status.BUSY
+            sess.prompt_injecting += 1
+            typed_wall = time.time()
+            try:
+                ok = await inject.send_text_and_enter(sess.name, body)
+            finally:
+                sess.prompt_injecting -= 1
+            if ok is not inject.DIALOG_BEFORE_TYPING and ok is not inject.DIALOG_WHILE_TYPING:
+                break
+            if await self._dialog_on_record(sess):
+                break
+            # No dialog any more and none on record: typed again.
+        if ok is inject.DIALOG_BEFORE_TYPING or ok is inject.DIALOG_WHILE_TYPING:
+            # A dialog opened (roadmap 8.143): nothing went to Claude and no
+            # key answered it. Its note goes (the message is typed again,
+            # with a new one, once the dialog is answered); the caller
+            # holds the message.
+            if note_path is not None:
+                try:
+                    Path(note_path).unlink(missing_ok=True)
+                except OSError:
+                    log.debug("[%s] could not remove the held message's note",
+                              sess.label, exc_info=True)
+            log.info("[%s] A prompt opened while a message was typed: held for it",
+                     sess.label)
+            return PROMPT_DIALOG
         if ok and not reactions.is_slash_command(text):
             # Prompt evidence: the turn files Claude sends may come from
             # (state.py files_turn_opened; kept when one already runs). A
@@ -1439,6 +1473,26 @@ class SessionOpsMixin:
             _spawn(self._enter_again_if_held_back(sess, note_path))
         return ok
 
+    async def _dialog_on_record(self, sess: TrackedSession) -> bool:
+        """After a message met a dialog (roadmap 8.143): True once the dialog
+        is on record (``dialog_is_open``: the message is then held for it
+        and its answer releases it), False when the typing gate no longer
+        sees one (nothing to wait for: the message is typed again). The
+        dialog's own event can wait behind an older turn's finish: given
+        :data:`MET_DIALOG_WAIT_SECONDS`, then True (held, and out at the
+        turn's end at the latest)."""
+        deadline = time.monotonic() + MET_DIALOG_WAIT_SECONDS
+        while True:
+            if sess.dialog_is_open():
+                return True
+            if not inject.dialog_open(sess.name):
+                return False
+            if time.monotonic() >= deadline:
+                log.info("[%s] a dialog is not on record %.0fs after a message met "
+                         "it: held for the turn's end", sess.label, MET_DIALOG_WAIT_SECONDS)
+                return True
+            await _sleep(MET_DIALOG_POLL_SECONDS)
+
     async def _enter_held_back_now(self, sess: TrackedSession) -> None:
         """Before another message is typed: the second Enter of an earlier
         one that may still sit held back (:meth:`_held_back_verdict`),
@@ -1452,8 +1506,13 @@ class SessionOpsMixin:
         if verdict == "wait":
             return                      # its own watch tries again
         del _HELD_BACK[sess.name]
-        if verdict == "press" and await self._press_held_back_enter(sess):
-            await _sleep(HELD_BACK_SETTLE_SECONDS)
+        if verdict == "press":
+            pressed = await self._press_held_back_enter(sess)
+            if pressed is inject.DIALOG_BEFORE_TYPING:
+                # A dialog came first (roadmap 8.143): its own watch tries again.
+                _HELD_BACK.setdefault(sess.name, note_path)
+            elif pressed:
+                await _sleep(HELD_BACK_SETTLE_SECONDS)
 
     async def _enter_again_if_held_back(self, sess: TrackedSession, note_path) -> None:
         """Press Enter once more when Claude Code held the message back.
@@ -1478,7 +1537,11 @@ class SessionOpsMixin:
                 continue
             del _HELD_BACK[sess.name]
             if verdict == "press":
-                await self._press_held_back_enter(sess)
+                pressed = await self._press_held_back_enter(sess)
+                if pressed is inject.DIALOG_BEFORE_TYPING and sess.name not in _HELD_BACK:
+                    # A dialog came first (roadmap 8.143): try again later.
+                    _HELD_BACK[sess.name] = note_path
+                    continue
             return
         if _HELD_BACK.get(sess.name) is note_path:
             # Kept: the next message's flush presses it before typing.
@@ -1511,10 +1574,13 @@ class SessionOpsMixin:
             return "wait"
         return "press"
 
-    async def _press_held_back_enter(self, sess: TrackedSession) -> bool:
+    async def _press_held_back_enter(self, sess: TrackedSession):
+        """The second Enter, through the typing gate (roadmap 8.143): True,
+        False, or ``inject.DIALOG_BEFORE_TYPING`` when a dialog came first
+        (nothing pressed)."""
         log.info("[%s] the message was held back by Claude Code's invisible-character "
                  "check: pressing Enter once more", sess.label)
-        return await inject.send_keys(sess.name, "Enter")
+        return await inject.press_enter_gated(sess.name)
 
     def _build_reply_context(
         self, msg, sess, *, bot_id: int, allow_file: bool,

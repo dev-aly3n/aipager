@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from aipager import claude_launch, claude_resolve, daemon_secrets, instance, perm_modes
-from aipager.dtach import bg_jobs
+from aipager.dtach import bg_jobs, typing_gate
 
 log = logging.getLogger(__name__)
 
@@ -322,7 +322,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # - ``send_keys``: one hold per key write;
 # - ``send_text_and_enter``: ONE hold across the text (its pieces and the
 #   gaps between them, for a long prompt), its settle delay and the Enter,
-#   so nothing can land between them;
+#   so nothing can land between them (and, first, the typing gate's second
+#   look, normally nothing to wait for, and the wipe of a prompt a dialog
+#   stopped, roadmap 8.143);
 # - ``discard_queued_input``: ONE hold across its Escape, the settle gap and
 #   every Ctrl+U write (about 0.3 s for a short queue, one more write per
 #   40 characters queued, at most 512 writes), so no prompt's text lands in a
@@ -439,6 +441,34 @@ def _refuse_parked(session: str) -> bool:
     return True
 
 
+def _never_in_dialog(_session: str) -> bool:
+    return False
+
+
+# Whether a dialog (a permission prompt, a question) is open in a session,
+# as the daemon's registry says (cli/daemon.py installs it, like the parked
+# probe): a prompt is never typed into one (roadmap 8.143).
+_dialog_probe: Callable[[str], object] = _never_in_dialog
+
+
+def set_dialog_probe(fn: Callable[[str], object] | None) -> None:
+    """Install *fn* (session name -> a dialog is open?) as the dialog
+    probe; None puts back the default, which says no dialog is open."""
+    global _dialog_probe
+    _dialog_probe = fn if fn is not None else _never_in_dialog
+
+
+def dialog_open(session: str) -> bool:
+    """Whether the probe says a dialog is open in *session*. A probe that
+    raises counts as open: holding a message back is safe, typing it into
+    a dialog is not."""
+    try:
+        return bool(_dialog_probe(session))
+    except Exception:  # noqa: BLE001 - fail closed
+        log.warning("dialog probe failed for %s", session, exc_info=True)
+        return True
+
+
 async def _await_chord(session: str) -> None:
     """Wait (at most ``_CHORD_WAIT_LIMIT``) while a send-now chord is being
     written to *session*, so no other write lands inside it."""
@@ -466,6 +496,12 @@ async def send_now(session: str) -> bool:
     timed out after its byte was delivered, a lone Ctrl+X may be left
     pending in Claude Code's input; the next key then ends that chord."""
     if _refuse_parked(session):
+        return False
+    if _PENDING_WIPE.get(session):
+        # A prompt a dialog stopped left text in the input box (roadmap
+        # 8.143): the chord would send it, though it was never sent whole.
+        log.warning("Send-now chord → %s not pressed: a stopped prompt's text "
+                    "is still in the input box", session)
         return False
     # Marked before the first await, so a write another path starts from
     # here on waits for the chord instead of landing inside it.
@@ -531,14 +567,182 @@ async def send_keys(session: str, keys: str) -> bool:
 # Claude works; 64 to 512 characters with 20 to 50 ms gaps all held). The
 # margin assumes Claude Code reads its input within about 100 ms: four
 # pieces read together reach the ~800 characters it takes as a paste.
-# A permission dialog that opens while a prompt is being typed (a busy
-# session) takes the rest of it, as it took the Enter before (roadmap
-# 8.143).
 TYPE_CHUNK_CHARS: int = 200
 TYPE_CHUNK_GAP_SECONDS: float = 0.03
 
+# No dialog takes a prompt's keys (roadmap 8.143). Claude Code draws a
+# permission dialog the moment its tool's PreToolUse hooks return and runs
+# the PermissionRequest hooks beside it, so the dialog takes keys before
+# aipager hears of it (about 0.075 s later): typed into it, a prompt's
+# Enter, or a lone digit, picks a "Yes" row (2.1.311, live: the command
+# ran). So, around every prompt typed (aipager/dtach/typing_gate.py):
+# - the typing marker, written first, holds every tool call that has not
+#   passed its PreToolUse hook yet until the Enter is in, and
+#   GATE_AFTER_ENTER_SECONDS more so Claude Code reads that Enter first;
+# - a call that passed before the marker left a stamp: the typing waits
+#   until every stamp is GATE_FRESH_SECONDS old (its dialog, if any, is
+#   then known), at most GATE_WAIT_LIMIT_SECONDS, or GATE_WAIT_HARD_LIMIT
+#   while one passed less than GATE_MIN_PASS_AGE ago (a call held at the
+#   marker past its hook's cap goes on with a fresh stamp: this is looked
+#   at again before every piece and the Enter, renewing the marker);
+# - the dialog probe is asked before every piece and before the Enter. A
+#   dialog open before anything is typed: nothing is typed
+#   (DIALOG_BEFORE_TYPING). One that opened after some pieces (a slower
+#   hook of the user's own, say): the rest and the Enter are not typed,
+#   and what was typed is wiped (Ctrl+U) before the next prompt goes in
+#   (DIALOG_WHILE_TYPING). Either way the caller holds the message for the
+#   dialog. No piece is a single character: a lone digit picks a row.
+GATE_FRESH_SECONDS: float = 1.0
+GATE_WAIT_LIMIT_SECONDS: float = 1.5
+GATE_MIN_PASS_AGE: float = 0.3
+GATE_WAIT_HARD_LIMIT: float = 2.5
+GATE_POLL_SECONDS: float = 0.05
+GATE_AFTER_ENTER_SECONDS: float = 0.15
+# Seam for the gate's waits (tests replace this, never asyncio's own).
+_gate_sleep = asyncio.sleep
+# Sends holding each session's typing marker (two prompts can overlap: the
+# marker goes only when the last one is done).
+_GATE_HOLDS: dict[str, int] = {}
+# Characters a prompt stopped by a dialog left in the input box, wiped
+# before the next prompt is typed there.
+_PENDING_WIPE: dict[str, int] = {}
 
-async def send_text_and_enter(session: str, text: str) -> bool:
+
+class _SendStopped:
+    """A falsy :func:`send_text_and_enter` result: the prompt was not
+    sent because a dialog is open. Compared with ``is``."""
+
+    __slots__ = ("_name",)
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return self._name
+
+
+DIALOG_BEFORE_TYPING = _SendStopped("DIALOG_BEFORE_TYPING")
+DIALOG_WHILE_TYPING = _SendStopped("DIALOG_WHILE_TYPING")
+
+
+def _gate_base() -> str:
+    from aipager import config
+    return os.path.dirname(config.SOCKET_PATH) or "/tmp"
+
+
+def _gate_begin(session: str) -> None:
+    _GATE_HOLDS[session] = _GATE_HOLDS.get(session, 0) + 1
+    try:
+        written = typing_gate.begin(_gate_base(), session)
+    except Exception:  # noqa: BLE001 - the probe checks still guard
+        written = False
+    if not written:
+        log.warning("Typing marker for %s could not be written: tool calls "
+                    "are not held while it is typed", session)
+
+
+def _gate_end(session: str) -> None:
+    left = _GATE_HOLDS.get(session, 0) - 1
+    if left > 0:
+        _GATE_HOLDS[session] = left
+        return
+    _GATE_HOLDS.pop(session, None)
+    typing_gate.end(_gate_base(), session)
+
+
+def _gate_finish(session: str, ok: bool) -> None:
+    """End this send's hold on the typing marker. After an Enter that went
+    in, a moment later: Claude Code reads the Enter before a tool call held
+    at the gate draws its dialog."""
+    if ok:
+        asyncio.get_running_loop().call_later(GATE_AFTER_ENTER_SECONDS, _gate_end, session)
+    else:
+        _gate_end(session)
+
+
+async def _await_quiet_gate(session: str, *, renew: bool = False) -> bool:
+    """Wait until no tool call passed its PreToolUse hook in the last
+    :data:`GATE_FRESH_SECONDS` (at most :data:`GATE_WAIT_LIMIT_SECONDS`;
+    then on, unless one passed in the last :data:`GATE_MIN_PASS_AGE`, its
+    dialog perhaps drawing right now, up to :data:`GATE_WAIT_HARD_LIMIT`).
+    False as soon as a dialog is open. *renew*: the typing marker's expiry
+    starts again first (a send that holds the lock long stays gated)."""
+    if renew:
+        try:
+            typing_gate.begin(_gate_base(), session)
+        except Exception:  # noqa: BLE001 - the probe checks still guard
+            log.debug("typing marker for %s not renewed", session, exc_info=True)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    deadline = started + GATE_WAIT_LIMIT_SECONDS
+    hard_deadline = started + GATE_WAIT_HARD_LIMIT
+    while True:
+        if dialog_open(session):
+            return False
+        fresh = _fresh_passes(session, GATE_FRESH_SECONDS)
+        if not fresh:
+            return True
+        if loop.time() >= deadline and (loop.time() >= hard_deadline
+                                         or not _fresh_passes(session, GATE_MIN_PASS_AGE)):
+            log.info("Typing into %s: a tool call still passing its hook after "
+                     "%.1f s, typing anyway", session, loop.time() - started)
+            return True
+        await _gate_sleep(GATE_POLL_SECONDS)
+
+
+def _fresh_passes(session: str, window: float) -> int:
+    try:
+        return typing_gate.fresh_passes(_gate_base(), session, window)
+    except Exception:  # noqa: BLE001 - the probe checks still guard
+        log.debug("typing gate stamps unreadable for %s", session, exc_info=True)
+        return 0
+
+
+def _type_pieces(text: str) -> list[str]:
+    """*text* in pieces of :data:`TYPE_CHUNK_CHARS`, never a lone
+    character (it joins the piece before)."""
+    pieces = [text[i:i + TYPE_CHUNK_CHARS]
+              for i in range(0, max(len(text), 1), TYPE_CHUNK_CHARS)]
+    if len(pieces) > 1 and len(pieces[-1]) == 1:
+        tail = pieces.pop()
+        pieces[-1] += tail
+    return pieces
+
+
+def _stopped_while_typing(session: str, typed: int) -> _SendStopped:
+    _PENDING_WIPE[session] = _PENDING_WIPE.get(session, 0) + typed
+    log.warning("A dialog opened in %s while a prompt was typed: stopped after "
+                "%d characters, no Enter", session, typed)
+    return DIALOG_WHILE_TYPING
+
+
+async def _wipe_stopped_text(session: str, sock: str) -> bool:
+    """Wipe what a prompt stopped by a dialog left in the input box
+    (:data:`_PENDING_WIPE`): Ctrl+U as :func:`discard_queued_input` presses
+    it, never an Escape (one would interrupt a running turn). Under the
+    caller's lock hold. False when a write failed (the wipe stays due)."""
+    chars = _PENDING_WIPE.get(session, 0)
+    if not chars:
+        return True
+    kills = KEYS["KillLine"].encode() * DISCARD_KILL_BATCH
+    writes = discard_presses(chars) // DISCARD_KILL_BATCH
+    for i in range(writes):
+        if i:
+            await _key_gap_sleep(DISCARD_KILL_GAP)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=kills)
+        if not ok:
+            log.warning("Wiping a stopped prompt in %s: Ctrl+U write %d/%d failed",
+                        session, i + 1, writes)
+            return False
+    _PENDING_WIPE.pop(session, None)
+    log.info("Wiped %d characters of a stopped prompt in %s", chars, session)
+    return True
+
+
+async def send_text_and_enter(session: str, text: str) -> bool | _SendStopped:
     """Send literal text followed by Enter.
 
     Text and Enter must be separate dtach -p calls — Claude Code's TUI
@@ -549,30 +753,90 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     write (a Stop's Escape, a send-now chord's check and Ctrl+S) can land
     between the pieces or before the Enter; it is counted once, for the
     whole. A piece that fails stops the send: no Enter.
+
+    Never into a dialog (roadmap 8.143, the gate note above): returns
+    :data:`DIALOG_BEFORE_TYPING` when one is open before anything is
+    typed, :data:`DIALOG_WHILE_TYPING` when one opened after some pieces
+    (no Enter; their text is wiped before the next prompt).
     """
     if _refuse_parked(session):
         return False
     await _await_chord(session)
     sock = _sock_path(session)
-    async with _write_lock(session):
-        if _refuse_parked(session):
-            return False
-        _note_write(session)
-        for start in range(0, max(len(text), 1), TYPE_CHUNK_CHARS):
-            if start:
-                await _key_gap_sleep(TYPE_CHUNK_GAP_SECONDS)
-            piece = text[start:start + TYPE_CHUNK_CHARS]
-            ok, _ = await _run([_DTACH, "-p", sock], stdin=piece.encode())
-            if not ok:
+    _gate_begin(session)
+    ok = False
+    try:
+        if not await _await_quiet_gate(session):
+            log.info("Not typing into %s: a dialog is open", session)
+            return DIALOG_BEFORE_TYPING
+        async with _write_lock(session):
+            if _refuse_parked(session):
                 return False
-        # Claude Code's Ink TUI needs time to process text input before
-        # Enter is recognized as "submit". Too short → \r is swallowed.
-        # Scale with text length: longer text = more rendering time needed.
-        delay = max(0.15, min(0.5, len(text) * 0.003))
-        await _key_gap_sleep(delay)
-        ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
+            # Again: the lock may have waited behind other writes (the
+            # marker is renewed for as long again, at every look below too).
+            if not await _await_quiet_gate(session, renew=True):
+                log.info("Not typing into %s: a dialog is open", session)
+                return DIALOG_BEFORE_TYPING
+            _note_write(session)
+            if not await _wipe_stopped_text(session, sock):
+                return False
+            typed = 0
+            for i, piece in enumerate(_type_pieces(text)):
+                if i:
+                    await _key_gap_sleep(TYPE_CHUNK_GAP_SECONDS)
+                # The whole gate again, not only the probe: a tool call held
+                # at the marker longer than its hook's cap went on with a
+                # fresh stamp, and its dialog may be drawing right now.
+                if not await _await_quiet_gate(session, renew=True):
+                    ok = False
+                    if not i:
+                        log.info("Not typing into %s: a dialog is open", session)
+                        return DIALOG_BEFORE_TYPING
+                    return _stopped_while_typing(session, typed)
+                ok, _ = await _run([_DTACH, "-p", sock], stdin=piece.encode())
+                if not ok:
+                    return False
+                typed += len(piece)
+            # Claude Code's Ink TUI needs time to process text input before
+            # Enter is recognized as "submit". Too short → \r is swallowed.
+            # Scale with text length: longer text = more rendering time needed.
+            delay = max(0.15, min(0.5, len(text) * 0.003))
+            await _key_gap_sleep(delay)
+            if not await _await_quiet_gate(session, renew=True):
+                ok = False
+                return _stopped_while_typing(session, len(text))
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
+    finally:
+        _gate_finish(session, ok)
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)
+    return ok
+
+
+async def press_enter_gated(session: str) -> bool | _SendStopped:
+    """One Enter typed as a prompt's is (the second Enter of a message
+    Claude Code held back, roadmap 8.124): through the typing gate, never
+    into a dialog (:data:`DIALOG_BEFORE_TYPING`, nothing written)."""
+    if _refuse_parked(session):
+        return False
+    await _await_chord(session)
+    sock = _sock_path(session)
+    _gate_begin(session)
+    ok = False
+    try:
+        if not await _await_quiet_gate(session):
+            return DIALOG_BEFORE_TYPING
+        async with _write_lock(session):
+            if _refuse_parked(session):
+                return False
+            if not await _await_quiet_gate(session, renew=True):
+                return DIALOG_BEFORE_TYPING
+            _note_write(session)
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
+    finally:
+        _gate_finish(session, ok)
+    if ok:
+        log.info("Sent keys 'Enter' → %s", session)
     return ok
 
 
@@ -666,6 +930,8 @@ async def discard_queued_input(session: str, chars: int = 0) -> bool:
                 log.warning("Discard → %s: Ctrl+U write %d/%d failed",
                             session, i + 1, writes)
                 return False
+    # The input box is empty now: a stopped prompt's text went with it.
+    _PENDING_WIPE.pop(session, None)
     log.info("Discarded queued input → %s (Escape, %d x Ctrl+U)",
              session, presses)
     return True
@@ -815,6 +1081,8 @@ async def kill_session(session: str) -> bool:
     the monitor then reports as gone, and the orphan later deletes the
     socket of whatever session has since taken its place.
     """
+    # No input box to wipe any more (roadmap 8.143).
+    _PENDING_WIPE.pop(session, None)
     sock = _sock_path(session)
     sock_path = Path(sock)
     if not sock_path.is_socket():
@@ -1045,6 +1313,9 @@ async def launch_session(
     sock = f"{SOCK_PREFIX}{name}.sock"
     if Path(sock).is_socket():
         return False, f"Session '{name}' already exists"
+    # A new claude starts with an empty input box (roadmap 8.143); only
+    # past the check above, which keeps a live session's own.
+    _PENDING_WIPE.pop(f"claude-{name}", None)
 
     launch_cwd = cwd or _PROJECT_DIR
     if cwd and not Path(cwd).is_dir():

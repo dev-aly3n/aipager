@@ -449,6 +449,28 @@ def _answer_model_switch(session: str, data: dict) -> None:
         _debug(f"model switch marker error (no decision): {e}")
 
 
+def _pass_typing_gate(session: str) -> None:
+    """The end of a PreToolUse that lets its tool go on (roadmap 8.143).
+    Claude Code draws the tool's permission dialog the moment its
+    PreToolUse hooks return, and a prompt aipager is typing into the
+    session would answer it: its Enter, or a lone digit, picks a "Yes"
+    row. So this waits while aipager types (``typing_gate.pass_gate``,
+    at most a few seconds) and leaves a stamp the daemon waits out
+    otherwise. Never raises."""
+    if not session:
+        return
+    try:
+        from aipager.dtach import typing_gate
+
+        result = typing_gate.pass_gate(os.path.dirname(SOCKET_PATH) or "/tmp", session)
+        if result != "passed":
+            _debug(f"typing gate: {result}")
+    except MemoryError:
+        raise
+    except Exception as e:  # never wedge claude
+        _debug(f"typing gate error (going on): {e}")
+
+
 # What the hook knows of its event when an error escapes (problem reports,
 # roadmap 8.112): the event and tool names only, set once they are known.
 _ERROR_CONTEXT: dict = {"event": None, "tool": None}
@@ -1077,6 +1099,7 @@ def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
         # a deny for PreToolUse (main()); the slot write allocates nothing.
         if len(cap_slot) > 1:
             cap_slot[1] = True
+        let_through = False
         try:
             from aipager.dtach import enforce
             decide_error = None
@@ -1127,6 +1150,7 @@ def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
                 except Exception as e:
                     _debug(f"safety_blocked notify failed: {e}")
             else:
+                let_through = True
                 # Allowed. Only additionalContext, never an "allow"
                 # decision: that would skip Claude Code's own prompts in
                 # its Ask and Auto modes (C12).
@@ -1189,6 +1213,10 @@ def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
                 _report_error(e, denied=True)
             except BaseException:
                 pass
+        if let_through:
+            # Last, once its answer is out: a tool that may now draw a
+            # permission dialog waits while aipager types into the session.
+            _pass_typing_gate(data.get("session", ""))
 
     # /settings reply-style injection (item 6.2). The daemon precomputes
     # `style_text` on the session's policy snapshot at prompt-injection
