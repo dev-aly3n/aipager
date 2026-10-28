@@ -210,7 +210,7 @@ def test_dialog_unseen_by_tick_while_pid_unknown_still_refused(world, mk_update)
     assert world.writes == []
 
 
-# -- criterion 5: within 6 s of a resume SessionStart ------------------------------------
+# -- criterion 5: within RESUME_TYPE_SETTLE_SECONDS (1.5 s) of a resume SessionStart ----
 
 def _resume_started(world, ago):
     world.sess.session_start_at["resume"] = world.clock.wall - ago
@@ -246,7 +246,7 @@ def test_message_after_resume_without_dialog_is_typed(world, mk_update):
     assert world.bodies() == ["hello there"]
 
 
-def test_resume_settle_wait_bounded_by_six_seconds(world, mk_update):
+def test_resume_settle_wait_bounded_by_the_window(world, mk_update):
     world.idle(ago=0.0)
     _resume_started(world, 0.5)
     world.send(mk_update, "hello there", msg_id=10)
@@ -260,7 +260,7 @@ def test_resume_settle_polls_at_quarter_seconds(world, mk_update):
     assert world.sleeps and set(world.sleeps) == {term_dialog.FRESH_POLL_SECONDS}
 
 
-def test_message_seven_seconds_after_resume_is_not_delayed(world, mk_update):
+def test_message_after_the_resume_window_is_not_delayed(world, mk_update):
     world.idle(ago=0.0)
     _resume_started(world, term_dialog.RESUME_TYPE_SETTLE_SECONDS + 1)
     world.send(mk_update, "hello there", msg_id=10)
