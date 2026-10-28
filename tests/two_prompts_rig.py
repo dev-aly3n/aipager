@@ -155,16 +155,25 @@ class Rig:
         self.hook("PermissionRequest", **fields)
 
     def claude_bash(self, command="rm -rf build/", *, tool_use_id="toolu_p1",
-                    hook=True, request_id=None, mode=None):
-        """*mode*: the payload's ``permission_mode``, sent only when given."""
+                    hook=True, request_id=None, mode=None, suggestions=None,
+                    transcript_path=None):
+        """*mode*: the payload's ``permission_mode``, sent only when given;
+        *suggestions*: its ``permission_suggestions``, likewise; a None
+        *tool_use_id* sends none (as Claude Code 2.1.311 does);
+        *transcript_path*: the payload's (else the rig's empty one)."""
         fields = {"tool_name": "Bash",
-                  "tool_input": {"command": command, "description": command},
-                  "tool_use_id": tool_use_id}
+                  "tool_input": {"command": command, "description": command}}
+        if tool_use_id is not None:
+            fields["tool_use_id"] = tool_use_id
         if mode is not None:
             fields["permission_mode"] = mode
+        if suggestions is not None:
+            fields["permission_suggestions"] = suggestions
+        if transcript_path is not None:
+            fields["transcript_path"] = transcript_path
         if hook:
             fields["aipager_reply_addr"] = "/nonexistent/reply-claude.sock"
-            fields["aipager_request_id"] = request_id or f"req-{tool_use_id}"
+            fields["aipager_request_id"] = request_id or f"req-{tool_use_id or 'p'}"
         self.hook("PermissionRequest", **fields)
 
     def question(self, *, agent=None, tool_use_id="toolu_q1", mode=None):
