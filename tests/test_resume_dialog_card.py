@@ -95,6 +95,20 @@ def test_unknown_dialog_note_once_per_opening(w, mk_update):
     assert len(w.sent()) == 2
 
 
+def test_ensure_card_sends_once(w):
+    """The card is claimed before its send: a second call (another message
+    held meanwhile, the monitor's tick) sends nothing."""
+    w.cold_idle()
+    w.scan()
+
+    async def both():
+        import asyncio as _asyncio
+        await _asyncio.gather(resume_dialog.ensure_card(w.bot, w.sess),
+                              resume_dialog.ensure_card(w.bot, w.sess))
+    w.run_async(both())
+    assert len(w.sent()) == 1
+
+
 def test_note_after_typed_command_only(w, monkeypatch):
     """An unknown dialog aipager's own typing opened (a bare /config from
     Telegram): its note goes out at once. One nobody typed into: nothing
