@@ -270,10 +270,29 @@ def test_backstop_settles_a_busy_session(monkeypatch):
     registry.transition(NAME, Status.BUSY)
     sess.term_dialog_settle = {"since": 0.0, "after_wall": 1.0, "expect": ""}
     assert term_dialog.observe(sess, None, complete=True, now_mono=10.0,
-                               now_wall=time.time()) is None
+                               now_wall=time.time(), settle=True) is None
     assert term_dialog.observe(sess, None, complete=True,
                                now_mono=term_dialog.AFTER_ANSWER_MAX_WAIT + 1,
-                               now_wall=time.time()) == "settled"
+                               now_wall=time.time(), settle=True) == "settled"
+    assert sess.term_dialog_settle is None
+
+
+@pytest.mark.parametrize("status", ["idle", "busy"])
+def test_only_the_scan_ends_a_settle(status, monkeypatch):
+    """A look that is not the monitor's scan (right before typing, a
+    button's) never takes the settle: only the scan releases the hold it
+    belongs to (review rev-iter1-001)."""
+    registry = SessionRegistry()
+    sess = registry.get_or_create(NAME)
+    registry.transition(NAME, Status.IDLE if status == "idle" else Status.BUSY)
+    sess.term_dialog_settle = {"since": 0.0, "after_wall": 1.0, "expect": ""}
+    idle = {"pid": CLIENT, "status": "idle", "statusAt": time.time()}
+    late = term_dialog.AFTER_ANSWER_MAX_WAIT + 1
+    assert term_dialog.observe(sess, idle, complete=True, now_mono=late,
+                               now_wall=time.time()) is None
+    assert sess.term_dialog_settle is not None
+    assert term_dialog.observe(sess, idle, complete=True, now_mono=late,
+                               now_wall=time.time(), settle=True) == "settled"
     assert sess.term_dialog_settle is None
 
 

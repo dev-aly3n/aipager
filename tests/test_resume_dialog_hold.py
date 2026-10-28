@@ -302,3 +302,25 @@ def test_inject_prompt_says_dialog_without_a_note(w, monkeypatch):
     ok = w.run_async(w.bot._inject_prompt(w.sess, "hello"))
     assert ok is PROMPT_DIALOG
     assert list_outstanding_notes(NAME) == []
+
+
+# ---- review rev-iter1-001: only the scan ends a settle -------------------------------
+
+def test_typing_between_close_and_scan_does_not_strand_the_hold(w, mk_update):
+    """Another typing path (the Compact button here) runs after the close's
+    settle time but before the scan: its look before typing must not take
+    the settle, or the held message would stay held for good."""
+    _open(w)
+    w.send(mk_update, "first", msg_id=41)
+    w.idle(ago=0.0)
+    w.scan()
+    assert w.sess.dialog_hold.get("settling") is True
+    w.clock.advance(term_dialog.ANSWER_SETTLE_SECONDS + 0.5)
+    out = w.run_async(w.bot._compact_session_core(w.sess))
+    assert out.reason == "sent"
+    w.bot.registry.transition(NAME, Status.IDLE)
+    w.scan()
+    assert "first" in w.bodies()
+    assert w.sess.pending_queue == []
+    assert w.sess.dialog_hold is None
+    assert w.sess.term_dialog_settle is None

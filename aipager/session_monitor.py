@@ -1145,7 +1145,8 @@ class SessionMonitor:
                 change = term_dialog.observe(
                     sess, entry, complete=complete,
                     now_mono=term_dialog._now_mono(), now_wall=term_dialog._now_wall(),
-                    last_exchange_wall=lambda: last_exchange_at(sess.transcript_path))
+                    last_exchange_wall=lambda: last_exchange_at(sess.transcript_path),
+                    settle=True)
         except Exception:
             log.warning("[%s] terminal dialog check failed", sess.label, exc_info=True)
             return

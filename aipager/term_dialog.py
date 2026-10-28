@@ -257,14 +257,19 @@ def _settled(sess, entry: dict | None, now_mono: float) -> bool:
 def observe(sess, entry: dict | None, *, complete: bool, now_mono: float,
             now_wall: float,
             last_exchange_wall: float | None | Callable[[], float | None] = None,
-            ) -> str | None:
+            settle: bool = False) -> str | None:
     """Take *entry* (the registry entry of the session's own claude, None
     when none was found; *complete*: the read was whole, so "none found"
     means none) into the session's terminal-dialog state. Returns
     ``"opened"``, ``"closed"``, ``"settled"`` (a close's settle is over:
     what was held may go) or None (nothing changed).
     *last_exchange_wall* may be a callable: it is read only for a new
-    opening (it reads the transcript)."""
+    opening (it reads the transcript).
+
+    *settle*: only the session monitor's scan passes True, and acts on
+    ``"settled"`` (it releases the hold). The other looks (right before
+    typing, a button's) never end a settle: one taken there would be
+    lost, and the messages held for the dialog with it."""
     cur = sess.term_dialog
     if not _observable(sess):
         from aipager.state import Status
@@ -276,7 +281,7 @@ def observe(sess, entry: dict | None, *, complete: bool, now_mono: float,
                 close(sess, now_mono)
                 return "closed"
             return None
-        if (sess.status is not Status.GONE and not sess.relaunch_in_flight
+        if (settle and sess.status is not Status.GONE and not sess.relaunch_in_flight
                 and not sess.parked_job and _settled(sess, entry, now_mono)):
             # Only the backstop can say so here (the session is not idle).
             sess.term_dialog_settle = None
@@ -300,7 +305,7 @@ def observe(sess, entry: dict | None, *, complete: bool, now_mono: float,
     if record_waiting(entry) and not explained_by_hooks(sess):
         _open(sess, entry, now_mono, now_wall, last_exchange_wall)
         return "opened"
-    if _settled(sess, entry, now_mono):
+    if settle and _settled(sess, entry, now_mono):
         sess.term_dialog_settle = None
         return "settled"
     return None
