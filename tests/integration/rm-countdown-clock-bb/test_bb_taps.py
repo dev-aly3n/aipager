@@ -27,7 +27,9 @@ from tests.rm_clock_bb import (
     WINDOW_AT,
     Env,
 )
-from tests.two_prompts_rig import ALY, BG, BOB, CARD, GROUP, Rig, answers
+from tests.two_prompts_rig import BG, BOB, CARD, GROUP, Rig, answers
+
+ALICE = 1  # the rig's owner id (its first member)
 
 IN_WINDOW = REFUSE_AT - 5.0
 BEFORE = WINDOW_AT - 0.5
@@ -394,7 +396,7 @@ def test_a_new_rm_after_a_refused_one_answers_normally(env):
 def deny_scopes(*tools):
     def _s():
         return [Scope(chat_id=GROUP, kind="group", label="team", deny_tools=tools,
-                      members=(Member(id=ALY, label="alice", role="owner"),
+                      members=(Member(id=ALICE, label="alice", role="owner"),
                                Member(id=BOB, label="bob", role="user")))]
     return _s
 
@@ -410,7 +412,7 @@ def owners_rm_then_users_write(env):
     """Claude's rm opens in the owner's turn (no auto-deny), then the
     driver is a user whose role refuses Write, and Claude's Write prompt
     arrives beside the rm: its auto-deny would have to type."""
-    env.rig.sess.last_driver_user_id = ALY
+    env.rig.sess.last_driver_user_id = ALICE
     env.rm(hook=False)
     env.rig.sess.last_driver_user_id = BOB
     write_request(env)
