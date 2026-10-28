@@ -245,8 +245,8 @@ def _normalise_status_at(value, now: float | None = None) -> float | None:
     taken as milliseconds, below as seconds. Anything that is not a
     number, or lies outside [now - :data:`STATUS_AT_MAX_AGE`, now +
     :data:`STATUS_AT_AHEAD_SLACK`], is None."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
+    if not isinstance(value, (int, float)):
+        return None             # (a bool is a number here: 0 or 1, never plausible)
     seconds = float(value)
     if seconds != seconds:            # NaN
         return None

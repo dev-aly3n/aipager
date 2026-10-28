@@ -252,11 +252,12 @@ async def ensure_card(bot: "TelegramBot", sess, *, reply_to: int | None = None) 
         cur["card"] = card
         cur["card_kind"] = card_kind
         return
-    # It closed while the card went out: shown closed at once.
+    # It closed while the card went out: queued for closing (the bot closes
+    # the queue after every event; the monitor sends one while it is not
+    # empty).
     sess.term_dialog_closing.append({
         "epoch": cur["epoch"], "card": card, "card_kind": card_kind,
         "outcome": "ended" if sess.status is Status.GONE else "terminal"})
-    await close_cards(bot, sess)
 
 
 async def on_opened(bot: "TelegramBot", sess) -> None:
@@ -276,12 +277,11 @@ async def on_message_held(bot: "TelegramBot", update, sess) -> bool:
     cur = sess.term_dialog
     if cur is None:
         return False
-    if not cur.get("told"):
-        reply_to = None
-        message = getattr(update, "message", None)
-        if calling_chat_id(update) == resolve_chat_id_int(sess) and message is not None:
-            reply_to = getattr(message, "message_id", None)
-        await ensure_card(bot, sess, reply_to=reply_to if isinstance(reply_to, int) else None)
+    reply_to = None
+    message = getattr(update, "message", None)
+    if calling_chat_id(update) == resolve_chat_id_int(sess) and message is not None:
+        reply_to = getattr(message, "message_id", None)
+    await ensure_card(bot, sess, reply_to=reply_to if isinstance(reply_to, int) else None)
     return cur.get("kind") != term_dialog.OTHER and bool(cur.get("card"))
 
 
