@@ -446,4 +446,10 @@ async def _answer(bot: "TelegramBot", query, sess, cur: dict, verb: str, user_id
             log.warning("[%s] /clear after the resume question could not be typed",
                         sess.label)
             _set_outcome(sess, cur, "new_failed")
+            settle = sess.term_dialog_settle
+            if settle is not None and settle.get("expect") == "clear":
+                # No new conversation comes: the conversation goes on, and
+                # what was held goes once the record is idle again (else it
+                # would wait for the backstop).
+                settle["expect"] = ""
     await close_cards(bot, sess)

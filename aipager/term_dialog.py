@@ -241,11 +241,15 @@ def _settled(sess, entry: dict | None, now_mono: float) -> bool:
     from aipager.state import Status
     if sess.status is Status.IDLE and waited >= ANSWER_SETTLE_SECONDS:
         after = settle["after_wall"]
-        if (isinstance(entry, dict) and entry.get("status") == "idle"
-                and (entry.get("statusAt") or 0.0) > after):
-            return True
         expect = settle.get("expect")
-        if expect and ((sess.session_start_at or {}).get(expect) or 0.0) > after:
+        if expect:
+            # "Start a new conversation": only the new conversation's own
+            # start says so. The record goes idle at the Escape already,
+            # before /clear is typed or has taken effect.
+            if ((sess.session_start_at or {}).get(expect) or 0.0) > after:
+                return True
+        elif (isinstance(entry, dict) and entry.get("status") == "idle"
+                and (entry.get("statusAt") or 0.0) > after):
             return True
     if waited >= AFTER_ANSWER_MAX_WAIT:
         log.info("[%s] terminal dialog: the session never settled in %.0f s; "

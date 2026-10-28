@@ -203,27 +203,52 @@ def test_new_conversation_escape_wipe_then_clear(w):
     assert edits[-1].kwargs["text"] == EN.html(resume_dialog.CLOSED_NEW, session=LABEL)
 
 
-def test_new_conversation_settles_on_clear_start(w):
-    """After Start a new conversation, the new conversation's SessionStart
-    (source clear) settles the close, even when the record shows no newer
-    idle status."""
+def test_new_conversation_settles_on_clear_start(w, mk_update):
+    """After Start a new conversation, only the new conversation's own
+    SessionStart (source clear) releases what was held: live, the record
+    goes idle, with a fresh status time, the moment the Escape closes the
+    question, before /clear has taken effect (review rev-iter1-002)."""
     w.cold_idle()
     w.scan()
-    opened = w.sess.term_dialog["status_at"]
+    w.send(mk_update, "first", msg_id=41)
+    assert [e[0] for e in w.sess.pending_queue] == ["first"]
 
     def on_write(data):
         if data == ESC:
-            w.record(status="idle", statusUpdatedAt=int((opened - 5) * 1000))
+            w.idle(ago=0.0)
     w.on_write = on_write
     w.tap("rdnew")
+    assert w.bodies() == ["/clear"]
     hold = w.sess.dialog_hold
     assert hold.get("settling") is True
+    # Idle, newer than the opening, past the settle time: still held.
+    w.clock.advance(term_dialog.ANSWER_SETTLE_SECONDS + 0.5)
+    w.idle(ago=0.0)
+    w.scan()
+    assert w.bodies() == ["/clear"], "released before the new conversation started"
+    assert hold.get("settling") is True
+    # /clear ends the old conversation and starts the new one.
+    w.bot.registry.transition(NAME, Status.GONE)
+    w.sess.session_start_at["clear"] = w.clock.wall
+    w.bot.registry.transition(NAME, Status.IDLE)
+    w.scan()
+    assert w.bodies() == ["/clear", "first"]
+    assert w.sess.pending_queue == []
+
+
+def test_new_conversation_not_started_settles_on_idle(w, mk_update, monkeypatch):
+    """When /clear could not be typed no new conversation comes: the held
+    message goes once the record is idle again, not at the backstop."""
+    w.cold_idle()
+    w.scan()
+    w.send(mk_update, "first", msg_id=41)
+    w.on_write = lambda data: w.idle(ago=0.0) if data == ESC else None
+    monkeypatch.setattr(w.bot, "_command_after_dialog", AsyncMock(return_value=False))
+    w.tap("rdnew")
+    assert w.sess.term_dialog_settle["expect"] == ""
     w.clock.advance(term_dialog.ANSWER_SETTLE_SECONDS + 0.5)
     w.scan()
-    assert hold.get("settling") is True
-    w.sess.session_start_at["clear"] = w.clock.wall
-    w.scan()
-    assert w.sess.dialog_hold is None or not w.sess.dialog_hold.get("settling")
+    assert w.bodies() == ["first"]
 
 
 def test_card_closed_at_once_when_dialog_closed_while_sending(w):
