@@ -907,7 +907,8 @@ class HookReceiver:
 
     async def _raise_prompt(self, session_name: str, tool_info: dict | None,
                             context: dict, *, source: str,
-                            own_tool_use_id: str = "") -> None:
+                            own_tool_use_id: str = "",
+                            permission_mode: str = "") -> None:
         """A prompt Claude Code is showing (roadmap 8.120): the first of a
         wait moves the session INTERACTIVE and is drawn as before; one that
         opens while another is open is drawn as its own message
@@ -925,7 +926,12 @@ class HookReceiver:
           that question, for the dialog order;
         - any other PermissionRequest whose prompt key (owner, tool, its
           own call id, else its input's digest) matches an open prompt's
-          is the same dialog."""
+          is the same dialog.
+
+        *permission_mode*: the payload's mode, kept on the order with the
+        tool's name: a main-loop Bash prompt in Full access or Auto may be
+        Claude Code's risky-rm ask, which opens on top (roadmap 8.128,
+        ``prompt_stack.countdown_candidate``)."""
         sess = self.registry.get_or_create(session_name)
         now = time.monotonic()
         order = None
@@ -944,6 +950,9 @@ class HookReceiver:
                 "key": prompt_stack.prompt_key(
                     owner, tool_info.get("name"), own_tool_use_id,
                     tool_info.get("input_digest"), tool_info.get("summary")),
+                "tool": (tool_info.get("name")
+                         if isinstance(tool_info.get("name"), str) else ""),
+                "mode": permission_mode if isinstance(permission_mode, str) else "",
             }
             tool_info["order"] = order
         if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
@@ -1554,9 +1563,12 @@ class HookReceiver:
                     "tool_info": tool_info, "transcript_path": transcript_path,
                     "hook_reply": hook_reply_ctx,
                 }
+                payload_mode = msg.get("permission_mode")
                 await self._raise_prompt(
                     session_name, tool_info, context, source="permission_request",
-                    own_tool_use_id=_payload_tool_use_id(msg))
+                    own_tool_use_id=_payload_tool_use_id(msg),
+                    permission_mode=(payload_mode if isinstance(payload_mode, str)
+                                     else ""))
             return
 
         elif event == "permission_reply_timeout":
@@ -1648,8 +1660,15 @@ class HookReceiver:
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
             # Only when no prompt is open (roadmap 8.120): with one open,
             # this is the dialog its PermissionRequest already drew.
+            # Read from the transcript, not the PermissionRequest: a mode
+            # the payload does not carry is not known (roadmap 8.128).
+            notified_mode = msg.get("permission_mode")
             await self._raise_prompt(session_name, tool_info, context,
-                                     source="notification")
+                                     source="notification",
+                                     permission_mode=(
+                                         notified_mode
+                                         if isinstance(notified_mode, str) and notified_mode
+                                         else prompt_stack.MODE_UNKNOWN))
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
@@ -1922,10 +1941,12 @@ class HookReceiver:
                     # A subagent's question: never saved (see the
                     # PermissionRequest branch).
                     tool_info["agent_id"] = ask_agent
+                ask_mode = msg.get("permission_mode")
                 await self._raise_prompt(session_name, tool_info, {
                     "tool_info": tool_info,
                     "transcript_path": transcript_path,
-                }, source="question", own_tool_use_id=_payload_tool_use_id(msg))
+                }, source="question", own_tool_use_id=_payload_tool_use_id(msg),
+                    permission_mode=ask_mode if isinstance(ask_mode, str) else "")
                 return
 
             if tool_name:

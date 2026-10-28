@@ -3366,10 +3366,17 @@ class TrackedSession:
             if isinstance(order, dict):
                 return order
             # Recorded without one (restored, or its tool not known):
-            # Claude's own, there since it was shown.
+            # Claude's own (an agent's prompt is never restored), there
+            # since it was shown. Its permission mode cannot be proven
+            # (perm_mode/reported_mode are hook-reported and never widen a
+            # verdict), and a tool not known may be Bash: a possible
+            # risky-rm ask (roadmap 8.128).
+            name = info.get("name") if isinstance(info, dict) else None
             return {"owner": "", "launch": _prompt_stack.OWN,
                     "arrived": (p.get("wait_started_at") or 0.0)
-                    if isinstance(p, dict) else 0.0}
+                    if isinstance(p, dict) else 0.0,
+                    "tool": name if isinstance(name, str) and name else "Bash",
+                    "mode": _prompt_stack.MODE_UNKNOWN}
         others = [order_of(p) for p in self.open_prompts() if p is not perm]
         return _prompt_stack.keys_verdict(order_of(perm), others, now)
 

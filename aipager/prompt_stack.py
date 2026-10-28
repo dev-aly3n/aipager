@@ -14,6 +14,13 @@ when its own prompt is certainly the one shown first. This module turns
 what aipager knows about each open prompt into that verdict, failing
 closed: ``"yes"`` only when the order is certain.
 
+Claude Code 2.1.287+ breaks that order for one prompt: its risky-rm ask in
+Full access and Auto (a main-loop Bash prompt) carries a 2-minute
+countdown and opens on top of prompts already open, so keys meant for an
+older prompt land on it (roadmap 8.128). aipager leaves that countdown on,
+so a prompt that may be such an ask (a countdown candidate) makes every
+verdict ``"unknown"`` while another prompt is open.
+
 Pure: no aipager imports, no I/O, never raises.
 """
 
@@ -26,6 +33,12 @@ GRACE = 10.0
 
 #: Launch kinds of a prompt's owner.
 OWN, FOREGROUND, BACKGROUND, UNKNOWN = "own", "foreground", "background", "unknown"
+
+#: Permission modes in which Claude Code's risky-rm ask carries a countdown.
+CANDIDATE_MODES = frozenset({"bypassPermissions", "auto"})
+#: The ``mode`` of a prompt whose permission mode is not known (Claude Code
+#: never sends it): counted as a countdown candidate.
+MODE_UNKNOWN = "?"
 
 
 def _num(value: object) -> float:
@@ -87,6 +100,24 @@ def place(order: object, now: float, *, reply_deadline: float = REPLY_DEADLINE,
     return True, arrived, now
 
 
+def countdown_candidate(order: object) -> bool:
+    """Whether a prompt may be Claude Code's risky-rm ask with a countdown:
+    Claude's own (no agent owner: an agent's has no countdown) Bash prompt
+    in Full access or Auto, or in a mode that is not known. Anything that
+    is not an order dict counts (nothing about it is known). Never raises:
+    an order that cannot be read counts too."""
+    try:
+        if not isinstance(order, dict):
+            return True
+        if order.get("owner"):
+            return False
+        mode = order.get("mode")
+        return bool(order.get("tool") == "Bash"
+                    and (mode in CANDIDATE_MODES or mode == MODE_UNKNOWN))
+    except Exception:  # noqa: BLE001 - fail closed: a candidate
+        return True
+
+
 def keys_verdict(target: dict, others: list[dict], now: float, *,
                  reply_deadline: float = REPLY_DEADLINE,
                  grace: float = GRACE) -> str:
@@ -94,10 +125,17 @@ def keys_verdict(target: dict, others: list[dict], now: float, *,
     ``"behind"`` when another open prompt is certainly shown before it, or
     ``"unknown"``. Each argument is a prompt's ``order`` dict (see
     :func:`place`). With no other prompt open it is always ``"yes"``: a
-    single prompt is answered exactly as before 8.120."""
+    single prompt is answered exactly as before 8.120.
+
+    A countdown candidate among the open prompts (the target or any other,
+    even one certainly not in the terminal yet) makes the verdict
+    ``"unknown"``: that prompt may be on top of all of them."""
     try:
         if not others:
             return "yes"
+        if (countdown_candidate(target)
+                or any(countdown_candidate(other) for other in others)):
+            return "unknown"
         kw = {"reply_deadline": reply_deadline, "grace": grace}
         t_absent, t_lo, t_hi = place(target, now, **kw)
         rest = []

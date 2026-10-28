@@ -302,7 +302,8 @@ def test_spilled_pr_raises_prompt(folder, run_async):
     raised = []
     recv = hr.HookReceiver(SessionRegistry(), None)
 
-    async def _raise_prompt(session_name, tool_info, context, *, source, own_tool_use_id=""):
+    async def _raise_prompt(session_name, tool_info, context, *, source, own_tool_use_id="",
+                            permission_mode=""):
         raised.append((session_name, tool_info["name"], context["hook_reply"], source))
 
     recv._raise_prompt = _raise_prompt
