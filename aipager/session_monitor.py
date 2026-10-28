@@ -47,6 +47,9 @@ log = logging.getLogger(__name__)
 # The monitor loop's wait between ticks. A seam: tests replace THIS, never
 # ``asyncio.sleep`` (the global module; CLAUDE.md). Defaults to the real one.
 _loop_sleep = asyncio.sleep
+# The wait until a terminal dialog's card falls due (roadmap 8.127,
+# ``SessionMonitor._card_due_later``). A seam, like ``_loop_sleep``.
+_card_due_sleep = asyncio.sleep
 
 # Item 2.2 — after this long with no hook activity, the INTERACTIVE
 # watchdog asks the transcript whether the dialog is still open, and
@@ -766,6 +769,9 @@ class SessionMonitor:
         self._links_written: dict[str, dict] = {}
         self._pidmap_written: dict | None = None
         self._new_parks: dict[str, str] = {}
+        #: session name -> the one-shot look at a terminal dialog's card
+        #: when it falls due (roadmap 8.127), and the opening it is for.
+        self._card_checks: dict[str, tuple[int, asyncio.Task]] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -1168,6 +1174,40 @@ class SessionMonitor:
                 await self.notify_fn(sess, "term_dialog", {"change": change or "due"})
             except Exception:
                 log.warning("Failed to notify term_dialog for %s", name, exc_info=True)
+        self._schedule_card_check(name, sess)
+
+    def _schedule_card_check(self, name: str, sess: TrackedSession) -> None:
+        """When the open opening's card falls due before the next scan
+        (:func:`term_dialog.card_due_in`), one look then, not at the scan
+        after (roadmap 8.127): live, the opening is first seen about 1.2 s
+        after the draw and its card falls due a moment later."""
+        delay = term_dialog.card_due_in(sess, term_dialog._now_wall())
+        cur = sess.term_dialog
+        if delay is None or cur is None:
+            return
+        epoch = cur["epoch"]
+        held = self._card_checks.get(name)
+        if held is not None and held[0] == epoch and not held[1].done():
+            return
+        task = asyncio.get_running_loop().create_task(
+            self._card_due_later(name, sess, epoch, delay))
+        self._card_checks[name] = (epoch, task)
+
+    async def _card_due_later(self, name: str, sess: TrackedSession, epoch: int,
+                              delay: float) -> None:
+        try:
+            await _card_due_sleep(delay)
+            # The bot sends it only if it is due by then (``on_opened``).
+            await self.notify_fn(sess, "term_dialog", {"change": "due"})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.warning("Failed to send a terminal dialog's card for %s", name,
+                        exc_info=True)
+        finally:
+            held = self._card_checks.get(name)
+            if held is not None and held[0] == epoch:
+                self._card_checks.pop(name, None)
 
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.

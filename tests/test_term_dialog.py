@@ -473,3 +473,23 @@ def test_resume_type_wait_stays_short():
     and live the record said waiting at most 0.05 s after SessionStart: the
     wait stays well under the 6 s it once was (live finding F1)."""
     assert 0.5 <= term_dialog.RESUME_TYPE_SETTLE_SECONDS <= 2.0
+
+
+def test_card_due_in(idle_sess, clock):
+    """How long until an opening's card falls due without a message: only
+    for one that gets a card by itself, only before it is due, only once
+    it is not claimed yet."""
+    idle_sess.session_start_at["resume"] = NOW - 2
+    assert _observe(idle_sess, _entry(NOW - 0.25)) == "opened"
+    assert term_dialog.card_due_in(idle_sess, NOW) == pytest.approx(
+        term_dialog.CARD_SETTLE_SECONDS - 0.25)
+    # Due already: the scan sends it.
+    assert term_dialog.card_due_in(idle_sess, NOW + 1.0) is None
+    idle_sess.term_dialog["told"] = True
+    assert term_dialog.card_due_in(idle_sess, NOW) is None
+    # The idle question gets its card when a message meets it, not by itself.
+    idle_sess.term_dialog = None
+    idle_sess.session_start_at.clear()
+    assert _observe(idle_sess, _entry(NOW - 0.25), exchange=NOW - 600) == "opened"
+    assert idle_sess.term_dialog["kind"] == term_dialog.COLD_IDLE
+    assert term_dialog.card_due_in(idle_sess, NOW) is None

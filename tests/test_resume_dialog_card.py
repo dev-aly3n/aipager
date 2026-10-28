@@ -133,6 +133,68 @@ def test_card_waits_for_opening_to_settle(w):
     assert len(w.sent()) == 1
 
 
+@pytest.mark.parametrize("case", ["open", "closed"])
+def test_card_sent_when_due_not_at_next_scan(w, monkeypatch, case):
+    """An opening first seen before its card falls due gets one look at
+    that moment, not two seconds later at the scan after (live finding
+    F3); none when it closed by then."""
+    from aipager import session_monitor
+    waits = []
+
+    async def due_sleep(seconds):
+        waits.append(seconds)
+        w.clock.advance(seconds)
+        if case == "closed":
+            w.sess.term_dialog = None
+
+    monkeypatch.setattr(session_monitor, "_card_due_sleep", due_sleep)
+    w.after_resume(ago=0.2)
+
+    async def live():
+        return [NAME]
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions", live)
+
+    async def scan_then_wait():
+        await w.monitor._scan()
+        assert w.sent() == []
+        _epoch, task = w.monitor._card_checks[NAME]
+        await task
+
+    w.run_async(scan_then_wait())
+    assert waits == [pytest.approx(term_dialog.CARD_SETTLE_SECONDS - 0.2, abs=0.01)]
+    assert len(w.sent()) == (1 if case == "open" else 0)
+    assert NAME not in w.monitor._card_checks
+
+
+def test_card_check_scheduled_once_per_opening(w, monkeypatch):
+    """Scans before the card falls due schedule one look, not one each."""
+    from aipager import session_monitor
+    waits = []
+
+    async def due_sleep(seconds):
+        waits.append(seconds)
+        await asyncio.Event().wait()     # still waiting at the next scan
+
+    monkeypatch.setattr(session_monitor, "_card_due_sleep", due_sleep)
+    w.after_resume(ago=0.1)
+
+    async def live():
+        return [NAME]
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions", live)
+
+    async def two_scans():
+        await w.monitor._scan()
+        await asyncio.sleep(0)
+        w.clock.advance(0.2)
+        await w.monitor._scan()
+        await asyncio.sleep(0)
+        _epoch, task = w.monitor._card_checks[NAME]
+        task.cancel()
+
+    w.run_async(two_scans())
+    assert len(waits) == 1
+
+
 def test_unsure_card_offers_only_continue(w):
     w.after_resume()
     w.scan()

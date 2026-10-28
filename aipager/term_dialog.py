@@ -337,12 +337,33 @@ def card_due(sess, now_wall: float) -> bool:
     at = cur.get("status_at") or cur.get("seen_wall") or now_wall
     if now_wall - at < CARD_SETTLE_SECONDS:
         return False
+    return _told_unasked(cur, at)
+
+
+def _told_unasked(cur: dict, at: float) -> bool:
+    """Whether the opening *cur* (its status time *at*) gets its card or
+    note without a message meeting it."""
     if cur["kind"] == RESUME_UNSURE:
         return True
     if cur["kind"] == OTHER:
         wrote = cur.get("write_wall") or 0.0
         return bool(wrote) and -1.0 <= at - wrote <= AFTER_WRITE_NOTE_SECONDS
     return False
+
+
+def card_due_in(sess, now_wall: float) -> float | None:
+    """Seconds until the open opening's card falls due (:func:`card_due`),
+    when it will without a message meeting it and is not due yet; None
+    otherwise. The session monitor looks again at that moment rather than
+    at its next scan."""
+    cur = sess.term_dialog
+    if cur is None or cur.get("told"):
+        return None
+    at = cur.get("status_at") or cur.get("seen_wall") or now_wall
+    left = at + CARD_SETTLE_SECONDS - now_wall
+    if left <= 0 or not _told_unasked(cur, at):
+        return None
+    return left
 
 
 # -- the session's own record, read afresh ---------------------------------------------
