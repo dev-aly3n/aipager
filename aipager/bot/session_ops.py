@@ -305,6 +305,21 @@ _HELD_BACK: dict[str, Path] = {}
 #: The key marking such a message's note among what Claude's queue held
 #: before a typed refusal (roadmap 8.144).
 HELD_BACK_KEY = "_held_back"
+#: session name -> (loop, lock): one look for a terminal dialog before
+#: typing at a time per session (roadmap 8.127), so messages that wait
+#: through a ``--resume`` start's look leave it, and reach the write lock,
+#: in the order they came.
+_BEFORE_TYPING_LOCKS: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Lock]] = {}
+
+
+def _before_typing_lock(name: str) -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    held = _BEFORE_TYPING_LOCKS.get(name)
+    if held is None or held[0] is not loop:
+        held = (loop, asyncio.Lock())
+        _BEFORE_TYPING_LOCKS[name] = held
+    return held[1]
+
 
 #: session name -> the running watch (one per session; a newer answer
 #: replaces it). Also keeps a reference so the task is not collected.
@@ -1510,8 +1525,17 @@ class SessionOpsMixin:
         :data:`term_dialog.RESUME_TYPE_SETTLE_SECONDS` of a ``--resume``
         start the record is read again every
         :data:`term_dialog.FRESH_POLL_SECONDS` until then, for a dialog that
-        has not drawn yet. Never raises: a failed read says closed (the
-        typing gate's probe still guards)."""
+        has not drawn yet. One look at a time per session, in the order
+        asked: a message sent while another waits here goes after it.
+        Never raises: a failed read says closed (the typing gate's probe
+        still guards)."""
+        if sess.terminal_dialog_open():
+            return True
+        async with _before_typing_lock(sess.name):
+            return await self._terminal_dialog_look(sess)
+
+    async def _terminal_dialog_look(self, sess: TrackedSession) -> bool:
+        """:meth:`_terminal_dialog_before_typing`'s look, under its lock."""
         from aipager import term_dialog
         if sess.terminal_dialog_open():
             return True

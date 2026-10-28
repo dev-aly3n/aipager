@@ -6,6 +6,7 @@ too. Every terminal write is captured (exact bytes)."""
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -337,3 +338,31 @@ def test_typing_between_close_and_scan_does_not_strand_the_hold(w, mk_update):
     assert w.sess.pending_queue == []
     assert w.sess.dialog_hold is None
     assert w.sess.term_dialog_settle is None
+
+
+# ---- review rev-iter1-004: messages waiting after a resume keep their order ----------
+
+def test_messages_waiting_after_resume_are_typed_in_order(w, monkeypatch):
+    """Two messages sent within the wait after a ``--resume`` start, the
+    second while the first still waits: typed first, then second."""
+    w.sess.session_start_at["resume"] = w.clock.wall
+    w.idle(ago=0.1)
+
+    async def fresh(sess):
+        return term_dialog.read_own_record(sess)
+    monkeypatch.setattr(term_dialog, "fresh_record", fresh)
+
+    async def poll_sleep(_seconds):
+        w.clock.advance(term_dialog.FRESH_POLL_SECONDS)
+        await asyncio.sleep(0)
+    from aipager.bot import session_ops
+    monkeypatch.setattr(session_ops, "_sleep", poll_sleep)
+
+    async def both():
+        first = asyncio.ensure_future(w.bot._inject_prompt(w.sess, "first"))
+        for _ in range(3):
+            await asyncio.sleep(0)
+        second = asyncio.ensure_future(w.bot._inject_prompt(w.sess, "second"))
+        await asyncio.gather(first, second)
+    w.run_async(both())
+    assert w.bodies() == ["first", "second"]
