@@ -59,8 +59,10 @@ _REMOVALS = frozenset({"rm", "rmdir"})
 _WRAPPERS = frozenset({
     "sudo", "doas", "exec", "command", "env", "nice", "nohup", "busybox", "time",
     "timeout", "stdbuf", "setsid", "ionice", "pkexec", "runuser", "eval", "xargs"})
+#: ``time`` is not here: it is read as a wrapper, so ``time -p rm x``
+#: skips its option.
 _KEYWORDS = frozenset({"do", "then", "else", "elif", "if", "while", "until", "!",
-                       "coproc", "time"})
+                       "coproc"})
 _SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh"})
 _EXEC_FLAGS = frozenset({"-exec", "-execdir", "-ok", "-okdir"})
 _ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
@@ -72,13 +74,20 @@ _CLOCK_KEYS = frozenset({"refuse_at", "command_sha"})
 
 # ── reading a command ─────────────────────────────────────────────────
 
+class _Doubt(Exception):
+    """A command this reader cannot split the way the shell does."""
+
+
 def _segments(script: str) -> list[list[str]]:
     """*script* split into simple commands, each a list of its words with
     quotes removed. Splits at unquoted ``;`` ``&`` ``|`` newline ``(``
     ``)`` backtick and ``$(``, and at ``{`` / ``}`` standing as words. A
     quoted string stays one word whatever it holds. ``#`` starting a word
     comments out the rest of the line. Escapes are honoured outside single
-    quotes."""
+    quotes. An unquoted ``<<`` (a heredoc or a here-string) raises
+    :class:`_Doubt`: its body is data the shell does not run as commands
+    (Claude Code's parser reads it so), which this reader would split as
+    lines of commands."""
     segments: list[list[str]] = []
     words: list[str] = []
     word: list[str] = []
@@ -127,6 +136,8 @@ def _segments(script: str) -> list[list[str]]:
             in_word = True
             i += 1
             continue
+        if c == "<" and i + 1 < n and script[i + 1] == "<":
+            raise _Doubt("heredoc")
         if c == "#" and not in_word:
             j = script.find("\n", i)
             i = n if j < 0 else j
@@ -238,7 +249,8 @@ def runs_removal(command: object) -> bool:
     ``find ... -exec rm``, or inside a ``sh -c`` / ``bash -lc`` / ``eval``
     script up to two levels deep. False for anything that is not a str,
     a command over :data:`MAX_COMMAND_CHARS`, a removal only named inside
-    quoted text, and on any doubt. Never raises."""
+    quoted text, a command with a heredoc, and on any doubt. Never
+    raises."""
     try:
         if not isinstance(command, str) or len(command) > MAX_COMMAND_CHARS:
             return False
