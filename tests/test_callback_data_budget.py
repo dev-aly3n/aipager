@@ -198,6 +198,13 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # "auto"/"full", 4 characters) and the same key; "_:sx:<idx>:bgmodeauto"
     # + 8 characters is ~31 bytes.
     "bgmode{mode}{_bg_key(sess)}",
+    # resume_dialog.py's card for a question in Claude Code's terminal
+    # (roadmap 8.127): the opening's epoch, a per-session counter (an int,
+    # a few digits; parse_verb takes at most 12), never a session name:
+    # "_:sx:<idx>:rdresume" + 12 digits is ~33 bytes.
+    "rdcont{epoch}",
+    "rdresume{epoch}",
+    "rdnew{epoch}",
 })
 
 
