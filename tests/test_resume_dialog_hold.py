@@ -366,3 +366,26 @@ def test_messages_waiting_after_resume_are_typed_in_order(w, monkeypatch):
         await asyncio.gather(first, second)
     w.run_async(both())
     assert w.bodies() == ["first", "second"]
+
+
+# ---- review rev-iter1-005: no Shift+Tab into a dialog not seen by a scan yet ---------
+
+@pytest.mark.parametrize("record", ["waiting", "idle"])
+def test_in_place_mode_switch_reads_the_record_first(w, record):
+    """The in-place Ask/Auto switch looks at the session's own record
+    before its first Shift+Tab, as a message does: a dialog drawn since
+    the last scan refuses it, and nothing is pressed."""
+    w.sess.perm_mode = "ask"
+    w.sess.reported_mode = "default"
+    if record == "waiting":
+        w.waiting(ago=0.5)
+    else:
+        w.idle(ago=5)
+    out = w.run_async(w.bot._mode_switch_core(w.sess, "auto"))
+    if record == "waiting":
+        assert (out.ok, out.reason) == (False, "dialog_open")
+        assert w.writes == []
+        assert w.sess.terminal_dialog_open()
+    else:
+        assert (out.ok, out.reason) == (True, "sent")
+        assert w.writes and set(w.writes) == {b"\x1b[Z"}

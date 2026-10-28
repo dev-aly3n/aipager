@@ -3737,6 +3737,15 @@ class SessionOpsMixin:
         if sess.dialog_is_open():
             return RestartOutcome(ok=False, reason="dialog_open", label=label,
                                   mode=target, in_place=True)
+        # Roadmap 8.127: a dialog in Claude Code's terminal that no hook
+        # tells of (a resume question), looked for in the session's own
+        # record now, as before a message is typed: the probe's memory may
+        # be a scan old, and Shift+Tab would land in it.
+        if await self._terminal_dialog_before_typing(sess):
+            log.info("[%s] Not switching the mode in place: a dialog is open in "
+                     "the terminal", label)
+            return RestartOutcome(ok=False, reason="dialog_open", label=label,
+                                  mode=target, in_place=True)
         from aipager.state import ModeSwitch
         start_raw = sess.mode_raw()
         count = perm_modes.presses(start_raw, target,
