@@ -94,8 +94,8 @@ def test_fa_chat_shows_the_persian_clock_sentence(env):
     preferences.set_ui_language(GROUP, "fa")
     env.rm()
     text = env.rig.prompt_messages()[0]["text"]
-    assert fa_line().replace("⁨", "").replace("⁩", "") in (
-        text.replace("⁨", "").replace("⁩", ""))
+    assert fa_line().replace("\u2068", "").replace("\u2069", "") in (
+        text.replace("\u2068", "").replace("\u2069", ""))
 
 
 def test_fa_chat_has_no_latin_time(env):

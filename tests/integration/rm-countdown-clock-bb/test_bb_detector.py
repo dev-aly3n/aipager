@@ -103,7 +103,7 @@ def test_a_str_that_raises_on_access_never_raises():
 
 
 @pytest.mark.parametrize("command", ["rm 'x", 'rm "x', "sh -c 'rm", "$(", "`", "\\",
-                                     "((((((", "rm x\x00y", "‮rm x"],
+                                     "((((((", "rm x\x00y", "\u202Erm x"],
                          ids=["open-single", "open-double", "open-script", "open-subst",
                               "open-backtick", "trailing-backslash", "parens", "nul",
                               "bidi"])
