@@ -408,6 +408,23 @@ def test_recent_write_is_not_cold_idle(idle_sess, clock, monkeypatch):
     assert idle_sess.term_dialog["kind"] == term_dialog.OTHER
 
 
+def test_activity_after_the_draw_does_not_count_against_cold_idle(idle_sess, clock,
+                                                                  monkeypatch):
+    """The quiet rule looks back from the dialog's own time: a statusline
+    redraw (or any hook) or a write the scan sees after it does not make
+    the idle question "other" (review rev-iter1-003)."""
+    at = NOW - 1.5
+    monkeypatch.setitem(inject._LAST_WRITE_AT, NAME, MONO - 600)
+    idle_sess.last_hook_at = MONO - 0.5          # 1 s after the draw
+    assert _observe(idle_sess, _entry(at), exchange=at - 300) == "opened"
+    assert idle_sess.term_dialog["kind"] == term_dialog.COLD_IDLE
+    idle_sess.term_dialog = None
+    idle_sess.last_hook_at = MONO - 600
+    monkeypatch.setitem(inject._LAST_WRITE_AT, NAME, MONO - 0.5)
+    assert _observe(idle_sess, _entry(at), exchange=at - 300) == "opened"
+    assert idle_sess.term_dialog["kind"] == term_dialog.COLD_IDLE
+
+
 def test_young_conversation_is_not_cold_idle(idle_sess, clock):
     at = NOW - 1
     assert _observe(idle_sess, _entry(at), exchange=at - 100) == "opened"

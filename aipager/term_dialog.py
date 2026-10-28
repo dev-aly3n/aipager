@@ -160,8 +160,11 @@ def classify(sess, entry: dict, *, now_wall: float, last_write_wall: float,
         return RESUME_UNSURE
     if last_exchange_wall is None or at - last_exchange_wall < IDLE_DIALOG_MIN_AGE:
         return OTHER
+    # Claude Code's own quiet rule looks back from the draw: what happened
+    # after it (a statusline redraw, a hook the dialog caused, seen by the
+    # time the scan first looks) does not count.
     quiet_since = at - IDLE_DIALOG_MIN_QUIET
-    if last_write_wall > quiet_since or last_hook_wall > quiet_since:
+    if quiet_since < last_write_wall <= at or quiet_since < last_hook_wall <= at:
         return OTHER
     return COLD_IDLE
 
