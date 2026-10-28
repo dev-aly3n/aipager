@@ -267,8 +267,22 @@ class Env:
         self.mp = monkeypatch
         self.code = code
         self._freeze()
+        self._inline_reads()
         if decoy is not None:
             self.decoys(decoy)
+
+    def _inline_reads(self) -> None:
+        """Claude's files (the session registry aipager reads before typing
+        into an idle session, roadmap 8.127) are read inline, not in a
+        worker thread: a surface records the order its texts come out in,
+        and a thread's finish would let a concurrent task's text (a rename
+        question's "expired" edit) go first or second by chance. Clocks
+        are frozen above for the same reason."""
+        from aipager import claude_jobs
+
+        async def inline(fn, *args, **kwargs):
+            return fn(*args, **kwargs)
+        self.mp.setattr(claude_jobs, "_to_thread", inline)
 
     def decoys(self, code: str) -> None:
         """Store *code* for chats no surface renders in (a private chat and

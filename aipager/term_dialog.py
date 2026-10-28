@@ -376,19 +376,16 @@ def read_own_record(sess) -> dict | None:
         return None
 
 
-async def fresh_record(sess, *, own_only: bool = False) -> dict | None:
-    """:func:`read_own_record` with its file reads off the event loop.
-    *own_only*: only the claude pid's own file, never the whole registry
-    (None when the pid is not known or its file shows nothing). Never
+async def fresh_record(sess) -> dict | None:
+    """:func:`read_own_record` with its file reads off the event loop: the
+    claude pid's own file when it is known (one small read; None when it
+    shows nothing), else the whole registry (a claude just started whose
+    first hook is not in yet: when a ``--resume`` question draws). Never
     raises."""
     try:
         pid = sess.claude_pid if isinstance(sess.claude_pid, int) else 0
-        if pid <= 0 and own_only:
-            return None
         if pid > 0:
-            entry = await claude_jobs.off_loop(_own_entry_by_pid, pid)
-            if entry is not None or own_only:
-                return entry
+            return await claude_jobs.off_loop(_own_entry_by_pid, pid)
         entries = await claude_jobs.read_registry_async()
         return claude_jobs.find_client(sess, entries)
     except Exception:  # noqa: BLE001 - a reader never raises

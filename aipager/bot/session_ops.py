@@ -1503,9 +1503,10 @@ class SessionOpsMixin:
         """Whether a dialog no hook tells of is open in *sess*'s terminal
         right before a message is typed (roadmap 8.127): already on record,
         or found now in Claude Code's record of the session's own claude.
-        Read only for a session idle in aipager's view whose claude pid is
-        known (one small file, off the event loop; a session whose pid is
-        not known yet is left to the monitor's next look). Within
+        Read only for a session idle in aipager's view, off the event loop:
+        its claude's own file when the pid is known, else the whole
+        registry (a claude just started; a ``--resume`` question draws
+        before its first hook). Within
         :data:`term_dialog.RESUME_TYPE_SETTLE_SECONDS` of a ``--resume``
         start the record is read again every
         :data:`term_dialog.FRESH_POLL_SECONDS` until then, for a dialog that
@@ -1524,7 +1525,7 @@ class SessionOpsMixin:
             if i:
                 await _sleep(term_dialog.FRESH_POLL_SECONDS)
             try:
-                entry = await term_dialog.fresh_record(sess, own_only=True)
+                entry = await term_dialog.fresh_record(sess)
                 term_dialog.observe(
                     sess, entry, complete=False,
                     now_mono=term_dialog._now_mono(), now_wall=term_dialog._now_wall(),

@@ -74,9 +74,11 @@ def test_fresh_read_reads_only_own_record(w, mk_update, monkeypatch):
     assert w.sess.terminal_dialog_open()
 
 
-def test_no_whole_registry_read_before_typing(w, mk_update, monkeypatch):
-    """With no claude pid known yet, the message is not delayed by a read of
-    the whole registry: the monitor's next look finds the client."""
+def test_pid_unknown_reads_the_registry_before_typing(w, mk_update, monkeypatch):
+    """With no claude pid known yet (a claude just started: a ``--resume``
+    question draws before its first hook), the whole registry is read
+    before typing, and a dialog in it refuses the message (test report
+    tester-iter1-001)."""
     reads = []
     real = claude_jobs.read_registry
 
@@ -85,9 +87,20 @@ def test_no_whole_registry_read_before_typing(w, mk_update, monkeypatch):
         return real(*a, **k)
     monkeypatch.setattr(claude_jobs, "read_registry", counted)
     w.sess.claude_pid = 0
+    w.waiting(ago=0.5)
+    w.send(mk_update, "hello", msg_id=41)
+    assert reads == [1]
+    assert w.writes == []
+    assert [e[0] for e in w.sess.pending_queue] == ["hello"]
+    assert w.sess.terminal_dialog_open()
+
+
+def test_pid_unknown_idle_record_is_typed(w, mk_update):
+    """The control: the same read finds the record idle, and the message
+    is typed."""
+    w.sess.claude_pid = 0
     w.idle(ago=5)
     w.send(mk_update, "hello", msg_id=41)
-    assert reads == []
     assert w.bodies() == ["hello"]
 
 
