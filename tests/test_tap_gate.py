@@ -988,3 +988,18 @@ def test_custom_roles_split_approve_from_prompt(gbot, reached, run_async, uid, v
     run_async(bot._handle_callback(u, MagicMock()))
     assert (reached == [(S, verb)]) is ok
     assert (REFUSED in _answers(q)) is (not ok)
+
+
+def test_resume_dialog_caps():
+    """Roadmap 8.127: the terminal resume question's buttons. Continue and
+    Resume answer a question Claude waits on (APPROVE); Start a new
+    conversation types /clear (PROMPT, re-checked inside)."""
+    from aipager.bot import resume_dialog
+    assert tap_gate.required_capability("claude-x", "rdcont3") is APPROVE
+    assert tap_gate.required_capability("claude-x", "rdresume12") is APPROVE
+    assert tap_gate.required_capability("claude-x", "rdnew7") is PROMPT
+    for verb in ("rdcont", "rdresume", "rdnew"):
+        assert resume_dialog.parse_verb(f"{verb}5") == (verb, 5)
+        assert resume_dialog.parse_verb(verb) is None
+        assert resume_dialog.parse_verb(f"{verb}x5") is None
+    assert resume_dialog.parse_verb("rdy_full") is None

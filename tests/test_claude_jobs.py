@@ -382,3 +382,46 @@ def test_a_zombie_is_not_alive():
 
 def test_a_running_process_is_alive():
     assert claude_jobs._pid_alive(os.getpid()) is True
+
+
+# ---- roadmap 8.127: a dialog in the terminal, as the record says it -------------
+
+def _read_one(cfg, pid=300, **fields):
+    reg(cfg, pid, kind="interactive", **fields)
+    entries = claude_jobs.read_registry()
+    assert entries is not None and len(entries) == 1
+    return entries[0]
+
+
+def test_entry_keeps_waiting_for_and_status_at(cfg):
+    """``waitingFor`` is kept, and ``statusUpdatedAt`` (Claude Code writes
+    milliseconds) becomes wall-clock seconds."""
+    import time
+    now_ms = int(time.time() * 1000)
+    entry = _read_one(cfg, status="waiting", waitingFor="dialog open",
+                      statusUpdatedAt=now_ms)
+    assert entry["waitingFor"] == "dialog open"
+    assert entry["statusAt"] == pytest.approx(now_ms / 1000.0)
+    # Seconds are taken as seconds.
+    assert claude_jobs._entry({"statusUpdatedAt": now_ms / 1000.0}, 300)[
+        "statusAt"] == pytest.approx(now_ms / 1000.0)
+
+
+@pytest.mark.parametrize("field,value,expect", [
+    ("waitingFor", 7, ""),
+    ("waitingFor", ["dialog open"], ""),
+    ("statusUpdatedAt", "1761600000000", None),
+    ("statusUpdatedAt", True, None),
+    ("statusUpdatedAt", 1_000_000_000_000, None),        # 2001: implausible
+    ("statusUpdatedAt", 99_999_999_999_999, None),       # far ahead
+])
+def test_entry_rejects_bad_waiting_fields(cfg, field, value, expect):
+    entry = _read_one(cfg, status="waiting", **{field: value})
+    key = "waitingFor" if field == "waitingFor" else "statusAt"
+    assert entry[key] == expect
+
+
+def test_job_state_waiting_stays_unknown():
+    """A job's record that says waiting is neither busy nor idle."""
+    assert claude_jobs.entry_state({"status": "waiting",
+                                    "waitingFor": "dialog open"}) == "unknown"

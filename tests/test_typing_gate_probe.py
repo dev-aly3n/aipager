@@ -126,3 +126,14 @@ def test_the_probe_says_open_for_every_other_sign_of_a_prompt(probe, state):
     else:
         hr._DIALOG_DATAGRAMS[NAME] = 1
     assert inject.dialog_open(NAME) is True
+
+
+def test_probe_reports_terminal_dialog(probe):
+    """Roadmap 8.127: a dialog in Claude Code's terminal that no hook tells
+    of (from its session record) is a dialog for the typing too."""
+    probe.registry.transition(NAME, Status.IDLE)
+    assert inject.dialog_open(NAME) is False
+    probe.sess.term_dialog = {"epoch": 1, "pid": 4100, "kind": "other"}
+    assert inject.dialog_open(NAME) is True
+    probe.sess.term_dialog = None
+    assert inject.dialog_open(NAME) is False
