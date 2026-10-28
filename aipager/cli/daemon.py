@@ -323,7 +323,10 @@ def _wire_dialog_probe(registry, hook_receiver) -> None:
     session, so no prompt's keys answer one. Open: the session waits on a
     prompt (INTERACTIVE, a carried or recorded one, another open prompt),
     or a datagram telling of one has arrived and is not handled yet (it
-    can wait behind an older turn's finish while its dialog is on screen)."""
+    can wait behind an older turn's finish while its dialog is on screen),
+    or Claude Code's session record showed a dialog no hook tells of (a
+    resume question, roadmap 8.127: ``terminal_dialog_open``). Memory
+    only: no file is read here."""
     from aipager.dtach import inject
 
     def dialog_open(name: str) -> bool:
@@ -333,7 +336,7 @@ def _wire_dialog_probe(registry, hook_receiver) -> None:
         if sess is None:
             return False
         return bool(sess.dialog_is_open() or sess.pending_permission is not None
-                    or sess.extra_prompts)
+                    or sess.extra_prompts or sess.terminal_dialog_open())
 
     inject.set_dialog_probe(dialog_open)
 

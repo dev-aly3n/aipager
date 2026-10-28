@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}، {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ الرسائل تذهب إلى <b>{session}</b>"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "متابعة هذه المحادثة"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "بدء محادثة جديدة"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "استئناف"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: المحادثة مستمرة."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: انتهت الجلسة قبل الإجابة عن السؤال."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: بدأت محادثة جديدة."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: أُعيد تشغيل الجلسة قبل الإجابة عن السؤال."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: تمت الإجابة عن السؤال في الطرفية."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: يسأل Claude Code هل يستأنف هذه المحادثة. فقد بقيت دون استخدام وقتًا طويلًا، واستئنافها يستهلك جزءًا من حد الاستخدام الخاص بك لكل ٥ ساعات."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: المحادثة مستمرة، لكن تعذّر بدء محادثة جديدة. يمكنك إرسال {clear} لبدء واحدة."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> بانتظار إجابة عن سؤال في الطرفية الخاصة بها. يمكنك الإجابة هناك، والرسائل المرسلة في هذه الأثناء تصل إلى Claude بعدها مباشرة."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "لبدء المحادثة من جديد أو تلخيصها، يمكنك الضغط على متابعة ثم إرسال {clear} أو {compact}."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: يطرح Claude Code سؤالًا في الطرفية قبل أن يتابع هذه المحادثة."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "بطاقة العمل"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "ضغطات الأزرار"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager نفسه"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ لا أعرف لأي جلسة هذا الملف. يمكنك اختيار واحدة عبر {command} أو من لوحة المفاتيح."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ لا يزال Claude بانتظار إجابتك على طلب الإذن هذا. يمكنك الإجابة عنه أولًا، وبعدها مباشرة تصل رسالتك الجديدة إلى Claude."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ لا يزال Claude بانتظار إجابتك على هذا السؤال. يمكنك الإجابة عنه أولًا، وبعدها مباشرة تصل رسالتك الجديدة إلى Claude."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ يسأل Claude Code عن هذه المحادثة. يمكنك الإجابة عن السؤال أعلاه أولًا، وبعدها مباشرة تصل رسالتك الجديدة إلى Claude."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude بانتظار إجابة في الطرفية. يمكنك الإجابة هناك أو الضغط على إيقاف، وبعدها مباشرة تصل رسالتك الجديدة إلى Claude."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ تعذّر إرسال نص الرسالة الصوتية إلى [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "لا توجد جلسات لإنهائها."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "لا يستطيع aipager معرفة أي طلب يعرضه Claude Code أولًا، لذا يمكنك الرد على هذا الطلب في الطرفية."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "ينهي Claude مهمته الآن، لذا يمكنك الضغط على هذا الطلب مرة أخرى بعد قليل."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram يقيّد هذه الدردشة الآن - يمكنك المحاولة بعد الساعة {time}"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "تجري الإجابة عن هذا السؤال بالفعل."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "لم يعد هذا السؤال مفتوحًا."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "تعذّرت الإجابة عن السؤال. يمكنك المحاولة مرة أخرى، أو الإجابة عنه في الطرفية."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude يعمل الآن. يمكنك المحاولة مرة أخرى عندما ينتهي."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "يجري الإرسال بالفعل."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "تم الإرسال بالفعل."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "معاينة التقرير في دردشتك الخاصة مع البوت."}

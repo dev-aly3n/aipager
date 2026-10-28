@@ -184,6 +184,10 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"bg\.toast_[a-z0-9_]+", "toast", "chars", 200, ""),
     (r"bg\.btn_[a-z0-9_]+", "button", "cells", 40, ""),
     (r"bg\.[a-z0-9_.]+", "message", "chars", 300, ""),
+    # A question Claude Code asks in its terminal (roadmap 8.127): the
+    # card's buttons, then its lines.
+    (r"rdlg\.btn_[a-z0-9_]+", "button", "cells", 40, ""),
+    (r"rdlg\.[a-z0-9_.]+", "message", "chars", 300, ""),
     # The command line's own lines (aipager session / aipager resume).
     (r"cli\.[a-z0-9_.]+", "message", "chars", 400, ""),
 )

@@ -140,6 +140,14 @@ NUMBERED_CAPS: tuple[tuple[str, Cap], ...] = (
     ("modefull", MANAGE),    # /mode switch to Full access: the handler
                              # re-checks the admin rule too (may_full)
     ("rdy_m", PROMPT),       # Ready card's model choice
+    # A question Claude Code asks in the terminal about resuming the
+    # conversation (roadmap 8.127), keyed by the opening it was shown
+    # for: Continue / Resume answer it (Escape), like any prompt answer;
+    # Start a new conversation types /clear (the handler re-checks that
+    # the tapper may send it).
+    ("rdcont", APPROVE),
+    ("rdresume", APPROVE),
+    ("rdnew", PROMPT),
 )
 
 # Verb families by prefix (checked after the exact and numbered ones).

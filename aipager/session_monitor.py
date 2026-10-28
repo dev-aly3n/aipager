@@ -14,7 +14,7 @@ import logging
 import os
 import time
 
-from aipager import claude_jobs, statusline_file
+from aipager import claude_jobs, statusline_file, term_dialog
 from aipager.dtach import bg_jobs
 from aipager.report import store as report_store
 from aipager.dtach import inject as dtach_inject
@@ -35,6 +35,7 @@ from aipager.state import (
 )
 from aipager.transcript import (
     extract_last_response_flagged,
+    last_exchange_at,
     last_assistant_preview,
     saved_prompt_evidence,
     turn_appears_complete,
@@ -46,6 +47,9 @@ log = logging.getLogger(__name__)
 # The monitor loop's wait between ticks. A seam: tests replace THIS, never
 # ``asyncio.sleep`` (the global module; CLAUDE.md). Defaults to the real one.
 _loop_sleep = asyncio.sleep
+# The wait until a terminal dialog's card falls due (roadmap 8.127,
+# ``SessionMonitor._card_due_later``). A seam, like ``_loop_sleep``.
+_card_due_sleep = asyncio.sleep
 
 # Item 2.2 — after this long with no hook activity, the INTERACTIVE
 # watchdog asks the transcript whether the dialog is still open, and
@@ -765,6 +769,9 @@ class SessionMonitor:
         self._links_written: dict[str, dict] = {}
         self._pidmap_written: dict | None = None
         self._new_parks: dict[str, str] = {}
+        #: session name -> the one-shot look at a terminal dialog's card
+        #: when it falls due (roadmap 8.127), and the opening it is for.
+        self._card_checks: dict[str, tuple[int, asyncio.Task]] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -1124,6 +1131,84 @@ class SessionMonitor:
                 log.warning("Failed to notify bg_release for %s", name,
                             exc_info=True)
 
+    async def _check_term_dialog_tick(self, name: str, sess: TrackedSession) -> None:
+        """The scan's look for a dialog open in the session's terminal that
+        no hook tells of (roadmap 8.127, aipager/term_dialog.py): Claude
+        Code's record of the session's own claude, found in the scan's
+        registry read (no file read of its own; the transcript's tail once
+        per new opening), taken into the session's state; the bot is told
+        of an opening, a close, a card that is due and cards to close, and
+        a settled close releases what was held for it."""
+        change = None
+        try:
+            # An ended session, or one being relaunched, has no dialog to
+            # find (and its old claude's record is not its own any more).
+            if sess.status != Status.GONE and not sess.relaunch_in_flight:
+                entries = self._tick_registry
+                entry = (claude_jobs.find_client(sess, entries)
+                         if entries is not None else None)
+                complete = entries is not None and getattr(entries, "complete", True)
+                change = term_dialog.observe(
+                    sess, entry, complete=complete,
+                    now_mono=term_dialog._now_mono(), now_wall=term_dialog._now_wall(),
+                    last_exchange_wall=lambda: last_exchange_at(sess.transcript_path),
+                    settle=True)
+        except Exception:
+            log.warning("[%s] terminal dialog check failed", sess.label, exc_info=True)
+            return
+        if change == "settled":
+            hold = sess.dialog_hold
+            if hold is not None and hold.pop("settling", None):
+                hold["closed"] = "answered"
+                log.info("[%s] terminal dialog settled: releasing %d held message(s)",
+                         sess.label, len(sess.pending_queue))
+                try:
+                    await self.notify_fn(sess, "dialog_hold_settle", {})
+                except Exception:
+                    log.warning("Failed to settle the dialog hold for %s", name,
+                                exc_info=True)
+            return
+        if (change is not None or sess.term_dialog_closing
+                or term_dialog.card_due(sess, term_dialog._now_wall())):
+            try:
+                await self.notify_fn(sess, "term_dialog", {"change": change or "due"})
+            except Exception:
+                log.warning("Failed to notify term_dialog for %s", name, exc_info=True)
+        self._schedule_card_check(name, sess)
+
+    def _schedule_card_check(self, name: str, sess: TrackedSession) -> None:
+        """When the open opening's card falls due before the next scan
+        (:func:`term_dialog.card_due_in`), one look then, not at the scan
+        after (roadmap 8.127): live, the opening is first seen about 1.2 s
+        after the draw and its card falls due a moment later."""
+        delay = term_dialog.card_due_in(sess, term_dialog._now_wall())
+        cur = sess.term_dialog
+        if delay is None or cur is None:
+            return
+        epoch = cur["epoch"]
+        held = self._card_checks.get(name)
+        if held is not None and held[0] == epoch and not held[1].done():
+            return
+        task = asyncio.get_running_loop().create_task(
+            self._card_due_later(name, sess, epoch, delay))
+        self._card_checks[name] = (epoch, task)
+
+    async def _card_due_later(self, name: str, sess: TrackedSession, epoch: int,
+                              delay: float) -> None:
+        try:
+            await _card_due_sleep(delay)
+            # The bot sends it only if it is due by then (``on_opened``).
+            await self.notify_fn(sess, "term_dialog", {"change": "due"})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.warning("Failed to send a terminal dialog's card for %s", name,
+                        exc_info=True)
+        finally:
+            held = self._card_checks.get(name)
+            if held is not None and held[0] == epoch:
+                self._card_checks.pop(name, None)
+
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.
 
@@ -1352,7 +1437,7 @@ class SessionMonitor:
             # its "answer it first" notice. Normally done at once by the
             # hook that closed the dialog; this is the backstop for a close
             # no hook reported (a tap, /stop, a turn ended in the terminal).
-            if sess.dialog_hold is not None and not sess.dialog_is_open():
+            if sess.dialog_hold is not None and not sess.any_dialog_open():
                 try:
                     await self.notify_fn(sess, "dialog_hold_settle", {})
                 except Exception:
@@ -1370,6 +1455,9 @@ class SessionMonitor:
             # Parked on a Claude Code background job: never typed into
             # (dtach/inject.py's probe reads the field this sets).
             await self._check_parked_tick(name, sess)
+            # A dialog open in Claude Code's terminal that no hook tells of
+            # (roadmap 8.127), from the same registry read.
+            await self._check_term_dialog_tick(name, sess)
             # A dialog answered "No" at the terminal (roadmap 8.113): Claude
             # Code ends the turn like an interrupt and fires no hook, so
             # only the transcript tells. Checked before the watchdog below,

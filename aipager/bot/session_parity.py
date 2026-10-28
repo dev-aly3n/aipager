@@ -50,7 +50,9 @@ from telegram.ext import ContextTypes
 
 from aipager.bot import mode_labels
 from aipager import i18n, perm_modes
-from aipager.bot import card_owner, group_intake, held_message, language_menu, settings_menu
+from aipager.bot import (
+    card_owner, group_intake, held_message, language_menu, resume_dialog, settings_menu,
+)
 from aipager import bg_text as _ops
 from aipager.bot.sibling_text import shown
 from aipager.i18n import Command, Msg, Plural, Safe
@@ -1675,7 +1677,8 @@ async def handle_callback(
             or (action.startswith("modeask") and action[7:].isdigit())
             or (action.startswith("modeauto") and action[8:].isdigit())
             or (action.startswith("modefull") and action[8:].isdigit())
-            or parse_bg_verb(action) is not None):
+            or parse_bg_verb(action) is not None
+            or resume_dialog.parse_verb(action) is not None):
         return False
 
     # The card is the chat's; a pop-up is the tapper's.
@@ -1972,6 +1975,13 @@ async def handle_callback(
     if bg is not None:
         await _handle_bg_tap(bot, update, query, sess, bg[0], chat_id, user_id,
                              shared, person, job=bg[1])
+        return True
+    # A question Claude Code asks in the terminal (roadmap 8.127): its
+    # card's buttons, keyed by the opening they were shown for.
+    rd = resume_dialog.parse_verb(action)
+    if rd is not None:
+        await resume_dialog.handle_tap(bot, update, query, sess, rd[0], rd[1],
+                                       chat_id, user_id, shared, person)
         return True
 
     if action == "restart-confirm":

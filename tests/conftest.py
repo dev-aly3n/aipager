@@ -1529,6 +1529,7 @@ def _isolate_typing_gate(tmp_path, monkeypatch):
     monkeypatch.setattr(inject, "_dialog_probe", inject._never_in_dialog)
     monkeypatch.setattr(inject, "_GATE_HOLDS", {})
     monkeypatch.setattr(inject, "_PENDING_WIPE", {})
+    monkeypatch.setattr(inject, "_WIPE_DRAFT_ONLY", set())
     monkeypatch.setattr(hook_receiver, "_DIALOG_DATAGRAMS", {})
     return real
 

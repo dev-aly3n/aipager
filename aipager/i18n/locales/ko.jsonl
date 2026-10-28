@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ 메시지는 <b>{session}</b> 세션으로 가요"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "이 대화 계속하기"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "새 대화 시작하기"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "재개하기"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: 대화가 이어져요."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: 질문에 답하기 전에 세션이 종료됐어요."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: 새 대화가 시작됐어요."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: 질문에 답하기 전에 세션이 재시작됐어요."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: 터미널에서 질문에 답했어요."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: Claude Code가 이 대화를 재개할지 묻고 있어요. 오랫동안 쓰지 않은 대화라서, 재개하면 5시간 사용 한도의 일부를 쓰게 돼요."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: 대화는 이어지지만 새 대화를 시작하지 못했어요. 새 대화를 시작하려면 {clear}을(를) 보내세요."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> 세션이 터미널에서 질문에 대한 답을 기다리고 있어요. 터미널에서 답하면 그동안 보낸 메시지가 바로 Claude에게 전달돼요."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "대화를 처음부터 다시 하거나 대화 압축을 하려면 계속하기를 누른 다음 {clear} 또는 {compact}을(를) 보내세요."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: Claude Code가 이 대화를 이어 가기 전에 터미널에서 질문하고 있어요."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "작업 카드"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "버튼 탭"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager 자체"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ 이 파일을 어느 세션에 보낼지 모르겠어요. {command} 명령이나 키보드로 하나 골라 주세요."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude가 아직 이 권한 요청에 대한 답을 기다리고 있어요. 먼저 답하면 새 메시지가 바로 Claude에게 전달돼요."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude가 아직 이 질문에 대한 답을 기다리고 있어요. 먼저 답하면 새 메시지가 바로 Claude에게 전달돼요."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code가 이 대화에 대해 묻고 있어요. 먼저 위의 질문에 답하면 새 메시지가 바로 Claude에게 전달돼요."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude가 터미널에서 답을 기다리고 있어요. 터미널에서 답하거나 중지를 누르면 새 메시지가 바로 Claude에게 전달돼요."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 음성 메시지를 받아쓴 내용을 [{session}] 세션에 보내지 못했어요"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "종료할 세션이 없어요."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "Claude Code가 어떤 요청을 먼저 보여 주는지 aipager가 알 수 없어요. 이 요청은 터미널에서 답해 주세요."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude가 작업을 마무리하고 있어요. 잠시 후 이 요청을 다시 눌러 주세요."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram이 이 채팅을 제한하고 있어요. {time} 이후에 다시 시도해 주세요"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "이 질문에 이미 답하는 중이에요."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "이 질문은 이제 열려 있지 않아요."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "질문에 답하지 못했어요. 다시 시도하거나 터미널에서 답해 주세요."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude가 지금 작업 중이에요. 작업이 끝나면 다시 시도해 주세요."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "이미 보내는 중이에요."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "이미 보냈어요."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "보고서 미리 보기는 봇과의 개인 채팅에 있어요."}

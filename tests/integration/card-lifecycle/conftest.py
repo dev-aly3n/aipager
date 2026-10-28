@@ -89,6 +89,15 @@ def vloop(monkeypatch):
     for module in (animation, notify, flood, flood_budget, state,
                    hook_receiver, session_monitor, lifecycle):
         monkeypatch.setattr(module, "time", fake, raising=False)
+    # Claude's files (the session registry read before a message is typed
+    # into an idle session, roadmap 8.127) are read inline: while a worker
+    # thread runs the loop has nothing ready, so its clock would jump to
+    # the next timer and a read of microseconds would take virtual seconds.
+    from aipager import claude_jobs
+
+    async def inline(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+    monkeypatch.setattr(claude_jobs, "_to_thread", inline)
     yield loop
     try:
         pending = [t for t in asyncio.all_tasks(loop) if not t.done()]

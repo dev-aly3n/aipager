@@ -305,6 +305,21 @@ _HELD_BACK: dict[str, Path] = {}
 #: The key marking such a message's note among what Claude's queue held
 #: before a typed refusal (roadmap 8.144).
 HELD_BACK_KEY = "_held_back"
+#: session name -> (loop, lock): one look for a terminal dialog before
+#: typing at a time per session (roadmap 8.127), so messages that wait
+#: through a ``--resume`` start's look leave it, and reach the write lock,
+#: in the order they came.
+_BEFORE_TYPING_LOCKS: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Lock]] = {}
+
+
+def _before_typing_lock(name: str) -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    held = _BEFORE_TYPING_LOCKS.get(name)
+    if held is None or held[0] is not loop:
+        held = (loop, asyncio.Lock())
+        _BEFORE_TYPING_LOCKS[name] = held
+    return held[1]
+
 
 #: session name -> the running watch (one per session; a newer answer
 #: replaces it). Also keeps a reference so the task is not collected.
@@ -883,6 +898,13 @@ def _external_quote_context(fragment: str) -> str:
     )
 
 
+def _last_exchange(sess: TrackedSession) -> float | None:
+    """When the session's conversation last had a user or assistant entry
+    (roadmap 8.127; the transcript's tail, read once per new opening)."""
+    from aipager.transcript import last_exchange_at
+    return last_exchange_at(sess.transcript_path)
+
+
 def _clear_turn_open(session_name: str) -> None:
     """The daemon's half of the hook's turn state (roadmap 8.77): a
     session it stops, kills, relaunches or launches has no turn running.
@@ -1335,6 +1357,14 @@ class SessionOpsMixin:
             log.info("[%s] Refused a slash command from %s: %s",
                      sess.label, explicit_driver_user_id, text[:80])
             return PROMPT_REFUSED
+        # Roadmap 8.127: a dialog in Claude Code's terminal that no hook
+        # tells of (a resume question), looked for in the session's own
+        # record now: the monitor's last look may be up to a scan old, and
+        # one drawn right after a `--resume` start is waited for. Nothing
+        # is typed: the caller holds the message for it.
+        if await self._terminal_dialog_before_typing(sess):
+            log.info("[%s] Not typing: a dialog is open in the terminal", sess.label)
+            return PROMPT_DIALOG
         if driver_user_id is None:
             driver_user_id = sess.last_driver_user_id
         sess.last_prompt_origin = "telegram"
@@ -1484,6 +1514,64 @@ class SessionOpsMixin:
             _spawn(self._enter_again_if_held_back(sess, note_path))
         return ok
 
+    async def _terminal_dialog_before_typing(self, sess: TrackedSession) -> bool:
+        """Whether a dialog no hook tells of is open in *sess*'s terminal
+        right before a message is typed (roadmap 8.127): already on record,
+        or found now in Claude Code's record of the session's own claude.
+        Read only for a session idle in aipager's view, off the event loop:
+        its claude's own file when the pid is known, else the whole
+        registry (a claude just started; a ``--resume`` question draws
+        before its first hook). Within
+        :data:`term_dialog.RESUME_TYPE_SETTLE_SECONDS` of a ``--resume``
+        start the record is read again every
+        :data:`term_dialog.FRESH_POLL_SECONDS` until then, for a dialog that
+        has not drawn yet. One look at a time per session, in the order
+        asked: a message sent while another waits here goes after it.
+        Never raises: a failed read says closed (the typing gate's probe
+        still guards)."""
+        if sess.terminal_dialog_open():
+            return True
+        async with _before_typing_lock(sess.name):
+            return await self._terminal_dialog_look(sess)
+
+    async def _terminal_dialog_look(self, sess: TrackedSession) -> bool:
+        """:meth:`_terminal_dialog_before_typing`'s look, under its lock."""
+        from aipager import term_dialog
+        if sess.terminal_dialog_open():
+            return True
+        if sess.status is not Status.IDLE:
+            return False
+        resume_at = (sess.session_start_at or {}).get("resume") or 0.0
+        left = resume_at + term_dialog.RESUME_TYPE_SETTLE_SECONDS - term_dialog._now_wall()
+        looks = 1 + (max(0, int(left / term_dialog.FRESH_POLL_SECONDS + 0.999))
+                     if left > 0 else 0)
+        for i in range(looks):
+            if i:
+                await _sleep(term_dialog.FRESH_POLL_SECONDS)
+            try:
+                entry = await term_dialog.fresh_record(sess)
+                term_dialog.observe(
+                    sess, entry, complete=False,
+                    now_mono=term_dialog._now_mono(), now_wall=term_dialog._now_wall(),
+                    last_exchange_wall=lambda: _last_exchange(sess))
+            except Exception:
+                log.warning("[%s] terminal dialog check before typing failed",
+                            sess.label, exc_info=True)
+            if sess.terminal_dialog_open():
+                return True
+        return False
+
+    async def _command_after_dialog(self, sess: TrackedSession, command: str,
+                                    driver_user_id: int | None) -> bool:
+        """Type *command* (``/clear``) right after a terminal dialog was
+        answered from its card (roadmap 8.127), as the Compact button types
+        ``/compact``: a local command, its note let expire, no turn and no
+        busy card. Through the typing gate. True once typed."""
+        ok = await self._inject_prompt(sess, command, driver_user_id=driver_user_id)
+        if ok:
+            self._mark_injected_command_ran(sess, command)
+        return bool(ok)
+
     async def _dialog_on_record(self, sess: TrackedSession) -> bool:
         """After a message met a dialog (roadmap 8.143): True once the dialog
         is on record (``dialog_is_open``: the message is then held for it
@@ -1494,7 +1582,7 @@ class SessionOpsMixin:
         turn's end at the latest)."""
         deadline = time.monotonic() + MET_DIALOG_WAIT_SECONDS
         while True:
-            if sess.dialog_is_open():
+            if sess.any_dialog_open():
                 return True
             if not inject.dialog_open(sess.name):
                 return False
@@ -1579,8 +1667,9 @@ class SessionOpsMixin:
         if (self.registry.get(sess.name) is not sess or sess.status == Status.GONE
                 or self._parked(sess)):
             return "drop"
-        if (sess.status == Status.INTERACTIVE or sess.dialog_is_open()
+        if (sess.status == Status.INTERACTIVE or sess.any_dialog_open()
                 or sess.pending_permission is not None or sess.turn_state_held()
+                or sess.term_dialog_settle is not None
                 or (sess.dialog_release_pending() and not releasing)):
             return "wait"
         return "press"
@@ -2963,6 +3052,8 @@ class SessionOpsMixin:
         or refuses with ``bg_busy`` unless *force*."""
         label = sess.label
         session_name = sess.name
+        # Roadmap 8.127: a dialog in the old claude's terminal dies with it.
+        sess.end_terminal_dialog("restarted")
         own_conversation = resume_id is None
         if own_conversation:
             resume_id = sess.claude_session_id
@@ -3644,6 +3735,15 @@ class SessionOpsMixin:
             return RestartOutcome(ok=False, reason="parked", label=label,
                                   mode=target, in_place=True)
         if sess.dialog_is_open():
+            return RestartOutcome(ok=False, reason="dialog_open", label=label,
+                                  mode=target, in_place=True)
+        # Roadmap 8.127: a dialog in Claude Code's terminal that no hook
+        # tells of (a resume question), looked for in the session's own
+        # record now, as before a message is typed: the probe's memory may
+        # be a scan old, and Shift+Tab would land in it.
+        if await self._terminal_dialog_before_typing(sess):
+            log.info("[%s] Not switching the mode in place: a dialog is open in "
+                     "the terminal", label)
             return RestartOutcome(ok=False, reason="dialog_open", label=label,
                                   mode=target, in_place=True)
         from aipager.state import ModeSwitch

@@ -387,6 +387,33 @@ def _tail_lines(path: str, max_bytes: int = TAIL_READ_BYTES) -> list[str]:
     return lines
 
 
+def last_exchange_at(path: str) -> float | None:
+    """When the conversation in *path* last had a user or assistant entry
+    (epoch seconds), from the last :data:`TAIL_READ_BYTES` of the file; None
+    when none is there or the file cannot be read. How old the
+    conversation is to Claude Code's resume questions (roadmap 8.127).
+    Never raises."""
+    if not path:
+        return None
+    try:
+        lines = _tail_lines(path)
+    except (OSError, ValueError):
+        return None
+    for line in reversed(lines):
+        if '"user"' not in line and '"assistant"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict) or entry.get("type") not in ("user", "assistant"):
+            continue
+        at = _entry_timestamp(entry)
+        if at is not None:
+            return at
+    return None
+
+
 def turn_tail_since(transcript_path: str, since: float) -> str | None:
     """What the transcript's newest turn entry says about a turn whose
     permission prompt was answered by typing into Claude Code's dialog at

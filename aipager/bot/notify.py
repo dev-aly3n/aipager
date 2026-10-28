@@ -2422,7 +2422,7 @@ class NotifyMixin:
             # the head, it goes out once that dialog is answered (or at the
             # turn's end, when the dialog is not on record yet).
             sess.pending_queue.insert(0, entry)
-            if sess.dialog_is_open():
+            if sess.any_dialog_open():
                 from aipager.bot.handlers import _claim_dialog_hold
                 _claim_dialog_hold(sess)
             self.registry.mark_dirty()
@@ -2457,14 +2457,19 @@ class NotifyMixin:
         turn (another person's, roadmap 8.77): it and those after it wait
         for the turn's end, as before. A message arriving while this runs
         is held behind the others (``dialog_release_pending``) and goes out
-        in this same pass."""
+        in this same pass.
+
+        A terminal dialog's hold (roadmap 8.127) is left alone while it
+        settles after the dialog's close (``"settling"``): the session
+        monitor marks it answered once the session has settled."""
         hold = sess.dialog_hold
-        if hold is None or sess.dialog_settling or sess.dialog_is_open():
+        if (hold is None or sess.dialog_settling or sess.any_dialog_open()
+                or hold.get("settling")):
             return
         sess.dialog_settling = True
         try:
             if hold.get("closed") == "answered" and sess.status is not Status.GONE:
-                while sess.pending_queue and not sess.dialog_is_open():
+                while sess.pending_queue and not sess.any_dialog_open():
                     before = len(sess.pending_queue)
                     await self._drain_next_queued(sess)
                     if len(sess.pending_queue) >= before:
@@ -2472,13 +2477,14 @@ class NotifyMixin:
         finally:
             sess.dialog_settling = False
             notices = list(hold.get("notices") or [])
-            if (sess.dialog_hold is hold and sess.dialog_is_open()
+            if (sess.dialog_hold is hold and sess.any_dialog_open()
                     and sess.pending_queue):
                 # Another dialog opened while they went out: the rest are
                 # held for that one now, and its first new message gets a
                 # notice of its own.
                 hold.pop("closed", None)
-                hold["entered_at"] = sess.interactive_entered_at
+                hold["entered_at"] = sess.dialog_wait_stamp()
+                hold["terminal"] = not sess.dialog_is_open()
                 hold["told"] = set()
                 hold["notices"] = []
             elif sess.dialog_hold is hold:
@@ -2559,12 +2565,21 @@ class NotifyMixin:
             # A hook that closed a dialog messages were held for (or the
             # session monitor's backstop, ``dialog_hold_settle``): send
             # them on now (:meth:`_settle_dialog_hold`).
-            if sess.dialog_hold is not None and not sess.dialog_is_open():
+            if sess.dialog_hold is not None and not sess.any_dialog_open():
                 try:
                     await self._settle_dialog_hold(sess)
                 except Exception:
                     log.warning("[%s] releasing the messages held for a "
                                 "dialog failed", sess.label, exc_info=True)
+            # The cards of terminal dialogs that closed (roadmap 8.127),
+            # wherever the close was found: shown closed now.
+            if sess.term_dialog_closing:
+                try:
+                    from aipager.bot import resume_dialog  # local: import cycle
+                    await resume_dialog.close_cards(self, sess)
+                except Exception:
+                    log.warning("[%s] closing a terminal dialog's card failed",
+                                sess.label, exc_info=True)
             # The statusline reported a typed /model's switch (or the
             # session monitor's backstop, ``model_hold_settle``, saw its
             # check's time run out): send on what was held for it. A no-op
@@ -2592,6 +2607,14 @@ class NotifyMixin:
         # back now" (P6). Never reaches the status branches below.
         if event == "bg_parked":
             await self._notify_parked(sess, context.get("job") or "")
+            return
+        # ── a dialog in Claude Code's terminal no hook tells of ──
+        # The monitor saw it open, close, or its card fall due (roadmap
+        # 8.127). Cards to close are closed by `notify` itself, after
+        # every event.
+        if event == "term_dialog":
+            from aipager.bot import resume_dialog  # local: import cycle
+            await resume_dialog.on_opened(self, sess)
             return
         # ── a session brought back from a background job ──
         # Its relaunched claude's first SessionStart (or the monitor's

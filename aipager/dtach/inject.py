@@ -16,7 +16,7 @@ import shlex
 import shutil
 import signal
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from aipager import claude_launch, claude_resolve, daemon_secrets, instance, perm_modes
@@ -337,6 +337,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 #   gaps between them (at most 3 writes + 2 x ``MODE_PRESS_GAP``, 0.3 s,
 #   plus the typing gate's look before each press, bounded as a prompt's
 #   are), so no prompt's text lands between two presses.
+# - ``press_key_in_dialog``: ONE hold across its "is the dialog still
+#   open?" check (one small file read off the event loop, roadmap 8.127)
+#   and its one key write, so no key lands in a dialog that closed.
 # Waiting is FIFO. The bound on any writer's wait (Stop's Escape
 # included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
 # then the lock hold in progress: one ``dtach -p`` write, a prompt's
@@ -619,6 +622,10 @@ _GATE_HOLDS: dict[str, int] = {}
 # Characters a prompt stopped by a dialog left in the input box, wiped
 # before the next prompt is typed there.
 _PENDING_WIPE: dict[str, int] = {}
+#: Sessions whose pending wipe is only a draft a terminal dialog's Escape
+#: left (:func:`request_wipe`), no stopped prompt: for the log's wording.
+#: Read only while a wipe is pending; both writers keep it right then.
+_WIPE_DRAFT_ONLY: set[str] = set()
 
 
 class _SendStopped:
@@ -727,6 +734,7 @@ def _type_pieces(text: str) -> list[str]:
 
 def _stopped_while_typing(session: str, typed: int) -> _SendStopped:
     _PENDING_WIPE[session] = _PENDING_WIPE.get(session, 0) + typed
+    _WIPE_DRAFT_ONLY.discard(session)
     log.warning("A dialog opened in %s while a prompt was typed: stopped after "
                 "%d characters, no Enter", session, typed)
     return DIALOG_WHILE_TYPING
@@ -751,7 +759,11 @@ async def _wipe_stopped_text(session: str, sock: str) -> bool:
                         session, i + 1, writes)
             return False
     _PENDING_WIPE.pop(session, None)
-    log.info("Wiped %d characters of a stopped prompt in %s", chars, session)
+    if session in _WIPE_DRAFT_ONLY:
+        log.info("Wiped the input box (up to %d characters of a draft left behind "
+                 "a terminal dialog) in %s", chars, session)
+    else:
+        log.info("Wiped %d characters of a stopped prompt in %s", chars, session)
     return True
 
 
@@ -851,6 +863,56 @@ async def press_enter_gated(session: str) -> bool | _SendStopped:
     if ok:
         log.info("Sent keys 'Enter' → %s", session)
     return ok
+
+
+async def press_key_in_dialog(session: str, key: str,
+                              still_open: Callable[[], Awaitable[bool]]) -> bool:
+    """Answer a dialog open in Claude Code's terminal that no hook tells of
+    (roadmap 8.127, a resume question) with one key from :data:`KEYS`.
+
+    Only while it is still open: *still_open* is awaited under the
+    session's write lock, right before the write, and False (or raising)
+    writes nothing; so a key never lands in a dialog that closed, a newer
+    one, or a turn. Not through the dialog probe (the dialog is the
+    target). Refused for a parked session. True once the key went out."""
+    seq = KEYS.get(key)
+    if seq is None:
+        log.warning("press_key_in_dialog: %r is not a key name; nothing sent to %s",
+                    key, session)
+        return False
+    if _refuse_parked(session):
+        return False
+    await _await_chord(session)
+    sock = _sock_path(session)
+    async with _write_lock(session):
+        if _refuse_parked(session):
+            return False
+        try:
+            still = bool(await still_open())
+        except Exception:  # noqa: BLE001 - fail closed: no key
+            log.warning("dialog check failed for %s: no key sent", session,
+                        exc_info=True)
+            still = False
+        if not still:
+            log.info("Not pressing %s in %s: the dialog is no longer open",
+                     key, session)
+            return False
+        _note_write(session)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
+    if ok:
+        log.info("Sent keys %r → %s (dialog)", key, session)
+    return ok
+
+
+def request_wipe(session: str, chars: int) -> None:
+    """Have the next prompt typed into *session* first wipe its input box
+    (Ctrl+U, as for a prompt a dialog stopped: :data:`_PENDING_WIPE`) of
+    at least *chars* characters. For a draft a terminal dialog's Escape
+    left there (roadmap 8.127)."""
+    if chars > 0:
+        if not _PENDING_WIPE.get(session):
+            _WIPE_DRAFT_ONLY.add(session)
+        _PENDING_WIPE[session] = max(_PENDING_WIPE.get(session, 0), int(chars))
 
 
 # discard_queued_input's wipe. Claude Code's Ctrl+U deletes, per press, one
