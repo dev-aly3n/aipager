@@ -34,6 +34,7 @@ def main() -> None:
         "file_download_dir": instance.file_download_dir(),
         "self_restart_log_path": instance.self_restart_log_path(),
         "protected_globs": list(instance.protected_globs()),
+        "spill_globs": list(instance.spill_globs()),
         "start_check": instance.start_check(),
         "config.SOCKET_PATH": _s(config.SOCKET_PATH),
         "config._default_socket_path": _s(config._default_socket_path()),

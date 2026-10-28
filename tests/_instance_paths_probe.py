@@ -48,7 +48,7 @@ def main() -> None:
         status,
     )
     from aipager.bot import session_ops
-    from aipager.dtach import hook_reply, inject, model_switch_marker
+    from aipager.dtach import hook_reply, hook_spill, inject, model_switch_marker
     from aipager.dtach import notify_hook, statusline_notify
 
     session = PROBE_SESSION
@@ -65,6 +65,16 @@ def main() -> None:
         restricted_write[kind] = bool(safety.path_violation(
             "Write", {"file_path": path},
             safety.DENY_PATHS_NO_ACCESS, safety.DENY_PATHS_NO_WRITE))
+
+    # The hook spill folder (roadmap 8.138): a restricted turn's file
+    # tools may not reach a spilled event, under an instance or not.
+    spill_file = os.path.join(str(hook_spill.spill_dir(hook_runtime)), "ev-" + "0" * 32 + ".json")
+    spill_denied = {
+        tool: bool(safety.path_violation(
+            tool, {"file_path": spill_file},
+            safety.DENY_PATHS_NO_ACCESS, safety.DENY_PATHS_NO_WRITE))
+        for tool in ("Read", "Write", "Edit")
+    }
 
     out = {
         "runtime": {
@@ -89,6 +99,7 @@ def main() -> None:
                 session_ops._marker_dir(), session)),
             "reply_socket": hook_reply.build_reply_path(hook_runtime, "0" * 32),
             "self_restart_log": instance.self_restart_log_path(),
+            "spill_dir": str(hook_spill.spill_dir(hook_runtime)),
         },
         # Only for an instance: without one these would list the real /tmp.
         "scans": {
@@ -97,6 +108,7 @@ def main() -> None:
         } if inst else {},
         "deny_no_access": list(safety.DENY_PATHS_NO_ACCESS),
         "restricted_write_denied": restricted_write,
+        "spill_denied": spill_denied,
         "home": {
             "session_state": str(config.SESSION_STATE_FILE),
             "flood_state": str(config.FLOOD_STATE_FILE),

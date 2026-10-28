@@ -736,6 +736,19 @@ Inbound:
   process can send hook events to it - same trust as
   `~/.claude/settings.json`, which already controls what runs
   hooks.
+- The hook spill folder, `aipager-spill-<uid>` beside that socket. A
+  hook event too big for one datagram is written there as a file and
+  the datagram only names it (see [hooks](hooks.md)). The daemon
+  creates the folder with mode `0700` and does not use it if it is not
+  its own. The hook writes only into that folder, and only when it is
+  owned by the same user with no group or other access; each file is
+  created `0600` with a random name. A datagram carries a name, never a
+  path: the daemon accepts only its own name pattern, opens the file
+  inside the folder without following links, accepts only a regular file
+  of its own user up to 4 MiB, and deletes every file it reads or
+  refuses. Files left by a daemon that stopped are deleted at the next
+  start once older than 5 minutes. Restricted turns' file tools are kept
+  off the folder, as off the `/tmp/claude-*` control files.
 
 This means: the daemon is not a remote attack surface. A network-
 level attacker cannot reach it without a foothold on the host.

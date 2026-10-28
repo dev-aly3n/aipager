@@ -95,6 +95,7 @@ def _expected_unset(sock_dir: str) -> dict:
         "marker": f"{sock_dir}/aipager-modelswitch-claude-probe__d1.json",
         "reply_socket": f"{sock_dir}/aipager-reply-{'0' * 32}.sock",
         "self_restart_log": "/tmp/aipager.log",
+        "spill_dir": f"{sock_dir}/aipager-spill-{uid}",
     }
 
 
@@ -118,7 +119,9 @@ def test_parity_with_instance_unset(tmp_path, xdg):
     env = {"XDG_RUNTIME_DIR": xdg} if xdg else {}
     out = _probe(env, tmp_path)
     assert out["runtime"] == _expected_unset(xdg or "/tmp")
-    assert out["deny_no_access"] == BASE_DENY
+    # The hook spill folder beside the control socket (roadmap 8.138).
+    assert out["deny_no_access"] == BASE_DENY + [f"{xdg or '/tmp'}/aipager-spill-*"]
+    assert out["spill_denied"] == dict.fromkeys(("Read", "Write", "Edit"), True)
 
 
 def test_parity_socket_override_still_wins_without_instance(tmp_path):
@@ -204,6 +207,8 @@ def test_isolation_safety_floor_protects_relocated_control_files(isolated):
     assert deny[:len(BASE_DENY)] == BASE_DENY
     for kind in ("policy", "notes", "status", "reply", "dtach"):
         assert f"{inst}/claude-{kind}-*" in deny, kind
+    assert f"{inst}/aipager-spill-*" in deny
+    assert out["spill_denied"] == dict.fromkeys(("Read", "Write", "Edit"), True)
     assert out["restricted_write_denied"] == dict.fromkeys(
         ("policy", "notes", "status", "reply", "dtach"), True)
 

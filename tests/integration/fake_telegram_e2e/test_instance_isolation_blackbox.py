@@ -245,18 +245,33 @@ def test_protected_globs_are_the_control_kinds(iso):
 
 
 def test_deny_list_gains_exactly_protected_globs(scratch):
+    """An instance gains its control-file globs plus its own hook spill
+    glob, which sits beside the control socket and so moves with it."""
     with_inst = _isolated(scratch)
     without = probe(scrubbed_env(HOME=str(scratch / "h")))
+    protected = set(with_inst["protected_globs"])
+    spill = set(with_inst["spill_globs"])
+    assert spill and not spill & protected
     gained = set(with_inst["safety.DENY_PATHS_NO_ACCESS"]) - set(
         without["safety.DENY_PATHS_NO_ACCESS"])
-    assert gained == set(with_inst["protected_globs"])
+    assert gained == protected | spill
 
 
 def test_deny_list_keeps_todays_entries_when_isolated(scratch):
+    """Every entry of a normal install stays under an instance, except the
+    spill glob, which is relocated into the instance folder."""
     with_inst = _isolated(scratch)
     without = probe(scrubbed_env(HOME=str(scratch / "h")))
-    assert set(without["safety.DENY_PATHS_NO_ACCESS"]) <= set(
-        with_inst["safety.DENY_PATHS_NO_ACCESS"])
+    inst = str(scratch / "i")
+    old_spill = set(without["spill_globs"])
+    new_spill = set(with_inst["spill_globs"])
+    deny_with = set(with_inst["safety.DENY_PATHS_NO_ACCESS"])
+    deny_without = set(without["safety.DENY_PATHS_NO_ACCESS"])
+    assert old_spill and old_spill <= deny_without
+    assert not old_spill & deny_with
+    assert new_spill and new_spill <= deny_with
+    assert all(g.startswith(inst + os.sep) for g in new_spill)
+    assert deny_without - old_spill <= deny_with
 
 
 @pytest.mark.parametrize("name", [

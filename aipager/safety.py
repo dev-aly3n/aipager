@@ -56,7 +56,12 @@ DENY_PATHS_NO_ACCESS: tuple[str, ...] = (
     # (AIPAGER_INSTANCE_DIR), where those files live instead; empty for
     # a normal install. Computed at import with the process env, which
     # the daemon and its hooks share, so their floor lists agree.
-) + _instance.protected_globs()
+) + _instance.protected_globs() + (
+    # The hook spill folder beside the control socket (roadmap 8.138): for
+    # a moment its files hold other turns' whole prompts, tool inputs and
+    # answers. Present for a normal install too.
+    _instance.spill_globs()
+)
 
 # ---------------------------------------------------------------------------
 # Credential files (roadmap 8.79): keys, tokens and passwords other

@@ -142,6 +142,7 @@ behaviour.
 | `$XDG_RUNTIME_DIR/aipager.sock` | Unix datagram socket for hook events (`/tmp/aipager.sock` without `$XDG_RUNTIME_DIR`; `$AIPAGER_SOCKET_PATH` overrides both) | aipager daemon (binds) |
 | `aipager-reply-<id>.sock` (beside the control socket) | One short-lived reply socket per permission prompt the hook waits on | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (beside the control socket) | The current Telegram rate-limit state, for `aipager status` and the doctor | aipager daemon |
+| `aipager-spill-<uid>/ev-<id>.json` (beside the control socket) | A hook event too big for one datagram, read and deleted by the daemon when its pointer datagram arrives; files older than 5 minutes are swept at start ([hooks](hooks.md)) | `aipager-hook` (written), aipager daemon (folder created, files read and deleted) |
 | `aipager-modelswitch-<name>.json` (beside the control socket) | Marks a model switch aipager typed, for 30 s ([hooks](hooks.md#premodelswitch)) | aipager daemon (written), `aipager-hook` (claimed) |
 | `/tmp/claude-dtach-<name>.sock` | dtach control socket per session | dtach |
 | `/tmp/claude-status-<name>.json` | Statusline data per session | `aipager-statusline` |
@@ -192,7 +193,8 @@ socket. aipager never elevates; see
 
 Set `AIPAGER_INSTANCE_DIR` to an absolute folder you own and every
 shared runtime file above moves into it: the control socket (and the
-reply sockets, flood signal files and model-switch marker beside it),
+reply sockets, flood signal files, model-switch marker and hook spill
+folder beside it),
 the `claude-dtach-*` sockets, the `claude-policy-*`, `claude-notes-*`,
 `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` and `claude-exit-*`
 files, the policy floor file,

@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import socket
+import sys
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -25,6 +26,7 @@ from aipager import (
     agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, safety, send_check,
     statusline_file,
 )
+from aipager.dtach import hook_spill
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -124,6 +126,38 @@ def dialog_datagram_pending(session: str) -> bool:
     """Whether a datagram telling of a dialog in *session* has arrived and
     is not handled yet."""
     return _DIALOG_DATAGRAMS.get(session, 0) > 0
+
+
+# Big events (roadmap 8.138). asyncio reads a datagram with this many
+# bytes at most: one that fills it was probably cut short.
+_RECV_MAX_BYTES = 256 * 1024
+# macOS refuses (ENOBUFS) any datagram that does not fit the free part of
+# the receiver's buffer, 4 KiB by default (net.local.dgram.recvspace); the
+# kernel clamps a raise to kern.ipc.maxsockbuf. On Linux the receive
+# buffer plays no part in a Unix datagram's admission.
+_RAISE_RCVBUF = not sys.platform.startswith("linux")
+_RCVBUF_BYTES = 4 * 1024 * 1024
+
+
+async def _dropped() -> None:
+    """What a refused spill pointer is handled as: nothing."""
+    return None
+
+
+def _spill_base() -> str:
+    """The folder the spill folder sits in: the control socket's."""
+    return os.path.dirname(SOCKET_PATH) or "/tmp"
+
+
+def _raise_rcvbuf(transport) -> None:
+    """Ask for a bigger receive buffer where the OS needs one."""
+    if not _RAISE_RCVBUF:
+        return
+    try:
+        transport.get_extra_info("socket").setsockopt(
+            socket.SOL_SOCKET, socket.SO_RCVBUF, _RCVBUF_BYTES)
+    except (OSError, AttributeError):
+        log.debug("hook receiver: SO_RCVBUF not raised", exc_info=True)
 
 # A Stop hook landing on an already-IDLE session within this many seconds
 # of an explicit /stop (or safety halt) is Claude finalising the turn the
@@ -813,6 +847,18 @@ class HookReceiver:
         self.parked_check = None
 
     async def start(self) -> None:
+        # Hook events too big for one datagram come through files in this
+        # folder (hook_spill). A folder that is not ours is never used:
+        # big events are then lost, as they were before, and said so.
+        base = _spill_base()
+        why = hook_spill.ensure_dir(base)
+        if why:
+            log.warning("hook spill folder %s is not usable (%s): hook events too big "
+                        "for one datagram will be lost", hook_spill.spill_dir(base), why)
+        else:
+            swept = hook_spill.sweep(base)
+            if swept:
+                log.info("removed %d stale hook spill file(s)", swept)
         try:
             os.unlink(SOCKET_PATH)
         except FileNotFoundError:
@@ -824,6 +870,7 @@ class HookReceiver:
             local_addr=SOCKET_PATH,
             family=socket.AF_UNIX,
         )
+        _raise_rcvbuf(transport)
         os.chmod(SOCKET_PATH, 0o666)
         self._transport = transport
         log.info("Hook receiver listening on %s", SOCKET_PATH)
@@ -1149,15 +1196,45 @@ class HookReceiver:
     def _on_datagram_counted(self, data: bytes):
         """:meth:`_on_datagram`, counting a dialog's datagram as pending
         from the moment it arrives (synchronously, in ``datagram_received``)
-        until it is handled (:func:`dialog_datagram_pending`)."""
+        until it is handled (:func:`dialog_datagram_pending`).
+
+        A spill pointer (an event too big for one datagram, roadmap 8.138)
+        is resolved here first, in its arrival position: from then on the
+        event is the file's bytes, counted, deduplicated and handled as if
+        it had come inline. A refused one is handled as nothing."""
+        spilled = 0
+        name = hook_spill.parse_pointer(data)
+        if name is not None:
+            # Runs inside datagram_received. asyncio would keep the socket
+            # open on an exception here, but the event would be lost all the
+            # same with only an "Exception in callback" traceback for it, and
+            # any local user can send pointers. Caught, a failed read is one
+            # refusal line naming its cause, like every other refused pointer.
+            try:
+                body, why = hook_spill.read_spill(_spill_base(), name)
+            except Exception as e:
+                body, why = None, f"error:{type(e).__name__}"
+            if body is None:
+                shown = name[:80] if isinstance(name, str) else type(name).__name__
+                log.warning("hook spill file refused (%s): %r", why, shown)
+                return _dropped()
+            data = body
+            spilled = len(body)
+        elif len(data) >= _RECV_MAX_BYTES:
+            log.warning("hook datagram of %d bytes reached the receive size and "
+                        "may be cut short", len(data))
         session = _dialog_datagram_session(data)
         if session:
             _DIALOG_DATAGRAMS[session] = _DIALOG_DATAGRAMS.get(session, 0) + 1
-        return self._handle_counted(data, session)
+        return self._handle_counted(data, session, spilled=spilled)
 
-    async def _handle_counted(self, data: bytes, session: str) -> None:
+    async def _handle_counted(self, data: bytes, session: str, *,
+                              spilled: int = 0) -> None:
         try:
-            await self._on_datagram(data)
+            if spilled:
+                await self._on_datagram(data, spilled=spilled)
+            else:
+                await self._on_datagram(data)
         finally:
             if session:
                 left = _DIALOG_DATAGRAMS.get(session, 0) - 1
@@ -1166,7 +1243,7 @@ class HookReceiver:
                 else:
                     _DIALOG_DATAGRAMS.pop(session, None)
 
-    async def _on_datagram(self, data: bytes) -> None:
+    async def _on_datagram(self, data: bytes, *, spilled: int = 0) -> None:
         try:
             msg = json.loads(data)
         except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
@@ -1189,6 +1266,10 @@ class HookReceiver:
 
         if not session_name or not event:
             return
+        if spilled:
+            tracked = self.registry.get(session_name)
+            log.info("[%s] %s arrived through a spill file (%d bytes)",
+                     tracked.label if tracked else session_name, event, spilled)
 
         hook_version = msg.get("aipager_version")
         on_hook_version = getattr(self, "on_hook_version", None)

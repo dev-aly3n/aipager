@@ -2,10 +2,10 @@
 
 One place decides every path that is NOT under ``$HOME`` and that two
 daemons on one machine would otherwise share: the control socket (and,
-derived from its folder, the reply sockets, the flood signal files and
-the model-switch marker), the dtach session sockets, the per-session
-policy / notes / status / reply files, the policy floor file, the
-download folder and the self-restart log.
+derived from its folder, the reply sockets, the flood signal files, the
+model-switch marker and the hook spill folder), the dtach session
+sockets, the per-session policy / notes / status / reply files, the
+policy floor file, the download folder and the self-restart log.
 
 With ``AIPAGER_INSTANCE_DIR`` unset (every normal install) each function
 returns exactly the path aipager has always used. With it set, all of
@@ -105,6 +105,15 @@ def protected_globs() -> tuple[str, ...]:
         os.path.join(inst, f"claude-{kind}-*")
         for kind in ("policy", "notes", "status", "reply", "dtach", "bgjob", "exit")
     )
+
+
+def spill_globs() -> tuple[str, ...]:
+    """The hook spill folder a restricted turn may not touch: its files
+    hold other turns' events for a moment (``dtach/hook_spill.py``). It
+    sits beside the control socket, so it follows it whether or not the
+    instance is set. No ``/**``: an anchored ``**`` glob is matched as a
+    literal prefix, while ``*`` here also spans the ``/`` below it."""
+    return (os.path.join(os.path.dirname(control_socket_path()), "aipager-spill-*"),)
 
 
 def _real_home() -> str:

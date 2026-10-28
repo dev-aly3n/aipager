@@ -31,9 +31,18 @@ JSON on stdin, adds two fields (below) and sends it to the daemon as one
 datagram on a Unix socket. The socket is, in this order:
 `$AIPAGER_INSTANCE_DIR/aipager.sock` for an isolated test instance,
 `$AIPAGER_SOCKET_PATH`, `$XDG_RUNTIME_DIR/aipager.sock`, or
-`/tmp/aipager.sock`. The send never waits: if no daemon is listening the
-event is dropped, and the session monitor catches up from the session's
-files.
+`/tmp/aipager.sock`. If no daemon is listening the event is dropped, and
+the session monitor catches up from the session's files. The send waits
+only when the daemon has a long queue of unread events (on Linux).
+
+An event too big for one datagram (over 240 KiB, or over the system's
+own limit: about 208 KiB on Linux and 2 KiB by default on macOS) goes
+through a file instead. The hook writes it, owner-only, into the
+`aipager-spill-<uid>` folder beside the socket and sends a short
+datagram naming the file; the daemon reads and deletes it at once and
+handles the event as if it had come whole, in the same order. Events
+over 4 MiB are still dropped. See [security](security.md) for the
+checks on that folder.
 
 Most events cost Claude Code about 20 to 25 ms of process start. A few
 also load aipager's rule code: before a tool call (the safety check, see
