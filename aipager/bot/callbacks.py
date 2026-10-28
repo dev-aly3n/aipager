@@ -52,7 +52,7 @@ from aipager.bot import (
 from aipager.dtach import hook_reply, inject
 from aipager.report import store as report_store
 
-from aipager import i18n, perm_modes, preferences
+from aipager import i18n, perm_modes, preferences, rm_countdown
 from aipager.i18n import Command, Msg, Plural, Safe, Span
 from aipager.i18n.locales import is_selectable
 from aipager.bot.settings_menu import (
@@ -339,6 +339,16 @@ PROMPT_ORDER_UNKNOWN = Msg(
     "in the terminal.",
     note="Pop-up: two prompts are open and the order Claude Code shows them in is not "
          "known, so typing could answer the wrong one; nothing was typed")
+PROMPT_REFUSED_CLOSED = Msg(
+    "toast.prompt_refused_closed",
+    "Claude Code already refused this by itself, so the question is no longer open.",
+    note="Pop-up: a tap on a prompt Claude Code refused on its own; nothing was typed")
+RM_REFUSAL_DUE = Msg(
+    "toast.rm_refusal_due",
+    "Claude Code refuses this by itself about now, so answer it in the terminal if it "
+    "is still open.",
+    note="Pop-up: a tap in the last moments of Claude Code's own 2-minute limit on a "
+         "risky removal; nothing was typed and no answer was sent")
 CANT_STOP = Msg("toast.cant_stop", "You can't stop this session.",
                 note="Pop-up: the person may not stop this session")
 NOT_HERE = Msg("toast.session_not_here", "That session isn't running here.",
@@ -1898,7 +1908,10 @@ class CallbackDispatchMixin:
             # keeps its buttons if the edit below does not land. A missing
             # token on either side never matches (fail closed).
             if surface[1] is None or surface[1] not in open_tokens:
-                refusal = ALREADY_ANSWERED
+                # Refused by Claude Code itself (8.128): said as that.
+                refusal = (PROMPT_REFUSED_CLOSED
+                           if sess.prompt_refused(tapped_id, surface[1])
+                           else ALREADY_ANSWERED)
         elif ((is_option or action in _CARD_ANSWER_VERBS)
                 and sess.prompt_known_closed(tapped_id)):
             # An answer button on a message whose prompt is KNOWN to be
@@ -1911,8 +1924,10 @@ class CallbackDispatchMixin:
             # a stale BUSY) is not in the record: its buttons still type.
             # Its buttons are not taken off: the message is the working
             # card (its Stop), a finished card (its own buttons) or a
-            # prompt already marked answered.
-            refusal = ALREADY_ANSWERED
+            # prompt already marked answered. One Claude Code refused by
+            # itself (its risky-removal countdown, 8.128) is said as that.
+            refusal = (PROMPT_REFUSED_CLOSED if sess.prompt_refused(tapped_id)
+                       else ALREADY_ANSWERED)
             strip_refused = False
         elif (sess.status == Status.INTERACTIVE
                 and (sess.pending_permission or sess.pending_prompt_msg)):
@@ -1971,6 +1986,16 @@ class CallbackDispatchMixin:
             elif where is None and not perm:
                 separate_perm = (sess.pending_prompt_msg or {}).get("perm") or None
                 perm = separate_perm or {}
+        if (action in ("allow", "allow_always", "deny")
+                and rm_countdown.refusal_window_open(perm, rm_countdown._now_wall())):
+            # Claude Code's risky-removal prompt at the end of its own
+            # countdown (roadmap 8.128): it may have refused it already,
+            # and then it ignores a hook's answer and keys would land in
+            # whatever comes next. Nothing is typed, sent or recorded.
+            log.info("[%s] tap refused: the risky-removal prompt's refusal "
+                     "time has come", sess.label)
+            await self._safe_answer(query, person.text(RM_REFUSAL_DUE))
+            return
         if (is_option or action in ("submit", "continue")) and await self._keys_refused(
                 query, person, sess, perm):
             return

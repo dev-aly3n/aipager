@@ -449,6 +449,14 @@ keeps waiting on that prompt, sent again as its own message. A restart
 with two or more prompts open brings none of them back: their buttons
 answer `already answered` and type nothing, and the prompts can still be
 answered in the terminal. One open prompt comes back as before.
+In Full access and Auto, Claude Code refuses its own prompt for a risky
+`rm` or `rmdir` by itself when nobody answers within 2 minutes, so its
+card says when (`If nobody answers, Claude Code refuses this by itself
+at about 14:05.`), and once it has, the card says so and its buttons are
+gone. Such a prompt opens on top of any prompt already open, so while
+Claude's own Bash prompt in Full access or Auto is open beside another
+one, a tap that has to type keys says the "can't tell" line above, and
+Allow and Deny still work while the hook waits.
 
 At 80% context the chat gets `⚠️ name · Context at 82% - auto-compact
 soon` with **📦 Compact Now**, which sends `/compact` to that session. It

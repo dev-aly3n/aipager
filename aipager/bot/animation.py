@@ -22,7 +22,7 @@ import httpx
 from telegram.error import RetryAfter
 
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
-from aipager.bot import card_rows, claude_bidi, question_form
+from aipager.bot import card_rows, claude_bidi, question_form, rm_refusal
 from aipager.bot.divider import DIVIDER_SEP, without_dividers
 from aipager.bot.footer import footer, without_last_footer
 from aipager.i18n import Msg, Plural, Safe, Span
@@ -2319,6 +2319,8 @@ class AnimationMixin:
             # command with no description, a bare file path).
             text += _format_perm_detail(
                 tool_summary, tool_info.get("detail") or "", tr=tr)
+            # When Claude Code refuses a risky removal by itself (8.128).
+            text += rm_refusal.clock_line_html(tr, tool_info)
         return text
 
     def _history_html(self, sess: TrackedSession, tr, max_visible: int) -> str:

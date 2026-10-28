@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "Devam edildi"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "Reddedildi"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "{n}. seçenek seçildi"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Claude Code reddetti"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "Seçilen: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Hiçbir şey seçilmeden gönderildi"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "Özel sohbet"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "İznin gerekiyor"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Seçimini bekliyor"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Soru gelmedi"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ Kimse yanıtlamazsa Claude Code bu isteği {time} civarında kendisi reddeder."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ Kimse zamanında yanıtlamadığı için Claude Code bu isteği kendisi reddetti."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · İznin gerekiyor"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "Yanıtla: {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"one": "{n} hazır", "other": "{n} hazır"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code önce başka bir isteği gösteriyor: önce onu, sonra bunu yanıtla."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "bu istek artık açık değil"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager, Claude Code'un hangi isteği önce gösterdiğini bilemiyor: bunu terminalde yanıtla."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code bu isteği zaten kendisi reddetti, bu yüzden soru artık açık değil."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude görevini bitiriyor, bu yüzden birazdan bu isteğe tekrar dokun."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram bu sohbeti sınırlıyor: {time} sonrasında tekrar dene"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "Bu soru zaten yanıtlanıyor."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Şu an başka birinin sırası: bitince tekrar dene"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Önce açık isteği yanıtla, sonra tekrar dene"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "[{session}] tekrar gönderiliyor"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code bu isteği birazdan kendisi reddedecek; hâlâ açıksa terminalde yanıtla."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "{session} oturumuna gönderilemedi"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Yanıt Claude Code'a yazılamadı"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Meşgul, birazdan tekrar dene"}

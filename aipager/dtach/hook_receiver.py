@@ -23,8 +23,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from aipager import (
-    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, safety, send_check,
-    statusline_file,
+    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, rm_countdown, safety,
+    send_check, statusline_file,
 )
 from aipager.dtach import hook_spill
 from aipager.config import (
@@ -342,6 +342,17 @@ def _perm_owner(perm) -> str | None:
     if not isinstance(info, dict):
         return None
     return str(info.get("agent_id") or "")
+
+
+def _drop_rm_clock(perm) -> bool:
+    """A prompt whose tool call failed (PostToolUseFailure) while its
+    record stays open was answered, in the terminal if not from the chat,
+    and its call ran: Claude Code's own refusal when nobody answers
+    fires neither hook (roadmap 8.128, live check Q3). Its risky-removal
+    clock goes, so nothing later closes it as refused by Claude Code.
+    True when it had one."""
+    info = perm.get("tool_info") if isinstance(perm, dict) else None
+    return isinstance(info, dict) and info.pop("rm_clock", None) is not None
 
 
 def _owned_by(*owners: str):
@@ -907,7 +918,8 @@ class HookReceiver:
 
     async def _raise_prompt(self, session_name: str, tool_info: dict | None,
                             context: dict, *, source: str,
-                            own_tool_use_id: str = "") -> None:
+                            own_tool_use_id: str = "",
+                            permission_mode: str = "") -> None:
         """A prompt Claude Code is showing (roadmap 8.120): the first of a
         wait moves the session INTERACTIVE and is drawn as before; one that
         opens while another is open is drawn as its own message
@@ -925,7 +937,12 @@ class HookReceiver:
           that question, for the dialog order;
         - any other PermissionRequest whose prompt key (owner, tool, its
           own call id, else its input's digest) matches an open prompt's
-          is the same dialog."""
+          is the same dialog.
+
+        *permission_mode*: the payload's mode, kept on the order with the
+        tool's name: a main-loop Bash prompt in Full access or Auto may be
+        Claude Code's risky-rm ask, which opens on top (roadmap 8.128,
+        ``prompt_stack.countdown_candidate``)."""
         sess = self.registry.get_or_create(session_name)
         now = time.monotonic()
         order = None
@@ -944,6 +961,9 @@ class HookReceiver:
                 "key": prompt_stack.prompt_key(
                     owner, tool_info.get("name"), own_tool_use_id,
                     tool_info.get("input_digest"), tool_info.get("summary")),
+                "tool": (tool_info.get("name")
+                         if isinstance(tool_info.get("name"), str) else ""),
+                "mode": permission_mode if isinstance(permission_mode, str) else "",
             }
             tool_info["order"] = order
         if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
@@ -1012,6 +1032,39 @@ class HookReceiver:
                                  {"inline_closed": inline_closed})
         return False
 
+    @staticmethod
+    def _refusals_due(sess) -> dict | None:
+        """Claude's own open prompts that Claude Code may already have
+        refused by itself (roadmap 8.128: a risky-removal prompt whose
+        refusal window is open), with where each is shown, read before a
+        closer closes them; None when there is none. Claude Code fires no
+        hook at that refusal, so the next closer says it."""
+        if sess is None:
+            return None
+        now = rm_countdown._now_wall()
+        perms, records = [], []
+        for where, perm, rec in sess.open_prompt_records():
+            if _perm_owner(perm) == "" and rm_countdown.refusal_window_open(perm, now):
+                perms.append(perm)
+                records.append((where, rec))
+        if not perms:
+            return None
+        return {"perms": perms, "records": records, "outcome": "refused",
+                "close": False}
+
+    async def _report_refusals(self, sess, due: dict | None) -> None:
+        """Tell the bot the prompts in *due* (:meth:`_refusals_due`) closed
+        as refused by Claude Code. Never raises: a closer always goes on."""
+        if not due or sess is None:
+            return
+        log.info("[%s] %d risky-removal prompts closed as refused by Claude "
+                 "Code", sess.label, len(due["perms"]))
+        try:
+            await self.notify_fn(sess, "rm_refused", due)
+        except Exception:  # noqa: BLE001 - the closer must finish
+            log.warning("[%s] recording a prompt refused by Claude Code failed",
+                        sess.label, exc_info=True)
+
     def _carry_agent_prompts(self, session_name: str) -> bool:
         """Claude's Stop while it waits on prompts (roadmap 8.120): its own
         and those of agents no longer running are closed, and if a running
@@ -1050,7 +1103,10 @@ class HookReceiver:
         error), or the SessionEnd of the linked background job that ran it
         (D3; an API error only when the transcript's last record is
         Claude Code's own error record). Always finalizes (see below)."""
+        refused = self._refusals_due(self.registry.get(session_name))
         carry = self._carry_agent_prompts(session_name)
+        # Before the IDLE transition: the row is on the finished card.
+        await self._report_refusals(self.registry.get(session_name), refused)
         try:
             # The turn is over, whatever step it was in (see the Stop branch).
             sess_ref.parent_tool_started_at = None
@@ -1535,6 +1591,19 @@ class HookReceiver:
                 perm_agent = msg.get("agent_id")
                 if perm_agent:
                     tool_info["agent_id"] = perm_agent
+                # Claude Code's risky-removal prompt in Full access or Auto
+                # carries a 2-minute countdown and is refused by itself
+                # when nobody answers, with no hook (roadmap 8.128): when
+                # it is that one, the card says about when, and the
+                # transcript's result for this command closes it.
+                if rm_countdown.clock_eligible(
+                        tool_name=tool_name, mode=msg.get("permission_mode"),
+                        suggestions=suggestions, agent_id=perm_agent,
+                        tool_input=tool_input):
+                    clock = rm_countdown.make_clock(tool_input.get("command"),
+                                                    rm_countdown._now_wall())
+                    if clock is not None:
+                        tool_info["rm_clock"] = clock
                 # design.md "answer PermissionRequest hooks with a
                 # decision instead of keystrokes": the hook offers a
                 # reply channel by embedding these two keys on the
@@ -1554,9 +1623,12 @@ class HookReceiver:
                     "tool_info": tool_info, "transcript_path": transcript_path,
                     "hook_reply": hook_reply_ctx,
                 }
+                payload_mode = msg.get("permission_mode")
                 await self._raise_prompt(
                     session_name, tool_info, context, source="permission_request",
-                    own_tool_use_id=_payload_tool_use_id(msg))
+                    own_tool_use_id=_payload_tool_use_id(msg),
+                    permission_mode=(payload_mode if isinstance(payload_mode, str)
+                                     else ""))
             return
 
         elif event == "permission_reply_timeout":
@@ -1648,8 +1720,15 @@ class HookReceiver:
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
             # Only when no prompt is open (roadmap 8.120): with one open,
             # this is the dialog its PermissionRequest already drew.
+            # Read from the transcript, not the PermissionRequest: a mode
+            # the payload does not carry is not known (roadmap 8.128).
+            notified_mode = msg.get("permission_mode")
             await self._raise_prompt(session_name, tool_info, context,
-                                     source="notification")
+                                     source="notification",
+                                     permission_mode=(
+                                         notified_mode
+                                         if isinstance(notified_mode, str) and notified_mode
+                                         else prompt_stack.MODE_UNKNOWN))
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
@@ -1922,10 +2001,12 @@ class HookReceiver:
                     # A subagent's question: never saved (see the
                     # PermissionRequest branch).
                     tool_info["agent_id"] = ask_agent
+                ask_mode = msg.get("permission_mode")
                 await self._raise_prompt(session_name, tool_info, {
                     "tool_info": tool_info,
                     "transcript_path": transcript_path,
-                }, source="question", own_tool_use_id=_payload_tool_use_id(msg))
+                }, source="question", own_tool_use_id=_payload_tool_use_id(msg),
+                    permission_mode=ask_mode if isinstance(ask_mode, str) else "")
                 return
 
             if tool_name:
@@ -2048,10 +2129,14 @@ class HookReceiver:
                     # Claude working again proves its own dialogs closed,
                     # never an agent's (roadmap 8.120): a background
                     # agent's prompt stays open while Claude goes on.
+                    # A risky-removal prompt past its refusal window was
+                    # refused by Claude Code itself (roadmap 8.128).
+                    refused = self._refusals_due(sess)
                     closed, inline_closed = sess.close_prompts(_owned_by(""))
                     await self._prompts_closed(
                         sess, closed, inline_closed, "claude-tool-call",
                         preserve_job_state=sess.job_work_running())
+                    await self._report_refusals(sess, refused)
                 elif sess.status != Status.BUSY:
                     self.registry.transition(
                         session_name, Status.BUSY,
@@ -2206,8 +2291,12 @@ class HookReceiver:
                     # Claude's own refusal ends its turn (the session
                     # monitor's dialog_ended_in_terminal): its record stays
                     # for that, only its buttons stop typing.
+                    # The call ran (8.128): never closed later as
+                    # refused by Claude Code.
                     for perm in ended:
                         sess.mark_prompt_closed(sess.prompt_surface(perm))
+                        if _drop_rm_clock(perm):
+                            self.registry.mark_dirty()  # a restart reads it so
                     if not ended:
                         sess.mark_prompt_closed(sess.busy_msg_id)
                 if (not msg.get("agent_id")
@@ -2713,7 +2802,13 @@ class HookReceiver:
                     log.debug("[%s] idle notification while waiting — already "
                               "reminded this wait", waiting.label)
                 return
+            # A risky-removal prompt past its refusal window was refused by
+            # Claude Code itself (roadmap 8.128): said before the IDLE
+            # transition, so its row is on the finished card.
+            refused = (self._refusals_due(waiting) if event.lower() == "stop"
+                       else None)
             carry = self._carry_agent_prompts(session_name)
+            await self._report_refusals(waiting, refused)
             try:
                 # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
                 # window before the next prompt is treated as restricted.

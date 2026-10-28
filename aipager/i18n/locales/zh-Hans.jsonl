@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "已继续"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "已拒绝"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "已选择选项 {n}"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Claude Code 已自行拒绝"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "已选择：{options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "已提交（没有选择）"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "私聊"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "需要你授予权限"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · 等你选择"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · 没有收到问题"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ 如果没人回答，Claude Code 会在 {time} 左右自行拒绝这个请求。"}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ 因为没人及时回答，Claude Code 已自行拒绝这个请求。"}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · 需要你授予权限"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "回复 {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "{n} 个就绪"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code 正在先显示另一个请求，请先回答那个，再回答这个。"}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "这个请求已不再打开"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager 无法确定 Claude Code 先显示哪个请求，请在终端中回答这个请求。"}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code 已经自行拒绝了这个请求，这个问题已经关闭了。"}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude 正在结束这次任务，请稍后再点一次这个请求。"}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram 正在限制这个聊天，请在 {time} 之后再试"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "这个问题已经在回答了。"}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "现在轮到别人，请等结束后再试"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "请先回答打开的请求，再重试"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "正在重新发送 [{session}]"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code 马上会自行拒绝这个请求，如果它还开着，请在终端中回答。"}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "没能发送到 {session}"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "无法把回答输入到 Claude Code"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "现在还不行，请稍后再试"}

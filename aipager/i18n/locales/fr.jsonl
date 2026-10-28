@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "Continué"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "Refusé"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "Option {n} choisie"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Refusé par Claude Code"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "Choix : {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Envoyé sans rien choisir"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "Discussion privée"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "A besoin de votre autorisation"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Attend votre choix"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Aucune question n'est arrivée"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ Si personne ne répond, Claude Code refusera cette demande de lui-même vers {time}."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ Claude Code a refusé cette demande de lui-même, car personne n'a répondu à temps."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · A besoin de votre autorisation"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "Répondre à {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"many": "{n} prêtes", "one": "{n} prête", "other": "{n} prêtes"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code affiche d'abord une autre demande : répondez-y avant de répondre à celle-ci."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "cette demande n'est plus ouverte"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager ne peut pas savoir quelle demande Claude Code affiche en premier : répondez à celle-ci dans le terminal."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code a déjà refusé cette demande de lui-même : la question n'est plus ouverte."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude termine sa tâche, alors touchez à nouveau cette demande dans un instant."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram limite cette discussion : réessayez après {time}"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "Une réponse à cette question est déjà en cours."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "C'est le tour d'une autre personne : réessayez quand il sera fini"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Répondez d'abord à la demande ouverte, puis réessayez"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "Nouvel envoi [{session}]"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code va refuser cette demande de lui-même d'un instant à l'autre : répondez dans le terminal si elle est encore ouverte."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "Impossible d'envoyer à {session}"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Impossible de taper la réponse dans Claude Code"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Occupé, réessayez dans un instant"}

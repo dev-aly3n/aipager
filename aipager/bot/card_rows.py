@@ -105,6 +105,13 @@ ANSWER_VERBS = {
                         note="How a permission prompt was answered: allowed, and a "
                              "standing rule saved"),
 }
+#: A prompt Claude Code refused by itself when nobody answered in time
+#: (its risky-removal countdown, roadmap 8.128). Not an action of
+#: ``transport.ACTION_VERBS`` (that dict also validates button actions):
+#: stored as this English, as the audit's action.
+REFUSED_BY_CLAUDE = Msg("ans.verb.refused_by_claude", "Refused by Claude Code",
+                        note="How a prompt ended on the busy card's history row: nobody "
+                             "answered and Claude Code refused it by itself")
 OPTION_VERB = Msg("ans.verb.option", "Selected option {n}",
                   note="How a question was answered: the option's number", eg={"n": 2})
 SUBMITTED_NONE = Msg("ans.verb.submitted_none", "Submitted (none)",
@@ -121,6 +128,7 @@ _SHELL_RE = re.compile(
     r"\((?P<detail>[^()]*)\)\Z", re.S)
 _ANSWER_RE = re.compile(
     r"\A(?P<icon>🔑|❓) (?P<detail>.*) → (?P<verb>Allowed always|Allowed|Denied|Continued"
+    r"|Refused by Claude Code"
     r"|Selected option (?P<opt>\d+)|Submitted \(none\)|Selected: (?P<sel>.*))\Z", re.S)
 _CLOCK_ONLY = re.compile(r"\A" + _CLOCK + r"\Z")
 # Written by aipager.send_check.sending_row: SENDING_FILES's English forms.
@@ -174,6 +182,8 @@ def verb_text(tr, verb: str, kind: str = "md") -> str:
         return render(OPTION_VERB, n=int(m.group(1)))
     if verb == SUBMITTED_NONE:
         return render(SUBMITTED_NONE)
+    if verb == REFUSED_BY_CLAUDE:
+        return render(REFUSED_BY_CLAUDE)
     if verb.startswith("Selected: "):
         options = verb[len("Selected: "):]
         return render(SELECTED, options=(_isolated(tr, _mono(options), options)
@@ -211,6 +221,14 @@ def _render(tr, summary: str, kind: str, code) -> str | None:
         return render(ANSWER, icon=Safe(m.group("icon")), detail=span(m.group("detail")),
                       verb=Safe(verb_text(tr, m.group("verb"), kind)))
     return None
+
+
+def refused_by_claude(summary: object) -> bool:
+    """Whether a stored history row is a prompt Claude Code refused by
+    itself (roadmap 8.128). Reads the stored English code, never shown
+    text: the turn's end keeps such a row ❌ instead of marking it done."""
+    m = _ANSWER_RE.match(summary) if isinstance(summary, str) else None
+    return bool(m) and m.group("verb") == str(REFUSED_BY_CLAUDE)
 
 
 def render_md(tr, summary: str, *, code=None) -> str:

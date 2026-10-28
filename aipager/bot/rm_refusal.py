@@ -1,0 +1,41 @@
+"""The chat's view of Claude Code's risky-removal countdown (roadmap 8.128).
+
+In Full access and Auto, Claude Code refuses its own prompt for a risky
+``rm`` / ``rmdir`` by itself when nobody answers within about 2 minutes
+(:mod:`aipager.rm_countdown`). Its permission card says about when, and
+once it has, the prompt message says so.
+"""
+
+from __future__ import annotations
+
+from aipager import rm_countdown
+from aipager.bot.flood import clear_time
+from aipager.i18n import Msg
+
+RM_CLOCK = Msg(
+    "perm.rm_clock",
+    "⏱ If nobody answers, Claude Code refuses this by itself at about {time}.",
+    note="Under a permission prompt for a risky removal in Full access or Auto: Claude "
+         "Code refuses it by itself about 2 minutes after it opened; {time} is a clock "
+         "time (the computer's local time)",
+    eg={"time": "14:05"})
+RM_REFUSED = Msg(
+    "perm.rm_refused",
+    "⏱ Claude Code refused this by itself because nobody answered in time.",
+    note="Added under a prompt message once Claude Code refused it on its own; its "
+         "buttons are gone")
+
+
+def clock_line_html(tr, holder) -> str:
+    """The clock line under a risky-removal prompt (a leading newline and
+    the line), in *tr*'s language and digits, from the ``rm_clock`` of
+    *holder* (the prompt's ``tool_info`` or the prompt); ``""`` for a
+    prompt with none. The time is the computer's local time of day."""
+    clock = rm_countdown.clock_of(holder)
+    if clock is None:
+        return ""
+    try:
+        shown = clear_time(clock["refuse_at"])
+    except (OverflowError, OSError, ValueError):
+        return ""
+    return "\n" + tr.html(RM_CLOCK, time=tr.num(shown))

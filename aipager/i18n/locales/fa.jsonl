@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "ادامه داده شد"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "رد شد"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "گزینهٔ {n} انتخاب شد"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "خود Claude Code رد کرد"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "انتخاب‌ها: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "بدون انتخاب فرستاده شد"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "چت خصوصی"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "اجازه می‌خواهد"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · منتظر انتخاب شما"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · سؤالی نرسید"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ اگر کسی جواب ندهد، Claude Code حدود ساعت {time} خودش این درخواست را رد می‌کند."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ چون کسی به‌موقع جواب نداد، Claude Code خودش این درخواست را رد کرد."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · اجازه می‌خواهد"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "جواب دادن به {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"one": "{n} آماده", "other": "{n} آماده"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "فعلاً Claude Code یک درخواست دیگر را جلوتر نشان می‌دهد؛ اول به آن جواب بدهید، بعد به این یکی."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "این درخواست دیگر باز نیست"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "برای aipager معلوم نیست Claude Code کدام درخواست را اول نشان می‌دهد؛ این یکی را در ترمینال جواب بدهید."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "این سؤال دیگر باز نیست، چون Claude Code خودش این درخواست را رد کرده."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "فعلاً Claude دارد کارش را تمام می‌کند؛ چند لحظه بعد دوباره روی این درخواست بزنید."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram فعلاً این چت را محدود کرده - بعد از {time} دوباره امتحان کنید"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "جواب این سؤال در حال ارسال است."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "الان نوبت شخص دیگری است - وقتی تمام شد دوباره امتحان کنید"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "اول جواب درخواست باز را بدهید، بعد دوباره امتحان کنید"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "در حال ارسال دوباره [{session}]"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "تقریباً همین الان Claude Code خودش این درخواست را رد می‌کند؛ اگر هنوز باز است، در ترمینال جوابش را بدهید."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "به {session} ارسال نشد"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "جواب در Claude Code تایپ نشد"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "فعلاً مشغول است، چند لحظه بعد دوباره امتحان کنید"}
