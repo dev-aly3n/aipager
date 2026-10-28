@@ -15,6 +15,7 @@ which then reached Telegram. When no stamped path exists, callers fail closed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime, timezone
@@ -590,6 +591,83 @@ def _saved_prompt_evidence_in(tail: list[str], mtime: float, since_wall: float,
                   and _only_the_saved_tool_use(msg, tool_use_id, tool_name)):
             moved_on = True
     return "moved_on" if moved_on else "none"
+
+
+def tool_call_result(path: str, tool_use_id: str, tool_name: str,
+                     command_sha: str) -> str:
+    """How one Bash tool call came back, from the transcript *path*
+    (roadmap 8.128: Claude Code refuses its risky-removal prompt by itself
+    with no hook, and only this result tells):
+
+    - ``"error"``: a ``tool_result`` for *tool_use_id* with ``is_error``
+      true, and the call's own ``tool_use`` (same id, *tool_name*, a
+      ``command`` whose sha256 hex is *command_sha*) is in the tail;
+    - ``"ok"``: the same match, and the result is not an error;
+    - ``"absent"``: no result for the id (also when the file does not
+      exist yet: the transcript is written lazily);
+    - ``"mismatch"``: a result for the id, but its ``tool_use`` is not in
+      the tail or is another call (the id was borrowed from a parallel
+      call of the same tool);
+    - ``"unreadable"``: an empty path or id, or the file cannot be read.
+
+    Reads only ``type``, ``tool_use_id``, ``is_error``, ``id``, ``name``
+    and ``input.command``: never Claude Code's text. Reads the file's last
+    :data:`TAIL_READ_BYTES` only and never moves the card stream's offset.
+    Never raises."""
+    if not path or not isinstance(tool_use_id, str) or not tool_use_id:
+        return "unreadable"
+    try:
+        tail = _tail_lines(path)
+    except FileNotFoundError:
+        return "absent"
+    except Exception:  # noqa: BLE001 - never raises, by contract
+        return "unreadable"
+    try:
+        return _tool_call_result_in(tail, tool_use_id, tool_name, command_sha)
+    except Exception:  # noqa: BLE001 - never raises, by contract
+        return "unreadable"
+
+
+def _tool_call_result_in(tail: list[str], tool_use_id: str, tool_name: str,
+                         command_sha: str) -> str:
+    """:func:`tool_call_result` over the read *tail*."""
+    result = None  # the result's is_error, once seen
+    call_matches = False
+    for line in tail:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except (ValueError, RecursionError):
+            continue  # torn, or nested past the parser's depth
+        if not isinstance(entry, dict):
+            continue
+        msg = entry.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
+        if not isinstance(content, list):
+            continue
+        etype = entry.get("type")
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if (etype == "user" and block.get("type") == "tool_result"
+                    and block.get("tool_use_id") == tool_use_id):
+                result = block.get("is_error") is True
+            elif (etype == "assistant" and block.get("type") == "tool_use"
+                    and block.get("id") == tool_use_id):
+                inp = block.get("input")
+                command = inp.get("command") if isinstance(inp, dict) else None
+                call_matches = (
+                    block.get("name") == tool_name and isinstance(command, str)
+                    and bool(command_sha)
+                    and hashlib.sha256(command.encode("utf-8", "surrogatepass"))
+                    .hexdigest() == command_sha)
+    if result is None:
+        return "absent"
+    if not call_matches:
+        return "mismatch"
+    return "error" if result else "ok"
 
 
 def interrupted_since(transcript_path: str, since: float) -> bool:
