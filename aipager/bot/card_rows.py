@@ -223,6 +223,14 @@ def _render(tr, summary: str, kind: str, code) -> str | None:
     return None
 
 
+def refused_by_claude(summary: object) -> bool:
+    """Whether a stored history row is a prompt Claude Code refused by
+    itself (roadmap 8.128). Reads the stored English code, never shown
+    text: the turn's end keeps such a row ❌ instead of marking it done."""
+    m = _ANSWER_RE.match(summary) if isinstance(summary, str) else None
+    return bool(m) and m.group("verb") == str(REFUSED_BY_CLAUDE)
+
+
 def render_md(tr, summary: str, *, code=None) -> str:
     """A stored row's text part for the card (Markdown): ``_mono(summary)``
     in English and for any shape not ours; else drawn from its key with

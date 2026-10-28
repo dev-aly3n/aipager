@@ -4123,10 +4123,13 @@ class NotifyMixin:
                 )
 
                 # Mark all tools as done — except a background shell's
-                # settled failed/stopped row, which keeps its own outcome.
+                # settled failed/stopped row, which keeps its own outcome,
+                # and a prompt Claude Code refused by itself (8.128), which
+                # stays ❌: nobody answered and the command never ran.
                 sess.tool_history = [
-                    (s, d if (d in ("failed", _bg_shells.STOPPED)
-                              and s.startswith(_bg_shells.SHELL_ROW_PREFIX))
+                    (s, d if ((d in ("failed", _bg_shells.STOPPED)
+                               and s.startswith(_bg_shells.SHELL_ROW_PREFIX))
+                              or (d == "failed" and card_rows.refused_by_claude(s)))
                      else True)
                     for s, d in sess.tool_history]
                 # A self-woken turn that ends before earning its deferred card
