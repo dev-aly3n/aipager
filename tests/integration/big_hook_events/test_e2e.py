@@ -281,8 +281,34 @@ def _wmem_default():
 @pytest.mark.skipif(not sys.platform.startswith("linux") or _wmem_default() < 212_992,
                     reason="default Linux wmem only")
 def test_inline_212k_no_touch(tmp_path, monkeypatch, run_async):
-    *_x, mtime = _real(tmp_path, monkeypatch, run_async, 212_000)
-    assert mtime == 1_000_000
+    """A 212,000-byte event fits the default Linux datagram limit, so it goes
+    inline and the spill folder stays untouched. A loaded host can still
+    refuse a datagram this big with ENOBUFS (the kernel cannot get a large
+    enough block of memory), and then a spill is the correct answer: the
+    real send's outcome is recorded through the seam, and only that refusal
+    excuses a touched folder."""
+    real_send = notify_hook._send_datagram
+    sends = []
+
+    def recording(data, path):
+        try:
+            real_send(data, path)
+        except OSError as e:
+            sends.append((len(data), e.errno))
+            raise
+        sends.append((len(data), None))
+
+    monkeypatch.setattr(notify_hook, "_send_datagram", recording)
+    ok, data, got, mtime = _real(tmp_path, monkeypatch, run_async, 212_000)
+    assert ok
+    assert got == [json.loads(data)]
+    assert sends and sends[0][0] == len(data)
+    first_errno = sends[0][1]
+    if first_errno == errno.ENOBUFS:
+        assert len(sends) == 2 and sends[1][1] is None and sends[1][0] < len(data)
+    else:
+        assert sends == [(len(data), None)]
+        assert mtime == 1_000_000
 
 
 def test_230k_arrives(tmp_path, monkeypatch, run_async):
