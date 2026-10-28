@@ -767,6 +767,9 @@ def _detail_text(name: str, inp: dict) -> str:
 # post-turn housekeeping, so a prompt sent right after an answer would be
 # "confirmed" by the previous turn's tail.
 _NOT_TURN_EVIDENCE = frozenset({"statusline", "SubagentStop"})
+# The SessionStart sources whose time is kept per session (roadmap 8.127,
+# ``TrackedSession.session_start_at``).
+_SESSION_START_SOURCES = frozenset({"startup", "resume", "clear", "compact"})
 
 # A turn's own activity: the events that write its card state (rows, prose,
 # agents, compaction and the SessionStart that ends it, a permission prompt
@@ -2511,6 +2514,13 @@ class HookReceiver:
         elif event == "SessionStart":
             # SessionStart with source=compact fires after compaction completes
             source = msg.get("source", "")
+            if (not bg_job and not hook_agent_id and isinstance(source, str)
+                    and source in _SESSION_START_SOURCES):
+                # Roadmap 8.127: when the session's own claude last started
+                # a conversation, by how (a ``--resume`` start can draw a
+                # resume question with no hook, aipager/term_dialog.py).
+                # Never a background job's or an agent's.
+                sess_ref.session_start_at[source] = time.time()
             if bg_job and source == "fork":
                 # The linked job's first hook (``←`` forked the
                 # conversation into it): liveness and ids only, recorded

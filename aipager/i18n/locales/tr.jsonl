@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Mesajlar <b>{session}</b> oturumuna gider"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Bu konuşmaya devam et"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Yeni konuşma başlat"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Devam ettir"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: konuşma devam ediyor."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: soru yanıtlanmadan önce oturum sona erdi."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: yeni bir konuşma başlatıldı."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: soru yanıtlanmadan önce oturum yeniden başlatıldı."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: soru terminalde yanıtlandı."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: Claude Code bu konuşmaya devam edilip edilmeyeceğini soruyor. Konuşma uzun süredir kullanılmıyordu ve devam etmek 5 saatlik kullanım sınırının bir kısmını harcar."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: konuşma devam ediyor ama yeni bir konuşma başlatılamadı. Başlatmak için {clear} gönder."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> terminalinde bir sorunun yanıtını bekliyor. Orada yanıtla, bu arada gönderilen mesajlar hemen ardından Claude'a gider."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "Baştan başlamak ya da konuşmayı sıkıştırmak için Devam et'e dokun, sonra {clear} veya {compact} gönder."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: Claude Code bu konuşmaya devam etmeden önce terminalde bir soru soruyor."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "çalışma kartı"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "düğme dokunuşları"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager'ın kendisi"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Bu dosyanın hangi oturum için olduğunu bilmiyorum. {command} ile ya da klavyeden bir tane seç."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude hâlâ bu izin isteğine yanıtını bekliyor. Önce yanıtla, yeni mesajın hemen ardından Claude'a gider."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude hâlâ bu soruya yanıtını bekliyor. Önce yanıtla, yeni mesajın hemen ardından Claude'a gider."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code bu konuşma hakkında bir şey soruyor. Önce yukarıdaki soruyu yanıtla, yeni mesajın hemen ardından Claude'a gider."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude terminalde bir yanıt bekliyor. Orada yanıtla ya da Durdur'a dokun, yeni mesajın hemen ardından Claude'a gider."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Sesli mesajın metni [{session}] oturumuna gönderilemedi"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Sonlandırılacak oturum yok."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager, Claude Code'un hangi isteği önce gösterdiğini bilemiyor: bunu terminalde yanıtla."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude görevini bitiriyor, bu yüzden birazdan bu isteğe tekrar dokun."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram bu sohbeti sınırlıyor: {time} sonrasında tekrar dene"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "Bu soru zaten yanıtlanıyor."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "Bu soru artık açık değil."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "Soru yanıtlanamadı. Yeniden dene ya da terminalde yanıtla."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude şu anda çalışıyor. İşi bitince yeniden dene."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Zaten gönderiliyor."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Zaten gönderildi."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "Rapor önizlemesi botla olan özel sohbetinde."}

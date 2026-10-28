@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ I messaggi vanno a <b>{session}</b>"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Continua questa conversazione"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Inizia una nuova conversazione"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Riprendi"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: la conversazione continua."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: la sessione è terminata prima che la domanda ricevesse una risposta."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: è iniziata una nuova conversazione."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: la sessione è stata riavviata prima che la domanda ricevesse una risposta."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: alla domanda è stata data risposta nel terminale."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: Claude Code chiede se riprendere questa conversazione. È rimasta inutilizzata a lungo, e riprenderla consuma parte del tuo limite di utilizzo di 5 ore."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: la conversazione continua, ma non è stato possibile iniziarne una nuova. Invia {clear} per iniziarla."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> aspetta la risposta a una domanda nel suo terminale. Rispondi lì, e i messaggi inviati nel frattempo arriveranno a Claude subito dopo."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "Per ricominciare da capo o accorciarla, tocca Continua e poi invia {clear} o {compact}."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: Claude Code sta facendo una domanda nel terminale prima di andare avanti con questa conversazione."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "nella scheda di attività"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "nei tocchi sui pulsanti"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "in aipager stesso"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Non so per quale sessione è questo file. Scegline una con {command} o con la tastiera."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude aspetta ancora la tua risposta a questa richiesta di permesso. Rispondi prima, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude aspetta ancora la tua risposta a questa domanda. Rispondi prima, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code sta chiedendo qualcosa su questa conversazione. Rispondi prima alla domanda qui sopra, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude aspetta una risposta nel terminale. Rispondi lì o tocca Ferma, e il tuo nuovo messaggio arriverà a Claude subito dopo."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Non è stato possibile inviare il testo del vocale a [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Nessuna sessione da terminare."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager non riesce a capire quale richiesta Claude Code mostra per prima: rispondi a questa nel terminale."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude sta finendo la sua attività, quindi tocca di nuovo questa richiesta tra un momento."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram sta limitando questa chat: riprova dopo le {time}"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "Si sta già rispondendo a questa domanda."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "Questa domanda non è più aperta."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "Non è stato possibile rispondere alla domanda. Riprova, oppure rispondi nel terminale."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude sta lavorando proprio ora. Riprova quando ha finito."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Invio già in corso."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Già inviata."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "L'anteprima della segnalazione è nella tua chat privata con il bot."}

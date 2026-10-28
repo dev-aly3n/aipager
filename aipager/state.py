@@ -864,6 +864,29 @@ class TrackedSession:
     # True while the bot sends the held messages on: one release at a
     # time per session, whichever hold it is for. Transient.
     dialog_settling: bool = False
+    # Roadmap 8.127: a dialog open in Claude Code's terminal that no hook
+    # tells of (the resume questions), found from Claude Code's own session
+    # record by aipager/term_dialog.py (which owns these fields; this
+    # module never imports it). ``term_dialog``: the opening on record
+    # (its claude pid, status time, kind, card), None when none is open;
+    # what the typing probe reads (``terminal_dialog_open``).
+    # ``term_dialog_epoch``: counts openings, so a card's buttons act on
+    # their own opening only. ``term_dialog_settle``: after a close, until
+    # the session has settled and what was held for it may go (``since``
+    # monotonic, ``after_wall`` the opening's status time, ``expect`` a
+    # SessionStart source that also says so). ``term_dialog_closing``:
+    # cards and notes of closed openings for the bot to close, with their
+    # outcome. ``session_start_at``: wall time of the last main-agent
+    # SessionStart per source ("resume", "clear", ...), set by the hook
+    # receiver. A hold for a terminal dialog carries ``"terminal": True``
+    # in ``dialog_hold`` and ``"settling": True`` between its close and
+    # the settle. All transient, never in _PERSIST_FIELDS: after a daemon
+    # restart the next registry read finds an open dialog again.
+    term_dialog: dict | None = None
+    term_dialog_epoch: int = 0
+    term_dialog_settle: dict | None = None
+    term_dialog_closing: list = field(default_factory=list, repr=False)
+    session_start_at: dict = field(default_factory=dict, repr=False)
     # Guards the idle-recovery fallback's own INFO log (session_monitor.py)
     # so a tool/compaction that stands the recovery down for minutes logs
     # ONE line for the whole episode rather than one per 2s scan tick.
@@ -3151,6 +3174,52 @@ class TrackedSession:
         """
         return self.status is Status.INTERACTIVE or self.prompt_wait_carry
 
+    def terminal_dialog_open(self) -> bool:
+        """True while a dialog no hook tells of is open in Claude Code's
+        terminal, as its session record showed (roadmap 8.127,
+        aipager/term_dialog.py). Nothing may be typed into the session."""
+        return self.term_dialog is not None
+
+    def any_dialog_open(self) -> bool:
+        """A prompt aipager tracks by hook (:meth:`dialog_is_open`) or a
+        terminal dialog (:meth:`terminal_dialog_open`): what holds a
+        message and keeps the messages held for it."""
+        return self.dialog_is_open() or self.terminal_dialog_open()
+
+    def dialog_wait_stamp(self) -> float:
+        """What a hold for the open dialog is keyed to: the INTERACTIVE
+        wait's start for a hook-tracked prompt, the opening's first sight
+        for a terminal dialog, 0.0 when none is open."""
+        if self.dialog_is_open():
+            return self.interactive_entered_at
+        cur = self.term_dialog
+        if cur is not None:
+            return float(cur.get("seen_at") or 0.0)
+        return 0.0
+
+    def end_terminal_dialog(self, outcome: str) -> None:
+        """The session's claude ended or is being relaunched: the terminal
+        dialog on record (if any) went with it, its card is queued for
+        closing with *outcome* ("ended", "restarted"), and a hold for it is
+        marked ended (the paths that handle a session's end own the
+        queue), except while ``/clear`` after "Start a new conversation"
+        ends the conversation on purpose: that hold waits for the new
+        one."""
+        cur = self.term_dialog
+        self.term_dialog = None
+        if cur is not None and cur.get("card"):
+            self.term_dialog_closing.append({
+                "epoch": cur.get("epoch"), "card": cur["card"],
+                "card_kind": cur.get("card_kind") or "card", "outcome": outcome})
+        settle = self.term_dialog_settle
+        if settle is not None and settle.get("expect") == "clear" and outcome == "ended":
+            return
+        self.term_dialog_settle = None
+        hold = self.dialog_hold
+        if hold is not None and hold.get("terminal"):
+            hold.pop("settling", None)
+            hold["closed"] = "ended"
+
     # ── roadmap 8.120: more than one open prompt ───────────────────────────
 
     def agent_tool_started(self, agent_id: str, tool_use_id: str,
@@ -3343,7 +3412,10 @@ class TrackedSession:
         held behind them, so the person's messages reach Claude in the order
         they were sent."""
         hold = self.dialog_hold
-        return hold is not None and hold.get("closed") == "answered"
+        # A terminal dialog's hold settling after its close (roadmap 8.127)
+        # counts: a message arriving then goes behind the held ones.
+        return hold is not None and (hold.get("closed") == "answered"
+                                     or bool(hold.get("settling")))
 
     def tap_is_for_this_turn(self, tapped_msg_id: int | None, *,
                              turn: int | None = None) -> bool:
@@ -4231,6 +4303,8 @@ class SessionRegistry:
         if new_status == Status.GONE:
             if sess.gone_at is None:
                 sess.gone_at = time.time()
+            # Roadmap 8.127: a terminal dialog ends with its claude.
+            sess.end_terminal_dialog("ended")
             # Roadmap 8.41: a gone session runs no agents and is owed no
             # ✅ edit into its chat.
             sess.clear_bg_agents()

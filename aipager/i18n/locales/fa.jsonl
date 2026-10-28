@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}، {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ پیام‌ها به <b>{session}</b> ارسال می‌شوند"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "همین گفتگو را ادامه بده"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "شروع گفتگوی جدید"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "ادامه بده"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: گفتگو ادامه پیدا می‌کند."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: سشن قبل از اینکه به سؤال جواب داده شود بسته شد."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: یک گفتگوی جدید شروع شد."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: سشن قبل از اینکه به سؤال جواب داده شود ری‌استارت شد."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: به سؤال در ترمینال جواب داده شد."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: Claude Code می‌پرسد این گفتگو ادامه پیدا کند یا نه. این گفتگو مدت زیادی بی‌استفاده مانده و ادامه دادنش بخشی از سقف استفادهٔ ۵ ساعتهٔ شما را مصرف می‌کند."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: گفتگو ادامه پیدا می‌کند، اما گفتگوی جدید شروع نشد. برای شروعش {clear} را بفرستید."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> در ترمینالش منتظر جواب یک سؤال است. همان‌جا جواب بدهید؛ پیام‌هایی که در این فاصله بفرستید بلافاصله بعدش برای Claude ارسال می‌شوند."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "برای شروع دوباره یا کوتاه کردن گفتگو، دکمهٔ ادامه را بزنید و بعد {clear} یا {compact} را بفرستید."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: Claude Code قبل از ادامهٔ این گفتگو در ترمینال یک سؤال پرسیده است."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "کارت در حال کار"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "زدن دکمه‌ها"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "خود aipager"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ نمی‌دانم این فایل مال کدام سشن است. با {command} یا از کیبورد یکی را انتخاب کنید."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude هنوز منتظر جواب شما به این درخواست اجازه است. اول جوابش را بدهید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude هنوز منتظر جواب شما به این سؤال است. اول جوابش را بدهید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code دربارهٔ این گفتگو سؤالی پرسیده است. اول به سؤال بالا جواب بدهید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude در ترمینال منتظر جواب است. همان‌جا جواب بدهید یا «توقف» را بزنید، بعد پیام جدیدتان بلافاصله برای Claude ارسال می‌شود."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ متن ویس به [{session}] ارسال نشد"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "سشنی برای بستن نیست."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "برای aipager معلوم نیست Claude Code کدام درخواست را اول نشان می‌دهد؛ این یکی را در ترمینال جواب بدهید."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "فعلاً Claude دارد کارش را تمام می‌کند؛ چند لحظه بعد دوباره روی این درخواست بزنید."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram فعلاً این چت را محدود کرده - بعد از {time} دوباره امتحان کنید"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "جواب این سؤال در حال ارسال است."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "این سؤال دیگر باز نیست."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "جواب سؤال ارسال نشد. دوباره امتحان کنید یا در ترمینال جواب بدهید."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude الان در حال کار است. وقتی کارش تمام شد دوباره امتحان کنید."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "دارد ارسال می‌شود."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "قبلاً ارسال شده."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "پیش‌نمایش گزارش در چت خصوصی شما با ربات است."}

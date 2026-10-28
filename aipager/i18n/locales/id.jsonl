@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Pesan masuk ke <b>{session}</b>"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Lanjutkan percakapan ini"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Mulai percakapan baru"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Lanjutkan"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: percakapan berlanjut."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: sesi sudah berakhir sebelum pertanyaannya dijawab."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: percakapan baru sudah dimulai."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: sesi dimulai ulang sebelum pertanyaannya dijawab."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: pertanyaannya sudah dijawab di terminal."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: Claude Code bertanya apakah percakapan ini mau dilanjutkan. Percakapan ini sudah lama tidak dipakai, dan melanjutkannya memakai sebagian batas pemakaian 5 jam kamu."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: percakapan berlanjut, tapi percakapan baru tidak bisa dimulai. Kirim {clear} untuk memulainya."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> sedang menunggu jawaban untuk sebuah pertanyaan di terminalnya. Jawab di sana, lalu pesan yang masuk selama itu langsung diteruskan ke Claude."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "Untuk mulai dari awal atau meringkasnya, ketuk Lanjutkan lalu kirim {clear} atau {compact}."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: Claude Code sedang mengajukan pertanyaan di terminal sebelum melanjutkan percakapan ini."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "kartu kerja"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "ketukan tombol"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager sendiri"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Aku tidak tahu file ini untuk sesi yang mana. Pilih satu dengan {command} atau dari papan ketik."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude masih menunggu jawabanmu untuk permintaan izin ini. Jawab dulu, lalu pesan barumu langsung dikirim ke Claude."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude masih menunggu jawabanmu untuk pertanyaan ini. Jawab dulu, lalu pesan barumu langsung dikirim ke Claude."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code sedang bertanya soal percakapan ini. Jawab dulu pertanyaan di atas, lalu pesan barumu langsung dikirim ke Claude."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude sedang menunggu jawaban di terminal. Jawab di sana atau ketuk Hentikan, lalu pesan barumu langsung dikirim ke Claude."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Teks pesan suara tidak terkirim ke [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Tidak ada sesi untuk diakhiri."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager tidak bisa tahu permintaan mana yang ditampilkan Claude Code lebih dulu, jadi jawab yang ini di terminal."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude sedang menyelesaikan tugasnya, jadi ketuk permintaan ini lagi sebentar lagi."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram sedang membatasi chat ini - coba lagi setelah pukul {time}"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "Pertanyaan ini sedang dijawab."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "Pertanyaan ini sudah tidak terbuka."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "Pertanyaannya tidak bisa dijawab. Coba lagi, atau jawab di terminal."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude sedang bekerja. Coba lagi setelah selesai."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Sedang dikirim."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Sudah dikirim."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "Pratinjau laporan ada di chat pribadimu dengan bot."}

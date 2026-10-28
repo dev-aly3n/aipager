@@ -232,9 +232,39 @@ def _as_int(value) -> int | None:
     return bg_jobs._as_int(value)
 
 
+#: How far from now a record's ``statusUpdatedAt`` may lie and still be
+#: believed (roadmap 8.127): further back than this, or ahead by more than
+#: the slack, it is not a time of this machine's clock and reads as unknown.
+STATUS_AT_MAX_AGE = 30 * 86400.0
+STATUS_AT_AHEAD_SLACK = 60.0
+
+
+def _normalise_status_at(value, now: float | None = None) -> float | None:
+    """Claude Code's ``statusUpdatedAt`` as wall-clock seconds, or None.
+    Claude Code writes milliseconds (2.1.311); a number above 1e11 is
+    taken as milliseconds, below as seconds. Anything that is not a
+    number, or lies outside [now - :data:`STATUS_AT_MAX_AGE`, now +
+    :data:`STATUS_AT_AHEAD_SLACK`], is None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    seconds = float(value)
+    if seconds != seconds:            # NaN
+        return None
+    if seconds > 1e11:
+        seconds /= 1000.0
+    now = time.time() if now is None else now
+    if not now - STATUS_AT_MAX_AGE <= seconds <= now + STATUS_AT_AHEAD_SLACK:
+        return None
+    return seconds
+
+
 def _entry(data: dict, file_pid: int) -> dict | None:
     """One registry file's fields aipager reads, normalised; None when it
-    names no process."""
+    names no process. ``waitingFor`` (a string, "" when absent) and
+    ``statusAt`` (``statusUpdatedAt`` as wall-clock seconds, or None) tell
+    of a dialog open in Claude Code's terminal (roadmap 8.127,
+    :mod:`aipager.term_dialog`): while one is up the record reads
+    ``status: "waiting"`` with the dialog's ``waitingFor``."""
     pid = _as_int(data.get("pid"))
     if pid is None:
         pid = file_pid
@@ -253,6 +283,8 @@ def _entry(data: dict, file_pid: int) -> dict | None:
         "parkedJobId": text("parkedJobId"),
         "procStart": _as_int(data.get("procStart")),
         "status": text("status"),
+        "waitingFor": text("waitingFor"),
+        "statusAt": _normalise_status_at(data.get("statusUpdatedAt")),
         "spare": data.get("spare") is True,
     }
 

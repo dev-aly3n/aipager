@@ -382,6 +382,14 @@ HELD_TERMINAL = Msg(
     note="As route.held_question, for a question or permission request that can "
          "only be answered in the terminal (Claude Code's own screen on the "
          "computer); Stop is the busy card's Stop button")
+HELD_RESUME_DIALOG = Msg(
+    "route.held_resume_dialog",
+    "❓ Claude Code is asking about this conversation. Answer the question "
+    "above, and your new message goes to Claude right after.",
+    note="Reply to the card of a question Claude Code asks in the terminal "
+         "about resuming the conversation (it was idle a long time), when "
+         "someone sends a message meanwhile: the message is held until the "
+         "question is answered. Deleted once it is sent")
 NO_SESSION_HERE = Msg("route.no_session_here", "⚠️ No session named <b>{session}</b> here.",
                       note="HTML. A typed name matches no session in this chat",
                       eg={"session": "x1"})
@@ -731,12 +739,20 @@ class _PendingAlbum:
 def open_dialog_surface(sess) -> tuple[str, int | None, int | None]:
     """``(kind, chat_id, message_id)`` of the dialog *sess* waits on, as
     the chat shows it: ``kind`` is ``"question"`` (AskUserQuestion),
-    ``"permission"`` (a tool permission) or ``"terminal"`` (no answerable
-    message of this wait in the chat: a dialog left to the terminal, or a
-    prompt whose send did not land). The message is the busy card that
-    carries the prompt inline, or the prompt's own message; ``None`` for
-    ``"terminal"``."""
+    ``"permission"`` (a tool permission), ``"resume"`` (a dialog in Claude
+    Code's terminal that no hook tells of, roadmap 8.127: its card, when
+    one was sent) or ``"terminal"`` (no answerable message of this wait in
+    the chat: a dialog left to the terminal, or a prompt whose send did
+    not land). The message is the busy card that carries the prompt
+    inline, the prompt's own message or the terminal dialog's card;
+    ``None`` for ``"terminal"``."""
     from aipager.bot.transport import resolve_chat_id_int
+
+    if not sess.dialog_is_open() and sess.terminal_dialog_open():
+        card = sess.term_dialog.get("card")
+        if card:
+            return "resume", card[0], card[1]
+        return "resume", None, None
 
     def kind_of(perm: dict) -> str:
         info = perm.get("tool_info")
@@ -770,12 +786,16 @@ def _claim_dialog_hold(sess) -> dict | None:
     being released. Synchronous: no await between the check and the
     claim."""
     hold = sess.dialog_hold
-    if not sess.dialog_is_open():
+    if not sess.any_dialog_open():
         return hold
-    entered = sess.interactive_entered_at
+    entered = sess.dialog_wait_stamp()
     if hold is None or hold.get("entered_at") != entered:
         hold = {"entered_at": entered, "told": set(),
                 "notices": list(hold.get("notices") or []) if hold else []}
+        if not sess.dialog_is_open():
+            # A dialog in Claude Code's terminal (roadmap 8.127): released
+            # once it closed and the session settled.
+            hold["terminal"] = True
         sess.dialog_hold = hold
     return hold
 
@@ -922,7 +942,7 @@ class CommandHandlersMixin:
         # can start a stray background job. Held until it is brought back.
         for_park = await self._look_for_park(sess)
         for_dialog = (not for_park
-                      and (sess.dialog_is_open() or sess.dialog_release_pending()))
+                      and (sess.any_dialog_open() or sess.dialog_release_pending()))
         if for_park:
             held_reason = "parked"
         elif for_dialog:
@@ -992,7 +1012,7 @@ class CommandHandlersMixin:
             )
             return False
         self.registry.mark_dirty()
-        open_now = sess.dialog_is_open()
+        open_now = sess.any_dialog_open()
         if open_now:
             _claim_dialog_hold(sess)
         await self._react(update, reactions.HANDED_OFF)
@@ -1121,8 +1141,18 @@ class CommandHandlersMixin:
         send does, so the dialog's close releases the message and deletes
         the notice. Best-effort: a failed send leaves the message held."""
         hold = sess.dialog_hold
-        if hold is None or not sess.dialog_is_open():
+        if hold is None or not sess.any_dialog_open():
             return  # answered (or settled) meanwhile: nothing to wait for
+        if not sess.dialog_is_open():
+            # A dialog in Claude Code's terminal (roadmap 8.127): its card
+            # (or, for one aipager cannot answer, its note) first. A note
+            # is all a person is told; under a card each person gets the
+            # notice below, once.
+            from aipager.bot import resume_dialog  # local: import cycle
+            if not await resume_dialog.on_message_held(self, update, sess):
+                return
+            if sess.dialog_hold is None or not sess.any_dialog_open():
+                return
         hold = _claim_dialog_hold(sess)
         person = driver_id_from_update(update) or 0
         if person in hold["told"]:
@@ -1131,8 +1161,8 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         kind, surface_chat, surface_msg = open_dialog_surface(sess)
         text = i18n.for_update(update).text(
-            {"question": HELD_QUESTION, "permission": HELD_PERMISSION}.get(
-                kind, HELD_TERMINAL))
+            {"question": HELD_QUESTION, "permission": HELD_PERMISSION,
+             "resume": HELD_RESUME_DIALOG}.get(kind, HELD_TERMINAL))
         held_id = update.message.message_id
         targets = []
         if surface_msg and surface_chat == chat_id:

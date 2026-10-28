@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Tin nhắn sẽ đến <b>{session}</b>"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Tiếp tục cuộc trò chuyện này"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Bắt đầu cuộc trò chuyện mới"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Tiếp tục"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>: cuộc trò chuyện vẫn tiếp tục."}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>: phiên đã kết thúc trước khi câu hỏi được trả lời."}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>: đã bắt đầu một cuộc trò chuyện mới."}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>: phiên đã được khởi động lại trước khi câu hỏi được trả lời."}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>: câu hỏi đã được trả lời trong terminal."}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>: Claude Code hỏi có tiếp tục cuộc trò chuyện này không. Cuộc trò chuyện đã lâu không được dùng, và tiếp tục nó sẽ dùng một phần giới hạn sử dụng 5 giờ của bạn."}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>: cuộc trò chuyện vẫn tiếp tục, nhưng không thể bắt đầu cuộc trò chuyện mới. Hãy gửi {clear} để bắt đầu."}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> đang chờ trả lời một câu hỏi trong terminal của phiên. Hãy trả lời ở đó, rồi các tin nhắn gửi trong lúc chờ sẽ đến Claude ngay sau đó."}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "Để bắt đầu lại hoặc thu gọn cuộc trò chuyện, hãy nhấn Tiếp tục rồi gửi {clear} hoặc {compact}."}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>: Claude Code đang đặt một câu hỏi trong terminal trước khi tiếp tục cuộc trò chuyện này."}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "thẻ làm việc"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "chạm nút"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "chính aipager"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Không rõ file này dành cho phiên nào. Hãy chọn một phiên bằng {command} hoặc từ bàn phím."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude vẫn đang chờ bạn trả lời yêu cầu cấp quyền này. Hãy trả lời trước, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude vẫn đang chờ bạn trả lời câu hỏi này. Hãy trả lời trước, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code đang hỏi về cuộc trò chuyện này. Hãy trả lời câu hỏi ở trên trước, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude đang chờ trả lời trong terminal. Hãy trả lời ở đó hoặc nhấn Dừng, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ Không gửi được nội dung tin nhắn thoại tới [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "Không có phiên nào để kết thúc."}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager không biết Claude Code đang hiện yêu cầu nào trước, nên hãy trả lời yêu cầu này trong terminal."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude đang làm xong việc, nên hãy chạm lại vào yêu cầu này sau giây lát."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram đang giới hạn chat này - thử lại sau {time}"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "Câu hỏi này đang được trả lời."}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "Câu hỏi này không còn mở nữa."}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "Không thể trả lời câu hỏi. Hãy thử lại hoặc trả lời trong terminal."}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude đang làm việc. Hãy thử lại khi Claude xong việc."}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "Đang gửi rồi."}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "Đã gửi rồi."}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "Bản xem trước báo cáo nằm trong chat riêng của bạn với bot."}

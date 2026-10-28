@@ -588,6 +588,19 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "（{state}，{running}）"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ 消息会发到 <b>{session}</b>"}
+{"k": "rdlg.btn_continue", "src": "309d17d6", "v": "继续这个对话"}
+{"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "开始新对话"}
+{"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "恢复"}
+{"k": "rdlg.closed_continued", "src": "212ee9d0", "v": "✅ <b>{session}</b>：对话继续。"}
+{"k": "rdlg.closed_ended", "src": "58d24d8b", "v": "<b>{session}</b>：问题还没回答，会话就结束了。"}
+{"k": "rdlg.closed_new", "src": "d75168f2", "v": "🧹 <b>{session}</b>：已开始新对话。"}
+{"k": "rdlg.closed_restarted", "src": "be9a0413", "v": "<b>{session}</b>：问题还没回答，会话就重启了。"}
+{"k": "rdlg.closed_terminal", "src": "4a247f15", "v": "<b>{session}</b>：问题已在终端中回答。"}
+{"k": "rdlg.cold_question", "src": "4def5a15", "v": "❓ <b>{session}</b>：Claude Code 在问是否恢复这个对话。这个对话已经很久没用了，恢复它会用掉你 5 小时用量限额的一部分。"}
+{"k": "rdlg.new_failed", "src": "81abd88c", "v": "<b>{session}</b>：对话继续，但没能开始新对话。发送 {clear} 来开始新对话。"}
+{"k": "rdlg.other_note", "src": "bc9f2732", "v": "❓ <b>{session}</b> 正在终端里等待一个问题的回答。请在终端回答，期间发送的消息随后就会发给 Claude。"}
+{"k": "rdlg.unsure_hint", "src": "b4d640aa", "v": "如需重新开始或压缩对话，点按“继续这个对话”，然后发送 {clear} 或 {compact}。"}
+{"k": "rdlg.unsure_question", "src": "c57996a8", "v": "❓ <b>{session}</b>：Claude Code 在继续这个对话之前，正在终端里提一个问题。"}
 {"k": "rep.area.animation", "src": "6a3a8292", "v": "工作卡片"}
 {"k": "rep.area.callbacks", "src": "397d02b3", "v": "按钮点按"}
 {"k": "rep.area.daemon", "src": "dbcc03a0", "v": "aipager 本身"}
@@ -670,6 +683,7 @@
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ 我不知道这个文件要发给哪个会话。请用 {command} 或键盘选择一个。"}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude 还在等你回答这个权限请求。先回答它，你的新消息随后就会发给 Claude。"}
 {"k": "route.held_question", "src": "36ea2c5c", "v": "❓ Claude 还在等你回答这个问题。先回答它，你的新消息随后就会发给 Claude。"}
+{"k": "route.held_resume_dialog", "src": "e5d3bcd9", "v": "❓ Claude Code 正在询问这个对话的事。先回答上面的问题，你的新消息随后就会发给 Claude。"}
 {"k": "route.held_terminal", "src": "a39b06b3", "v": "❓ Claude 正在终端里等待回答。请在终端回答或点按“停止”，你的新消息随后就会发给 Claude。"}
 {"k": "route.inject_failed", "src": "4793e79c", "v": "❌ 无法把语音转成的文字发送到 [{session}]"}
 {"k": "route.kill_none", "src": "1c62fda9", "v": "没有可结束的会话。"}
@@ -974,6 +988,10 @@
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager 无法确定 Claude Code 先显示哪个请求，请在终端中回答这个请求。"}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude 正在结束这次任务，请稍后再点一次这个请求。"}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram 正在限制这个聊天，请在 {time} 之后再试"}
+{"k": "toast.rdlg_answering", "src": "772053b3", "v": "这个问题已经在回答了。"}
+{"k": "toast.rdlg_closed", "src": "d6f73eb3", "v": "这个问题已经关闭了。"}
+{"k": "toast.rdlg_failed", "src": "9338ed4e", "v": "没能回答这个问题。请重试，或在终端中回答。"}
+{"k": "toast.rdlg_not_idle", "src": "b122be75", "v": "Claude 正在工作。等它完成后再试。"}
 {"k": "toast.rep.already_sending", "src": "b23b5ab6", "v": "正在发送中。"}
 {"k": "toast.rep.already_sent", "src": "99493916", "v": "已经发送过了。"}
 {"k": "toast.rep.in_dm", "src": "88740c30", "v": "报告预览在你和机器人的私聊中。"}
