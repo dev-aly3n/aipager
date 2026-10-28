@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "Đã tiếp tục"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "Đã từ chối"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "Đã chọn phương án {n}"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Claude Code đã tự từ chối"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "Đã chọn: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Đã gửi mà không chọn gì"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "Chat riêng"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "Cần bạn cấp quyền"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Đang chờ bạn chọn"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Không nhận được câu hỏi"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ Nếu không ai trả lời, Claude Code sẽ tự từ chối yêu cầu này vào khoảng {time}."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ Claude Code đã tự từ chối yêu cầu này vì không ai trả lời kịp."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · Cần bạn cấp quyền"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "Trả lời {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "{n} sẵn sàng"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code đang hiện một yêu cầu khác trước, nên hãy trả lời yêu cầu đó trước rồi mới tới yêu cầu này."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "yêu cầu này không còn mở"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager không biết Claude Code đang hiện yêu cầu nào trước, nên hãy trả lời yêu cầu này trong terminal."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code đã tự từ chối yêu cầu này, nên câu hỏi không còn mở nữa."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude đang làm xong việc, nên hãy chạm lại vào yêu cầu này sau giây lát."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram đang giới hạn chat này - thử lại sau {time}"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "Câu hỏi này đang được trả lời."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Đang là lượt của người khác - hãy thử lại khi xong"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Hãy trả lời yêu cầu đang mở trước, rồi thử lại"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "Đang gửi lại [{session}]"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code sắp tự từ chối yêu cầu này, nên hãy trả lời trong terminal nếu nó vẫn còn mở."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "Không gửi được đến {session}"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Không gõ được câu trả lời vào Claude Code"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Chưa được lúc này, thử lại sau giây lát"}

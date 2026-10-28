@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "Dilanjutkan"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "Ditolak"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "Opsi {n} dipilih"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Ditolak oleh Claude Code"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "Dipilih: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Dikirim tanpa memilih apa pun"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "Chat pribadi"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "Perlu izinmu"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Menunggu pilihanmu"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Pertanyaan tidak datang"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ Kalau tidak ada yang menjawab, Claude Code akan menolak permintaan ini sendiri sekitar pukul {time}."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ Claude Code menolak permintaan ini sendiri karena tidak ada yang menjawab tepat waktu."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · Perlu izinmu"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "Jawab {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "{n} siap"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code sedang menampilkan permintaan lain lebih dulu, jadi jawab yang itu dulu sebelum yang ini."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "permintaan ini sudah tidak terbuka"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager tidak bisa tahu permintaan mana yang ditampilkan Claude Code lebih dulu, jadi jawab yang ini di terminal."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code sudah menolak permintaan ini sendiri, jadi pertanyaannya sudah tidak terbuka."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude sedang menyelesaikan tugasnya, jadi ketuk permintaan ini lagi sebentar lagi."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram sedang membatasi chat ini - coba lagi setelah pukul {time}"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "Pertanyaan ini sedang dijawab."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Sekarang giliran orang lain - coba lagi setelah selesai"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Jawab dulu permintaan yang terbuka, lalu coba lagi"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "Mengirim ulang [{session}]"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code akan menolak permintaan ini sendiri sebentar lagi, jadi jawab di terminal kalau masih terbuka."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "Tidak terkirim ke {session}"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Jawaban tidak bisa diketik ke Claude Code"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Belum bisa sekarang, coba lagi sebentar lagi"}

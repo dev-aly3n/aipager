@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "계속함"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "거부됨"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "{n}번 옵션 선택"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Claude Code가 거부함"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "선택: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "선택 없이 제출함"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "개인 채팅"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "권한이 필요해요"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · 선택을 기다리는 중"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · 질문을 받지 못함"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ 아무도 답하지 않으면 Claude Code가 {time}쯤 이 요청을 스스로 거부해요."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ 아무도 제때 답하지 않아서 Claude Code가 이 요청을 스스로 거부했어요."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · 권한이 필요해요"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "{session} 답하기"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "준비됨 {n}개"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code가 다른 요청을 먼저 보여 주고 있어요. 그 요청에 먼저 답한 다음 이 요청에 답해 주세요."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "이 요청은 이제 열려 있지 않아요"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "Claude Code가 어떤 요청을 먼저 보여 주는지 aipager가 알 수 없어요. 이 요청은 터미널에서 답해 주세요."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code가 이미 이 요청을 스스로 거부해서 이 질문은 이제 열려 있지 않아요."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude가 작업을 마무리하고 있어요. 잠시 후 이 요청을 다시 눌러 주세요."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram이 이 채팅을 제한하고 있어요. {time} 이후에 다시 시도해 주세요"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "이 질문에 이미 답하는 중이에요."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "지금은 다른 사람 차례예요. 끝나면 다시 시도하세요"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "열린 요청에 먼저 답한 뒤 다시 시도하세요"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "[{session}] 다시 보내는 중"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code가 곧 이 요청을 스스로 거부해요. 아직 열려 있다면 터미널에서 답해 주세요."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "{session} 세션에 메시지를 보내지 못했어요"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Claude Code에 답을 입력하지 못했어요"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "지금은 할 수 없어요. 잠시 후 다시 시도해 주세요"}

@@ -34,6 +34,7 @@
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "Продовжено"}
 {"k": "ans.verb.deny", "src": "63b16bd4", "v": "Відхилено"}
 {"k": "ans.verb.option", "src": "7a8b9272", "v": "Вибрано варіант {n}"}
+{"k": "ans.verb.refused_by_claude", "src": "ef53b759", "v": "Відхилено Claude Code"}
 {"k": "ans.verb.selected", "src": "5462eaaf", "v": "Вибрано: {options}"}
 {"k": "ans.verb.submitted_none", "src": "36a62d88", "v": "Надіслано без вибору"}
 {"k": "app.chat.dm", "src": "05a3b9fa", "v": "Особистий чат"}
@@ -564,6 +565,8 @@
 {"k": "perm.needed", "src": "7c7a8e5c", "v": "Потрібен твій дозвіл"}
 {"k": "perm.needs_input", "src": "f2444f6f", "v": "🔐 <b>{session}</b> · Чекає на твій вибір"}
 {"k": "perm.no_questions", "src": "b2ab2b80", "v": "❓ <b>{session}</b> · Питання не надійшло"}
+{"k": "perm.rm_clock", "src": "f104667b", "v": "⏱ Якщо ніхто не відповість, Claude Code сам відхилить цей запит приблизно о {time}."}
+{"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ Claude Code сам відхилив цей запит, бо ніхто не відповів вчасно."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · Потрібен твій дозвіл"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "Відповісти {session}"}
 {"k": "pin.count.idle", "src": "6abeefbf", "v": {"few": "{n} готові", "many": "{n} готові", "one": "{n} готова", "other": "{n} готові"}}
@@ -986,6 +989,7 @@
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code зараз спершу показує інший запит: спершу дай відповідь на нього, потім на цей."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "цей запит уже закрито"}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager не може зрозуміти, який запит Claude Code показує першим, тож дай відповідь на цей у терміналі."}
+{"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code уже сам відхилив цей запит, тож питання закрите."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude завершує завдання, тож натисни на цей запит ще раз трохи згодом."}
 {"k": "toast.rate_limited", "src": "fc09f3d7", "v": "Telegram обмежує цей чат: спробуй після {time}"}
 {"k": "toast.rdlg_answering", "src": "772053b3", "v": "На це питання вже відповідають."}
@@ -1005,6 +1009,7 @@
 {"k": "toast.retry_others_turn", "src": "b243bab8", "v": "Зараз черга іншої людини: повтори, коли вона закінчиться"}
 {"k": "toast.retry_prompt_open", "src": "2554567b", "v": "Спершу дай відповідь на відкритий запит, потім повтори"}
 {"k": "toast.retry_retrying", "src": "b5a61b76", "v": "Надсилаю повторно [{session}]"}
+{"k": "toast.rm_refusal_due", "src": "8beb5746", "v": "Claude Code ось-ось сам відхилить цей запит, тож якщо він ще відкритий, дай відповідь у терміналі."}
 {"k": "toast.send_failed", "src": "0fbea382", "v": "Не вдалося надіслати в {session}"}
 {"k": "toast.send_keys_failed", "src": "32458da9", "v": "Не вдалося ввести відповідь у Claude Code"}
 {"k": "toast.sendnow_busy", "src": "56b39fd4", "v": "Зайнято, спробуй трохи згодом"}
