@@ -204,12 +204,22 @@ def _fake_binary(monkeypatch):
     )
 
 
+@pytest.fixture
+def _no_stop_recancel(monkeypatch):
+    """stop() cancels the loop a second time when it still runs after
+    `_STOP_RECANCEL_SECONDS` (1 s). That would rescue a loop that lost
+    its cancel within a stop() bound below, so it is pushed out of reach
+    (as in test_tunnel_slow_retry.py) and the bound sees such a loop."""
+    monkeypatch.setattr(tm, "_STOP_RECANCEL_SECONDS", 30.0)
+
+
 def test_start_returns_immediately_without_awaiting_the_first_url(
     monkeypatch, run_async,
 ):
     """entrypoints.md: start() 'never awaits the first URL'. Proven here
     by making discovery hang forever and asserting start() still
-    returns promptly."""
+    returns: the bound only catches a hang, as one that awaited the
+    first URL would never return."""
     calls = {"n": 0}
 
     async def _hangs(binary, port):
@@ -223,7 +233,7 @@ def test_start_returns_immediately_without_awaiting_the_first_url(
 
     async def _scenario():
         manager = tm.TunnelManager(8765, AsyncMock())
-        await asyncio.wait_for(manager.start(), timeout=0.5)
+        await asyncio.wait_for(manager.start(), timeout=5.0)
         await manager.stop()  # clean up the still-pending task
 
     run_async(_scenario())
@@ -245,7 +255,7 @@ def test_publishes_the_discovered_url(monkeypatch, run_async):
         manager = tm.TunnelManager(8765, _on_url_change)
         await manager.start()
 
-        first = await asyncio.wait_for(queue.get(), timeout=1.0)
+        first = await asyncio.wait_for(queue.get(), timeout=10.0)
         assert first == "https://one.trycloudflare.com"
         assert manager.current_url == "https://one.trycloudflare.com"
 
@@ -281,15 +291,15 @@ def test_death_clears_then_restart_republishes_a_new_url(monkeypatch, run_async)
         manager = tm.TunnelManager(8765, _on_url_change)
         await manager.start()
 
-        first = await asyncio.wait_for(queue.get(), timeout=1.0)
+        first = await asyncio.wait_for(queue.get(), timeout=10.0)
         assert first == "https://one.trycloudflare.com"
 
         proc1.die(0)  # the child exits unexpectedly
 
-        cleared = await asyncio.wait_for(queue.get(), timeout=1.0)
+        cleared = await asyncio.wait_for(queue.get(), timeout=10.0)
         assert cleared == ""
 
-        second = await asyncio.wait_for(queue.get(), timeout=1.0)
+        second = await asyncio.wait_for(queue.get(), timeout=10.0)
         assert second == "https://two.trycloudflare.com"
         assert second != first
 
@@ -405,7 +415,8 @@ def test_binary_fetch_failure_counts_toward_the_ceiling_without_spawning(
     run_async(_scenario())
 
 
-def test_stop_terminates_a_live_child_and_is_idempotent(monkeypatch, run_async):
+def test_stop_terminates_a_live_child_and_is_idempotent(monkeypatch, run_async,
+                                                       _no_stop_recancel):
     proc = _FakeProcess()
 
     async def _spawn(binary, port):
@@ -420,20 +431,23 @@ def test_stop_terminates_a_live_child_and_is_idempotent(monkeypatch, run_async):
 
         manager = tm.TunnelManager(8765, _on_url_change)
         await manager.start()
-        await asyncio.wait_for(queue.get(), timeout=1.0)
+        await asyncio.wait_for(queue.get(), timeout=10.0)
 
-        await asyncio.wait_for(manager.stop(), timeout=1.0)
+        # Under the 3.0 s default kill window: a stop() that waited it out
+        # though the child ended at its terminate fails here.
+        await asyncio.wait_for(manager.stop(), timeout=2.5)
         assert proc.terminate_calls == 1
         assert manager.current_url == ""
         assert tunnel_mod.get_managed_tunnel_url() == ""
 
-        await asyncio.wait_for(manager.stop(), timeout=1.0)  # idempotent
+        await asyncio.wait_for(manager.stop(), timeout=2.5)  # idempotent
         assert proc.terminate_calls == 1
 
     run_async(_scenario())
 
 
-def test_stop_escalates_to_kill_when_terminate_is_ignored(monkeypatch, run_async):
+def test_stop_escalates_to_kill_when_terminate_is_ignored(monkeypatch, run_async,
+                                                         _no_stop_recancel):
     monkeypatch.setattr("aipager.config.TUNNEL_KILL_TIMEOUT_SECONDS", 0.02)
     proc = _FakeProcess()
     # Simulate a wedged child: terminate() is recorded but does NOT
@@ -452,16 +466,19 @@ def test_stop_escalates_to_kill_when_terminate_is_ignored(monkeypatch, run_async
 
         manager = tm.TunnelManager(8765, _on_url_change)
         await manager.start()
-        await asyncio.wait_for(queue.get(), timeout=1.0)
+        await asyncio.wait_for(queue.get(), timeout=10.0)
 
-        await asyncio.wait_for(manager.stop(), timeout=1.0)
+        # Under the 3.0 s default: a stop() that ignored the patched
+        # 0.02 s kill window fails here.
+        await asyncio.wait_for(manager.stop(), timeout=2.5)
         assert proc.terminate_calls == 1
         assert proc.killed is True
 
     run_async(_scenario())
 
 
-def test_stop_mid_backoff_cancels_cleanly_with_no_dangling_task(monkeypatch, run_async):
+def test_stop_mid_backoff_cancels_cleanly_with_no_dangling_task(monkeypatch, run_async,
+                                                                _no_stop_recancel):
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_BASE_SECONDS", 1000.0)
     monkeypatch.setattr("aipager.config.TUNNEL_RESTART_BACKOFF_MAX_SECONDS", 1000.0)
 
@@ -475,7 +492,7 @@ def test_stop_mid_backoff_cancels_cleanly_with_no_dangling_task(monkeypatch, run
     async def _scenario():
         manager = tm.TunnelManager(8765, AsyncMock())
         await manager.start()
-        await asyncio.wait_for(attempt_started.wait(), timeout=1.0)
+        await asyncio.wait_for(attempt_started.wait(), timeout=10.0)
         # A handful of scheduling ticks — a fixed literal, not derived
         # from the (huge) backoff constant — to let the loop actually
         # reach `await asyncio.sleep(1000.0)` before we cancel it.
@@ -486,9 +503,10 @@ def test_stop_mid_backoff_cancels_cleanly_with_no_dangling_task(monkeypatch, run
         assert task_ref is not None and not task_ref.done()
 
         # If cancellation didn't work, this would hang for the full
-        # 1000s backoff instead of returning — the timeout below is
-        # what actually proves "cancels cleanly", not just "returns".
-        await asyncio.wait_for(manager.stop(), timeout=1.0)
+        # 1000s backoff (stop()'s re-cancel is out of reach too) instead
+        # of returning — the timeout below is what actually proves
+        # "cancels cleanly", not just "returns".
+        await asyncio.wait_for(manager.stop(), timeout=2.5)
 
         assert task_ref.done()
         assert manager._task is None
