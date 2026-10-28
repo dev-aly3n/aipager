@@ -295,15 +295,26 @@ def test_the_asking_agents_refused_tool_ends_its_prompt(rig):
     assert sess.status == Status.BUSY
 
 
-def test_claudes_refused_tool_is_left_to_the_turns_end(rig):
-    """Claude's own refusal ends its turn (dialog_ended_in_terminal): the
-    failure alone does not move the session."""
+def test_claudes_interrupted_tool_is_left_to_the_turns_end(rig):
+    """An Escape while Claude's own allowed call ran ends its turn
+    (dialog_ended_in_terminal): the interrupted failure alone does not
+    move the session."""
     _bot, sess, hook, _agent_tool, _prompts, _frames = rig
     hook("PermissionRequest", tool_name="Bash", tool_input={"command": "rm -rf build/"},
          tool_use_id="toolu_p1")
     hook("PostToolUseFailure", tool_name="Bash", tool_input={"command": "rm -rf build/"},
-         tool_use_id="toolu_p1", error="The user doesn't want to proceed with this tool use.")
+         tool_use_id="toolu_p1", error="Interrupted by user", is_interrupt=True)
     assert sess.status == Status.INTERACTIVE
+
+
+def test_claudes_failed_tool_works_again(rig):
+    """Its call ran and failed (roadmap 8.151): the session works again."""
+    _bot, sess, hook, _agent_tool, _prompts, _frames = rig
+    hook("PermissionRequest", tool_name="Bash", tool_input={"command": "rm -rf build/"},
+         tool_use_id="toolu_p1")
+    hook("PostToolUseFailure", tool_name="Bash", tool_input={"command": "rm -rf build/"},
+         tool_use_id="toolu_p1", error="Exit code 1")
+    assert sess.status == Status.BUSY
 
 
 def _continuation(hook):

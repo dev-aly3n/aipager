@@ -97,9 +97,18 @@ def run_timer(r, monitor, clock, monkeypatch, between) -> None:
 
 # -- issue 001: answered Yes in the terminal, the rm failed ---------------------------
 
-def test_the_failed_calls_clock_goes(rig, tx):
+def test_the_failed_call_closes_its_prompt(rig, tx):
+    """Its call ran: the prompt closes as after a PostToolUse (8.151)."""
     rm_prompt(rig, tx)
     failed_in_terminal(rig, tx)
+    assert rig.sess.open_prompts() == []
+
+
+def test_the_interrupted_calls_clock_goes(rig, tx):
+    """Escape while it ran: the record stays for the turn's end, its clock
+    goes."""
+    rm_prompt(rig, tx)
+    rig.hook("PostToolUseFailure", **dict(FAILURE, is_interrupt=True))
     [perm] = rig.sess.open_prompts()
     assert "rm_clock" not in perm["tool_info"]
 
@@ -163,10 +172,10 @@ def test_a_late_refusal_report_for_a_failed_call_records_nothing(rig, tx, clock,
 
 
 def test_the_dropped_clock_is_saved(rig, tx):
-    """A restart reads the prompt without its clock."""
+    """A restart reads the interrupted call's prompt without its clock."""
     rm_prompt(rig, tx)
     rig.bot.registry.save_if_dirty()  # saved with its clock, nothing left dirty
-    failed_in_terminal(rig, tx)
+    rig.hook("PostToolUseFailure", **dict(FAILURE, is_interrupt=True))
     rig.bot.registry.save_if_dirty()
     saved = json.loads(state.SESSION_STATE_FILE.read_text())["sessions"][S]
     assert "rm_clock" not in saved["open_prompt"]["perm"]

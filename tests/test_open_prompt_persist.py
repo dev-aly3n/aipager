@@ -627,3 +627,44 @@ def test_a_flag_that_is_not_true_spoils_the_record():
     raw = copy.deepcopy(_saved())
     raw["perm"]["outside_reads_question"] = "yes"
     assert open_prompt.validate(raw, busy_msg_id=77, now_wall=time.time()) is None
+
+
+# -- roadmap 8.151: the text without the clock line ----------------------------
+
+def test_the_unclocked_text_survives_a_save_and_load():
+    reg = SessionRegistry()
+    sess = _separate(_waiting(reg))
+    sess.pending_prompt_msg["text_unclocked"] = "<b>Allow?</b>"
+    reg.save()
+    assert _reload().get(NAME).restored_open_prompt["text_unclocked"] == "<b>Allow?</b>"
+
+
+@pytest.mark.parametrize("value", ["", 5, "x" * 40000], ids=["empty", "int", "long"])
+def test_a_bad_unclocked_text_is_not_saved(value):
+    reg = SessionRegistry()
+    sess = _separate(_waiting(reg))
+    sess.pending_prompt_msg["text_unclocked"] = value
+    reg.save()
+    assert "text_unclocked" not in _saved()
+
+
+@pytest.mark.parametrize("value", ["", 5, "x" * 40000], ids=["empty", "int", "long"])
+def test_a_bad_unclocked_text_spoils_the_record(value):
+    from aipager import open_prompt
+    reg = SessionRegistry()
+    sess = _separate(_waiting(reg))
+    sess.pending_prompt_msg["text_unclocked"] = "ok"
+    reg.save()
+    raw = copy.deepcopy(_saved())
+    raw["text_unclocked"] = value
+    assert open_prompt.validate(raw, busy_msg_id=77, now_wall=time.time()) is None
+
+
+def test_an_inline_record_with_unclocked_text_is_spoilt():
+    from aipager import open_prompt
+    reg = SessionRegistry()
+    _inline(_waiting(reg))
+    reg.save()
+    raw = copy.deepcopy(_saved())
+    raw["text_unclocked"] = "ok"
+    assert open_prompt.validate(raw, busy_msg_id=77, now_wall=time.time()) is None

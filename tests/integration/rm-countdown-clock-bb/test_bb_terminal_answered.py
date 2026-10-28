@@ -192,10 +192,6 @@ def test_terminal_yes_then_failure_many_ticks_then_stop_is_never_refused(env):
     assert refused_anything(env) == NOTHING
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "tester-iter2-001: pre-existing on every prompt (default mode and non-rm "
-    "commands too): after PostToolUseFailure the lone prompt stays open and a "
-    "tap types Enter and records Allowed"))
 def test_terminal_yes_then_failure_tap_types_nothing(env):
     env.rm(hook=False)
     terminal_yes(env, at=T0 + 20.0)

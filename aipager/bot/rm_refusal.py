@@ -39,3 +39,14 @@ def clock_line_html(tr, holder) -> str:
     except (OverflowError, OSError, ValueError):
         return ""
     return "\n" + tr.html(RM_CLOCK, time=tr.num(shown))
+
+
+
+def take_unclocked_text(rec) -> str | None:
+    """A prompt message record's HTML text without its clock line, kept
+    when it was sent (``rec["text_unclocked"]``, roadmap 8.151), taken out
+    of the record so it is used once; None when it has none."""
+    if not isinstance(rec, dict):
+        return None
+    text = rec.pop("text_unclocked", None)
+    return text if isinstance(text, str) and text else None

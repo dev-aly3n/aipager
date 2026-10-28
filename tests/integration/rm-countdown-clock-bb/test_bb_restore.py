@@ -198,3 +198,39 @@ def test_a_removed_clock_keeps_the_record(cenv):
     cenv.rm()
     cenv.rig.bot.registry.save()
     assert load_after(None, present=False) is not None
+
+
+# -- roadmap 8.151: the line goes once the restored prompt closes ----------------------------
+
+def test_saved_separate_record_keeps_its_text_without_the_line(env):
+    env.rm()
+    rec = saved(env)["open_prompt"]
+    assert rec["text_unclocked"] + "\n" + LINE == rec["text"]
+
+
+def test_a_restored_prompt_still_drops_its_line_when_its_call_ends(
+        env, mk_bot, monkeypatch, run_async):
+    env.rm()
+    [sent] = env.rig.prompt_messages()
+    again = restart(env, mk_bot, monkeypatch, run_async)
+    again.hook("PostToolUseFailure", tool_name="Bash",
+               tool_input={"command": RM, "description": RM}, tool_use_id="toolu_p1",
+               error="Exit code 1", is_interrupt=False)
+    edits = [c.kwargs for c in again.rig.bot._app.bot.edit_message_text.await_args_list
+             if c.kwargs.get("message_id") == sent["msg_id"]]
+    assert len(edits) == 1 and LINE not in edits[0]["text"] and "rm -rf build/" in edits[0]["text"]
+
+
+def test_a_restored_unclocked_text_reveals_a_foreign_override(
+        env, mk_bot, monkeypatch, run_async):
+    """Restored as its text is: a raw direction control shows as its marker."""
+    env.rm()
+    [sent] = env.rig.prompt_messages()
+    env.rig.sess.pending_prompt_msg["text_unclocked"] += "\u202e"
+    again = restart(env, mk_bot, monkeypatch, run_async)
+    again.hook("PostToolUseFailure", tool_name="Bash",
+               tool_input={"command": RM, "description": RM}, tool_use_id="toolu_p1",
+               error="Exit code 1", is_interrupt=False)
+    [edit] = [c.kwargs for c in again.rig.bot._app.bot.edit_message_text.await_args_list
+              if c.kwargs.get("message_id") == sent["msg_id"]]
+    assert "⟨U+202E⟩" in edit["text"] and "\u202e" not in edit["text"]

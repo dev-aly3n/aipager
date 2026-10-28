@@ -69,6 +69,7 @@ from aipager.team import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
+from aipager.bot import rm_refusal
 from aipager.bot.dashboard import ALREADY_ANSWERED, PINNED_ANSWER_VERB, open_prompt_tokens
 from aipager.bot.flood import MUTE, clear_time
 from aipager.bot.transport import (  # noqa: F401
@@ -2429,6 +2430,11 @@ class CallbackDispatchMixin:
                 if separate_perm or (tapped_id and tapped_id == sess.busy_msg_id):
                     sess.mark_prompt_closed(tapped_id)
                 left = 0
+                # Its message's text without its clock line, when it has
+                # one to take off (roadmap 8.151); read before it closes.
+                _where, tapped_rec = (sess.prompt_record_of(separate_perm)
+                                      if separate_perm else (None, None))
+                unclocked = rm_refusal.take_unclocked_text(tapped_rec)
                 if separate_perm:
                     # Only this prompt closes (roadmap 8.120).
                     sess.close_prompts(lambda p: p is separate_perm)
@@ -2449,8 +2455,19 @@ class CallbackDispatchMixin:
                     self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s (via=%s)", sess.label, verb, via or "n/a")
                 try:
-                    await edit_text(query, f"{original_text}\n\n" + shared.text(
-                        ARROW_VERB, verb=Safe(card_rows.verb_text(shared, verb, "text"))))
+                    if unclocked is not None:
+                        # Answered: the "if nobody answers" line goes, on
+                        # the prompt's own message too when a copy the bar
+                        # re-sent was tapped.
+                        await edit_text(query, f"{unclocked}\n\n" + shared.html(
+                            ARROW_VERB, verb=card_rows.verb_text(shared, verb, "text")),
+                            parse_mode="HTML")
+                        if tapped_id != tapped_rec.get("msg_id"):
+                            await self._show_unclocked(sess, tapped_rec, unclocked)
+                    else:
+                        await edit_text(query, f"{original_text}\n\n" + shared.text(
+                            ARROW_VERB,
+                            verb=Safe(card_rows.verb_text(shared, verb, "text"))))
                 except Exception:
                     pass
                 self.registry.remove_message(

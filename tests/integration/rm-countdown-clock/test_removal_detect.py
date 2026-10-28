@@ -26,6 +26,8 @@ REMOVALS = [
     "time -p rm x", "time rm x",
     # One < is a redirection; << inside quotes is text, not a heredoc.
     "rm x < /dev/null", "rm 'a<<b'", 'rm "x<<y"', "rm x\\<<y",
+    # A heredoc's body is left out; an rm outside it still counts.
+    "rm x; cat <<EOF\nhi\nEOF", "rm x <<EOF\nyes\nEOF",
 ]
 NOT_REMOVALS = [
     "ls", "echo rm", "grep -r rm .", 'git commit -m "rm old"', "npm run rm-cache",
@@ -38,10 +40,10 @@ NOT_REMOVALS = [
     'echo "done; rm -rf x"', "git commit -m 'fix; rm old'", 'echo "$(date) && rm x"',
     # Deeper than Claude Code reads (two levels of scripts).
     "sh -c \"sh -c 'sh -c rm'\"",
-    # A heredoc's body is data, not commands (Claude Code's parser reads
-    # it so); any unquoted << is doubt, so no clock.
+    # A heredoc's body and a here-string are data, not commands (Claude
+    # Code's parser reads them so).
     "cat <<EOF > f.sh\nrm -rf x\nEOF", "cat > f <<'EOF'\nrm x\nEOF",
-    "cat <<-EOF\n\trm x\n\tEOF", "bash <<< 'rm x'", "rm x; cat <<EOF\nhi\nEOF",
+    "cat <<-EOF\n\trm x\n\tEOF", "bash <<< 'rm x'",
     "sh -c 'cat <<EOF\nrm x\nEOF'",
 ]
 
