@@ -405,6 +405,47 @@ idle. `aipager session x1 --resume <id>` does the same in the terminal;
 when the job is busy it prints `claude stop <job>` and `claude attach
 <job>` and exits with code 1 instead of starting anything.
 
+## Claude Code asks whether to resume a conversation
+
+`❓ x1: Claude Code asks whether to resume this conversation. It was idle
+for a long time, and resuming it uses part of your 5-hour usage limit.`
+
+Claude Code sometimes asks a question in its own terminal before it goes on
+with a long conversation, and tells no hook about it: "Resume this
+conversation?" when a large conversation has sat unused for a while
+(resuming it costs part of your 5-hour usage limit), "Resume from summary"
+when an old, large conversation is started again, and a few others. aipager
+reads Claude Code's own record of the session, so it knows such a question
+is open. While it is, aipager types nothing into that terminal: a message
+you send waits (👀) and goes to Claude once the question is answered.
+
+- **Right after a restart, a mode switch, a bring-back or a resume**,
+  aipager cannot tell which of these questions Claude Code is showing, so
+  the card says `❓ x1: Claude Code is asking a question in the terminal
+  before it goes on with this conversation.` and has one button, `Continue
+  this conversation`. It answers the question the way Escape does there:
+  the conversation goes on as it is, with its whole history. To start over
+  or shorten it, tap it and then send `/clear` or `/compact`.
+- **On a session that sat idle**, Claude Code asks by itself (for a
+  subscriber, about an hour after the last answer). Nothing is shown then;
+  when you send a message, it waits and the card above appears with
+  `Resume` and `Start a new conversation`. Resume goes on with the
+  conversation. Start a new conversation leaves it and starts an empty one
+  (aipager types `/clear`), and your waiting message is the new
+  conversation's first. Unlike Claude Code's own option, the new
+  conversation does not point at the old one. It needs the right to send
+  `/clear` in that chat.
+- **Any other question or panel** Claude Code shows in its terminal (a
+  `/config` sent from Telegram, say) gets a note and no buttons: `❓ x1 is
+  waiting on a question in its terminal. Answer it there, and messages sent
+  meanwhile go to Claude right after.`
+
+You can always answer in the terminal instead; the card then says `x1: the
+question was answered in the terminal.` A button tapped after the question
+closed does nothing and says `This question is no longer open.` aipager
+never offers "Don't ask me again": that changes Claude Code's own settings
+for every session.
+
 ## A permission prompt with no news for 5 minutes
 
 If a session waits on a permission prompt or a question and Claude Code
