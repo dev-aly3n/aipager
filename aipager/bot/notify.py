@@ -55,7 +55,7 @@ from aipager.bot.rich_message import (
 from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
-from aipager import i18n, preferences
+from aipager import i18n, preferences, rm_countdown
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
@@ -634,6 +634,8 @@ class NotifyMixin:
         for i, perm in enumerate(perms):
             if not isinstance(perm, dict) or perm.get("rm_refused"):
                 continue
+            if rm_countdown.clock_of(perm) is None:
+                continue  # its call came back meanwhile: it ran
             if close:
                 where, rec = sess.prompt_record_of(perm)
                 if where is None:

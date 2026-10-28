@@ -1267,6 +1267,12 @@ class SessionMonitor:
             return
         if not rm_countdown.refusal_window_open(perm, rm_countdown._now_wall()):
             return
+        # A "No" at the terminal writes the same error result plus the
+        # interrupt marker: that is the person's answer, never Claude
+        # Code's own refusal. The scan checks it first; the timer runs
+        # on its own, so the check is here for both.
+        if dialog_interrupted_in_terminal(sess, time.monotonic(), time.time()):
+            return
         info = perm["tool_info"]
         tuid = info["tool_use_id"]
         changed = self._rm_transcript_changed(name, sess, tuid)

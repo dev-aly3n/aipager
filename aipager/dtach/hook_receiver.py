@@ -344,6 +344,17 @@ def _perm_owner(perm) -> str | None:
     return str(info.get("agent_id") or "")
 
 
+def _drop_rm_clock(perm) -> bool:
+    """A prompt whose tool call failed (PostToolUseFailure) while its
+    record stays open was answered, in the terminal if not from the chat,
+    and its call ran: Claude Code's own refusal when nobody answers
+    fires neither hook (roadmap 8.128, live check Q3). Its risky-removal
+    clock goes, so nothing later closes it as refused by Claude Code.
+    True when it had one."""
+    info = perm.get("tool_info") if isinstance(perm, dict) else None
+    return isinstance(info, dict) and info.pop("rm_clock", None) is not None
+
+
 def _owned_by(*owners: str):
     """A :meth:`TrackedSession.close_prompts` predicate: the prompts of
     *owners*, and any whose owner is not known (as before 8.120, a tool
@@ -2280,8 +2291,12 @@ class HookReceiver:
                     # Claude's own refusal ends its turn (the session
                     # monitor's dialog_ended_in_terminal): its record stays
                     # for that, only its buttons stop typing.
+                    # The call ran (8.128): never closed later as
+                    # refused by Claude Code.
                     for perm in ended:
                         sess.mark_prompt_closed(sess.prompt_surface(perm))
+                        if _drop_rm_clock(perm):
+                            self.registry.mark_dirty()  # a restart reads it so
                     if not ended:
                         sess.mark_prompt_closed(sess.busy_msg_id)
                 if (not msg.get("agent_id")
