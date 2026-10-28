@@ -474,3 +474,27 @@ def test_note_deleted_on_close(w, mk_update):
     w.scan()
     w.bot._app.bot.delete_message.assert_any_await(chat_id=CHAT_ID, message_id=900)
     w.bot._app.bot.edit_message_text.assert_not_awaited()
+
+
+def test_wipe_for_a_draft_is_not_logged_as_a_stopped_prompt(w, caplog):
+    """The wipe before /clear is for a draft the Escape may have left, not
+    for a prompt a dialog stopped: the log says so (live finding F4)."""
+    import logging
+    caplog.set_level(logging.INFO, logger="aipager.dtach.inject")
+    inject.request_wipe(NAME, term_dialog.WIPE_DRAFT_CHARS)
+    assert w.run_async(inject.send_text_and_enter(NAME, "/clear")) is True
+    lines = [r.getMessage() for r in caplog.records]
+    assert any("draft left behind a terminal dialog" in m for m in lines)
+    assert not any("stopped prompt" in m for m in lines)
+    # A prompt a dialog stopped still says so.
+    caplog.clear()
+    inject._stopped_while_typing(NAME, 40)
+    inject.request_wipe(NAME, term_dialog.WIPE_DRAFT_CHARS)
+    assert w.run_async(inject.send_text_and_enter(NAME, "/clear")) is True
+    assert any("stopped prompt" in r.getMessage() for r in caplog.records)
+    # The other way round too: a stopped prompt after the request.
+    caplog.clear()
+    inject.request_wipe(NAME, term_dialog.WIPE_DRAFT_CHARS)
+    inject._stopped_while_typing(NAME, 40)
+    assert w.run_async(inject.send_text_and_enter(NAME, "/clear")) is True
+    assert any("stopped prompt" in r.getMessage() for r in caplog.records)

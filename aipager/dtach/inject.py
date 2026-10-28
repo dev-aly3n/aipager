@@ -622,6 +622,10 @@ _GATE_HOLDS: dict[str, int] = {}
 # Characters a prompt stopped by a dialog left in the input box, wiped
 # before the next prompt is typed there.
 _PENDING_WIPE: dict[str, int] = {}
+#: Sessions whose pending wipe is only a draft a terminal dialog's Escape
+#: left (:func:`request_wipe`), no stopped prompt: for the log's wording.
+#: Read only while a wipe is pending; both writers keep it right then.
+_WIPE_DRAFT_ONLY: set[str] = set()
 
 
 class _SendStopped:
@@ -730,6 +734,7 @@ def _type_pieces(text: str) -> list[str]:
 
 def _stopped_while_typing(session: str, typed: int) -> _SendStopped:
     _PENDING_WIPE[session] = _PENDING_WIPE.get(session, 0) + typed
+    _WIPE_DRAFT_ONLY.discard(session)
     log.warning("A dialog opened in %s while a prompt was typed: stopped after "
                 "%d characters, no Enter", session, typed)
     return DIALOG_WHILE_TYPING
@@ -754,7 +759,11 @@ async def _wipe_stopped_text(session: str, sock: str) -> bool:
                         session, i + 1, writes)
             return False
     _PENDING_WIPE.pop(session, None)
-    log.info("Wiped %d characters of a stopped prompt in %s", chars, session)
+    if session in _WIPE_DRAFT_ONLY:
+        log.info("Wiped the input box (up to %d characters of a draft left behind "
+                 "a terminal dialog) in %s", chars, session)
+    else:
+        log.info("Wiped %d characters of a stopped prompt in %s", chars, session)
     return True
 
 
@@ -901,6 +910,8 @@ def request_wipe(session: str, chars: int) -> None:
     at least *chars* characters. For a draft a terminal dialog's Escape
     left there (roadmap 8.127)."""
     if chars > 0:
+        if not _PENDING_WIPE.get(session):
+            _WIPE_DRAFT_ONLY.add(session)
         _PENDING_WIPE[session] = max(_PENDING_WIPE.get(session, 0), int(chars))
 
 
