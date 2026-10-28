@@ -30,6 +30,8 @@ NOT_REMOVALS = [
     "", "   ", "echo 'rm -rf x'", "# rm x", "echo hi # rm x", '"rm -rf x"',
     "command -v rm", "sh -c 'echo rm'", "python -c 'import os; os.remove(1)'",
     "find . -delete", "git rm x", "echo x | rmate",
+    # A separator inside quotes is text, not a new command.
+    'echo "done; rm -rf x"', "git commit -m 'fix; rm old'", 'echo "$(date) && rm x"',
     # Deeper than Claude Code reads (two levels of scripts).
     "sh -c \"sh -c 'sh -c rm'\"",
 ]
