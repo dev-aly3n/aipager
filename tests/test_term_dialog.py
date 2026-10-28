@@ -464,3 +464,12 @@ def test_last_exchange_at_reads_the_last_user_or_assistant_entry(tmp_path):
     assert last_exchange_at(str(path)) == want
     assert last_exchange_at(str(tmp_path / "missing.jsonl")) is None
     assert last_exchange_at("") is None
+
+
+def test_resume_type_wait_stays_short():
+    """The wait before the first message after a ``--resume`` start delays
+    that message after every resume, with a question or not. Claude Code
+    2.1.311 draws both resume questions with no network call before them,
+    and live the record said waiting at most 0.05 s after SessionStart: the
+    wait stays well under the 6 s it once was (live finding F1)."""
+    assert 0.5 <= term_dialog.RESUME_TYPE_SETTLE_SECONDS <= 2.0

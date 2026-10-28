@@ -76,7 +76,15 @@ WAITING = "waiting"
 RESUME_CONTEXT_SECONDS = 30.0
 #: For this long after a ``--resume`` SessionStart, a message about to be
 #: typed into an idle session first waits to see whether a dialog draws.
-RESUME_TYPE_SETTLE_SECONDS = 6.0
+#: Claude Code 2.1.311 decides on both resume questions with no network
+#: call (the cold-resume gate reads cached plan and usage data, the
+#: summary question only starts its summary in the background) and draws
+#: them as the conversation is restored: live, the record said waiting
+#: 0.016-0.049 s after the SessionStart hook (45 runs; the hook itself ran
+#: 50-76 ms after the draw), and at most 0.48 s after the draw. 1.5 s is
+#: thirty times the worst gap seen, and adds at most that to the first
+#: message after a resume.
+RESUME_TYPE_SETTLE_SECONDS = 1.5
 #: The cold-resume dialog's idle trigger: the conversation's last
 #: exchange is at least this much older than the dialog (the cache TTL is
 #: 5 min at the shortest; live, the dialog drew 292.5-292.9 s after the
