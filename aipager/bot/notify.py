@@ -379,6 +379,22 @@ def _separate_prompt_perm(tool_info: dict | None, summary: str,
     return perm
 
 
+def _refused_call_row(sess: TrackedSession, perm: dict, row: str) -> bool:
+    """The card's own row of the tool call Claude Code refused by itself
+    (roadmap 8.151) becomes the refused *row* (❌, kept at the turn's
+    end): the call never ran, so the finished card must not tick it. Its
+    first pending row with the call's summary, as a PostToolUseFailure
+    would settle it. False when it has none (the caller adds the row)."""
+    info = perm.get("tool_info")
+    summary = info.get("summary") if isinstance(info, dict) else None
+    claimed = {shell.get("history_idx") for shell in sess.bg_shells.values()}
+    for i, (text, done) in enumerate(sess.tool_history):
+        if text == summary and not done and i not in claimed:
+            sess.tool_history[i] = (row, "failed")
+            return True
+    return False
+
+
 def _prompt_owner(perm) -> str:
     """The agent id that owns open prompt *perm*, ``""`` for Claude's own
     or one whose tool is not known (roadmap 8.120)."""
@@ -466,6 +482,7 @@ class NotifyMixin:
         sess.turn_prompt_shown = True
         selector_text = context.get("selector_text", "")
         selector_options = context.get("selector_options")
+        unclocked = None  # its text without a clock line, when it has one
         if tool_info and tool_info["name"] == "AskUserQuestion":
             text, keyboard = self._build_ask_keyboard(sess, label, tool_info["input"])
             questions = (tool_info.get("input") or {}).get("questions") or []
@@ -486,7 +503,10 @@ class NotifyMixin:
                     tool_summary, (tool_info or {}).get("detail") or "",
                     tr=prompt_tr)
             # When Claude Code refuses a risky removal by itself (8.128).
-            text += rm_refusal.clock_line_html(prompt_tr, tool_info)
+            clock_line = rm_refusal.clock_line_html(prompt_tr, tool_info)
+            if clock_line:
+                unclocked = text
+                text += clock_line
             # This separate-message prompt keeps its Allow/Deny-only
             # keyboard on purpose (review rev-iter1-004): Allow-always
             # was never offered here. Stop stays absent as before;
@@ -511,6 +531,10 @@ class NotifyMixin:
                          "perm": _separate_prompt_perm(
                              tool_info, prompt_summary,
                              context.get("hook_reply"))}
+        if unclocked is not None:
+            # Shown once the prompt closes other than by Claude Code's
+            # own refusal (roadmap 8.151).
+            prompt_record["text_unclocked"] = unclocked
         if slot == "primary":
             sess.pending_prompt_msg = prompt_record
             reply_to = sess.trigger_msg_id
@@ -657,8 +681,9 @@ class NotifyMixin:
                 sess.mark_prompt_refused(rec.get("msg_id"), rec.get("prompt_token"))
                 edits.append(rec)
             detail = (perm.get("tool_summary") or "Permission")[:80]
-            sess.record_tool(f"🔑 {detail[:60]} → {card_rows.REFUSED_BY_CLAUDE}",
-                             "failed")
+            row = f"🔑 {detail[:60]} → {card_rows.REFUSED_BY_CLAUDE}"
+            if not _refused_call_row(sess, perm, row):
+                sess.record_tool(row, "failed")
             from aipager import audit as audit_mod
             audit_mod.append(
                 session=sess.name, label=sess.label,
@@ -701,6 +726,35 @@ class NotifyMixin:
             log.debug("[%s] card repaint after a refused prompt failed",
                       sess.label, exc_info=True)
         self._start_animation(sess)
+
+    async def _drop_clock_lines(self, sess: TrackedSession, records) -> None:
+        """Prompt messages whose prompt closed other than by Claude Code's
+        own refusal (a tap, an answer in the terminal, its call ran or
+        failed; roadmap 8.151): each loses its clock line ("If nobody
+        answers ..."), once, and keeps its buttons. A record with no
+        clock line is left alone (a refused prompt is closed before any
+        caller reads its record). Never raises."""
+        for rec in records or ():
+            base = rm_refusal.take_unclocked_text(rec)
+            if base is not None:  # none, or taken off already
+                await self._show_unclocked(sess, rec, base)
+
+    async def _show_unclocked(self, sess: TrackedSession, rec: dict,
+                              base: str) -> None:
+        """Prompt message record *rec* shows *base*, its text without the
+        clock line, with its buttons (see :meth:`_drop_clock_lines`).
+        Never raises."""
+        rec["text"] = base
+        chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
+        if not (isinstance(msg_id, int) and msg_id > 0):
+            return  # never sent (a muted chat): nothing to edit
+        try:
+            await self._app.bot.edit_message_text(
+                chat_id=chat_id or resolve_chat_id(sess), message_id=msg_id,
+                text=base, parse_mode="HTML", reply_markup=rec.get("keyboard"))
+        except Exception:  # noqa: BLE001 - cosmetic: the line stays
+            log.debug("[%s] clock line not taken off a closed prompt",
+                      sess.label, exc_info=True)
 
     async def _show_rm_refused(self, sess: TrackedSession, rec: dict, tr) -> None:
         """A refused prompt's own message: its text as sent, the refused
@@ -2787,6 +2841,9 @@ class NotifyMixin:
 
         # ── Claude Code refused its risky-removal prompt (8.128) ──
         # Before the app check: the records need no bot.
+        if event == "clock_lines_drop":
+            await self._drop_clock_lines(sess, context.get("records"))
+            return
         if event == "rm_refused":
             await self._on_rm_refused(sess, context)
             return
@@ -3243,11 +3300,16 @@ class NotifyMixin:
                     await self._after_prompts_changed(
                         sess, {"inline_closed": inline_closed})
                 return
-            await self._end_turn_ended_at_dialog(
-                sess, refused=refused, by="", confirmed=True,
-                carried_on=carried_on,
-                card_text=_terminal_card_text(sess.label, refused=refused,
-                                              tr=i18n.for_sess(sess)))
+            # Prompt messages sent with a clock line: answered in the
+            # terminal, the line goes (roadmap 8.151).
+            clocked = [rec for _where, _perm, rec in sess.open_prompt_records()
+                       if isinstance(rec, dict) and rec.get("text_unclocked")]
+            if await self._end_turn_ended_at_dialog(
+                    sess, refused=refused, by="", confirmed=True,
+                    carried_on=carried_on,
+                    card_text=_terminal_card_text(sess.label, refused=refused,
+                                                  tr=i18n.for_sess(sess))):
+                await self._drop_clock_lines(sess, clocked)
             return
 
         if event == "waiting_reminder":

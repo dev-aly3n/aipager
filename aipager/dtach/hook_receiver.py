@@ -355,6 +355,15 @@ def _drop_rm_clock(perm) -> bool:
     return isinstance(info, dict) and info.pop("rm_clock", None) is not None
 
 
+def _clock_records(sess, perms) -> list[dict]:
+    """The records of the prompt messages among *perms* (open prompts)
+    that were sent with a clock line (roadmap 8.151): the bot takes the
+    line off once they close other than by Claude Code's own refusal."""
+    return [rec for _where, p, rec in sess.open_prompt_records()
+            if isinstance(rec, dict) and rec.get("text_unclocked")
+            and any(p is e for e in perms)]
+
+
 def _owned_by(*owners: str):
     """A :meth:`TrackedSession.close_prompts` predicate: the prompts of
     *owners*, and any whose owner is not known (as before 8.120, a tool
@@ -2182,6 +2191,7 @@ class HookReceiver:
                          if _finishes_prompt(msg, tool_name, tool_input, p)]
                 sess.agent_tool_ended(msg.get("agent_id") or "",
                                       _payload_tool_use_id(msg))
+                clocked = _clock_records(sess, ended)
                 if ended:
                     # Answered (in the terminal, if not by a tap): an old
                     # answer button on its message types nothing now
@@ -2197,6 +2207,9 @@ class HookReceiver:
                 elif _finishes_open_prompt(msg, tool_name, tool_input, sess):
                     # The card's prompt outside a wait (a late end).
                     sess.mark_prompt_closed(sess.busy_msg_id)
+                if clocked:
+                    await self.notify_fn(sess, "clock_lines_drop",
+                                         {"records": clocked})
                 async_child = agent_tree.async_launched(msg)
                 if async_child:
                     # Runs on in the background (8.120): a foreground agent
@@ -2267,6 +2280,7 @@ class HookReceiver:
                          if _finishes_prompt(msg, tool_name, f_input, p)]
                 sess.agent_tool_ended(msg.get("agent_id") or "",
                                       _payload_tool_use_id(msg))
+                clocked = _clock_records(sess, ended)
                 if ended and msg.get("agent_id"):
                     # An agent's, refused in the terminal: the agent goes on
                     # (or stops), and the session with it once no other
@@ -2286,19 +2300,45 @@ class HookReceiver:
                         lambda p: any(p is e for e in ended))
                     await self._prompts_closed(
                         sess, closed, inline_closed, "tool-refused")
+                elif ended and msg.get("is_interrupt") is not True:
+                    # (No is_interrupt at all reads as a plain failure: the
+                    # prompt closes, the fail-closed side for taps; an
+                    # Escape then ends the turn as for any other tool.)
+                    # Claude's own, answered (in the terminal, if not by a
+                    # tap) and its call ran and failed (roadmap 8.151): its
+                    # dialog is gone and the turn goes on, exactly as after
+                    # a PostToolUse. Every surface of it refuses a later tap
+                    # (a typed Enter would land in Claude's input, or allow
+                    # whatever dialog is up then), the session works again
+                    # and a message held behind the dialog goes out.
+                    closed, inline_closed = sess.close_prompts(
+                        lambda p: any(p is e for e in ended))
+                    await self._prompts_closed(sess, closed, inline_closed,
+                                               "tool-failed")
                 elif ended or _finishes_open_prompt(msg, tool_name, f_input, sess):
-                    # Answered or refused: the dialog is closed (8.102).
-                    # Claude's own refusal ends its turn (the session
-                    # monitor's dialog_ended_in_terminal): its record stays
-                    # for that, only its buttons stop typing.
-                    # The call ran (8.128): never closed later as
-                    # refused by Claude Code.
+                    # Escape while the call ran (is_interrupt): the turn
+                    # ends with no Stop, and only the transcript's marker
+                    # tells (the session monitor's dialog_ended_in_terminal,
+                    # roadmap 8.113), so the record stays for that. A
+                    # terminal "No" or an Escape in the dialog fires no
+                    # PostToolUseFailure at all (Claude Code 2.1.311 runs
+                    # it only when the allowed call threw). The dialog is
+                    # gone all the same: no surface of it types any more
+                    # (8.102, 8.151), and the call ran (8.128): never
+                    # closed later as refused by Claude Code.
                     for perm in ended:
+                        # Only ever Claude's lone prompt here (others open:
+                        # the branch above), so it is the primary that
+                        # open_prompt_tokens reads the flag on.
                         sess.mark_prompt_closed(sess.prompt_surface(perm))
+                        perm["dialog_gone"] = True
                         if _drop_rm_clock(perm):
                             self.registry.mark_dirty()  # a restart reads it so
                     if not ended:
                         sess.mark_prompt_closed(sess.busy_msg_id)
+                if clocked:
+                    await self.notify_fn(sess, "clock_lines_drop",
+                                         {"records": clocked})
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says

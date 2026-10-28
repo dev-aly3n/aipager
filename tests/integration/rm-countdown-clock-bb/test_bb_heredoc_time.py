@@ -2,10 +2,12 @@
 decision 1 "any doubt means False", criteria 8 and 9; review-1
 rev-iter1-003 and its nit):
 
-- A command with an unquoted heredoc (``<<WORD``, ``<<'WORD'``,
-  ``<<"WORD"``, ``<<-WORD``) gets no clock: its body is data, and whether
-  Claude Code's check reads it is not established, so it is doubt. A
-  here-string's quoted text stays one opaque word.
+- A heredoc's body (``<<WORD``, ``<<'WORD'``, ``<<"WORD"``, ``<<-WORD``)
+  is data: an rm only in the body gets no clock, and an rm outside it
+  does (roadmap 8.151: live, ``rm -rf "$(echo ...)" <<'EOF'`` had Claude
+  Code's countdown). A here-string's operand is left out the same way. A
+  substitution the shell would run in a plain body or an operand is
+  doubt: no clock.
 - ``<<`` inside quotes is plain text, so the rest of the command is read
   as usual.
 - ``time`` skips its options as a wrapper does: ``time -p rm x`` gets one.
@@ -33,9 +35,44 @@ HEREDOCS = [
     "git commit -F - <<EOF\nrm old files\nEOF",
     "cat <<EOF | sh\nrm x\nEOF",
     "bash <<EOF\nrm x\nEOF",
-    "rm x <<EOF\nyes\nEOF",
     "echo start && cat <<EOF > f\nrm x\nEOF",
     "sh -c 'cat <<EOF\nrm x\nEOF'",
+]
+
+HEREDOC_REMOVALS = [
+    "rm x <<EOF\nyes\nEOF",
+    "rm -rf \"$(echo /home/alice/nope)\" <<'EOF'\nx\nEOF",
+    "rm x; cat <<EOF\nhi\nEOF",
+    "cat <<EOF > f\nhi\nEOF\nrm -rf build",
+    "cat <<EOF > f\nhi\nEOF\nls\nrm -rf build",
+    "cat <<-EOF > f\n\thi\n\tEOF\nrmdir d",
+    "cat <<A <<'B'\nrm a\nA\nrm b\nB\nrm -rf c",
+    "sudo rm -rf x <<< 'y'",
+    "sh -c 'rm x <<EOF\nhi\nEOF'",
+    "cat <<\\EOF\nrm x\nEOF\nrm y",
+    # No blank before or after the operator.
+    "rm<<EOF>out\nx\nEOF",
+    "cat <<EOF>f\nhi\nEOF\nrm x",
+]
+
+#: A body or an operand the shell would run a substitution in: doubt.
+HEREDOC_DOUBTS = [
+    "cat <<EOF > f\n$(rm x)\nEOF\nrm y",
+    "cat <<EOF\n`rm x`\nEOF\nrm y",
+    "cat <<EOF\n'$(rm x)'\nEOF\nrm y",
+    'cat <<< "$(rm x)"; rm y',
+    "cat <<< $(rm x); rm y",
+    "x=$(( 1 << 2 )); rm q",
+    # A delimiter whose quote never closes.
+    "rm x <<'EOF",
+    'rm x <<"EOF',
+]
+
+#: A quoted delimiter keeps its body as it is: no substitution runs.
+QUOTED_BODY_REMOVALS = [
+    "cat <<'EOF' > f\n$(rm x)\nEOF\nrm y",
+    'cat <<"EOF" > f\n`rm x`\nEOF\nrm y',
+    "cat <<< '$(rm x)'; rm y",
 ]
 
 HERE_STRINGS = [
@@ -65,6 +102,21 @@ TIME_KEEPS = ["time -p ls", "time -p make", "time -p rmx", "time -p"]
 @pytest.mark.parametrize("command", HEREDOCS)
 def test_a_heredoc_command_is_not_a_removal(command):
     assert runs_removal(command) is False
+
+
+@pytest.mark.parametrize("command", HEREDOC_REMOVALS)
+def test_an_rm_outside_the_heredoc_body_is_a_removal(command):
+    assert runs_removal(command) is True
+
+
+@pytest.mark.parametrize("command", HEREDOC_DOUBTS)
+def test_a_substitution_in_a_body_or_operand_is_doubt(command):
+    assert runs_removal(command) is False
+
+
+@pytest.mark.parametrize("command", QUOTED_BODY_REMOVALS)
+def test_a_quoted_body_is_never_expanded(command):
+    assert runs_removal(command) is True
 
 
 @pytest.mark.parametrize("command", HERE_STRINGS)
@@ -116,6 +168,13 @@ def test_a_heredoc_prompt_shows_no_clock(env, mode):
 def test_a_heredoc_prompt_shows_no_clock_inline(cenv):
     cenv.rm(HEREDOC_RM)
     assert CLOCK_HEAD not in cenv.last_card_text()
+
+
+@pytest.mark.parametrize("mode", ["bypassPermissions", "auto"])
+def test_an_rm_fed_a_heredoc_shows_the_clock(env, mode):
+    """Live 8.128 C4: Claude Code counts this one down."""
+    env.rm(HEREDOC_REMOVALS[1], mode=mode)
+    assert CLOCK_HEAD in env.rig.prompt_messages()[0]["text"]
 
 
 @pytest.mark.parametrize("mode", ["bypassPermissions", "auto"])

@@ -84,15 +84,26 @@ def _segments(script: str) -> list[list[str]]:
     ``)`` backtick and ``$(``, and at ``{`` / ``}`` standing as words. A
     quoted string stays one word whatever it holds. ``#`` starting a word
     comments out the rest of the line. Escapes are honoured outside single
-    quotes. An unquoted ``<<`` (a heredoc or a here-string) raises
-    :class:`_Doubt`: its body is data the shell does not run as commands
-    (Claude Code's parser reads it so), which this reader would split as
-    lines of commands."""
+    quotes.
+
+    A heredoc's body and a here-string's operand are data the shell does
+    not run as commands (Claude Code's parser reads them so, roadmap
+    8.151): they are left out, and the rest of the command is read as
+    usual, so ``rm -rf x <<'EOF'`` is a removal and a body that only names
+    rm is not. An unquoted ``<<WORD`` / ``<<-WORD`` / ``<<'WORD'`` takes
+    the lines after its own, up to the line that is WORD (leading tabs
+    stripped for ``<<-``), or to the end. Doubt (:class:`_Doubt`): a
+    delimiter that is not a plain name, and a body or operand that would
+    run a command substitution (``$(`` or a backtick outside single
+    quotes) when the shell expands it."""
     segments: list[list[str]] = []
     words: list[str] = []
     word: list[str] = []
     in_word = False
     i, n = 0, len(script)
+    #: Heredocs opened on the current line: ``(delimiter, strip_tabs,
+    #: expands)``.
+    pending: list[tuple[str, bool, bool]] = []
 
     def end_word() -> None:
         nonlocal in_word
@@ -137,7 +148,21 @@ def _segments(script: str) -> list[list[str]]:
             i += 1
             continue
         if c == "<" and i + 1 < n and script[i + 1] == "<":
-            raise _Doubt("heredoc")
+            end_word()
+            if script.startswith("<<<", i):
+                operand, i = _heredoc_word(script, i + 3)
+                if _expands(operand):
+                    raise _Doubt("herestring")
+                continue
+            strip_tabs = script.startswith("<<-", i)
+            raw, i = _heredoc_word(script, i + (3 if strip_tabs else 2))
+            delimiter = _unquote(raw)
+            if not _DELIMITER.fullmatch(delimiter):
+                raise _Doubt("delimiter")
+            # A quoted delimiter keeps the body as it is; a plain one
+            # expands it, so a substitution in it would run.
+            pending.append((delimiter, strip_tabs, raw == delimiter))
+            continue
         if c == "#" and not in_word:
             j = script.find("\n", i)
             i = n if j < 0 else j
@@ -163,6 +188,9 @@ def _segments(script: str) -> list[list[str]]:
         if c in ";&|\n()`":
             end_segment()
             i += 1
+            if c == "\n" and pending:
+                i = _skip_bodies(script, i, pending)
+                pending.clear()
             continue
         word.append(c)
         in_word = True
@@ -182,6 +210,90 @@ def _segments(script: str) -> list[list[str]]:
         if cur:
             out.append(cur)
     return out
+
+
+_DELIMITER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _heredoc_word(script: str, i: int) -> tuple[str, int]:
+    """The word starting at *i* after a ``<<`` / ``<<-`` / ``<<<`` (blanks
+    before it skipped), as written (quotes kept), and the index after it.
+    It ends at an unquoted blank or at a character that ends a command."""
+    n = len(script)
+    while i < n and script[i] in " \t":
+        i += 1
+    start = i
+    while i < n and script[i] not in " \t;&|\n()<>":
+        c = script[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c in "'\"":
+            j = script.find(c, i + 1)
+            if j < 0:
+                raise _Doubt("quote")
+            i = j + 1
+            continue
+        if c == "$" and i + 1 < n and script[i + 1] == "(":
+            raise _Doubt("substitution")
+        i += 1
+    return script[start:min(i, n)], min(i, n)
+
+
+def _unquote(word: str) -> str:
+    """*word* with its quotes and backslashes removed (a heredoc's
+    delimiter: ``'EOF'``, ``"EOF"``, ``\\EOF`` and ``E"O"F`` are all EOF)."""
+    out, i, n = [], 0, len(word)
+    while i < n:
+        c = word[i]
+        if c == "\\":
+            out.append(word[i + 1:i + 2])
+            i += 2
+        elif c in "'\"":
+            j = word.find(c, i + 1)
+            j = n if j < 0 else j
+            out.append(word[i + 1:j])
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def _expands(text: str, *, quotes: bool = True) -> bool:
+    """Whether *text* (a here-string operand, or with *quotes* False a
+    plain heredoc's body, where a single quote is a plain character) holds
+    a command substitution the shell would run: ``$(`` or a backtick
+    outside single quotes."""
+    quoted = False
+    for k, c in enumerate(text):
+        if c == "'" and quotes:
+            quoted = not quoted
+        elif not quoted and (c == "`" or (c == "$" and text[k + 1:k + 2] == "(")):
+            return True
+    return False
+
+
+def _skip_bodies(script: str, i: int,
+                 pending: list[tuple[str, bool, bool]]) -> int:
+    """The index after the bodies of the heredocs *pending* opened on the
+    line that ended just before *i*, each up to its delimiter line (or to
+    the end). A plain delimiter's body that would run a substitution is
+    doubt (:func:`_expands`)."""
+    n = len(script)
+    for delimiter, strip_tabs, expands in pending:
+        body: list[str] = []
+        while i < n:
+            j = script.find("\n", i)
+            end = n if j < 0 else j
+            line = script[i:end]
+            i = n if j < 0 else j + 1
+            if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                break
+            body.append(line)
+        if expands and _expands("\n".join(body), quotes=False):
+            raise _Doubt("substitution")
+    return i
 
 
 def _base(word: str) -> str:
@@ -249,8 +361,8 @@ def runs_removal(command: object) -> bool:
     ``find ... -exec rm``, or inside a ``sh -c`` / ``bash -lc`` / ``eval``
     script up to two levels deep. False for anything that is not a str,
     a command over :data:`MAX_COMMAND_CHARS`, a removal only named inside
-    quoted text, a command with a heredoc, and on any doubt. Never
-    raises."""
+    quoted text or a heredoc's body or a here-string, and on any doubt.
+    Never raises."""
     try:
         if not isinstance(command, str) or len(command) > MAX_COMMAND_CHARS:
             return False

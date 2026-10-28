@@ -1152,6 +1152,10 @@ class LifecycleMixin:
             "msg_id": rec["msg_id"], "chat_id": rec["chat_id"],
             "perm": sep_perm,
         }
+        if "text_unclocked" in rec:
+            # Its text without the clock line, as the text (roadmap 8.151).
+            sess.pending_prompt_msg["text_unclocked"] = bidi_guard.reveal(
+                bidi_guard.strip_own_marks(rec["text_unclocked"]))
         # Its message answers this prompt again. Not track_message: the
         # message map is persisted already, and tracking would move
         # last_active_session.

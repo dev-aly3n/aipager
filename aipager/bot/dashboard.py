@@ -488,18 +488,34 @@ def open_prompt_tokens(sess: TrackedSession) -> set:
     """The identities of every prompt *sess* is waiting on right now
     (roadmap 8.120): the primary's (:func:`current_prompt_token`) and each
     prompt that opened while it was open. Empty unless INTERACTIVE. A
-    message bound to a token outside this set shows a closed prompt."""
+    message bound to a token outside this set shows a closed prompt.
+
+    A primary whose dialog is gone while its record stays (its call ran and
+    was interrupted, ``perm["dialog_gone"]``, roadmap 8.151; only ever a
+    lone prompt) is left out: its own message and every copy the bar
+    re-sent refuse a tap."""
     if sess.status != Status.INTERACTIVE:
         return set()
     tokens = set()
     primary = current_prompt_token(sess)
-    if primary is not None:
+    if primary is not None and not _dialog_gone(
+            sess.pending_permission or sess.pending_prompt_msg):
         tokens.add(primary)
     for rec in sess.extra_prompts:
         token = rec.get("prompt_token") if isinstance(rec, dict) else None
         if token is not None:
             tokens.add(token)
     return tokens
+
+
+def _dialog_gone(holder) -> bool:
+    """Whether the prompt held by *holder* (an inline prompt's own dict,
+    or a prompt message's record with its ``perm``) is marked as one
+    whose dialog is gone (see :func:`open_prompt_tokens`)."""
+    if not isinstance(holder, dict):
+        return False
+    perm = holder.get("perm") if isinstance(holder.get("perm"), dict) else holder
+    return perm.get("dialog_gone") is True
 
 
 def new_prompt_token() -> int:
@@ -1335,7 +1351,9 @@ class DashboardMixin:
         (:meth:`register_prompt_surface`), so a tap on it after the prompt
         was answered — even with the session already waiting on the next
         one — is refused instead of answering a prompt it never showed."""
-        if sess.status != Status.INTERACTIVE:
+        if sess.status != Status.INTERACTIVE or _dialog_gone(
+                sess.pending_permission or sess.pending_prompt_msg):
+            # Its dialog is gone (8.151): only the turn's end is left.
             return RESEND_NOT_WAITING
         markup = self._pending_prompt_markup(sess)
         if markup is None:

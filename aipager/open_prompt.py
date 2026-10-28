@@ -206,6 +206,10 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
         record["msg_id"] = msg_id
         record["text"] = text
         record["summary"] = _cut(sent.get("summary"), MAX_SUMMARY)
+        unclocked = sent.get("text_unclocked")
+        if _str_within(unclocked, MAX_TEXT, non_empty=True):
+            # Its text without the clock line (roadmap 8.151).
+            record["text_unclocked"] = unclocked
 
     # Shown during THIS wait: a prompt dict an earlier wait left behind
     # (``pending_prompt_msg`` is never cleared on answer) is not it.
@@ -421,7 +425,11 @@ def _validate(raw, *, busy_msg_id, now_wall: float) -> dict | None:
     if not (_is_int(raw.get("v")) and raw["v"] == RECORD_VERSION):
         return None
     kind = raw.get("kind")
-    keys = set(raw) - {"input_digest"}
+    keys = set(raw) - {"input_digest", "text_unclocked"}
+    if "text_unclocked" in raw and not (
+            kind == "separate"
+            and _str_within(raw["text_unclocked"], MAX_TEXT, non_empty=True)):
+        return None
     if kind == "inline":
         if keys != _INLINE_KEYS:
             return None
@@ -463,4 +471,6 @@ def _validate(raw, *, busy_msg_id, now_wall: float) -> dict | None:
             return None
         out.update(chat_id=chat_id, msg_id=msg_id, text=raw["text"],
                    summary=raw["summary"])
+        if "text_unclocked" in raw:
+            out["text_unclocked"] = raw["text_unclocked"]
     return out

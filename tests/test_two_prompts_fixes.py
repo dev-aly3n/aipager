@@ -394,14 +394,27 @@ def test_claudes_refused_prompt_closes_while_an_agents_is_open(rig):
     assert rig.sess.status == Status.INTERACTIVE
 
 
-def test_claudes_lone_refused_prompt_keeps_its_record(rig):
-    """Alone, its record stays for dialog_ended_in_terminal's line."""
+def test_claudes_lone_interrupted_prompt_keeps_its_record(rig):
+    """Escape while its call ran (is_interrupt): alone, its record stays
+    for dialog_ended_in_terminal's line, and its card types nothing."""
     rig.claude_bash(tool_use_id="toolu_p1")
     rig.hook("PostToolUseFailure", tool_name="Bash",
              tool_input=_bash("rm -rf build/"), tool_use_id="toolu_p1",
-             error="The user doesn't want to proceed with this tool use.")
+             error="Interrupted by user", is_interrupt=True)
     assert owners(rig) == [None]
     assert rig.sess.prompt_known_closed(CARD)
+
+
+def test_claudes_lone_failed_prompt_closes(rig):
+    """Its call ran and failed (no interrupt): closed as after a
+    PostToolUse (roadmap 8.151), the session works again."""
+    rig.claude_bash(tool_use_id="toolu_p1")
+    rig.hook("PostToolUseFailure", tool_name="Bash",
+             tool_input=_bash("rm -rf build/"), tool_use_id="toolu_p1",
+             error="Exit code 1", is_interrupt=False)
+    assert owners(rig) == []
+    assert rig.sess.prompt_known_closed(CARD)
+    assert rig.sess.status == Status.BUSY
 
 
 # -- a second prompt after the wait ended is not shown (review nit) ---------
