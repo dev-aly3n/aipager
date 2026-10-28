@@ -292,11 +292,12 @@ async def close_cards(bot: "TelegramBot", sess) -> None:
     if not records or bot._app is None:
         return
     tr = i18n.for_sess(sess)
+    app = bot._app
     for rec in records:
         chat_id, message_id = rec["card"]
         try:
             if rec.get("card_kind") == "note":
-                await bot._app.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                await app.bot.delete_message(chat_id=chat_id, message_id=message_id)
                 continue
             msg = _OUTCOMES.get(rec.get("outcome") or "", CLOSED_TERMINAL)
             params = {"session": sess.label}
