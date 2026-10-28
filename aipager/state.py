@@ -691,7 +691,7 @@ class TrackedSession:
     # Transient (a restart forgets them: the tap then says "already
     # answered", from ``closed_prompt_msgs``) and bounded like it.
     refused_prompt_msgs: list[int] = field(default_factory=list)
-    refused_prompt_tokens: list = field(default_factory=list)
+    refused_prompt_tokens: list[int] = field(default_factory=list)
     # Files Claude sends (SendUserFile, aipager/bot/outbox.py): the turn
     # they may come from. Opened only by prompt evidence (a prompt the
     # daemon typed, a UserPromptSubmit), never by a tool call's hook, so a
