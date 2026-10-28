@@ -852,16 +852,24 @@ class AuthMixin:
         watched, as a lone prompt's refusal is (:meth:`_auto_deny`)."""
         import time as _time
 
+        from aipager import rm_countdown
         from aipager.dtach import hook_reply, inject
+
+        def typable(perm) -> bool:
+            # On top, and not a risky-removal prompt Claude Code may have
+            # refused by itself already (roadmap 8.128): its Escape would
+            # land in Claude's input or in the next dialog.
+            return (sess.keys_verdict(perm, _time.monotonic()) == "yes"
+                    and not rm_countdown.refusal_window_open(
+                        perm, rm_countdown._now_wall()))
+
         for _ in range(len(sess.extra_prompts) + 1):
             if sess.status != Status.INTERACTIVE:
                 return
             due = [rec for rec in sess.extra_prompts
                    if isinstance(rec, dict) and rec.get("auto_deny_due")
                    and not rec.get("auto_deny_typing")]
-            ready = next((rec for rec in due
-                          if sess.keys_verdict(rec.get("perm"), _time.monotonic())
-                          == "yes"), None)
+            ready = next((rec for rec in due if typable(rec.get("perm"))), None)
             if ready is None:
                 return
             perm = ready["perm"]
@@ -879,7 +887,7 @@ class AuthMixin:
                 ready.pop("auto_deny_typing", None)
             if (sess.status != Status.INTERACTIVE
                     or not any(rec is ready for rec in sess.extra_prompts)
-                    or sess.keys_verdict(perm, _time.monotonic()) != "yes"):
+                    or not typable(perm)):
                 return
             question = info.get("name") == "AskUserQuestion"
             last_open = all(p is perm for p in sess.open_prompts())
@@ -899,7 +907,7 @@ class AuthMixin:
                 # the key.
                 if (sess.status != Status.INTERACTIVE
                         or not any(rec is ready for rec in sess.extra_prompts)
-                        or sess.keys_verdict(perm, _time.monotonic()) != "yes"):
+                        or not typable(perm)):
                     if held_back is not None:
                         session_ops._HELD_BACK.setdefault(sess.name, held_back)
                     return

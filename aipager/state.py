@@ -685,6 +685,13 @@ class TrackedSession:
     # buttons still answer it. Bounded (MAX_CLOSED_PROMPT_SURFACES, newest
     # kept) and persisted, so a stale tap after a restart is refused too.
     closed_prompt_msgs: list[int] = field(default_factory=list)
+    # Roadmap 8.128: the prompt surfaces (message ids) and prompt tokens of
+    # prompts Claude Code refused by itself (its risky-removal countdown ran
+    # out): a later tap on one says so instead of "already answered".
+    # Transient (a restart forgets them: the tap then says "already
+    # answered", from ``closed_prompt_msgs``) and bounded like it.
+    refused_prompt_msgs: list[int] = field(default_factory=list)
+    refused_prompt_tokens: list = field(default_factory=list)
     # Files Claude sends (SendUserFile, aipager/bot/outbox.py): the turn
     # they may come from. Opened only by prompt evidence (a prompt the
     # daemon typed, a UserPromptSubmit), never by a tool call's hook, so a
@@ -2952,6 +2959,35 @@ class TrackedSession:
         answer that prompt, whatever an earlier one on it was."""
         if msg_id in self.closed_prompt_msgs:
             self.closed_prompt_msgs.remove(msg_id)
+        if msg_id in self.refused_prompt_msgs:
+            self.refused_prompt_msgs.remove(msg_id)
+
+    def mark_prompt_refused(self, msg_id: object, token: object = None) -> None:
+        """Record that the prompt shown on message *msg_id* (and bound to
+        prompt *token*) was refused by Claude Code itself (roadmap 8.128):
+        closed (:meth:`mark_prompt_closed`), and a later tap says it was
+        refused. A non-positive or non-int id, or a None token, is not
+        recorded."""
+        self.mark_prompt_closed(msg_id)
+        if type(msg_id) is int and msg_id > 0:
+            if msg_id in self.refused_prompt_msgs:
+                self.refused_prompt_msgs.remove(msg_id)
+            self.refused_prompt_msgs.append(msg_id)
+            del self.refused_prompt_msgs[:-MAX_CLOSED_PROMPT_SURFACES]
+        if token is not None and not isinstance(token, bool):
+            if token in self.refused_prompt_tokens:
+                self.refused_prompt_tokens.remove(token)
+            self.refused_prompt_tokens.append(token)
+            del self.refused_prompt_tokens[:-MAX_CLOSED_PROMPT_SURFACES]
+
+    def prompt_refused(self, msg_id: object, token: object = None) -> bool:
+        """Whether the prompt on message *msg_id*, or the one bound to
+        *token*, was refused by Claude Code itself (see
+        :meth:`mark_prompt_refused`)."""
+        if type(msg_id) is int and msg_id > 0 and msg_id in self.refused_prompt_msgs:
+            return True
+        return (token is not None and not isinstance(token, bool)
+                and token in self.refused_prompt_tokens)
 
     def prompt_known_closed(self, msg_id: object) -> bool:
         """Whether the prompt on message *msg_id* is known to be closed."""
@@ -3040,6 +3076,8 @@ class TrackedSession:
         self.card_settled_msg_id = 0
         self.pending_card_deletes = []
         self.closed_prompt_msgs = []
+        self.refused_prompt_msgs = []
+        self.refused_prompt_tokens = []
         self.prompt_sent_msg = None
         busy = self.busy_msg_id
         if busy is not None and busy > 0:
@@ -3285,6 +3323,22 @@ class TrackedSession:
             if isinstance(perm, dict):
                 out.append(("extra", perm, rec))
         return out
+
+    def open_prompt_records(self) -> list[tuple[str, dict, dict | None]]:
+        """``[(where, perm, record)]`` of every open prompt in arrival
+        order: *where* is ``"inline"`` (the busy card's, no record),
+        ``"carried"`` (no record), ``"separate"`` or ``"extra"`` (its own
+        message's record)."""
+        return list(self._open_records())
+
+    def prompt_record_of(self, perm) -> tuple[str | None, dict | None]:
+        """``(where, record)`` of open prompt *perm* (see
+        :meth:`open_prompt_records`), ``(None, None)`` when it is not
+        open."""
+        for where, p, rec in self._open_records():
+            if p is perm:
+                return where, rec
+        return None, None
 
     def open_prompts(self) -> list[dict]:
         """The open prompts in arrival order (empty when none): the

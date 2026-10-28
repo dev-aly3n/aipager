@@ -77,7 +77,12 @@ _HOOK_REPLY_KEYS = frozenset({"addr", "request_id"})
 #: (a typed Allow must not answer it). Records written without them read
 #: back as before.
 _HOOK_REPLY_OPTIONAL = frozenset({"session"})
-_PERM_OPTIONAL = frozenset({"outside_reads_question"})
+_PERM_OPTIONAL = frozenset({"outside_reads_question", "rm_clock"})
+#: The optional ``rm_clock`` of Claude Code's risky-removal prompt
+#: (roadmap 8.128, ``aipager.rm_countdown``): when Claude Code refuses it
+#: by itself (epoch seconds) and the sha256 hex of its command. Exactly
+#: these two keys; anything else invalidates the record.
+_RM_CLOCK_KEYS = frozenset({"refuse_at", "command_sha"})
 _QUESTION_KEYS = frozenset({"question", "options"})
 _OPTION_KEYS = frozenset({"label", "description"})
 
@@ -283,6 +288,12 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
         if tool_info.get("outside_reads_question") is True:
             # Kept across a restart: a typed Allow must not answer it.
             record["perm"]["outside_reads_question"] = True
+        clock = tool_info.get("rm_clock")
+        if _valid_rm_clock(clock):
+            # Kept across a restart: its clock line and refused close
+            # (roadmap 8.128).
+            record["perm"]["rm_clock"] = {"refuse_at": clock["refuse_at"],
+                                          "command_sha": clock["command_sha"]}
     # The record must read back: what would not pass the loader is not
     # written (a suggestion that is not JSON, say).
     return validate(record, busy_msg_id=sess.busy_msg_id, now_wall=now_wall)
@@ -330,10 +341,20 @@ def _valid_json(x, depth: int = 0) -> bool:
     return False
 
 
+def _valid_rm_clock(c) -> bool:
+    """A well-formed ``rm_clock``: exactly its two keys, a finite positive
+    ``refuse_at`` and a sha256 hex ``command_sha``."""
+    return (isinstance(c, dict) and set(c) == _RM_CLOCK_KEYS
+            and _is_number(c["refuse_at"]) and c["refuse_at"] > 0
+            and _is_digest(c["command_sha"]))
+
+
 def _valid_perm(p) -> dict | None:
     if not (isinstance(p, dict) and _PERM_KEYS <= set(p) <= _PERM_KEYS | _PERM_OPTIONAL):
         return None
     if "outside_reads_question" in p and p["outside_reads_question"] is not True:
+        return None
+    if "rm_clock" in p and not _valid_rm_clock(p["rm_clock"]):
         return None
     name = p["tool_name"]
     if not _str_within(name, MAX_TOOL_NAME, non_empty=True):
@@ -373,6 +394,9 @@ def _valid_perm(p) -> dict | None:
            "question": question}
     if p.get("outside_reads_question") is True:
         out["outside_reads_question"] = True
+    if "rm_clock" in p:
+        out["rm_clock"] = {"refuse_at": p["rm_clock"]["refuse_at"],
+                           "command_sha": p["rm_clock"]["command_sha"]}
     return out
 
 

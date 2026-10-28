@@ -14,7 +14,7 @@ import logging
 import os
 import time
 
-from aipager import claude_jobs, statusline_file, term_dialog
+from aipager import claude_jobs, rm_countdown, statusline_file, term_dialog
 from aipager.dtach import bg_jobs
 from aipager.report import store as report_store
 from aipager.dtach import inject as dtach_inject
@@ -38,6 +38,7 @@ from aipager.transcript import (
     last_exchange_at,
     last_assistant_preview,
     saved_prompt_evidence,
+    tool_call_result,
     turn_appears_complete,
     turn_tail_since,
 )
@@ -50,6 +51,9 @@ _loop_sleep = asyncio.sleep
 # The wait until a terminal dialog's card falls due (roadmap 8.127,
 # ``SessionMonitor._card_due_later``). A seam, like ``_loop_sleep``.
 _card_due_sleep = asyncio.sleep
+# The wait until a risky-removal prompt's refusal time (roadmap 8.128,
+# ``SessionMonitor._rm_due_later``). A seam, like ``_loop_sleep``.
+_rm_due_sleep = asyncio.sleep
 
 # Item 2.2 — after this long with no hook activity, the INTERACTIVE
 # watchdog asks the transcript whether the dialog is still open, and
@@ -772,6 +776,12 @@ class SessionMonitor:
         #: session name -> the one-shot look at a terminal dialog's card
         #: when it falls due (roadmap 8.127), and the opening it is for.
         self._card_checks: dict[str, tuple[int, asyncio.Task]] = {}
+        #: (session name, tool_use_id, refuse_at) -> the one-shot look at a
+        #: risky-removal prompt's result at its refusal time (roadmap 8.128).
+        self._rm_checks: dict[tuple[str, str, float], asyncio.Task] = {}
+        #: session name -> tool_use_id -> the transcript (mtime, size) last
+        #: read for that prompt's result: read again only after a change.
+        self._rm_read: dict[str, dict[str, tuple[int, int]]] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -1209,6 +1219,117 @@ class SessionMonitor:
             if held is not None and held[0] == epoch:
                 self._card_checks.pop(name, None)
 
+    # -- Claude Code's risky-removal countdown (roadmap 8.128) -----------
+
+    @staticmethod
+    def _rm_prompts(sess: TrackedSession) -> list[dict]:
+        """Claude's own open prompts that carry the risky-removal clock and
+        the id of the tool call they ask about."""
+        out = []
+        for perm in sess.open_prompts():
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            if not isinstance(info, dict) or info.get("agent_id"):
+                continue
+            tuid = info.get("tool_use_id")
+            if (rm_countdown.clock_of(info) is not None
+                    and isinstance(tuid, str) and tuid):
+                out.append(perm)
+        return out
+
+    def _rm_transcript_changed(self, name: str, sess: TrackedSession,
+                               tool_use_id: str) -> bool:
+        """Whether the transcript changed since this prompt's result was
+        last looked for (a long wait costs one stat a tick)."""
+        try:
+            st = os.stat(sess.transcript_path) if sess.transcript_path else None
+        except OSError:
+            st = None
+        if st is None:
+            return False
+        key = (st.st_mtime_ns, st.st_size)
+        seen = self._rm_read.setdefault(name, {})
+        if seen.get(tool_use_id) == key:
+            return False
+        seen[tool_use_id] = key
+        return True
+
+    async def _check_rm_prompt(self, name: str, sess: TrackedSession, perm: dict,
+                               *, force: bool = False) -> None:
+        """Close risky-removal prompt *perm* when its refusal window is open
+        and the transcript shows how its tool call came back: an error is
+        Claude Code's own refusal (nobody answered in time), a result that
+        is not one means it was answered in the terminal and ran. Nothing
+        else closes it: silence proves nothing (the transcript is written
+        lazily). *force*: read even if the transcript did not change."""
+        if sess.status != Status.INTERACTIVE:
+            return
+        if not any(p is perm for p in sess.open_prompts()):
+            return
+        if not rm_countdown.refusal_window_open(perm, rm_countdown._now_wall()):
+            return
+        info = perm["tool_info"]
+        tuid = info["tool_use_id"]
+        changed = self._rm_transcript_changed(name, sess, tuid)
+        if not (changed or force):
+            return
+        clock = rm_countdown.clock_of(info)
+        if clock is None:
+            return
+        found = tool_call_result(sess.transcript_path, tuid,
+                                 str(info.get("name") or ""), clock["command_sha"])
+        if found == "error":
+            outcome = "refused"
+        elif found == "ok":
+            outcome = "ran"
+        else:
+            return
+        log.info("[%s] risky-removal prompt's tool call came back (%s)",
+                 sess.label, outcome)
+        await self.notify_fn(sess, "rm_refused", {
+            "perms": [perm], "outcome": outcome, "close": True})
+
+    async def _check_rm_refusal_tick(self, name: str, sess: TrackedSession) -> None:
+        """The scan's look at the risky-removal prompts of a session
+        waiting on a dialog: each is checked, and its refusal-time look is
+        scheduled. Never raises."""
+        try:
+            for perm in self._rm_prompts(sess):
+                self._schedule_rm_check(name, sess, perm)
+                await self._check_rm_prompt(name, sess, perm)
+        except Exception:  # noqa: BLE001 - the scan goes on
+            log.warning("Failed to check a risky-removal prompt for %s", name,
+                        exc_info=True)
+
+    def _schedule_rm_check(self, name: str, sess: TrackedSession, perm: dict) -> None:
+        """One look at *perm*'s result at its refusal time plus
+        ``CHECK_GRACE_SECONDS``, even if no scan comes then. Once per
+        prompt; none when that time has passed (the scan looks then)."""
+        due = rm_countdown.next_check_at(perm)
+        if due is None:
+            return
+        delay = due - rm_countdown._now_wall()
+        if delay <= 0:
+            return
+        key = (name, str(perm["tool_info"]["tool_use_id"]), due)
+        held = self._rm_checks.get(key)
+        if held is not None and not held.done():
+            return
+        self._rm_checks[key] = asyncio.get_running_loop().create_task(
+            self._rm_due_later(name, sess, perm, key, delay))
+
+    async def _rm_due_later(self, name: str, sess: TrackedSession, perm: dict,
+                            key: tuple[str, str, float], delay: float) -> None:
+        try:
+            await _rm_due_sleep(delay)
+            await self._check_rm_prompt(name, sess, perm, force=True)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.warning("Failed to check a risky-removal prompt for %s", name,
+                        exc_info=True)
+        finally:
+            self._rm_checks.pop(key, None)
+
     async def tick(self) -> None:
         """One pass of the loop: scan, save, the mute catch-up, the bar.
 
@@ -1465,6 +1586,7 @@ class SessionMonitor:
             if sess.status != Status.INTERACTIVE:
                 self._dialog_seen.pop(name, None)
                 self._dialog_checked.pop(name, None)
+                self._rm_read.pop(name, None)
             elif (self._dialog_transcript_changed(name, sess)
                   and dialog_interrupted_in_terminal(sess, now, time.time())):
                 log.info("[%s] the dialog was answered in the terminal: "
@@ -1479,6 +1601,12 @@ class SessionMonitor:
                     # again after the interrupt.
                     self._dialog_seen.pop(name, None)
                 continue
+
+            # Claude Code's risky-removal prompt refused by itself when its
+            # countdown ran out (roadmap 8.128): no hook says so, only the
+            # tool call's result in the transcript.
+            if sess.status == Status.INTERACTIVE:
+                await self._check_rm_refusal_tick(name, sess)
 
             # INTERACTIVE watchdog (item 2.2): demotes only on the
             # transcript's evidence that the dialog is over. Read again only

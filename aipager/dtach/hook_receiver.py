@@ -23,8 +23,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from aipager import (
-    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, safety, send_check,
-    statusline_file,
+    agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, rm_countdown, safety,
+    send_check, statusline_file,
 )
 from aipager.dtach import hook_spill
 from aipager.config import (
@@ -1021,6 +1021,39 @@ class HookReceiver:
                                  {"inline_closed": inline_closed})
         return False
 
+    @staticmethod
+    def _refusals_due(sess) -> dict | None:
+        """Claude's own open prompts that Claude Code may already have
+        refused by itself (roadmap 8.128: a risky-removal prompt whose
+        refusal window is open), with where each is shown, read before a
+        closer closes them; None when there is none. Claude Code fires no
+        hook at that refusal, so the next closer says it."""
+        if sess is None:
+            return None
+        now = rm_countdown._now_wall()
+        perms, records = [], []
+        for where, perm, rec in sess.open_prompt_records():
+            if _perm_owner(perm) == "" and rm_countdown.refusal_window_open(perm, now):
+                perms.append(perm)
+                records.append((where, rec))
+        if not perms:
+            return None
+        return {"perms": perms, "records": records, "outcome": "refused",
+                "close": False}
+
+    async def _report_refusals(self, sess, due: dict | None) -> None:
+        """Tell the bot the prompts in *due* (:meth:`_refusals_due`) closed
+        as refused by Claude Code. Never raises: a closer always goes on."""
+        if not due or sess is None:
+            return
+        log.info("[%s] %d risky-removal prompts closed as refused by Claude "
+                 "Code", sess.label, len(due["perms"]))
+        try:
+            await self.notify_fn(sess, "rm_refused", due)
+        except Exception:  # noqa: BLE001 - the closer must finish
+            log.warning("[%s] recording a prompt refused by Claude Code failed",
+                        sess.label, exc_info=True)
+
     def _carry_agent_prompts(self, session_name: str) -> bool:
         """Claude's Stop while it waits on prompts (roadmap 8.120): its own
         and those of agents no longer running are closed, and if a running
@@ -1059,7 +1092,10 @@ class HookReceiver:
         error), or the SessionEnd of the linked background job that ran it
         (D3; an API error only when the transcript's last record is
         Claude Code's own error record). Always finalizes (see below)."""
+        refused = self._refusals_due(self.registry.get(session_name))
         carry = self._carry_agent_prompts(session_name)
+        # Before the IDLE transition: the row is on the finished card.
+        await self._report_refusals(self.registry.get(session_name), refused)
         try:
             # The turn is over, whatever step it was in (see the Stop branch).
             sess_ref.parent_tool_started_at = None
@@ -1544,6 +1580,19 @@ class HookReceiver:
                 perm_agent = msg.get("agent_id")
                 if perm_agent:
                     tool_info["agent_id"] = perm_agent
+                # Claude Code's risky-removal prompt in Full access or Auto
+                # carries a 2-minute countdown and is refused by itself
+                # when nobody answers, with no hook (roadmap 8.128): when
+                # it is that one, the card says about when, and the
+                # transcript's result for this command closes it.
+                if rm_countdown.clock_eligible(
+                        tool_name=tool_name, mode=msg.get("permission_mode"),
+                        suggestions=suggestions, agent_id=perm_agent,
+                        tool_input=tool_input):
+                    clock = rm_countdown.make_clock(tool_input.get("command"),
+                                                    rm_countdown._now_wall())
+                    if clock is not None:
+                        tool_info["rm_clock"] = clock
                 # design.md "answer PermissionRequest hooks with a
                 # decision instead of keystrokes": the hook offers a
                 # reply channel by embedding these two keys on the
@@ -2069,10 +2118,14 @@ class HookReceiver:
                     # Claude working again proves its own dialogs closed,
                     # never an agent's (roadmap 8.120): a background
                     # agent's prompt stays open while Claude goes on.
+                    # A risky-removal prompt past its refusal window was
+                    # refused by Claude Code itself (roadmap 8.128).
+                    refused = self._refusals_due(sess)
                     closed, inline_closed = sess.close_prompts(_owned_by(""))
                     await self._prompts_closed(
                         sess, closed, inline_closed, "claude-tool-call",
                         preserve_job_state=sess.job_work_running())
+                    await self._report_refusals(sess, refused)
                 elif sess.status != Status.BUSY:
                     self.registry.transition(
                         session_name, Status.BUSY,
@@ -2734,7 +2787,13 @@ class HookReceiver:
                     log.debug("[%s] idle notification while waiting — already "
                               "reminded this wait", waiting.label)
                 return
+            # A risky-removal prompt past its refusal window was refused by
+            # Claude Code itself (roadmap 8.128): said before the IDLE
+            # transition, so its row is on the finished card.
+            refused = (self._refusals_due(waiting) if event.lower() == "stop"
+                       else None)
             carry = self._carry_agent_prompts(session_name)
+            await self._report_refusals(waiting, refused)
             try:
                 # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
                 # window before the next prompt is treated as restricted.

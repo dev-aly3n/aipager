@@ -1098,6 +1098,10 @@ class LifecycleMixin:
             if perm.get("outside_reads_question") is True:
                 # A typed Allow must still not answer it (roadmap 8.142).
                 tool_info["outside_reads_question"] = True
+            if isinstance(perm.get("rm_clock"), dict):
+                # Claude Code's risky-removal countdown (roadmap 8.128):
+                # the card's clock line and the refused close, as before.
+                tool_info["rm_clock"] = dict(perm["rm_clock"])
         # Its message holds an open prompt again (8.102).
         sess.reopen_prompt_surface(rec["card_msg_id"] if rec["kind"] == "inline"
                                    else rec["msg_id"])

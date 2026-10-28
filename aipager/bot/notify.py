@@ -30,7 +30,7 @@ from aipager.bot.divider import (
     without_dividers,
 )
 from aipager.bot.footer import footer_block, without_last_footer
-from aipager.bot import question_form, reactions
+from aipager.bot import card_rows, question_form, reactions, rm_refusal
 from aipager.bot.sibling_text import shown
 from aipager.bot.dashboard import PIN_NEEDS_INPUT, new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
@@ -485,6 +485,8 @@ class NotifyMixin:
                 text += _format_perm_detail(
                     tool_summary, (tool_info or {}).get("detail") or "",
                     tr=prompt_tr)
+            # When Claude Code refuses a risky removal by itself (8.128).
+            text += rm_refusal.clock_line_html(prompt_tr, tool_info)
             # This separate-message prompt keeps its Allow/Deny-only
             # keyboard on purpose (review rev-iter1-004): Allow-always
             # was never offered here. Stop stays absent as before;
@@ -604,6 +606,127 @@ class NotifyMixin:
                                       reply_markup=self._build_stop_keyboard(sess),
                                       chat_id=resolve_chat_id(sess))
         await self._run_due_auto_denies(sess)
+
+    async def _on_rm_refused(self, sess: TrackedSession, context: dict) -> None:
+        """Claude Code's risky-removal prompts that came back with no
+        answer from the chat (roadmap 8.128), ``context["perms"]``:
+        ``outcome`` ``"refused"`` (its countdown ran out and Claude Code
+        refused it by itself) or ``"ran"`` (answered in the terminal).
+
+        ``close`` True (the session monitor read the result): each prompt
+        still open is closed here, and the session goes on as after an
+        answer. False (a hook closer already closed them): only the
+        records; ``context["records"]`` then says where each was shown,
+        ``(where, record)`` as :meth:`TrackedSession.prompt_record_of`.
+
+        A refused prompt's surface is marked refused (a later tap says
+        so), the card's history row says "Refused by Claude Code" (❌,
+        never ✅), the audit records it as a refusal with no person, and
+        its own message, if it has one, gets the refused line and loses
+        its buttons. Nobody answered, so no answer line is posted. Each
+        prompt is handled once (``perm["rm_refused"]``)."""
+        perms = context.get("perms") or []
+        records = context.get("records") or []
+        close = context.get("close") is True
+        refused = context.get("outcome") == "refused"
+        closed_any = inline_closed = False
+        edits = []
+        for i, perm in enumerate(perms):
+            if not isinstance(perm, dict) or perm.get("rm_refused"):
+                continue
+            if close:
+                where, rec = sess.prompt_record_of(perm)
+                if where is None:
+                    continue  # answered or closed meanwhile
+            elif i < len(records) and isinstance(records[i], tuple):
+                where, rec = records[i]
+            else:
+                where, rec = sess.prompt_record_of(perm)
+            perm["rm_refused"] = True
+            if close:
+                closed, inl = sess.close_prompts(lambda p, perm=perm: p is perm)
+                closed_any = closed_any or bool(closed)
+                inline_closed = inline_closed or inl
+            if not refused:
+                continue
+            if where == "inline":
+                sess.mark_prompt_refused(sess.busy_msg_id, perm.get("prompt_token"))
+            elif isinstance(rec, dict):
+                sess.mark_prompt_refused(rec.get("msg_id"), rec.get("prompt_token"))
+                edits.append(rec)
+            detail = (perm.get("tool_summary") or "Permission")[:80]
+            sess.record_tool(f"🔑 {detail[:60]} → {card_rows.REFUSED_BY_CLAUDE}",
+                             "failed")
+            from aipager import audit as audit_mod
+            audit_mod.append(
+                session=sess.name, label=sess.label,
+                action=str(card_rows.REFUSED_BY_CLAUDE),
+                tool=str((perm.get("tool_info") or {}).get("name") or "Bash"),
+                summary=detail, user_id=None, username="",
+                scope_label=self._scope_label(sess.scope_chat_id),
+                scope_chat_id=sess.scope_chat_id or None,
+                denied=True, via="claude_code_timeout")
+            log.info("[%s] prompt refused by Claude Code (nobody answered in "
+                     "time): %s", sess.label, detail)
+        if closed_any or edits:
+            self.registry.mark_dirty()
+        if self._app is not None:
+            tr = i18n.for_sess(sess)
+            for rec in edits:
+                await self._show_rm_refused(sess, rec, tr)
+        if not (close and closed_any):
+            return
+        if sess.open_prompts():
+            await self._after_prompts_changed(sess, {"inline_closed": inline_closed})
+            return
+        if sess.status != Status.INTERACTIVE:
+            return
+        if sess.resumed_after_stop:
+            # Carried over Claude's Stop (8.120): no turn of Claude's runs.
+            self.registry.transition(sess.name, Status.IDLE)
+            return
+        self.registry.transition(sess.name, Status.BUSY,
+                                 preserve_job_state=sess.job_work_running())
+        card = sess.busy_msg_id
+        if self._app is None or not (card and card > 0):
+            return
+        try:
+            await self._edit_busy_raw(
+                card, self._build_busy_text(sess.label, "Working", sess),
+                reply_markup=self._build_stop_keyboard(sess),
+                chat_id=resolve_chat_id(sess))
+        except Exception:  # noqa: BLE001 - the animation repaints it
+            log.debug("[%s] card repaint after a refused prompt failed",
+                      sess.label, exc_info=True)
+        self._start_animation(sess)
+
+    async def _show_rm_refused(self, sess: TrackedSession, rec: dict, tr) -> None:
+        """A refused prompt's own message: its text as sent, the refused
+        line under it, and no buttons. Its buttons go even when the text
+        cannot be edited."""
+        chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
+        if not (isinstance(msg_id, int) and msg_id > 0):
+            return
+        chat = chat_id or resolve_chat_id(sess)
+        bot = self._app.bot
+        try:
+            await bot.edit_message_text(
+                chat_id=chat, message_id=msg_id,
+                text=(rec.get("text") or "") + "\n\n" + tr.html(rm_refusal.RM_REFUSED),
+                parse_mode="HTML", reply_markup=None)
+            return
+        except FloodMuted:
+            log.info("[%s] refused prompt message not edited - chat flood-muted",
+                     sess.label)
+        except Exception:  # noqa: BLE001 - fall back to the buttons alone
+            log.debug("[%s] refused prompt message edit failed", sess.label,
+                      exc_info=True)
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat, message_id=msg_id,
+                                                reply_markup=None)
+        except Exception:  # noqa: BLE001 - nothing more to do
+            log.debug("[%s] refused prompt message's buttons not removed",
+                      sess.label, exc_info=True)
 
     async def _on_prompts_carried(self, sess: TrackedSession) -> None:
         """Claude's turn ended with an agent's prompt still open (roadmap
@@ -2658,6 +2781,12 @@ class NotifyMixin:
             return
         if event == "send_files_refused":
             self._audit_refused_files(sess, context)
+            return
+
+        # ── Claude Code refused its risky-removal prompt (8.128) ──
+        # Before the app check: the records need no bot.
+        if event == "rm_refused":
+            await self._on_rm_refused(sess, context)
             return
 
         if not self._app:
