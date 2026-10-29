@@ -118,3 +118,33 @@ def test_stop_closes_an_agents_prompt_too_when_the_escapes_move_the_status(
     _texts, marks = _edits_of(env, extra)
     assert marks and marks[-1]["reply_markup"] is None, marks
 
+
+def test_a_clocked_prompt_whose_text_edit_fails_still_loses_its_buttons(env):
+    """The clock line cannot be taken off (the text edit fails): the
+    message still loses its buttons, as a refused prompt's does."""
+    msg_id = _own_prompt(env, agent=True)
+    bot = env.rig.bot._app.bot
+    bot.edit_message_text.side_effect = RuntimeError("Bad Request")
+    env.run_async(env.rig.bot._stop_session_core(env.rig.sess))
+    texts, marks = _edits_of(env, msg_id)
+    assert texts, "the clocked edit was not tried first"
+    assert marks and marks[-1]["reply_markup"] is None, marks
+
+
+@pytest.mark.parametrize("stripped", [True, False], ids=["stripped", "edit-failed"])
+def test_stop_on_the_prompts_own_message_edits_it_once(env, stripped):
+    """Stop tapped on the prompt's own message: the Stop already took its
+    buttons off, so the tap sends no second edit of it. When that edit
+    failed, the tap's own edit still takes them off."""
+    msg_id = _own_prompt(env, agent=False, mode="default")
+    bot = env.rig.bot._app.bot
+    if not stripped:
+        bot.edit_message_reply_markup.side_effect = RuntimeError("Bad Request")
+    q = env.rig.tap(msg_id, "stop")
+    assert env.rig.keys == ["Escape", "Escape"]
+    _texts, marks = _edits_of(env, msg_id)
+    assert len(marks) == 1, marks
+    if stripped:
+        q.edit_message_reply_markup.assert_not_awaited()
+    else:
+        q.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)

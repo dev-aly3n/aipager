@@ -166,6 +166,8 @@ class StopOutcome:
     agents: int = 0
     #: The job's background shells, which keep running.
     shells: int = 0
+    #: The prompt messages whose buttons the Stop took off.
+    stripped: frozenset = frozenset()
 
 
 CARD_STOPPED = Msg("card.stopped", "⚠️ <b>{session}</b> · Stopped",
@@ -2281,11 +2283,11 @@ class SessionOpsMixin:
         sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
-        await self._show_prompts_closed(sess, closed_records)
+        stripped = await self._show_prompts_closed(sess, closed_records)
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
         return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by,
-                           mode=STOP_KEYS)
+                           mode=STOP_KEYS, stripped=frozenset(stripped))
 
     async def _stop_own_turn_over(self, sess: TrackedSession, *,
                                   by: str = "") -> StopOutcome | None:
@@ -2596,10 +2598,12 @@ class SessionOpsMixin:
                     await edit_text(query, stop_text.card_text(i18n.for_sess(sess),
                                                                outcome),
                                     parse_mode="HTML")
-                elif outcome.mode != STOP_KILL_AGENTS:
+                elif (outcome.mode != STOP_KILL_AGENTS
+                        and tapped not in outcome.stripped):
                     # A prompt's own message keeps what it asked; only its
                     # buttons go (they type nothing any more). An agent's
-                    # prompt a kill closed already says so (rev-iter6-004).
+                    # prompt a kill closed already says so (rev-iter6-004),
+                    # and one the core stripped is left alone.
                     await edit_markup(query, reply_markup=None)
             except Exception:
                 pass

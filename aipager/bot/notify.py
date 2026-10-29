@@ -794,47 +794,54 @@ class NotifyMixin:
             if base is not None:  # none, or taken off already
                 await self._show_unclocked(sess, rec, base)
 
-    async def _show_prompts_closed(self, sess: TrackedSession, records) -> None:
+    async def _show_prompts_closed(self, sess: TrackedSession,
+                                   records) -> set[int]:
         """Prompt messages whose prompt a Stop's Escapes closed (Claude's
         own, an agent's: every prompt goes with the turn) show no answer
         buttons, as a prompt answered in the terminal: one with a clock
         line loses it (:meth:`_drop_clock_lines`, Claude Code did not
-        refuse it), any other loses its buttons alone. Their surfaces are
-        marked closed already, so a late tap types nothing. The busy
-        card's inline prompt goes with the card's own settle. Never
-        raises."""
+        refuse it), any other loses its buttons alone. A clocked message
+        whose text cannot be edited still loses its buttons (as
+        :meth:`_show_rm_refused`). Their surfaces are marked closed
+        already, so a late tap types nothing. The busy card's inline
+        prompt goes with the card's own settle. Returns the ids of the
+        messages whose buttons went. Never raises."""
+        stripped: set[int] = set()
         if self._app is None:
-            return
+            return stripped
         for rec in records or ():
             if not isinstance(rec, dict):
                 continue
-            base = rm_refusal.take_unclocked_text(rec)
-            if base is not None:
-                await self._show_unclocked(sess, rec, base)
-                continue
             msg_id = rec.get("msg_id")
+            base = rm_refusal.take_unclocked_text(rec)
+            if base is not None and await self._show_unclocked(sess, rec, base):
+                stripped.add(msg_id)
+                continue
             if not (isinstance(msg_id, int) and msg_id > 0):
                 continue  # never sent (a muted chat): nothing to edit
             try:
                 await self._app.bot.edit_message_reply_markup(
                     chat_id=rec.get("chat_id") or resolve_chat_id(sess),
                     message_id=msg_id, reply_markup=None)
+                stripped.add(msg_id)
             except Exception:  # noqa: BLE001 - its taps type nothing anyway
                 log.debug("[%s] closed prompt message's buttons not removed",
                           sess.label, exc_info=True)
+        return stripped
 
     async def _show_unclocked(self, sess: TrackedSession, rec: dict,
-                              base: str, keyboard=None) -> None:
+                              base: str, keyboard=None) -> bool:
         """Prompt message record *rec* shows *base*, its text without the
         clock line (see :meth:`_drop_clock_lines`). *keyboard*: the
         buttons the message keeps, None for a closed prompt. An edit of
         the text sets the message's buttons too, so a closed prompt's
         edit sends none: its old Allow/Deny never come back, also after a
-        tap took them off (roadmap 8.152). Never raises."""
+        tap took them off (roadmap 8.152). True when the message was
+        edited. Never raises."""
         rec["text"] = base
         chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
         if not (isinstance(msg_id, int) and msg_id > 0):
-            return  # never sent (a muted chat): nothing to edit
+            return False  # never sent (a muted chat): nothing to edit
         try:
             await self._app.bot.edit_message_text(
                 chat_id=chat_id or resolve_chat_id(sess), message_id=msg_id,
@@ -842,6 +849,8 @@ class NotifyMixin:
         except Exception:  # noqa: BLE001 - cosmetic: the line stays
             log.debug("[%s] clock line not taken off a closed prompt",
                       sess.label, exc_info=True)
+            return False
+        return True
 
     async def _show_rm_refused(self, sess: TrackedSession, rec: dict, tr) -> None:
         """A refused prompt's own message: its text as sent, the refused
