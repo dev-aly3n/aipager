@@ -66,3 +66,20 @@ def test_the_real_phrases():
     assert "🔄 **hiva** · waiting for 1 agent · " in _status(sess)
     del sess.bg_shells["s1"]
     assert "🔄 **hiva** · waiting for 1 agent · " in _status(sess)
+
+
+def test_the_card_frame_follows_the_job_not_the_shown_state():
+    """The card's frame (what may bypass the age decay) stays "waiting"
+    while the job holds only a shell, or only its grace window: the card
+    still shows those, though every other surface reads idle."""
+    from aipager.bot.animation import AnimationMixin
+    sess = _sess()
+    sess.status = Status.IDLE
+    sess.bg_shells["s1"] = {"label": "npm test", "in_job": True}
+    assert sess.shown_state().state == "idle"
+    assert AnimationMixin._card_frame_state(sess)[1] is True
+    del sess.bg_shells["s1"]
+    sess.job_grace_until = time.monotonic() + 60
+    assert AnimationMixin._card_frame_state(sess)[1] is True
+    sess.job_grace_until = 0.0
+    assert AnimationMixin._card_frame_state(sess)[1] is False

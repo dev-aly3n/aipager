@@ -190,3 +190,21 @@ def test_the_skip_is_logged(bot, run_async, init_header, keys, caplog):
     with caplog.at_level(logging.INFO, logger="aipager.bot.session_ops"):
         _run_stop(bot, run_async, init_header, "card", turn_ended=True)
     assert any("Stop typed no keys" in r.getMessage() for r in caplog.records)
+
+
+def test_stop_on_a_session_that_needs_you_still_types_two_escapes(bot, run_async, keys):
+    """Control: a prompt open on a running turn (INTERACTIVE) is
+    interrupted exactly as before; only an ended turn gets no keys."""
+    recv = hr.HookReceiver(bot.registry, bot.notify)
+    seen: dict = {}
+
+    async def drive():
+        sess = await _bring_up(bot, recv, turn_ended=False)
+        bot.registry.transition(sess.name, Status.INTERACTIVE)
+        seen["before"] = sess.status
+        outcome = await bot._stop_session_core(sess)
+        seen["ok"] = outcome.ok
+
+    run_async(drive())
+    assert (seen["before"], seen["ok"]) == (Status.INTERACTIVE, True)
+    assert keys == ["Escape", "Escape"]
