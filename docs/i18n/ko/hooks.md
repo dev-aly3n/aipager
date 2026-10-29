@@ -110,7 +110,7 @@ API 오류로 작업이 끝났어요. 세션이 준비됨이 되고, 답변이 �
 
 자기가 시작한 에이전트가 아직 실행 중인데 멈춘 백그라운드 에이전트도 `SubagentStop`을 받아요. aipager는 이것을 끝이 아니라 잠깐 멈춤으로 봐요. 그 에이전트는 계속 실행 중으로 남아요(자기 줄, 그 일, 답변 아래 상태, 고정된 표시줄). 같은 ID로 오는 다음 `SubagentStart`는 이어서 하는 것이고 두 번째 줄을 만들지 않아요. 그 에이전트가 직접 하는 도구 호출도 이어서 하는 것으로 쳐요. 자기 에이전트가 하나도 실행 중이지 않은 상태로 멈추면 끝나요. 그중 마지막 에이전트가 끝나고 2분이 지나도 이어서 하지 않으면 더 이상 실행 중으로 세지 않지만, 완료로 보여 주지는 않아요. 실행 중인 에이전트는, 기다리는 에이전트까지 포함해, aipager가 재시작해도 남아요.
 
-백그라운드 에이전트를 멈추는 Claude Code의 키(ctrl+x ctrl+k를 두 번)로 멈춘 에이전트는 `SubagentStop`을 보내지 않아요. aipager가 직접 끝내요. aipager의 중지가 그 키를 눌렀으면 바로, Claude Code의 트랜스크립트에 `agents_killed` 줄이 생기면(그 뒤 Claude Code가 스스로 시작하는 작업의 `UserPromptSubmit`에서 읽어요. 그 프롬프트는 감싸는 태그 없는 평범한 문장이에요), 또는 `Stop` 이벤트의 `background_tasks`에 이전 `Stop`이 나열했던 에이전트가 더는 없을 때예요. 그 에이전트들의 열린 요청은 닫히고(어떤 훅도 알려 주지 않아요), 그중 하나에 대해 나중에 오는 `SubagentStop`은 무시해요. 그 작업은 절대 터미널에서 입력한 메시지로 취급하지 않아요.
+백그라운드 에이전트를 멈추는 Claude Code의 키(ctrl+x ctrl+k를 두 번)로 멈춘 에이전트는 `SubagentStop`을 보내지 않아요. aipager가 직접 끝내요. aipager의 중지가 그 키를 눌렀으면 바로, Claude Code의 트랜스크립트에 `agents_killed` 줄이 생기면(그 뒤 Claude Code가 스스로 시작하는 작업의 `UserPromptSubmit`에서 읽어요. 그 프롬프트는 감싸는 태그 없는 평범한 문장이에요), 또는 `Stop` 이벤트의 `background_tasks`에 이전 `Stop`이 나열했던 에이전트가 더는 없을 때예요. 그 에이전트들의 열린 요청은 닫히고(어떤 훅도 알려 주지 않아요), 그중 하나에 대해 나중에 오는 `SubagentStop`은 무시해요. aipager의 중지가 그 키를 눌렀거나 Claude Code의 트랜스크립트에 중지가 기록된 뒤라면, 그 작업은 터미널에서 입력한 메시지로 취급하지 않아요.
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 674abde4 -->
+<!-- i18n-source: docs/commands.md @ 92c37755 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -270,7 +270,7 @@ Yalnızca yanıtın kendi işinin arka plan komutları sayılır: önceki bir g�
 
 Bu yanıt, görev bittiği anda, mesajına yanıt olarak sıradan bir mesajla (bildirimle) gider: terminalin gösterdiği metnin aynısı. Çalışma kartı, görünüm ne olursa olsun, kendi **Durdur** düğmesiyle işin canlı durumu olarak onun üstünde kalır: `🔄 name · 1 ajanı bekliyor · 1:18`. Ajanlar rapor verdiğinde Claude'un buna verdiği yanıt ayrı bir mesaj olarak gelir; önceki yanıt, aipager yeniden başladıktan sonra bile asla yeniden gönderilmez. Ajanları birden fazla kez rapor veren bir iş, her rapor için bir yanıt verir ve her biri yazıldıkça gönderilir.
 
-O karttaki Durdur ajanların kendisini bitirir (Claude Code'un ctrl+x ctrl+k tuşları, iki kez), ve kart `⚠️ name · 2 arka plan ajanı durduruldu` der; Claude'un arka planda başlattığı bir komut hâlâ çalışıyorsa ikinci satırda `🖥 1 arka plan komutu çalışmaya devam ediyor.` yazar (Durdur onları bitirmez). Ardından Claude Code, Claude'a ajanların durdurulduğunu söyler ve Claude'un buna kısa yanıtı ayrı bir görev olarak gelir, asla terminalde yazılmış bir mesaj gibi gösterilmez. Terminalde ctrl+x ctrl+k ile durdurulan ajanlar da fark edilir: iş Claude'un yanıtına kadar sürer ve sonra biter, beklenen hiçbir ajan kalmaz.
+O karttaki Durdur ajanların kendisini bitirir (Claude Code'un ctrl+x ctrl+k tuşları, iki kez), ve kart `⚠️ name · 2 arka plan ajanı durduruldu` der; Claude'un arka planda başlattığı bir komut hâlâ çalışıyorsa ikinci satırda `🖥 1 arka plan komutu çalışmaya devam ediyor.` yazar (Durdur onları bitirmez). Ardından Claude Code, Claude'a ajanların durdurulduğunu söyler ve Claude'un buna kısa yanıtı ayrı bir görev olarak gelir, terminalde yazılmış bir mesaj gibi gösterilmez. Terminalde ctrl+x ctrl+k ile durdurulan ajanlar da fark edilir: iş Claude'un yanıtına kadar sürer ve sonra biter, beklenen hiçbir ajan kalmaz. Terminalde durdurulan ajanlarda bu yanıt, Claude Code'un dökümü durdurmayı gösterdikten sonra orada yazılmış gibi gösterilmez.
 
 Kendi arka plan işi hâlâ sürerken duran bir ajan, daha sonra devam edeceği için çalışıyor sayılır. Kendi ajanını başlatıp onu beklemek için duran bir ajan bu başlatmadan tanınır (diğer ajanı başlatan kendi çağrısından): kendi ajanlarından hiçbiri artık çalışmıyorken durana kadar durumda çalışıyor olarak kalır ve işi açık tutar. Bunların sonuncusu bittikten iki dakika sonra hâlâ devam etmediyse artık çalışıyor sayılmaz ve durum en son gösterildiği gibi kalır. Claude'un bir ajan için gönderdiği `<task-notification>` aynı şeyi bir notla söyler; aipager bu notu, o bildirim bir görev başlattığında ve ayrıca çalışma kartı ekrandayken Claude bildirimi süren bir görevin ortasında aldığında okur. Satır, o not onu geri getirebilsin diye bitmiş görünmeden önce birkaç saniye bekler. Durum, görünüm ne olursa olsun, sohbetin dilinde eklenir.
 

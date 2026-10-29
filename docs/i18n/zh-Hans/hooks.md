@@ -110,7 +110,7 @@ aipager 读取 Claude Code 的 `notification_type`：
 
 一个后台代理在它启动的代理仍在运行时停下，也会收到 `SubagentStop`。aipager 把它当作暂停，而不是结束：这个代理仍算作正在运行（它的那一行、这项工作、回答下方的状态、置顶栏）。它下一次带同一 ID 的 `SubagentStart` 表示它继续了，不会再添加第二行；它自己的任何工具调用也算作继续。当它在自己的代理都已不在运行时停下，它才算结束。如果在其中最后一个代理结束两分钟后它仍未继续，它就不再算作正在运行，但绝不会显示为已完成。正在运行的代理，包括正在等待的那些，在 aipager 重启后都会保留。
 
-用 Claude Code 停止后台代理的按键（ctrl+x ctrl+k，按两次）停止的代理不会触发 `SubagentStop`。aipager 会自己结束它们：它自己的停止按下了这些按键时立即结束；Claude Code 的对话记录出现 `agents_killed` 行时（在 Claude Code 随后自己开始的任务的 `UserPromptSubmit` 中读取，那个提示是一句没有包装的普通句子）；或者某个 `Stop` 事件的 `background_tasks` 不再列出之前某个 `Stop` 列出过的代理时。它们打开着的请求会关闭（没有任何 hook 告知这一点），之后才到达的、属于其中某个代理的 `SubagentStop` 会被忽略。这个任务绝不会被当成在终端里输入的消息。
+用 Claude Code 停止后台代理的按键（ctrl+x ctrl+k，按两次）停止的代理不会触发 `SubagentStop`。aipager 会自己结束它们：它自己的停止按下了这些按键时立即结束；Claude Code 的对话记录出现 `agents_killed` 行时（在 Claude Code 随后自己开始的任务的 `UserPromptSubmit` 中读取，那个提示是一句没有包装的普通句子）；或者某个 `Stop` 事件的 `background_tasks` 不再列出之前某个 `Stop` 列出过的代理时。它们打开着的请求会关闭（没有任何 hook 告知这一点），之后才到达的、属于其中某个代理的 `SubagentStop` 会被忽略。当 aipager 自己的停止按下了这些按键，或者 Claude Code 的对话记录里已经出现这次停止时，这个任务不会被当成在终端里输入的消息。
 
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 

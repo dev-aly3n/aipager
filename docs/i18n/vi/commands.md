@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 674abde4 -->
+<!-- i18n-source: docs/commands.md @ 92c37755 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -270,7 +270,7 @@ Chỉ các lệnh chạy nền thuộc chính công việc của câu trả lờ
 
 Câu trả lời đó được gửi ngay khi việc kết thúc, dưới dạng một tin nhắn bình thường (có thông báo) trả lời tin nhắn của bạn: đúng phần chữ mà terminal hiện. Thẻ làm việc ở lại bên trên nó làm trạng thái trực tiếp của công việc, ở mọi bố cục: `🔄 name · đang chờ 1 agent · 1:18`, kèm nút **Dừng** của nó. Khi các agent báo kết quả về, câu trả lời của Claude cho phần đó đến thành một tin nhắn mới riêng; câu trả lời trước không bao giờ được gửi lại, kể cả khi aipager khởi động lại. Một công việc mà các agent báo về nhiều lần sẽ có một câu trả lời cho mỗi lần báo, mỗi câu trả lời được gửi ngay khi được viết xong.
 
-Dừng trên thẻ đó kết thúc chính các agent (ctrl+x ctrl+k của Claude Code, bấm hai lần), và thẻ ghi `⚠️ name · Đã dừng 2 agent chạy nền`, với dòng thứ hai `🖥 1 lệnh chạy nền vẫn tiếp tục chạy.` khi một lệnh Claude khởi động chạy nền vẫn còn chạy (Dừng không kết thúc những lệnh đó). Sau đó Claude Code báo cho Claude rằng các agent đã bị dừng, và câu trả lời ngắn của Claude về việc đó đến như một lượt riêng, không bao giờ hiện như một tin nhắn gõ trong terminal. Các agent bị dừng trong terminal bằng ctrl+x ctrl+k cũng được nhận ra: công việc tiếp tục đến câu trả lời của Claude rồi kết thúc, không còn agent nào phải chờ.
+Dừng trên thẻ đó kết thúc chính các agent (ctrl+x ctrl+k của Claude Code, bấm hai lần), và thẻ ghi `⚠️ name · Đã dừng 2 agent chạy nền`, với dòng thứ hai `🖥 1 lệnh chạy nền vẫn tiếp tục chạy.` khi một lệnh Claude khởi động chạy nền vẫn còn chạy (Dừng không kết thúc những lệnh đó). Sau đó Claude Code báo cho Claude rằng các agent đã bị dừng, và câu trả lời ngắn của Claude về việc đó đến như một lượt riêng, không hiện như một tin nhắn gõ trong terminal. Các agent bị dừng trong terminal bằng ctrl+x ctrl+k cũng được nhận ra: công việc tiếp tục đến câu trả lời của Claude rồi kết thúc, không còn agent nào phải chờ. Với các agent bị dừng trong terminal, câu trả lời đó không hiện như tin nhắn gõ ở đó khi bản ghi của Claude Code đã cho thấy việc dừng.
 
 Một agent đã dừng trong lúc phần việc nền của chính nó vẫn đang chạy được tính là đang làm việc, vì nó sẽ tiếp tục sau. Một agent đã khởi chạy một agent của riêng nó rồi dừng lại để chờ agent đó được nhận ra từ lần khởi chạy ấy (lần gọi của chính nó đã khởi chạy agent kia): nó vẫn nằm trong trạng thái là đang làm việc, và giữ công việc mở, cho đến khi nó dừng mà không còn agent nào của riêng nó đang chạy. Nếu nó chưa tiếp tục sau hai phút kể từ khi agent cuối cùng trong số đó kết thúc, nó không còn được tính là đang chạy và trạng thái được giữ như lần hiện cuối cùng. `<task-notification>` của Claude cho một agent nói điều tương tự trong một ghi chú; aipager đọc ghi chú này khi thông báo đó bắt đầu một việc, và cả khi Claude nhận nó ngay giữa một việc đang chạy trong lúc thẻ làm việc còn hiện. Một dòng chờ vài giây trước khi hiện là đã xong, để ghi chú đó kịp lấy lại nó trước. Trạng thái được thêm vào ở mọi bố cục, bằng ngôn ngữ của chat.
 
