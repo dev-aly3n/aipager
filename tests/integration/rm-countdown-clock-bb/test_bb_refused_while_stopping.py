@@ -74,3 +74,34 @@ def test_control_a_stop_with_no_refusal_takes_the_clock_line(env):
     texts = _text_edits(env, msg_id)
     assert texts and line not in texts[-1]["text"]
     assert CLOCK_HEAD not in texts[-1]["text"]
+
+
+def test_a_prompt_answered_in_the_terminal_during_the_stops_escapes_still_loses_its_buttons(
+        env, monkeypatch):
+    """The same closer with outcome "ran" (answered in the terminal): it
+    closes the record but edits nothing on the message, so the Stop must
+    still take the clock line and the buttons off. Mutant: the "ran"
+    outcome is marked as shown too, and the message keeps both."""
+    from aipager.dtach import inject
+    env.rm(hook=False, mode="bypassPermissions")
+    sess = env.rig.sess
+    (msg_id,) = env.separate_ids()
+    perm = sess.open_prompts()[0]
+    real_keys = inject.send_keys
+    ran = []
+
+    async def keys(name, key, *a, **k):
+        if not ran:
+            ran.append(key)
+            await env.rig.bot._on_rm_refused(
+                sess, {"perms": [perm], "close": True, "outcome": "ran"})
+        return await real_keys(name, key, *a, **k)
+
+    monkeypatch.setattr(inject, "send_keys", keys)
+    outcome = env.run_async(env.rig.bot._stop_session_core(sess))
+    assert outcome.ok and ran == ["Escape"], "the answer did not land during the Escapes"
+    assert perm.get("rm_refused") is True
+    assert msg_id in outcome.stripped
+    texts = _text_edits(env, msg_id)
+    assert texts and CLOCK_HEAD not in texts[-1]["text"], [t["text"] for t in texts]
+    assert texts[-1]["reply_markup"] is None
