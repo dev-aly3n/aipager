@@ -2202,9 +2202,13 @@ class SessionOpsMixin:
         # live round 2, H4), read before any await: the hooks the Escapes
         # fire can move the status off INTERACTIVE, and the open prompts
         # then no longer read as open (an extra one is even dropped).
-        # One that another path closes meanwhile (refused by Claude Code,
-        # answered, its agent stopped) is that path's to show: never edited
-        # again below (rev-iter10-001).
+        # Only one whose closer shows its own final edit on the message
+        # meanwhile is left to that closer (``final_shown``): Claude Code's
+        # refusal (the refused line, ``_show_rm_refused``) and the kill
+        # chord (the stopped line, ``_show_agents_stopped``). Every other
+        # closer (a tap, a terminal answer, an agent's SubagentStop or next
+        # tool call, Claude's Stop, the watchdog) leaves the buttons, which
+        # go below (rev-iter10-001, rev-iter11-001).
         closed_records = [rec for _where, _perm, rec in sess.open_prompt_records()
                           if isinstance(rec, dict)]
 
@@ -2262,9 +2266,10 @@ class SessionOpsMixin:
         # The job ends, background agents included: every open prompt
         # with it (roadmap 8.120), and their buttons type nothing. Their
         # own messages (read before the Escapes) lose their buttons below,
-        # except those another path closed during the awaits above: its
-        # edit (the refused line, the stopped line) stays.
-        closed_records = [rec for rec in closed_records if not rec.get("closed")]
+        # except one Claude Code's refusal or the kill chord closed during
+        # the awaits above: its refused or stopped line stays.
+        closed_records = [rec for rec in closed_records
+                          if not rec.get("final_shown")]
         sess.close_all_prompts()
         sess.pending_permission = None
         sess.status = Status.IDLE

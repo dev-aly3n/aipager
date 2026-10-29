@@ -700,6 +700,9 @@ class NotifyMixin:
                 sess.mark_prompt_refused(sess.busy_msg_id, perm.get("prompt_token"))
             elif isinstance(rec, dict):
                 sess.mark_prompt_refused(rec.get("msg_id"), rec.get("prompt_token"))
+                # Its refused line is shown below: a Stop that read the
+                # record before its Escapes leaves the message to it.
+                rec["final_shown"] = True
                 edits.append(rec)
             detail = (perm.get("tool_summary") or "Permission")[:80]
             row = f"🔑 {detail[:60]} → {card_rows.REFUSED_BY_CLAUDE}"
@@ -888,6 +891,11 @@ class NotifyMixin:
         if self._app is None:
             return
         tr = i18n.for_sess(sess)
+        # Marked before the first edit: a Stop that read a record before
+        # its Escapes leaves the message to the stopped line.
+        for rec in records:
+            if isinstance(rec, dict):
+                rec["final_shown"] = True
         for rec in records:
             if isinstance(rec, dict):
                 await self._show_agent_stopped(sess, rec, tr)
