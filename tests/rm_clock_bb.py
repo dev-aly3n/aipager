@@ -135,3 +135,21 @@ class Env:
     def last_card_text(self) -> str:
         texts = [t for mid, t, _m in self.rig.card_edits if mid == CARD]
         return texts[-1] if texts else ""
+
+
+def restart(env: Env, mk_bot, monkeypatch, run_async, *, recover: bool = True) -> Env:
+    """A daemon restart: the registry is saved and loaded into a new bot
+    (with its recovery when *recover*); the same transcript and clock."""
+    from aipager.state import SessionRegistry
+
+    env.rig.bot.registry.save()
+    again = SessionRegistry()
+    again.load()
+    rig = Rig(mk_bot, monkeypatch, run_async, registry=again)
+    if recover:
+        run_async(rig.bot.recover_sessions())
+    out = Env.__new__(Env)
+    out.rig, out.wall, out.run_async, out.path = rig, env.wall, run_async, env.path
+    rig.sess.transcript_path = str(env.path)
+    out.monitor = SessionMonitor(again, rig.bot.notify)
+    return out

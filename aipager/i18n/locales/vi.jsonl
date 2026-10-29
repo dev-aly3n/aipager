@@ -217,6 +217,7 @@
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Đã từ chối"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} đã từ chối"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Đã từ chối trong terminal"}
+{"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Đã kết thúc trong terminal"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "đang hoàn tất"}
 {"k": "card.fold", "src": "2061ab43", "v": {"other": "▸ {n} công cụ đã chạy"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "({n} agent)"}}
@@ -244,6 +245,7 @@
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Đã dừng"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} đã dừng"}
+{"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Lệnh đã bị dừng trong terminal khi đang chạy"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Đã dừng trong terminal"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Đang suy nghĩ…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Xong"}

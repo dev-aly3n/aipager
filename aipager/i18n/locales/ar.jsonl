@@ -217,6 +217,7 @@
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · مرفوض"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · مرفوض من {person}"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · مرفوض في الطرفية"}
+{"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · انتهت من الطرفية"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "على وشك الانتهاء"}
 {"k": "card.fold", "src": "2061ab43", "v": {"few": "▸ {n} أدوات استُخدمت", "many": "▸ {n} أداة استُخدمت", "one": "▸ أداة واحدة استُخدمت", "other": "▸ {n} أداة استُخدمت", "two": "▸ أداتان استُخدمتا", "zero": "▸ لم تُستخدم أي أداة"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} وكلاء)", "many": "({n} وكيلًا)", "one": "(وكيل واحد)", "other": "({n} وكيل)", "two": "(وكيلان)", "zero": "(لا وكلاء)"}}
@@ -244,6 +245,7 @@
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · توقفت"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · أُوقفت بواسطة {person}"}
+{"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · أُوقف الأمر من الطرفية أثناء تشغيله"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · أُوقفت من الطرفية"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · يفكر…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "انتهى"}

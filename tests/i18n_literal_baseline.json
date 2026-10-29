@@ -91,7 +91,7 @@
  "aipager/status.py": 41,
  "aipager/team.py": 24,
  "aipager/telegram_endpoint.py": 5,
- "aipager/transcript.py": 3,
+ "aipager/transcript.py": 2,
  "aipager/ui.py": 3,
  "aipager/updater.py": 58,
  "aipager/wizard/_constants.py": 5,

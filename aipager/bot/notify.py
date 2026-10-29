@@ -56,6 +56,7 @@ from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
 from aipager import bidi_guard
 from aipager import i18n, preferences, rm_countdown
+from aipager import transcript as transcript_mod
 from aipager.i18n import Msg, Plural, Safe, Span
 from aipager.clockfmt import elapsed as clock
 from aipager.config import (
@@ -402,6 +403,26 @@ def _prompt_owner(perm) -> str:
     return str(info.get("agent_id") or "") if isinstance(info, dict) else ""
 
 
+def _terminal_end_how(sess: TrackedSession, perm) -> str:
+    """How the permission dialog of *perm* (Claude's own, shown during the
+    wait that just ended at the transcript's interrupt marker) ended at
+    the terminal (roadmap 8.152): ``"ran"`` when its call was allowed and
+    then stopped while it ran (a PostToolUseFailure with ``is_interrupt``
+    marked it ``dialog_gone``, or the marker names the call's message),
+    ``"denied"`` when the dialog itself was answered "No" or Escape,
+    ``"unknown"`` when nothing says which. Never raises."""
+    try:
+        perm = perm if isinstance(perm, dict) else {}
+        if perm.get("dialog_gone") is True:
+            return transcript_mod.END_RAN
+        info = perm.get("tool_info")
+        tuid = info.get("tool_use_id") if isinstance(info, dict) else None
+        return transcript_mod.terminal_end_kind(sess.transcript_path or "",
+                                                tuid if isinstance(tuid, str) else "")
+    except Exception:  # noqa: BLE001 - the neutral wording then
+        return transcript_mod.END_UNKNOWN
+
+
 #: :meth:`NotifyMixin._end_job_turn`'s answer when the job is still open.
 _JOB_STILL_OPEN = object()
 
@@ -727,23 +748,60 @@ class NotifyMixin:
                       sess.label, exc_info=True)
         self._start_animation(sess)
 
+    async def _on_rm_clock_disproven(self, sess: TrackedSession,
+                                     context: dict) -> None:
+        """Risky-removal prompts whose clock the transcript disproved
+        (roadmap 8.152, ``context["perms"]``): each one still open loses
+        its clock line and keeps its answer buttons. Its own message is
+        edited to its text without the line; the busy card's inline
+        prompt is drawn again (its text no longer carries the line). The
+        bar's later copies are sent from the same, now unclocked, text.
+        Never raises."""
+        if self._app is None:
+            return
+        for perm in context.get("perms") or ():
+            if not isinstance(perm, dict) or not rm_countdown.clock_disproven(perm):
+                continue
+            where, rec = sess.prompt_record_of(perm)
+            try:
+                if where == "inline" and sess.pending_permission is perm:
+                    card = sess.busy_msg_id
+                    if card and card > 0:
+                        await self._edit_busy_raw(
+                            card, self._build_busy_text(sess.label, "Waiting", sess),
+                            reply_markup=self._pending_prompt_keyboard(sess),
+                            chat_id=resolve_chat_id(sess))
+                elif where in ("separate", "extra") and isinstance(rec, dict):
+                    base = rm_refusal.take_unclocked_text(rec)
+                    if base is not None:
+                        self.registry.mark_dirty()
+                        await self._show_unclocked(sess, rec, base,
+                                                   keyboard=rec.get("keyboard"))
+            except Exception:  # noqa: BLE001 - cosmetic: the line stays
+                log.debug("[%s] clock line not taken off a disproven prompt",
+                          sess.label, exc_info=True)
+
     async def _drop_clock_lines(self, sess: TrackedSession, records) -> None:
         """Prompt messages whose prompt closed other than by Claude Code's
         own refusal (a tap, an answer in the terminal, its call ran or
         failed; roadmap 8.151): each loses its clock line ("If nobody
-        answers ..."), once, and keeps its buttons. A record with no
-        clock line is left alone (a refused prompt is closed before any
-        caller reads its record). Never raises."""
+        answers ..."), once, and shows no answer buttons, since its
+        prompt is closed (roadmap 8.152). A record with no clock line is
+        left alone (a refused prompt is closed before any caller reads its
+        record). Never raises."""
         for rec in records or ():
             base = rm_refusal.take_unclocked_text(rec)
             if base is not None:  # none, or taken off already
                 await self._show_unclocked(sess, rec, base)
 
     async def _show_unclocked(self, sess: TrackedSession, rec: dict,
-                              base: str) -> None:
+                              base: str, keyboard=None) -> None:
         """Prompt message record *rec* shows *base*, its text without the
-        clock line, with its buttons (see :meth:`_drop_clock_lines`).
-        Never raises."""
+        clock line (see :meth:`_drop_clock_lines`). *keyboard*: the
+        buttons the message keeps, None for a closed prompt. An edit of
+        the text sets the message's buttons too, so a closed prompt's
+        edit sends none: its old Allow/Deny never come back, also after a
+        tap took them off (roadmap 8.152). Never raises."""
         rec["text"] = base
         chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
         if not (isinstance(msg_id, int) and msg_id > 0):
@@ -751,7 +809,7 @@ class NotifyMixin:
         try:
             await self._app.bot.edit_message_text(
                 chat_id=chat_id or resolve_chat_id(sess), message_id=msg_id,
-                text=base, parse_mode="HTML", reply_markup=rec.get("keyboard"))
+                text=base, parse_mode="HTML", reply_markup=keyboard)
         except Exception:  # noqa: BLE001 - cosmetic: the line stays
             log.debug("[%s] clock line not taken off a closed prompt",
                       sess.label, exc_info=True)
@@ -2847,6 +2905,9 @@ class NotifyMixin:
         if event == "rm_refused":
             await self._on_rm_refused(sess, context)
             return
+        if event == "rm_clock_disproven":
+            await self._on_rm_clock_disproven(sess, context)
+            return
 
         if not self._app:
             return
@@ -3255,9 +3316,10 @@ class NotifyMixin:
             # at the terminal can send or edit it, as after any Escape
             # there, so it is not wiped; a message aipager held while the
             # dialog was open still goes out below, typed after it, as at
-            # any turn end. And an Escape while a tool allowed at the
-            # terminal runs (no hook says the dialog closed) reads as
-            # Denied too: the turn did end there.
+            # any turn end. An Escape while a tool allowed at the
+            # terminal runs (no hook says the dialog closed) ends the turn
+            # the same way; the card tells the two apart from the marker
+            # (roadmap 8.152, transcript.terminal_end_kind).
             from aipager.bot.session_ops import _terminal_card_text
             from aipager.dtach import inject as dtach_inject
             entered = context.get("entered_at")
@@ -3304,11 +3366,12 @@ class NotifyMixin:
             # terminal, the line goes (roadmap 8.151).
             clocked = [rec for _where, _perm, rec in sess.open_prompt_records()
                        if isinstance(rec, dict) and rec.get("text_unclocked")]
+            how = _terminal_end_how(sess, perm) if refused else ""
             if await self._end_turn_ended_at_dialog(
                     sess, refused=refused, by="", confirmed=True,
                     carried_on=carried_on,
                     card_text=_terminal_card_text(sess.label, refused=refused,
-                                                  tr=i18n.for_sess(sess))):
+                                                  how=how, tr=i18n.for_sess(sess))):
                 await self._drop_clock_lines(sess, clocked)
             return
 

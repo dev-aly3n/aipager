@@ -34,6 +34,8 @@ from aipager.session_monitor import (
 )
 from aipager.state import SessionRegistry, Status, TrackedSession
 
+from tests import terminal_end_tx
+
 NAME = "claude-dlg"
 MARKER = "[Request interrupted by user for tool use]"
 
@@ -218,6 +220,8 @@ def world(mk_bot, tmp_path):
     sess.parent_tool_started_at = sess.pending_tool_started_at
     sess.pending_permission = {"tool_summary": "Bash: ls"}
     sess.transcript_path = str(tmp_path / "t.jsonl")
+    # What a terminal "No" leaves (live, roadmap 8.152).
+    terminal_end_tx.terminal_no(sess.transcript_path)
     policy_snapshot.mark_turn_open(NAME)
     return bot, sess
 

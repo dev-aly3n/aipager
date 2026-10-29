@@ -205,7 +205,8 @@ def test_a_terminal_close_takes_the_clock_line_off_the_message(env, close):
     close(env)
     [edit] = prompt_edits(env, sent["msg_id"])
     assert edit["text"] == sent["text"].rsplit("\n", 1)[0]
-    assert edit["reply_markup"] is sent["reply_markup"]
+    # Closed: the edit brings no answer buttons back (roadmap 8.152).
+    assert edit["reply_markup"] is None
 
 
 def test_the_clock_line_goes_once(env):
@@ -362,6 +363,23 @@ def test_a_tap_on_the_bars_copy_takes_the_line_off_the_message_too(env):
     env.rig.tap(copy, "allow")
     [edit] = prompt_edits(env, sent["msg_id"])
     assert edit["text"] == sent["text"].rsplit("\n", 1)[0]
+    # Answered from the copy: the message's own buttons go (roadmap 8.152).
+    assert edit["reply_markup"] is None
+
+
+def test_a_tapped_message_gets_no_buttons_back_when_the_turn_ends_in_the_terminal(env):
+    """Live D3: a tap took a closed prompt's buttons off, then the turn
+    ended at the terminal; the clock line's edit must not bring them
+    back (roadmap 8.152)."""
+    env.rm(hook=False)
+    [sent] = env.rig.prompt_messages()
+    failed(env, interrupt=True)
+    q = env.rig.tap(sent["msg_id"], "allow")
+    assert ALREADY in answers(q)
+    marker(env)
+    env.scan(T0 + 22.0)
+    edits = prompt_edits(env, sent["msg_id"])
+    assert edits and all(e["reply_markup"] is None for e in edits)
 
 
 def test_a_tap_on_the_message_itself_edits_no_other_message(env):

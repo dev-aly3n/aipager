@@ -782,6 +782,9 @@ class SessionMonitor:
         #: session name -> tool_use_id -> the transcript (mtime, size) last
         #: read for that prompt's result: read again only after a change.
         self._rm_read: dict[str, dict[str, tuple[int, int]]] = {}
+        #: The same for the look that may disprove a prompt's clock
+        #: (roadmap 8.152): one read per transcript change once due.
+        self._rm_disproof_read: dict[str, dict[str, tuple[int, int]]] = {}
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -1265,7 +1268,7 @@ class SessionMonitor:
             return
         if not any(p is perm for p in sess.open_prompts()):
             return
-        if not rm_countdown.refusal_window_open(perm, rm_countdown._now_wall()):
+        if not rm_countdown.result_check_open(perm, rm_countdown._now_wall()):
             return
         # A "No" at the terminal writes the same error result plus the
         # interrupt marker: that is the person's answer, never Claude
@@ -1302,9 +1305,52 @@ class SessionMonitor:
             for perm in self._rm_prompts(sess):
                 self._schedule_rm_check(name, sess, perm)
                 await self._check_rm_prompt(name, sess, perm)
+                await self._check_rm_disproof(name, sess, perm)
         except Exception:  # noqa: BLE001 - the scan goes on
             log.warning("Failed to check a risky-removal prompt for %s", name,
                         exc_info=True)
+
+    async def _check_rm_disproof(self, name: str, sess: TrackedSession,
+                                 perm: dict) -> None:
+        """Disprove risky-removal prompt *perm*'s clock (roadmap 8.152) when
+        the shown time plus ``rm_countdown.DISPROVE_AFTER_SECONDS`` has
+        passed, the prompt is still open, and the readable transcript
+        holds no result for its call (no refusal came: an ask rule made
+        Claude Code show its plain ask, or a server set a longer
+        countdown). The clock line goes and taps are no longer blocked;
+        the monitor still closes it as refused if the refusal comes later.
+        Read once per transcript change. Silence of an unreadable or
+        missing file proves nothing. Only the scan calls it, for the open
+        prompts of a session waiting on a dialog (a terminal answer
+        writes the call's result, so it never reads as no refusal)."""
+        if not rm_countdown.disproof_due(perm, rm_countdown._now_wall()):
+            return
+        info = perm["tool_info"]
+        tuid = info["tool_use_id"]
+        try:
+            st = os.stat(sess.transcript_path) if sess.transcript_path else None
+        except OSError:
+            st = None
+        if st is None:
+            return
+        key = (st.st_mtime_ns, st.st_size)
+        seen = self._rm_disproof_read.setdefault(name, {})
+        if seen.get(tuid) == key:
+            return
+        seen[tuid] = key
+        clock = rm_countdown.clock_of(info)
+        if clock is None:
+            return
+        found = tool_call_result(sess.transcript_path, tuid,
+                                 str(info.get("name") or ""), clock["command_sha"])
+        if found != "absent":
+            return  # a result is the refusal check's; anything else proves nothing
+        if not rm_countdown.disprove(info):
+            return
+        log.info("[%s] risky-removal prompt's clock disproven: no refusal %.0f s "
+                 "after the shown time", sess.label, rm_countdown.DISPROVE_AFTER_SECONDS)
+        self.registry.mark_dirty()
+        await self.notify_fn(sess, "rm_clock_disproven", {"perms": [perm]})
 
     def _schedule_rm_check(self, name: str, sess: TrackedSession, perm: dict) -> None:
         """One look at *perm*'s result at its refusal time plus
@@ -1593,6 +1639,7 @@ class SessionMonitor:
                 self._dialog_seen.pop(name, None)
                 self._dialog_checked.pop(name, None)
                 self._rm_read.pop(name, None)
+                self._rm_disproof_read.pop(name, None)
             elif (self._dialog_transcript_changed(name, sess)
                   and dialog_interrupted_in_terminal(sess, now, time.time())):
                 log.info("[%s] the dialog was answered in the terminal: "

@@ -30,8 +30,9 @@ def clock_line_html(tr, holder) -> str:
     """The clock line under a risky-removal prompt (a leading newline and
     the line), in *tr*'s language and digits, from the ``rm_clock`` of
     *holder* (the prompt's ``tool_info`` or the prompt); ``""`` for a
-    prompt with none. The time is the computer's local time of day."""
-    clock = rm_countdown.clock_of(holder)
+    prompt with none or with one the transcript disproved (roadmap
+    8.152). The time is the computer's local time of day."""
+    clock = rm_countdown.shown_clock(holder)
     if clock is None:
         return ""
     try:
