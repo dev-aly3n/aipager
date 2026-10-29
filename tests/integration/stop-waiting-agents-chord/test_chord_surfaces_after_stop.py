@@ -72,6 +72,12 @@ def test_a_late_tap_on_it_types_nothing(rig):
     rig.agent_bash(OTHER, "rm -rf dist")
     msg = _agent_prompt_message(rig)
     rig.tap(CARD, "stop", uid=ALY)
+    # Closed for good: its surface is on record as closed, and no record of
+    # it is left to be counted open again by a later wait.
+    sess = rig.sess
+    assert msg["msg_id"] in sess.closed_prompt_msgs
+    assert sess.extra_prompts == [] and sess.pending_prompt_msg is None
+    assert sess.pending_permission is None and sess.carried_inline_prompt is None
     before = list(rig.writes)
     rig.decisions.clear()
     rig.tap(msg["msg_id"], "allow", uid=ALY)
