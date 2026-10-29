@@ -315,8 +315,9 @@ of the turn Claude Code then starts by itself, whose prompt is a plain
 sentence with no wrapper), or when a `Stop` event's `background_tasks`
 no longer lists agents an earlier `Stop` listed. Their open prompts
 close (no hook says so), and a `SubagentStop` that still comes later
-for one of them is ignored. That turn is never taken for a prompt typed
-in the terminal.
+for one of them is ignored. That turn is not taken for a prompt typed
+in the terminal when aipager's own Stop pressed those keys, or once
+Claude Code's transcript shows the kill.
 
 ### `PreCompact` / `PostCompact`
 

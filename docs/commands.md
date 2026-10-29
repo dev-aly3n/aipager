@@ -709,9 +709,11 @@ background agents`, with a second line `🖥 1 background shell keeps
 running.` when a command Claude started in the background still runs
 (Stop does not end those). Claude Code then tells Claude the agents were
 stopped, and Claude's short reply to that arrives as a turn of its own,
-never shown as a message typed in the terminal. Agents stopped in the
-terminal with ctrl+x ctrl+k are noticed too: the job goes on to Claude's
-reply and then finishes, with no agent left waiting.
+not as a message typed in the terminal. Agents stopped in the terminal
+with ctrl+x ctrl+k are noticed too: the job goes on to Claude's reply
+and then finishes, with no agent left waiting. For agents stopped in the
+terminal, that reply is not shown as typed there once Claude Code's
+transcript shows the kill.
 
 An agent that stopped while background work of its own is still running
 counts as working, since it resumes later. An agent that started an
