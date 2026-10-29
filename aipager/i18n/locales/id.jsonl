@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} perintah latar belakang (shell) selesai ({clock})"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} perintah latar belakang (shell) berjalan"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} perintah latar belakang (shell) dihentikan ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"other": "⏹ {n} agen dihentikan ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} agen bekerja"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n} agen lainnya"}}
 {"k": "agents.promise", "src": "29723a21", "v": "Saat agen selesai, hasilnya dikirim ke sini."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · selesai ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · dihentikan ({clock})"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · menunggu agennya sendiri"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"other": "{n} pesan antrean dihapus."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"other": "{n} perintah latar belakang masih berjalan."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} dihentikan"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"other": "⏹ {n} agen latar belakang di {session} dihentikan"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"other": "⏹ {person} menghentikan {n} agen latar belakang di {session}"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} menghentikan {session}"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} menghentikan {session} ({n} pesan antrean dihapus)"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ {session} dihentikan ({n} pesan antrean dihapus)"}}
@@ -240,8 +246,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "perintah latar belakang: {label} - dihentikan ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "memulai"}
 {"k": "card.shells", "src": "9b747b65", "v": {"other": "{n} perintah latar belakang"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"other": "🖥 {n} perintah latar belakang masih berjalan."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Dihentikan"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"other": "⚠️ <b>{session}</b> · {n} agen latar belakang dihentikan"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"other": "⚠️ <b>{session}</b> · {person} menghentikan {n} agen latar belakang"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} menghentikannya"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Perintah dihentikan di terminal saat sedang berjalan"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Dihentikan di terminal"}
@@ -592,6 +601,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Pesan masuk ke <b>{session}</b>"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ Permintaan ini ditutup karena agen latar belakangnya dihentikan."}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Lanjutkan percakapan ini"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Mulai percakapan baru"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Lanjutkan"}
@@ -940,6 +950,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "Balas pesan dari {session} (atau sebut {bot}) untuk bicara dengan sesi itu."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Balas pesan dari {session} (atau sebut bot) untuk bicara dengan sesi itu."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} sedang menunggu jawabanmu."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "Agen latar belakang di {session} tidak bisa dihentikan. Ketuk Hentikan lagi."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "{session} sedang membuka dialog di terminal. Jawab di sana, lalu ketuk Hentikan lagi."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "sudah dijawab"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "Tidak ada aturan “selalu izinkan” untuk perintah ini - hanya diizinkan sekali ini [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}

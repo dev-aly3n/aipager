@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "백그라운드 명령(shell) {n}개 종료 ({clock})"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 백그라운드 명령(shell) {n}개 실행 중"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "백그라운드 명령(shell) {n}개 중지됨 ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"other": "⏹ 에이전트 {n}개 중지됨 ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ 에이전트 {n}개 작업 중"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+에이전트 {n}개 더"}}
 {"k": "agents.promise", "src": "29723a21", "v": "에이전트 작업이 끝나면 결과가 바로 여기로 와요."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · 완료 ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · 중지됨 ({clock})"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · 자기 에이전트를 기다리는 중"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"other": "대기 중인 메시지 {n}개를 삭제했어요."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"other": "백그라운드 명령 {n}개는 계속 실행 중이에요."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} 중지됨"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"other": "⏹ {session} 세션의 백그라운드 에이전트 {n}개 중지됨"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"other": "⏹ {person} 님이 {session} 세션의 백그라운드 에이전트 {n}개를 중지했어요"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} 님이 {session} 세션의 작업을 중지했어요"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} 님이 {session} 세션의 작업을 중지했어요 (대기 중인 메시지 {n}개 삭제)"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ {session} 중지됨 (대기 중인 메시지 {n}개 삭제)"}}
@@ -240,8 +246,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "백그라운드 명령: {label} - 중지됨 ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "시작하는 중"}
 {"k": "card.shells", "src": "9b747b65", "v": {"other": "백그라운드 명령 {n}개"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"other": "🖥 백그라운드 명령 {n}개는 계속 실행 중이에요."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · 중지됨"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"other": "⚠️ <b>{session}</b> · 백그라운드 에이전트 {n}개 중지됨"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"other": "⚠️ <b>{session}</b> · {person} 님이 백그라운드 에이전트 {n}개를 중지했어요"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} 님이 중지했어요"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · 실행 중에 터미널에서 중지됨"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · 터미널에서 중지됨"}
@@ -592,6 +601,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ 메시지는 <b>{session}</b> 세션으로 가요"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ 백그라운드 에이전트가 중지되어 이 요청이 닫혔어요."}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "이 대화 계속하기"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "새 대화 시작하기"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "재개하기"}
@@ -940,6 +950,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "{session} 세션의 메시지에 답장하면 (또는 {bot} 멘션) 그 세션과 대화할 수 있어요."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "{session} 세션의 메시지에 답장하면 (또는 봇 멘션) 그 세션과 대화할 수 있어요."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} 세션이 답변을 기다리고 있어요."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "{session} 세션의 백그라운드 에이전트를 중지하지 못했어요. 다시 중지를 눌러 주세요."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "{session} 세션의 터미널에 대화 상자가 열려 있어요. 거기서 답한 뒤 다시 중지를 눌러 주세요."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "이미 답했어요"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "이 명령에는 “항상 허용” 규칙이 없어요. 이번 한 번만 허용했어요 [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}

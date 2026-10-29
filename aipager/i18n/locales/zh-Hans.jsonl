@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} 个后台命令（shell）已结束（{clock}）"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} 个后台命令（shell）运行中"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} 个后台命令（shell）已停止（{clock}）"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"other": "⏹ {n} 个代理已停止（{clock}）"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} 个代理工作中"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"other": "还有 {n} 个代理"}}
 {"k": "agents.promise", "src": "29723a21", "v": "代理完成后，结果会发到这里。"}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · 已完成（{clock}）"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · 已停止（{clock}）"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · 正在等自己的代理"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"other": "删除了 {n} 条排队消息。"}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"other": "{n} 个后台命令仍在运行。"}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} 已停止"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"other": "⏹ 已停止 {session} 的 {n} 个后台代理"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"other": "⏹ {person} 停止了 {session} 的 {n} 个后台代理"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} 停止了 {session} 的任务"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} 停止了 {session} 的任务（删除了 {n} 条排队消息）"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ {session} 已停止（删除了 {n} 条排队消息）"}}
@@ -240,8 +246,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "后台命令：{label}，已停止（{clock}）"}
 {"k": "card.row.starting", "src": "9493af05", "v": "正在启动"}
 {"k": "card.shells", "src": "9b747b65", "v": {"other": "{n} 个后台命令"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"other": "🖥 {n} 个后台命令仍在运行。"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · 已停止"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"other": "⚠️ <b>{session}</b> · 已停止 {n} 个后台代理"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"other": "⚠️ <b>{session}</b> · {person} 停止了 {n} 个后台代理"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} 停止了任务"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · 命令运行时已在终端中停止"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · 已在终端中停止"}
@@ -592,6 +601,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "（{state}，{running}）"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ 消息会发到 <b>{session}</b>"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ 这个请求已关闭，因为它的后台代理已停止。"}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "继续这个对话"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "开始新对话"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "恢复"}
@@ -940,6 +950,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "回复 {session} 的消息（或提及 {bot}），就能和这个会话对话。"}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "回复 {session} 的消息（或提及机器人），就能和这个会话对话。"}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} 正在等你回复。"}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "无法停止 {session} 的后台代理。请再点一次“停止”。"}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "{session} 的终端里开着一个对话框。请先在那里回答，再点一次“停止”。"}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "已经回答过了"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "这个命令没有“始终允许”规则，只允许这一次 [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}

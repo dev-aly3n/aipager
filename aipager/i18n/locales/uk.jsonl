@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"few": "Завершено: {n} фонові команди (shell) ({clock})", "many": "Завершено: {n} фонових команд (shell) ({clock})", "one": "Завершено: {n} фонова команда (shell) ({clock})", "other": "Завершено: {n} фонові команди (shell) ({clock})"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"few": "🖥 У роботі: {n} фонові команди (shell)", "many": "🖥 У роботі: {n} фонових команд (shell)", "one": "🖥 У роботі: {n} фонова команда (shell)", "other": "🖥 У роботі: {n} фонові команди (shell)"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"few": "Зупинено: {n} фонові команди (shell) ({clock})", "many": "Зупинено: {n} фонових команд (shell) ({clock})", "one": "Зупинено: {n} фонова команда (shell) ({clock})", "other": "Зупинено: {n} фонові команди (shell) ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"few": "⏹ Зупинено агентів: {n} ({clock})", "many": "⏹ Зупинено агентів: {n} ({clock})", "one": "⏹ Зупинено агентів: {n} ({clock})", "other": "⏹ Зупинено агентів: {n} ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"few": "⏳ У роботі: {n} агенти", "many": "⏳ У роботі: {n} агентів", "one": "⏳ У роботі: {n} агент", "other": "⏳ У роботі: {n} агента"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"few": "і ще {n} агенти", "many": "і ще {n} агентів", "one": "і ще {n} агент", "other": "і ще {n} агенти"}}
 {"k": "agents.promise", "src": "29723a21", "v": "Коли агенти закінчать, результат прийде саме сюди."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · готово ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · зупинено ({clock})"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · чекає на своїх агентів"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"few": "{n} повідомлення з черги видалено.", "many": "{n} повідомлень із черги видалено.", "one": "{n} повідомлення з черги видалено.", "other": "{n} повідомлення з черги видалено."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"few": "{n} фонові команди працюють далі.", "many": "{n} фонових команд працюють далі.", "one": "{n} фонова команда працює далі.", "other": "{n} фонові команди працюють далі."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} зупинено"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"few": "⏹ Зупинено фонових агентів у {session}: {n}", "many": "⏹ Зупинено фонових агентів у {session}: {n}", "one": "⏹ Зупинено фонових агентів у {session}: {n}", "other": "⏹ Зупинено фонових агентів у {session}: {n}"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"few": "⏹ {person} зупинив(-ла) фонових агентів у {session}: {n}", "many": "⏹ {person} зупинив(-ла) фонових агентів у {session}: {n}", "one": "⏹ {person} зупинив(-ла) фонових агентів у {session}: {n}", "other": "⏹ {person} зупинив(-ла) фонових агентів у {session}: {n}"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} зупинив(-ла) {session}"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"few": "⏹ {person} зупинив(-ла) {session} ({n} повідомлення з черги видалено)", "many": "⏹ {person} зупинив(-ла) {session} ({n} повідомлень із черги видалено)", "one": "⏹ {person} зупинив(-ла) {session} ({n} повідомлення з черги видалено)", "other": "⏹ {person} зупинив(-ла) {session} ({n} повідомлення з черги видалено)"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"few": "⏹ {session} зупинена ({n} повідомлення з черги видалено)", "many": "⏹ {session} зупинена ({n} повідомлень із черги видалено)", "one": "⏹ {session} зупинена ({n} повідомлення з черги видалено)", "other": "⏹ {session} зупинена ({n} повідомлення з черги видалено)"}}
@@ -240,8 +246,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "фонова команда: {label} - зупинена ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "запускається"}
 {"k": "card.shells", "src": "9b747b65", "v": {"few": "{n} фонові команди", "many": "{n} фонових команд", "one": "{n} фонова команда", "other": "{n} фонові команди"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"few": "🖥 {n} фонові команди працюють далі.", "many": "🖥 {n} фонових команд працюють далі.", "one": "🖥 {n} фонова команда працює далі.", "other": "🖥 {n} фонові команди працюють далі."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Зупинена"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"few": "⚠️ <b>{session}</b> · Зупинено фонових агентів: {n}", "many": "⚠️ <b>{session}</b> · Зупинено фонових агентів: {n}", "one": "⚠️ <b>{session}</b> · Зупинено фонових агентів: {n}", "other": "⚠️ <b>{session}</b> · Зупинено фонових агентів: {n}"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"few": "⚠️ <b>{session}</b> · {person} зупинив(-ла) фонових агентів: {n}", "many": "⚠️ <b>{session}</b> · {person} зупинив(-ла) фонових агентів: {n}", "one": "⚠️ <b>{session}</b> · {person} зупинив(-ла) фонових агентів: {n}", "other": "⚠️ <b>{session}</b> · {person} зупинив(-ла) фонових агентів: {n}"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} зупинив(-ла)"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Команду зупинено в терміналі під час виконання"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Зупинена в терміналі"}
@@ -592,6 +601,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Повідомлення йдуть у <b>{session}</b>"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ Цей запит закрито: його фоновий агент зупинено."}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Продовжити цю розмову"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Почати нову розмову"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Продовжити"}
@@ -940,6 +950,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "Дай відповідь на повідомлення від {session} (або згадай {bot}), щоб спілкуватися з нею."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Дай відповідь на повідомлення від {session} (або згадай бота), щоб спілкуватися з нею."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} чекає на твою відповідь."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "Не вдалося зупинити фонових агентів {session}. Натисни «Зупинити» ще раз."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "У терміналі {session} відкрито діалог. Дай відповідь там, а потім знову натисни «Зупинити»."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "уже є відповідь"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "Для цієї команди немає правила «Дозволяти завжди»: дозволено лише цього разу [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
