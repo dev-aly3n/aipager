@@ -178,3 +178,35 @@ def test_after_aipagers_stop_the_wakes_card_lists_no_stopped_agent(rig, tmp_path
     drawn = "\n".join("\n".join(rows) for _kind, rows, _tools
                       in animation._build_sections(sess, final=True))
     assert "🤖" not in drawn and "✅" not in drawn
+
+
+def test_an_unflushed_kill_reads_stopped_when_the_wake_starts_a_new_agent(rig, tmp_path):
+    """The wake turn starts agent C after the kill line; at its Stop,
+    ``background_tasks`` no longer lists A and B but lists C. The line is
+    judged against the starts of the agents it ends (A and B), not C's:
+    A and B read stopped, never done, and C keeps running."""
+    from tests.two_prompts_rig import FG
+
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    sess = _waiting(rig, transcript)
+    # A and B started well before the kill, C after it.
+    for info in sess.active_subagents.values():
+        info["started_at"] -= 20.0
+    for info in sess.bg_agents.values():
+        info["started"] -= 20.0
+    sess.files_turn_closed_wall -= 10.0
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    assert sorted(sess.active_subagents) == sorted([BG, OTHER])
+    _line(transcript, {"type": "system", "subtype": "agents_killed",
+                       "timestamp": _stamp(time.time() - 5)})
+    rig.launch(FG, agent_type="ship-third")
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Started another.",
+             background_tasks=_tasks(FG), transcript_path=str(transcript))
+    assert list(sess.active_subagents) == [FG]
+    assert list(sess.bg_agents) == [FG]
+    rows = _agent_rows(rig.frames[-1])
+    ended = [r for r in rows if "ship-third" not in r]
+    assert len(ended) == 2 and len(rows) == 3, rig.frames[-1]
+    assert "stopped" not in next(r for r in rows if "ship-third" in r), rows
+    assert all("⏹" in r and "· stopped (" in r and "✅" not in r for r in ended), rows
