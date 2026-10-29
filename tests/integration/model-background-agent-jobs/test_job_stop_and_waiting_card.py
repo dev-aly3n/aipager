@@ -124,6 +124,7 @@ def test_stop_succeeds_while_waiting_on_background_work(mk_bot, run_async, monke
     assert sess.job_background_open() is True
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
 
@@ -146,6 +147,7 @@ def test_stop_clears_active_subagents_so_the_job_is_genuinely_over(
     bot.registry._sessions["claude-hiva"] = sess
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
 

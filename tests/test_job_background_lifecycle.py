@@ -879,6 +879,7 @@ def test_no_close_path_sends_the_interim_again(
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9104))
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.discard_queued_input",
                         AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.kill_session",

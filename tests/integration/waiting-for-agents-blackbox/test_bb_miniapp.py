@@ -170,6 +170,8 @@ def dtach(monkeypatch):
     keys = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", keys)
     monkeypatch.setattr("aipager.dtach.inject.kill_session", AsyncMock(return_value=True))
+    # A waiting session's agents are stopped with Claude Code's kill chord.
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.bot.session_ops._sleep", AsyncMock())
     return keys
 

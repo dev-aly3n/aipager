@@ -1,11 +1,14 @@
-"""Roadmap 8.121 F5 (design-amend-5 B): Stop never types Escape into a
-session whose own turn has ended.
+"""Roadmap 8.121 F5 (design-amend-5 B, design-6): Stop never types Escape
+into a session whose own turn has ended.
 
 Live, a Stop on a session waiting for its background agents typed two
 Escapes into Claude Code's idle prompt, which opened its Rewind menu, and
 the next Telegram message was typed into that menu and lost. Every Stop
-path reaches the keys through one helper (``_send_stop_keys``, called by
-``_stop_session_core``), which types nothing while the session is IDLE.
+path reaches the Escapes through one helper (``_send_stop_keys``, called by
+``_stop_session_core``), which types none while Claude's own turn is over.
+Since design-6 such a Stop presses Claude Code's kill chord instead
+(exactly two writes, no Escape) when the job's agents run, and types
+nothing at all with only the grace window or the job's shells left.
 
 Each entry point is driven the way its user drives it: the busy card's
 Stop button, /status's Stop button, the Mini App's stop route over HTTP
@@ -51,8 +54,19 @@ def keys(monkeypatch) -> list[str]:
         typed.append("discard")
         return True
 
+    async def run(args, stdin=b"", timeout=5):
+        # Only the kill chord reaches the dtach seam here (send_keys and the
+        # discard are recorded above by name).
+        typed.append("KillAgents" if stdin == b"\x18\x0b" else repr(stdin))
+        return True, ""
+
+    async def gap(_delay):
+        return None
+
     monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
     monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", discard)
+    monkeypatch.setattr("aipager.dtach.inject._run", run)
+    monkeypatch.setattr("aipager.dtach.inject._key_gap_sleep", gap)
 
     async def _no_sleep(_):
         return None
@@ -166,13 +180,42 @@ def _run_stop(bot, run_async, init_header, entry, *, turn_ended: bool):
 
 
 @pytest.mark.parametrize("entry", list(ENTRY_POINTS))
-def test_stop_on_a_session_whose_turn_ended_types_no_key(bot, run_async, init_header,
-                                                         keys, entry):
+def test_stop_on_a_session_whose_turn_ended_presses_the_chord_and_no_escape(
+        bot, run_async, init_header, keys, entry):
     seen = _run_stop(bot, run_async, init_header, entry, turn_ended=True)
     assert seen["before"] == (Status.IDLE, "tasks")
-    assert keys == []
-    # The rest of Stop is unchanged: the job is over, the card retired.
+    assert keys == ["KillAgents", "KillAgents"]
+    # The job is over, its agents gone, the card retired.
     assert seen["after"] == (Status.IDLE, "idle", {}, None)
+
+
+@pytest.mark.parametrize("left", ["grace", "shells"])
+@pytest.mark.parametrize("entry", list(ENTRY_POINTS))
+def test_stop_with_only_grace_or_shells_left_types_nothing(bot, run_async, init_header,
+                                                           keys, entry, left):
+    import time as _time
+
+    ctx = {"server": MiniAppServer(bot, bot.registry, port=8766),
+           "init_header": init_header}
+    recv = hr.HookReceiver(bot.registry, bot.notify)
+    seen: dict = {}
+
+    async def drive():
+        sess = await _bring_up(bot, recv, turn_ended=True)
+        sess.active_subagents.clear()
+        sess.bg_agents.clear()
+        if left == "grace":
+            sess.job_grace_until = _time.monotonic() + 30.0
+        else:
+            sess.bg_shells["s1"] = {"label": "npm run dev", "in_job": True,
+                                    "started_at": _time.monotonic()}
+        assert sess.can_be_stopped()
+        await ENTRY_POINTS[entry](bot, sess, ctx)
+        seen["after"] = (sess.status, sess.job_background_open(), sess.busy_msg_id)
+
+    run_async(drive())
+    assert keys == []
+    assert seen["after"] == (Status.IDLE, False, None)
 
 
 @pytest.mark.parametrize("entry", list(ENTRY_POINTS))

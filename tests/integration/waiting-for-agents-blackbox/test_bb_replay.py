@@ -60,7 +60,7 @@ def world(replay, vloop, monkeypatch):
     prefs.set_preference(kit.CHAT, "layout", "card")
     monkeypatch.setattr("aipager.dtach.inject.list_sessions",
                         AsyncMock(return_value=[replay.sess.name]))
-    for fn in ("send_keys", "discard_queued_input", "kill_session"):
+    for fn in ("send_keys", "discard_queued_input", "kill_session", "press_kill_agents"):
         monkeypatch.setattr(f"aipager.dtach.inject.{fn}", AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.bot.session_ops._sleep", AsyncMock())
     mon = SessionMonitor(replay.bot.registry, replay.bot.notify)
@@ -231,9 +231,10 @@ def test_stop_while_waiting_brings_every_surface_back(world, vloop):
         True, "idle", "idle", "IDLE")
 
 
-def test_after_stop_a_surviving_agent_reads_as_idle_work_on_the_bar(world, vloop):
-    """design.md 5: /stop leaves the agent running; the bar shows it as
-    work outside the job, never as waiting."""
+def test_after_stop_no_agent_is_left_on_the_bar(world, vloop):
+    """design-6 (roadmap 8.121 F5): Stop ends the job's agents with Claude
+    Code's kill chord, so the bar shows the session idle with no agent
+    running (it showed "(idle, 1 agent running)" while Stop left them)."""
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world, agents=("a1",), shell=False)
@@ -244,7 +245,7 @@ def test_after_stop_a_surviving_agent_reads_as_idle_work_on_the_bar(world, vloop
         w.cancel()
         return bar
 
-    assert _run(vloop, scenario()) == f"💤 {LABEL} (idle, 1 agent running)"
+    assert _run(vloop, scenario()) == f"💤 {LABEL} (idle)"
 
 
 def test_the_session_ending_shows_gone(world, vloop, monkeypatch):

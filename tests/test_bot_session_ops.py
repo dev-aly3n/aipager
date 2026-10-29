@@ -464,6 +464,7 @@ def test_stop_session_core_succeeds_while_job_background_open(
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 
@@ -485,6 +486,7 @@ def test_stop_session_core_clears_active_subagents(mk_bot, run_async, monkeypatc
                         AsyncMock(return_value=True))
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
 

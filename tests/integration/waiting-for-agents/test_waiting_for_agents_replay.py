@@ -138,11 +138,15 @@ def test_the_waiting_session_offers_stop_and_stop_ends_it(bot, run_async, monkey
     """The Mini App offers Stop while the session waits, and the stop route
     takes it: afterwards every surface reads idle."""
     monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=True))
+    # Its agents are stopped with Claude Code's kill chord (design-6): the
+    # dtach seam answers the two presses.
+    monkeypatch.setattr("aipager.dtach.inject._run", AsyncMock(return_value=(True, "")))
 
     async def _no_sleep(_):
         return None
 
     monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    monkeypatch.setattr("aipager.dtach.inject._key_gap_sleep", _no_sleep)
     server = MiniAppServer(bot, bot.registry, port=8766)
     recv = hr.HookReceiver(bot.registry, bot.notify)
     out: dict = {}

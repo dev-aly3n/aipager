@@ -277,6 +277,20 @@ def test_stop_button_sends_one_post_and_refreshes(node_bin, tmp_path):
     assert "ok: stop -> menu -> one POST /api/sessions/dev/stop" in proc.stdout, proc.stdout
 
 
+def test_stop_that_ended_agents_shows_the_servers_words(node_bin, tmp_path):
+    """Roadmap 8.121 F5: the stop route's ``detail`` (how many background
+    agents were stopped, the shells left running) is the notice, as it is
+    for resume; the flow stays in the app."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "stop_detail")
+    assert proc.returncode == 0, (
+        f"stop detail scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: stop that ended agents -> notice shows the server's detail" in proc.stdout
+
+
 def test_kill_requires_confirming_a_modal(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 

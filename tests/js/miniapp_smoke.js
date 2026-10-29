@@ -276,6 +276,7 @@ function detailFor(status, resumable) {
 // single one is picked below by SCENARIO.
 const SESSION_DETAIL_FIXTURES = {
   stop_busy: detailFor("busy", false),
+  stop_detail: detailFor("busy", false),
   kill_idle: detailFor("idle", false),
   resume_gone: detailFor("gone", true),
   resume_gone_no_transcript: detailFor("gone", false),
@@ -509,7 +510,12 @@ const FIXTURES = {
   // assertions only care about the request having been SENT, never about
   // this body, so returning the detail fixture for both is harmless.
   "/api/sessions/dev": SESSION_DETAIL_FIXTURES[SCENARIO],
-  "/api/sessions/dev/stop": { status: "stopped", label: "dev", dropped: 0 },
+  // A Stop that ended background agents (roadmap 8.121 F5) carries the
+  // words to show; any other Stop does not.
+  "/api/sessions/dev/stop": SCENARIO === "stop_detail"
+    ? { status: "stopped", label: "dev", dropped: 0, agents: 2, shells: 1,
+        detail: "⏹ Stopped 2 background agents of dev\n1 background shell keeps running." }
+    : { status: "stopped", label: "dev", dropped: 0 },
   "/api/sessions/dev/kill": { status: "killed", label: "dev" },
   "/api/sessions/dev/resume": { status: "resumed", label: "dev" },
   "/api/sessions/dev/perms": SCENARIO === "perms_in_place"
@@ -1038,6 +1044,24 @@ function driveStopBusy() {
     setTimeoutReal(() => {
       if (byId["view-detail"].hidden) fail("Stop navigated away from the detail view");
       console.log("ok: stop -> menu -> one POST /api/sessions/dev/stop, stayed on the page");
+      process.exit(0);
+    }, 20);
+  }, 10);
+}
+
+// ---- scenario: Stop that ended background agents shows the server's words
+function driveStopDetail() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    itemNamed(menu, "Stop").click();
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      if (notice.indexOf("Stopped 2 background agents of dev") === -1)
+        fail("the notice does not show the server's detail: " + JSON.stringify(notice));
+      if (notice.indexOf("1 background shell keeps running.") === -1)
+        fail("the notice dropped the shells line: " + JSON.stringify(notice));
+      console.log("ok: stop that ended agents -> notice shows the server's detail");
       process.exit(0);
     }, 20);
   }, 10);
@@ -3208,6 +3232,7 @@ const DRIVERS = {
   model_busy: driveModelBusy,
   settings: driveSettings,
   stop_busy: driveStopBusy,
+  stop_detail: driveStopDetail,
   kill_idle: driveKillIdle,
   resume_gone: driveResumeGone,
   resume_gone_no_transcript: driveResumeGoneNoTranscript,
