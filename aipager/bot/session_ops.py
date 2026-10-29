@@ -2559,11 +2559,15 @@ class SessionOpsMixin:
         card_id = sess.busy_msg_id
         toasted = False
         if query is not None:
+            person_tr = i18n.for_person(update if update is not None
+                                        else SimpleNamespace(callback_query=query))
             outcome, toasted = await self._stop_for_tap(
-                sess, query, i18n.for_person(
-                    update if update is not None
-                    else SimpleNamespace(callback_query=query)),
-                self._stop_session_core(sess, by=by))
+                sess, query, person_tr, by=by)
+            if not outcome.ok and outcome.reason == "stale":
+                # A new turn opened between the check above and the core.
+                if not toasted:
+                    await self._safe_answer(query, person_tr.text(TOAST_STOP_STALE))
+                return outcome
         else:
             outcome = await self._stop_session_core(sess, by=by)
         if not outcome.ok:
@@ -2617,18 +2621,20 @@ class SessionOpsMixin:
 
         return outcome
 
-    async def _stop_for_tap(self, sess: TrackedSession, query, tr,
-                            stop) -> tuple[StopOutcome, bool]:
-        """Await *stop* (the caller's :meth:`_stop_session_core`, made
-        after its own turn check) for a button tap, answering the tap in
-        time (:data:`STOP_TOAST_WAIT`): ``(outcome, toasted)``.
-        *toasted* True means the tap was answered with
+    async def _stop_for_tap(self, sess: TrackedSession, query, tr, *,
+                            by: str, turn: int | None = None
+                            ) -> tuple[StopOutcome, bool]:
+        """Stop *sess* for a button tap (:meth:`_stop_core_if_current`,
+        after the caller's own turn check), answering the tap in time
+        (:data:`STOP_TOAST_WAIT` after the tap came in):
+        ``(outcome, toasted)``. *toasted* True means the tap was answered with
         ``stop_text.TOAST_STOPPING`` while the Stop still ran, so the
         caller shows the outcome elsewhere, never in a second answer. The
         core runs in its own task, so the tap's handler being cancelled
         never cuts a Stop short halfway."""
         from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
-        core = asyncio.ensure_future(stop)
+        core = asyncio.ensure_future(
+            self._stop_core_if_current(sess, query, by=by, turn=turn))
         _BACKGROUND_TASKS.add(core)
         core.add_done_callback(_BACKGROUND_TASKS.discard)
         await asyncio.wait({core}, timeout=STOP_TOAST_WAIT)
@@ -2638,6 +2644,21 @@ class SessionOpsMixin:
                                                session=sess.label))
         await asyncio.wait({core})
         return core.result(), True
+
+    async def _stop_core_if_current(self, sess: TrackedSession, query, *,
+                                    by: str, turn: int | None
+                                    ) -> StopOutcome:
+        """:meth:`_stop_session_core` for a tap, run in its own task: the
+        tap's turn is checked again in that task's first step, with the
+        core's own checks, so a turn that opened in the loop pass between
+        the caller's check and this task is never stopped by an older
+        button (``reason="stale"``). *turn*: the button's ``turn_key``
+        (/status, the picker), else the tapped message's id decides."""
+        tapped = getattr(getattr(query, "message", None), "message_id", None)
+        if not sess.tap_is_for_this_turn(None if turn is not None else tapped,
+                                         turn=turn):
+            return StopOutcome(ok=False, label=sess.label, reason="stale")
+        return await self._stop_session_core(sess, by=by)
 
     async def _say_stop_refused(self, sess: TrackedSession, outcome: StopOutcome,
                                 update, query, *, toasted: bool = False) -> None:

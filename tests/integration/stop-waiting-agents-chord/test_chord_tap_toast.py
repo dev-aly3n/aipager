@@ -186,8 +186,7 @@ def test_the_stop_survives_the_taps_handler_being_cancelled(rig, monkeypatch):
 
     async def go():
         task = asyncio.ensure_future(rig.bot._stop_for_tap(
-            sess, q, MagicMock(text=lambda *a, **k: STOPPING),
-            rig.bot._stop_session_core(sess)))
+            sess, q, MagicMock(text=lambda *a, **k: STOPPING), by=""))
         await asyncio.sleep(0.1)
         task.cancel()
         for _ in range(40):

@@ -900,8 +900,13 @@ class CallbackDispatchMixin:
         # running then was toasted "Stopping", and the list or picker the
         # caller redraws shows the outcome; a refusal comes as a reply.
         outcome, toasted = await self._stop_for_tap(
-            sess, query, person, self._stop_session_core(sess, by=self._actor_label(
-                getattr(tapper, "id", None), chat, tapper)))
+            sess, query, person, by=self._actor_label(
+                getattr(tapper, "id", None), chat, tapper), turn=turn)
+        if not outcome.ok and outcome.reason == "stale":
+            # A new turn opened between the check above and the Stop.
+            if not toasted:
+                await self._safe_answer(query, person.text(again, session=sess.label))
+            return True, None
         if toasted:
             if (outcome.reason in bg_text.BG_FAILURES
                     or outcome.reason in stop_text.STOP_REFUSALS):
