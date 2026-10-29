@@ -726,6 +726,14 @@ def dialog_closed_in_transcript(sess: TrackedSession, now_mono: float,
     return evidence in ("answered", "moved_on")
 
 
+def kill_unconfirmed(sess, now: float) -> bool:
+    """Whether the window aipager's kill chord armed for its wake
+    (``kill_expected_until``, monotonic) ran out with no wake: the
+    one-shot is consumed (zeroed) by the wake. Pure."""
+    until = sess.kill_expected_until
+    return bool(until) and now >= until
+
+
 class SessionMonitor:
     """Periodically discovers dtach sessions and marks dead ones GONE."""
 
@@ -1605,6 +1613,15 @@ class SessionMonitor:
                          sess.label)
                 sess.files_turn_closed(sess.files_turn_closed_wall)
                 self.registry.mark_dirty()
+            # Roadmap 8.121 F5: aipager's kill chord was pressed, and no turn
+            # of Claude Code's said the agents were stopped in time. Its
+            # tables already dropped them; if the chord did nothing (a
+            # rebound key, a changed release) they run on unseen: said once.
+            if kill_unconfirmed(sess, now):
+                sess.kill_expected_until = 0.0
+                log.warning("[%s] Stop pressed the kill-agents chord, but no turn "
+                            "said the background agents were stopped", sess.label)
+                report_store.record_counter("kill_agents_unconfirmed")
             # Messages held while a dialog was open, and the dialog is not
             # open any more: the bot sends them on (answered) and deletes
             # its "answer it first" notice. Normally done at once by the

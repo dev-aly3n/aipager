@@ -700,6 +700,9 @@ class NotifyMixin:
                 sess.mark_prompt_refused(sess.busy_msg_id, perm.get("prompt_token"))
             elif isinstance(rec, dict):
                 sess.mark_prompt_refused(rec.get("msg_id"), rec.get("prompt_token"))
+                # Its refused line is shown below: a Stop that read the
+                # record before its Escapes leaves the message to it.
+                rec["final_shown"] = True
                 edits.append(rec)
             detail = (perm.get("tool_summary") or "Permission")[:80]
             row = f"🔑 {detail[:60]} → {card_rows.REFUSED_BY_CLAUDE}"
@@ -794,18 +797,54 @@ class NotifyMixin:
             if base is not None:  # none, or taken off already
                 await self._show_unclocked(sess, rec, base)
 
+    async def _show_prompts_closed(self, sess: TrackedSession,
+                                   records) -> set[int]:
+        """Prompt messages whose prompt a Stop's Escapes closed (Claude's
+        own, an agent's: every prompt goes with the turn) show no answer
+        buttons, as a prompt answered in the terminal: one with a clock
+        line loses it (:meth:`_drop_clock_lines`, Claude Code did not
+        refuse it), any other loses its buttons alone. A clocked message
+        whose text cannot be edited still loses its buttons (as
+        :meth:`_show_rm_refused`). Their surfaces are marked closed
+        already, so a late tap types nothing. The busy card's inline
+        prompt goes with the card's own settle. Returns the ids of the
+        messages whose buttons went. Never raises."""
+        stripped: set[int] = set()
+        if self._app is None:
+            return stripped
+        for rec in records or ():
+            if not isinstance(rec, dict):
+                continue
+            msg_id = rec.get("msg_id")
+            base = rm_refusal.take_unclocked_text(rec)
+            if base is not None and await self._show_unclocked(sess, rec, base):
+                stripped.add(msg_id)
+                continue
+            if not (isinstance(msg_id, int) and msg_id > 0):
+                continue  # never sent (a muted chat): nothing to edit
+            try:
+                await self._app.bot.edit_message_reply_markup(
+                    chat_id=rec.get("chat_id") or resolve_chat_id(sess),
+                    message_id=msg_id, reply_markup=None)
+                stripped.add(msg_id)
+            except Exception:  # noqa: BLE001 - its taps type nothing anyway
+                log.debug("[%s] closed prompt message's buttons not removed",
+                          sess.label, exc_info=True)
+        return stripped
+
     async def _show_unclocked(self, sess: TrackedSession, rec: dict,
-                              base: str, keyboard=None) -> None:
+                              base: str, keyboard=None) -> bool:
         """Prompt message record *rec* shows *base*, its text without the
         clock line (see :meth:`_drop_clock_lines`). *keyboard*: the
         buttons the message keeps, None for a closed prompt. An edit of
         the text sets the message's buttons too, so a closed prompt's
         edit sends none: its old Allow/Deny never come back, also after a
-        tap took them off (roadmap 8.152). Never raises."""
+        tap took them off (roadmap 8.152). True when the message was
+        edited. Never raises."""
         rec["text"] = base
         chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
         if not (isinstance(msg_id, int) and msg_id > 0):
-            return  # never sent (a muted chat): nothing to edit
+            return False  # never sent (a muted chat): nothing to edit
         try:
             await self._app.bot.edit_message_text(
                 chat_id=chat_id or resolve_chat_id(sess), message_id=msg_id,
@@ -813,6 +852,8 @@ class NotifyMixin:
         except Exception:  # noqa: BLE001 - cosmetic: the line stays
             log.debug("[%s] clock line not taken off a closed prompt",
                       sess.label, exc_info=True)
+            return False
+        return True
 
     async def _show_rm_refused(self, sess: TrackedSession, rec: dict, tr) -> None:
         """A refused prompt's own message: its text as sent, the refused
@@ -840,6 +881,55 @@ class NotifyMixin:
                                                 reply_markup=None)
         except Exception:  # noqa: BLE001 - nothing more to do
             log.debug("[%s] refused prompt message's buttons not removed",
+                      sess.label, exc_info=True)
+
+    async def _show_agents_stopped(self, sess: TrackedSession, records) -> None:
+        """Every closed agent prompt's own message in *records* (open
+        prompt records, see ``TrackedSession.open_prompt_records``) says
+        its agent was stopped, with no buttons (roadmap 8.121 F5). The
+        card's inline prompt goes with the card's own settle."""
+        if self._app is None:
+            return
+        tr = i18n.for_sess(sess)
+        # Marked before the first edit: a Stop that read a record before
+        # its Escapes leaves the message to the stopped line.
+        for rec in records:
+            if isinstance(rec, dict):
+                rec["final_shown"] = True
+        for rec in records:
+            if isinstance(rec, dict):
+                await self._show_agent_stopped(sess, rec, tr)
+
+    async def _show_agent_stopped(self, sess: TrackedSession, rec: dict, tr) -> None:
+        """A stopped agent's prompt message: its text as sent, the stopped
+        line under it, and no buttons. Its buttons go even when the text
+        cannot be edited (as :meth:`_show_rm_refused`)."""
+        from aipager.bot.stop_text import PROMPT_AGENT_STOPPED
+        chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
+        if not (isinstance(msg_id, int) and msg_id > 0):
+            return
+        chat = chat_id or resolve_chat_id(sess)
+        bot = self._app.bot
+        try:
+            await bot.edit_message_text(
+                chat_id=chat, message_id=msg_id,
+                # Without its countdown, if it had one (roadmap 8.151):
+                # the prompt did not close by Claude Code's own refusal.
+                text=((rec.get("text_unclocked") or rec.get("text") or "")
+                      + "\n\n" + tr.html(PROMPT_AGENT_STOPPED)),
+                parse_mode="HTML", reply_markup=None)
+            return
+        except FloodMuted:
+            log.info("[%s] stopped agent's prompt message not edited - chat "
+                     "flood-muted", sess.label)
+        except Exception:  # noqa: BLE001 - fall back to the buttons alone
+            log.debug("[%s] stopped agent's prompt message edit failed", sess.label,
+                      exc_info=True)
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat, message_id=msg_id,
+                                                reply_markup=None)
+        except Exception:  # noqa: BLE001 - nothing more to do
+            log.debug("[%s] stopped agent's prompt message's buttons not removed",
                       sess.label, exc_info=True)
 
     async def _on_prompts_carried(self, sess: TrackedSession) -> None:
@@ -1095,6 +1185,8 @@ class NotifyMixin:
 
         rows = []
         agent_ends = []
+        stopped_ends = []
+        done_ends = []
         shells = {"running": 0, "finished": [], "stopped": []}
         for item in rec["items"]:
             end = settled(item["id"])
@@ -1110,9 +1202,13 @@ class NotifyMixin:
             parent = row_of.get(item.get("parent") or "", -1)
             if end is not None:
                 agent_ends.append(end["at"])
+                # Roadmap 8.121 F5: an agent a person's Stop ended reads
+                # "stopped", never "done".
+                stopped = end.get("outcome") == "stopped"
+                (stopped_ends if stopped else done_ends).append(end["at"])
                 ran = end["at"] - (started if started is not None else sent_at)
                 rows.append(_agents_line.AgentRow(item["label"], True, ran,
-                                                  parent=parent))
+                                                  parent=parent, stopped=stopped))
                 continue
             info = sess.bg_agents.get(item["id"]) or {}
             rows.append(_agents_line.AgentRow(
@@ -1123,7 +1219,9 @@ class NotifyMixin:
         all_done = bool(rows) and len(agent_ends) == len(rows)
         return _agents_line.BlockView(
             agents=tuple(rows),
-            agents_done_seconds=(max(agent_ends) - sent_at) if all_done else None,
+            agents_done_seconds=(max(done_ends or agent_ends) - sent_at)
+            if all_done else None,
+            agents_stopped_seconds=(max(stopped_ends) - sent_at) if stopped_ends else 0.0,
             shells_running=shells["running"],
             shells_finished=len(shells["finished"]),
             shells_finished_seconds=max(shells["finished"], default=0.0),
@@ -2934,6 +3032,11 @@ class NotifyMixin:
         if event == "prompts_carried":
             await self._on_prompts_carried(sess)
             return
+        if event == "agent_prompts_stopped":
+            # Roadmap 8.121 F5: the agents whose prompts these were were
+            # stopped (Claude Code's kill chord): no hook closes them.
+            await self._show_agents_stopped(sess, context.get("records") or ())
+            return
 
         # ── A mute lifted and this session has an answer waiting (8.29) ──
         # Dispatched by `SessionMonitor._scan` on the 2 s tick it already
@@ -3682,9 +3785,16 @@ class NotifyMixin:
             # always fixed ("agent activity rows on the busy card").
             done_summary = settled_agent_row(
                 context.get("card_label") or agent_type, tool_count, elapsed)
+            mark: object = True
+            if context.get("stopped"):
+                # A kill chord stopped it (roadmap 8.121 F5): its row reads
+                # stopped, never done.
+                done_summary = card_rows.stopped_agent_row(
+                    context.get("card_label") or agent_type, elapsed)
+                mark = _bg_shells.STOPPED
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
-                sess.tool_history[history_idx] = (done_summary, True)
+                sess.tool_history[history_idx] = (done_summary, mark)
             elif agent_type:
                 # No matching start — daemon restart, or the start was
                 # evicted by the active_subagents cap — append as done
@@ -3693,7 +3803,7 @@ class NotifyMixin:
                 # jobs" requirement 5) carries no real information to show,
                 # so it must not pollute the timeline with a meaningless
                 # "🤖 " row.
-                sess.record_tool(done_summary, True)
+                sess.record_tool(done_summary, mark)
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
@@ -4256,6 +4366,8 @@ class NotifyMixin:
                 sess.tool_history = [
                     (s, d if ((d in ("failed", _bg_shells.STOPPED)
                                and s.startswith(_bg_shells.SHELL_ROW_PREFIX))
+                              or (d == _bg_shells.STOPPED
+                                  and card_rows.stopped_agent(s))
                               or (d == "failed" and card_rows.refused_by_claude(s)))
                      else True)
                     for s, d in sess.tool_history]

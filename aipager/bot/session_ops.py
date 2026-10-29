@@ -28,7 +28,7 @@ from aipager import i18n, invisible, perm_modes
 from aipager.config import RESUME_GUARD_SECONDS
 from aipager.i18n import Command, Msg, Safe, Span
 from aipager.dtach import inject
-from aipager.bot import reactions
+from aipager.bot import card_rows, reactions, stop_text
 from aipager.bot.sibling_text import shown
 from aipager.miniapp import sessions as _mini_sessions
 
@@ -41,8 +41,12 @@ from aipager.bot.callbacks import (
     _PERMS_POLL_INTERVAL,
     _PERMS_RESTART_QUIET,
     _stopped_line,
+    tap_wait_left,
 )
-from aipager.state import TURN_SENDER_TERMINAL, Status, TrackedSession
+from aipager.state import (
+    KILL_WAKE_EXPECT_SECONDS, STOP_KEYS, STOP_KILL_AGENTS,
+    TURN_SENDER_TERMINAL, Status, TrackedSession,
+)
 from aipager.transcript import last_assistant_preview as _read_preview
 from aipager.transcript import read_still_queued
 
@@ -54,6 +58,7 @@ from aipager.bot.transport import (  # noqa: F401
     RESUME_FULL_NEEDS_ADMIN,
     reply_text,
     edit_text,
+    edit_markup,
     send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
@@ -123,6 +128,21 @@ _spawn = asyncio.create_task
 #: already has "💀 Killed"). Only prunes: the id itself decides.
 KILL_NOTICE_QUIET_SECONDS: float = 60.0
 
+#: How long a Stop tap waits for its Stop before it answers the tap. A tap
+#: takes ONE answer (Telegram refuses a second), and the dispatcher sends
+#: the empty one that clears the button's spinner after
+#: ``callbacks.CALLBACK_ACK_BOUND`` (1 s), so a toast sent later is
+#: dropped. A Stop takes longer than that: the kill chord's two presses
+#: alone are ``inject.KILL_AGENTS_PRESS_GAP`` (1 s) apart, and the Escape
+#: path took 5 to 6 s live (roadmap 8.121 F5, live round 2). So the tap
+#: answers below the bound: with the outcome when the Stop is done by
+#: then, else with ``stop_text.TOAST_STOPPING``, and the card (or the
+#: list the button was on) then shows the outcome. Telegram documents no
+#: deadline for answering a tap, and nothing here measured one, so the
+#: answer is never held past aipager's own bound. The same pattern as a
+#: slow Send now tap (``send_now.SEND_NOW_TOAST_WAIT``).
+STOP_TOAST_WAIT: float = 0.8
+
 
 @dataclass
 class StopOutcome:
@@ -136,6 +156,18 @@ class StopOutcome:
     #: A parked session's forced bring-back that failed: its error
     #: ``(code, params)`` (``reason`` is the bring-back's).
     bg_err: tuple = ()
+    #: What the Stop did (roadmap 8.121 F5): ``state.STOP_KEYS``,
+    #: ``STOP_KILL_AGENTS`` or ``STOP_END_JOB``; ``""`` when refused at
+    #: once or for a parked session. ``reason`` is ``"dialog_open"`` or
+    #: ``"agents_not_stopped"`` (``stop_text.STOP_REFUSALS``) when a Stop
+    #: of a session whose turn has ended changed nothing.
+    mode: str = ""
+    #: Background agents the kill chord stopped.
+    agents: int = 0
+    #: The job's background shells, which keep running.
+    shells: int = 0
+    #: The prompt messages whose buttons the Stop took off.
+    stripped: frozenset = frozenset()
 
 
 CARD_STOPPED = Msg("card.stopped", "⚠️ <b>{session}</b> · Stopped",
@@ -954,6 +986,13 @@ def queued_chars(sess: TrackedSession, held: list[dict]) -> int:
         sess.stream_transcript_path or sess.transcript_path or "")
     return max(sum(len(text) + 1 for text in queued),
                sum(len(_candidate_text(c)) + 1 for c in held))
+
+
+def _agent_owned(perm) -> bool:
+    """Whether open prompt *perm* is a background agent's (its
+    ``tool_info`` names the asking agent; roadmap 8.120)."""
+    info = perm.get("tool_info") if isinstance(perm, dict) else None
+    return isinstance(info, dict) and bool(info.get("agent_id"))
 
 
 def _drop_held_back(sess: TrackedSession, notes: list[dict]) -> list[dict]:
@@ -2150,6 +2189,28 @@ class SessionOpsMixin:
             # may be typed into the parked client: Stop means "end this
             # work", so the job is stopped and the session brought back.
             return await self._stop_parked(sess, by=by)
+        if sess.stop_mode() != STOP_KEYS:
+            # Claude's own turn is over (roadmap 8.121 F5): its background
+            # agents are stopped with Claude Code's kill chord, or the job
+            # ends with no keys. None: a turn started meanwhile, so this
+            # Stop interrupts it as on any working session.
+            ended = await self._stop_own_turn_over(sess, by=by)
+            if ended is not None:
+                return ended
+
+        # The prompt messages this Stop closes (their buttons go below,
+        # live round 2, H4), read before any await: the hooks the Escapes
+        # fire can move the status off INTERACTIVE, and the open prompts
+        # then no longer read as open (an extra one is even dropped).
+        # Only one whose closer shows its own final edit on the message
+        # meanwhile is left to that closer (``final_shown``): Claude Code's
+        # refusal (the refused line, ``_show_rm_refused``) and the kill
+        # chord (the stopped line, ``_show_agents_stopped``). Every other
+        # closer (a tap, a terminal answer, an agent's SubagentStop or next
+        # tool call, Claude's Stop, the watchdog) leaves the buttons, which
+        # go below (rev-iter10-001, rev-iter11-001).
+        closed_records = [rec for _where, _perm, rec in sess.open_prompt_records()
+                          if isinstance(rec, dict)]
 
         # 0. Read Claude's queue BEFORE the Escapes below: the first one
         # makes Claude Code pull it into the input box and write
@@ -2169,21 +2230,9 @@ class SessionOpsMixin:
         # `popAll`, and the transcript then no longer shows the text.
         held_chars = queued_chars(sess, held) if held else 0
 
-        # 1. Send Escape twice to Claude Code — proven interrupt
-        # behaviour this change does not touch.
-        await inject.send_keys(sess.name, "Escape")
-        await _sleep(0.15)
-        await inject.send_keys(sess.name, "Escape")
-
-        # 1b. Wipe whatever Claude's own not-yet-picked-up queue
-        # surfaced into the input box (design.md "Stop and /clearqueue
-        # on the same primitive") — the Escapes above can move it there
-        # without cancelling the running task, and left alone it would
-        # concatenate onto the next prompt. Read once, up front, so the
-        # "was anything actually outstanding" check and the combined
-        # drop count below agree on the same snapshot (`held`, step 0).
-        if held:
-            await inject.discard_queued_input(sess.name, held_chars)
+        # 1. The keys: two Escapes, then the queue wipe (1b). Only here,
+        # so no Stop path can type them into an idle session.
+        await self._send_stop_keys(sess, held, held_chars)
 
         # 2. Cancel animation — and a self-woken turn's deferred card
         # (roadmap 8.32): this path ends the turn without the finish path,
@@ -2215,7 +2264,12 @@ class SessionOpsMixin:
         _clear_turn_open(sess.name)
         sess.turn_sender_id = None
         # The job ends, background agents included: every open prompt
-        # with it (roadmap 8.120), and their buttons type nothing.
+        # with it (roadmap 8.120), and their buttons type nothing. Their
+        # own messages (read before the Escapes) lose their buttons below,
+        # except one Claude Code's refusal or the kill chord closed during
+        # the awaits above: its refused or stopped line stays.
+        closed_records = [rec for rec in closed_records
+                          if not rec.get("final_shown")]
         sess.close_all_prompts()
         sess.pending_permission = None
         sess.status = Status.IDLE
@@ -2240,9 +2294,223 @@ class SessionOpsMixin:
         sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
+        stripped = await self._show_prompts_closed(sess, closed_records)
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
-        return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by)
+        return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by,
+                           mode=STOP_KEYS, stripped=frozenset(stripped))
+
+    async def _stop_own_turn_over(self, sess: TrackedSession, *,
+                                  by: str = "") -> StopOutcome | None:
+        """Stop a session whose own turn has ended (roadmap 8.121 F5,
+        ``TrackedSession.stop_mode``): with background agents running (or
+        asking), press Claude Code's kill chord twice
+        (``inject.press_kill_agents``), then end them in aipager's tables
+        and close their prompts; with only the job's grace window or shells
+        left, end the job with no keys. Never an Escape: two of them into
+        Claude Code's idle prompt open its Rewind menu.
+
+        Refused, with nothing changed, when a dialog of Claude's own (or
+        one nobody can name yet) is open (``"dialog_open"``) or the chord
+        could not be pressed (``"agents_not_stopped"``). None when a turn
+        of Claude's started meanwhile: the caller then stops it with the
+        Escapes, as any working session."""
+        from aipager.dtach.hook_receiver import dialog_datagram_pending
+        from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
+        if sess.stop_mode() == STOP_KEYS:
+            return None
+
+        def can_press() -> bool:
+            return (sess.status is not Status.GONE and not sess.parked_job
+                    and sess.own_turn_over() and not sess.own_dialog_open()
+                    and not dialog_datagram_pending(sess.name))
+
+        # Claude's queue, read as the Escape path reads it. Claude's turn is
+        # over, so a message typed now starts a turn at once and nothing of
+        # aipager's should be in it; what is counts as discarded (the kill
+        # clears Claude Code's queue).
+        await self._settle_queued_targets(sess, reanchor=False)
+        outstanding = list_outstanding_notes(sess.name)
+        held = held_by_claude(sess, outstanding + self._queued_candidates(sess))
+        dialog = False
+        mode = sess.stop_mode()
+        if mode == STOP_KILL_AGENTS:
+            dialog = await self._terminal_dialog_before_typing(sess)
+            mode = sess.stop_mode()
+            # The look can take seconds: the teardown wipes what is
+            # outstanding now, not before it.
+            outstanding = list_outstanding_notes(sess.name)
+            held = held_by_claude(sess, outstanding + self._queued_candidates(sess))
+        # Read again after the awaits above, with none from here to the
+        # press (or the keyless end).
+        if mode == STOP_KEYS:
+            if sess.status is Status.BUSY:
+                # A turn of Claude's started meanwhile: interrupted with
+                # the Escapes, as any working session.
+                return None
+            # Never an Escape into a session that is not working.
+            return self._stop_not_pressed(sess, inject.DIALOG_BEFORE_TYPING,
+                                          by=by, mode=mode)
+        if mode == STOP_KILL_AGENTS and (dialog or not can_press()):
+            log.info("[%s] Stop refused: a dialog of Claude's own (or one "
+                     "nobody can name) is open (no keys typed)", sess.label)
+            return self._stop_not_pressed(sess, inject.DIALOG_BEFORE_TYPING,
+                                          by=by, mode=mode)
+        gate = None
+        if mode == STOP_KILL_AGENTS:
+            gate = asyncio.Event()
+
+            def arm() -> None:
+                # Armed only right before the second press, with no await
+                # in between (rev-iter6-001): the turn Claude Code starts
+                # after the kill cannot come any sooner, so a prompt typed
+                # at the terminal before it is a person's turn (BUSY, and
+                # the second press is then not written).
+                sess.kill_expected_until = time.monotonic() + KILL_WAKE_EXPECT_SECONDS
+                sess.stop_gate = gate
+
+            pressed = await inject.press_kill_agents(sess.name, can_press, arm)
+            if not pressed:
+                sess.kill_expected_until = 0.0
+                gate.set()
+                if sess.stop_gate is gate:
+                    sess.stop_gate = None
+                if sess.status is Status.BUSY:
+                    # Only a turn really running gets the Escapes, never a
+                    # session whose own turn is over (rev-iter6-002).
+                    log.info("[%s] Stop: a turn started during the kill chord; "
+                             "interrupting it instead", sess.label)
+                    return None
+                log.warning("[%s] Stop refused: kill-agents chord not pressed (%s)",
+                            sess.label, "dialog" if pressed is inject.DIALOG_BEFORE_TYPING
+                            else "failed")
+                return self._stop_not_pressed(sess, pressed, by=by, mode=mode)
+        # From here to the card, no await: every surface reads one
+        # consistent state.
+        now = time.monotonic()
+        shells = len(sess.job_shell_ids())
+        records = [rec for _where, perm, rec in sess.open_prompt_records()
+                   if isinstance(rec, dict) and _agent_owned(perm)]
+        killed: list = []
+        if mode == STOP_KILL_AGENTS:
+            # Their dialogs went with them (no hook says so): the surfaces
+            # are marked closed, so a late tap types nothing.
+            sess.close_prompts(_agent_owned)
+            killed = sess.end_killed_agents(now, row=card_rows.stopped_agent_row)
+        sess.close_all_prompts()
+        # A message held back in the input box (its second Enter not
+        # pressed, roadmap 8.124) is wiped with what Claude held.
+        held += [n for n in _drop_held_back(sess, outstanding) if n not in held]
+        held_chars = queued_chars(sess, held) if held else 0
+        queued = reactions.held_entries(sess.pending_queue)
+        dropped = len(sess.pending_queue) + len(held)
+        sess.pending_queue.clear()
+        sess.turn_sender_id = None
+        sess.pending_permission = None
+        sess.status = Status.IDLE
+        sess.resumed_after_stop = False
+        sess.wait_from_idle = False
+        sess.prompt_wait_carry = False
+        sess.active_subagents.clear()
+        sess.bg_shells_leave_job()
+        sess.job_interim_seen = False
+        sess.job_continuation_active = False
+        sess.job_grace_until = 0.0
+        sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
+        self._discard_queued_targets(sess)
+        sess.user_stopped_at = now
+        sess.last_idle_at = now
+        _clear_turn_open(sess.name)
+        clear_notes_dir(sess.name)
+        self.registry.mark_dirty()
+        outcome = StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by,
+                              mode=mode, agents=len(killed), shells=shells)
+        try:
+            # No Escape (the guard), and what was held is wiped before the
+            # next prompt instead.
+            await self._send_stop_keys(sess, held, held_chars)
+            async with sess.animate_lock:
+                self._cancel_lazy_card(sess)
+                sess.close_turn()
+            self._stop_animation(sess)
+            await self._settle_card_text(sess, stop_text.card_text(i18n.for_sess(sess),
+                                                                   outcome))
+            sess.busy_msg_id = None
+            await self._mark_not_delivered(sess, queued + held)
+            if records:
+                await self._show_agents_stopped(sess, records)
+        finally:
+            if gate is not None:
+                gate.set()
+                if sess.stop_gate is gate:
+                    sess.stop_gate = None
+        if mode == STOP_KILL_AGENTS:
+            log.info("[%s] Stopped by user: kill-agents chord, %d agents stopped, "
+                     "%d shells left running (dropped %d)", sess.label, len(killed),
+                     shells, dropped)
+        else:
+            log.info("[%s] Stopped by user: job ended with no keys, %d shells left "
+                     "running (dropped %d)", sess.label, shells, dropped)
+        return outcome
+
+    def _stop_not_pressed(self, sess: TrackedSession, pressed, *, by: str,
+                          mode: str) -> StopOutcome:
+        """The refusal of a Stop whose own-turn-over path typed nothing,
+        tables untouched. A session that ended meanwhile is not working
+        (no reason: the callers say so); one parked on a background job
+        meanwhile could not have its agents stopped (the next Stop brings
+        it back); else a dialog that blocks the chord (*pressed* is
+        ``inject.DIALOG_BEFORE_TYPING``) or a failed press."""
+        if sess.status is Status.GONE:
+            reason = ""
+        elif sess.parked_job:
+            reason = "agents_not_stopped"
+        elif pressed is inject.DIALOG_BEFORE_TYPING:
+            reason = "dialog_open"
+        else:
+            reason = "agents_not_stopped"
+        return StopOutcome(ok=False, label=sess.label, reason=reason, by=by, mode=mode)
+
+    async def _send_stop_keys(self, sess: TrackedSession, held: list,
+                              held_chars: int) -> None:
+        """Type Stop's keys into *sess*: Escape twice (the proven
+        interrupt), then wipe what Claude's own queue surfaced into the
+        input box (design.md "Stop and /clearqueue on the same primitive":
+        the Escapes can move it there without cancelling the running task,
+        and left alone it would concatenate onto the next prompt; *held*
+        and *held_chars* are read once, before the Escapes).
+
+        The one place every Stop path (the busy card, /status, the /stop
+        command and picker, ``/<label> stop``, the Mini App's stop route,
+        all through :meth:`_stop_session_core`, and the safety halt,
+        :meth:`_halt_for_safety`) sends them, so none of them
+        can type into a session whose own turn has ended: an IDLE session
+        (Claude's turn over, its job's background agents or shells still
+        running) gets no key at all. Two Escapes into Claude Code's idle
+        prompt open its Rewind menu, and the next message sent is typed
+        into that menu and lost (roadmap 8.121 F5, live 2026-10-29).
+        Escape does not stop a background agent anyway; the rest of Stop
+        (the card, the job, the queue) is the caller's and is unchanged.
+        The same holds for a session waiting only on its agents' prompts
+        after its turn ended (``own_turn_over``): two Escapes would cancel
+        the dialog, then reach the idle prompt. Such a session's agents are
+        stopped with Claude Code's kill chord instead (``STOP_KILL_AGENTS``,
+        :meth:`_stop_own_turn_over`). What was held is wiped with Ctrl+U
+        before the next prompt (``inject.request_wipe``), never an Escape.
+        BUSY and a session with Claude's own prompt get today's keys."""
+        if sess.no_escape():
+            if held:
+                inject.request_wipe(sess.name, max(1, held_chars))
+            log.info("[%s] Stop typed no keys: Claude's turn has ended "
+                     "(%d held message(s) wiped before the next prompt)",
+                     sess.label, len(held))
+            return
+        await inject.send_keys(sess.name, "Escape")
+        await _sleep(0.15)
+        await inject.send_keys(sess.name, "Escape")
+        if held:
+            await inject.discard_queued_input(sess.name, held_chars)
 
     async def _stop_parked(self, sess: TrackedSession, *, by: str = "") -> StopOutcome:
         """Stop for a session parked on a Claude Code background job: a
@@ -2301,22 +2569,53 @@ class SessionOpsMixin:
         by = self._actor_label(
             getattr(person, "id", None),
             calling_chat_id(update if update is not None else query), person)
-        outcome = await self._stop_session_core(sess, by=by)
+        # The busy card as it was at the tap: the core retires it.
+        card_id = sess.busy_msg_id
+        toasted = False
+        if query is not None:
+            person_tr = i18n.for_person(update if update is not None
+                                        else SimpleNamespace(callback_query=query))
+            outcome, toasted = await self._stop_for_tap(
+                sess, query, person_tr, by=by)
+            if not outcome.ok and outcome.reason == "stale":
+                # A new turn opened between the check above and the core.
+                if not toasted:
+                    await self._safe_answer(query, person_tr.text(TOAST_STOP_STALE))
+                return outcome
+        else:
+            outcome = await self._stop_session_core(sess, by=by)
         if not outcome.ok:
-            if outcome.reason in BG_FAILURES:
-                await self._say_stop_refused(sess, outcome, update, query)
+            # A toasted Stop that found nothing to stop (the session went
+            # away meanwhile) is told so too: the caller's answer would be
+            # the tap's second one, and dropped.
+            if (outcome.reason in BG_FAILURES or outcome.reason in stop_text.STOP_REFUSALS
+                    or (toasted and outcome.reason == "")):
+                await self._say_stop_refused(sess, outcome, update, query,
+                                             toasted=toasted)
             return outcome
 
-        # Acknowledge, in the words every Stop uses.
-        if query:
+        # Acknowledge, in the words every Stop uses: a tap already told
+        # "Stopping" is shown the outcome by the card edit below.
+        if query and not toasted:
             await self._safe_answer(query, _stopped_line(
                 outcome, html=False,
                 tr=i18n.for_person(update if update is not None
                                    else SimpleNamespace(callback_query=query))))
-            # Also edit the callback query's message if it's the busy message
+        if query:
+            tapped = getattr(getattr(query, "message", None), "message_id", None)
             try:
-                await edit_text(query, _stopped_card_text(sess.label, by, i18n.for_sess(sess)),
-                                parse_mode="HTML")
+                if card_id and tapped == card_id:
+                    # The busy card: it shows how the Stop went.
+                    await edit_text(query, stop_text.card_text(i18n.for_sess(sess),
+                                                               outcome),
+                                    parse_mode="HTML")
+                elif (outcome.mode != STOP_KILL_AGENTS
+                        and tapped not in outcome.stripped):
+                    # A prompt's own message keeps what it asked; only its
+                    # buttons go (they type nothing any more). An agent's
+                    # prompt a kill closed already says so (rev-iter6-004),
+                    # and one the core stripped is left alone.
+                    await edit_markup(query, reply_markup=None)
             except Exception:
                 pass
         elif update:
@@ -2342,18 +2641,76 @@ class SessionOpsMixin:
 
         return outcome
 
+    async def _stop_for_tap(self, sess: TrackedSession, query, tr, *,
+                            by: str, turn: int | None = None
+                            ) -> tuple[StopOutcome, bool]:
+        """Stop *sess* for a button tap (:meth:`_stop_core_if_current`,
+        after the caller's own turn check), answering the tap in time
+        (:data:`STOP_TOAST_WAIT` after the tap came in):
+        ``(outcome, toasted)``. *toasted* True means the tap was answered with
+        ``stop_text.TOAST_STOPPING`` while the Stop still ran, so the
+        caller shows the outcome elsewhere, never in a second answer. The
+        core runs in its own task, so the tap's handler being cancelled
+        never cuts a Stop short halfway."""
+        from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
+        core = asyncio.ensure_future(
+            self._stop_core_if_current(sess, query, by=by, turn=turn))
+        _BACKGROUND_TASKS.add(core)
+        core.add_done_callback(_BACKGROUND_TASKS.discard)
+        # Due STOP_TOAST_WAIT after the tap came in, so the checks before
+        # this never push the toast past the empty ack's bound.
+        await asyncio.wait({core}, timeout=tap_wait_left(query, STOP_TOAST_WAIT))
+        if core.done():
+            return core.result(), False
+        await self._safe_answer(query, tr.text(stop_text.TOAST_STOPPING,
+                                               session=sess.label))
+        await asyncio.wait({core})
+        return core.result(), True
+
+    async def _stop_core_if_current(self, sess: TrackedSession, query, *,
+                                    by: str, turn: int | None
+                                    ) -> StopOutcome:
+        """:meth:`_stop_session_core` for a tap, run in its own task: the
+        tap's turn is checked again in that task's first step, with the
+        core's own checks, so a turn that opened in the loop pass between
+        the caller's check and this task is never stopped by an older
+        button (``reason="stale"``). *turn*: the button's ``turn_key``
+        (/status, the picker), else the tapped message's id decides."""
+        tapped = getattr(getattr(query, "message", None), "message_id", None)
+        if not sess.tap_is_for_this_turn(None if turn is not None else tapped,
+                                         turn=turn):
+            return StopOutcome(ok=False, label=sess.label, reason="stale")
+        return await self._stop_session_core(sess, by=by)
+
     async def _say_stop_refused(self, sess: TrackedSession, outcome: StopOutcome,
-                                update, query) -> None:
-        """Why a Stop of a parked session did not happen: a pop-up for a
-        tap, a reply for a command. Best-effort."""
+                                update, query, *, toasted: bool = False) -> None:
+        """Why a Stop did not happen (a parked session's failed bring-back,
+        or a session whose turn has ended refused, roadmap 8.121 F5): a
+        pop-up for a tap, a reply for a command. A tap already answered
+        "Stopping" (*toasted*) gets the reason as a reply under the tapped
+        message instead: its one answer is spent. Best-effort."""
         try:
-            if query is not None:
+            message = getattr(query, "message", None) if query is not None else None
+            if toasted and message is not None:
+                tr = i18n.for_chat(calling_chat_id(update if update is not None
+                                                   else query))
+                if outcome.reason == "":
+                    # Nothing left to stop (the session went away meanwhile).
+                    text = tr.html(NOT_WORKING, session=sess.label)
+                else:
+                    text = (stop_text.refusal(tr, outcome, html=True)
+                            or stop_refused_html(tr, outcome))
+                await reply_text(message, text, parse_mode="HTML")
+            elif query is not None:
                 tr = i18n.for_person(update if update is not None
                                      else SimpleNamespace(callback_query=query))
-                await self._safe_answer(query, stop_refused_text(tr, outcome))
+                await self._safe_answer(query, stop_text.refusal(tr, outcome, html=False)
+                                        or stop_refused_text(tr, outcome))
             elif update is not None and getattr(update, "message", None) is not None:
                 tr = i18n.for_update(update)
-                await reply_text(update.message, stop_refused_html(tr, outcome),
+                await reply_text(update.message,
+                                 stop_text.refusal(tr, outcome, html=True)
+                                 or stop_refused_html(tr, outcome),
                                  parse_mode="HTML")
         except Exception:
             log.debug("[%s] stop refusal notice failed", sess.label, exc_info=True)
@@ -2422,9 +2779,9 @@ class SessionOpsMixin:
                             exc_info=True)
         else:
             try:
-                await inject.send_keys(sess.name, "Escape")
-                await _sleep(0.15)
-                await inject.send_keys(sess.name, "Escape")
+                # Stop's own keys, so a session whose turn already ended
+                # (a background agent's call was blocked) gets none.
+                await self._send_stop_keys(sess, [], 0)
             except Exception:
                 log.debug("[%s] safety halt interrupt failed", sess.label,
                           exc_info=True)
@@ -2890,7 +3247,8 @@ class SessionOpsMixin:
         tr = i18n.for_update(update)
         if sess is not None:
             outcome = await self._stop_session(sess, update=update)
-            if not outcome.ok:
+            if not outcome.ok and outcome.reason == "":
+                # Any other refusal already said why (_stop_session).
                 await reply_text(update.message, tr.html(NOT_WORKING, session=sess.label),
                                  parse_mode="HTML")
             return

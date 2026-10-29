@@ -240,6 +240,9 @@ COUNTER_KEYS = ("watchdog_restart", "watchdog_refresh", "interactive_demoted",
                 # A Claude Code background worker's datagram for a job no
                 # session is parked on (dropped).
                 "bg_job_unlinked",
+                # Stop pressed Claude Code's kill-agents chord and no turn
+                # said the background agents were stopped (roadmap 8.121).
+                "kill_agents_unconfirmed",
                 # Environment errors: counted, never a fingerprint or an offer.
                 "tg_retry_after", "tg_conflict", "tg_forbidden", "tg_invalid_token",
                 "env_network", "env_timeout", "env_cancelled", "env_disk_full",

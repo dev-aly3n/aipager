@@ -34,8 +34,8 @@ from tests.footer_text import unfooter
 
 CHAT = 256113222
 DESC = "run the tests"
-IDLE = "💤 aipager_boss (idle)"
-WORKING = "⚙️ aipager_boss (working"
+IDLE = "💤 frontend (idle)"
+WORKING = "⚙️ frontend (working"
 HELD = 30.0
 #: Well beyond the few minutes an ended id is remembered for.
 LONG_AFTER = 3600
@@ -367,7 +367,7 @@ def test_bb_ghost_end_leaves_another_id_running(replay, vloop, monkeypatch):
 
 def test_bb_ghost_end_leaves_another_id_counted(replay, vloop, monkeypatch):
     out = _ghost_end(replay, vloop, monkeypatch, then_launch="breal1")
-    assert out["pin"] == "💤 aipager_boss (idle, 1 shell running)"
+    assert out["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 def test_bb_ghost_end_leaves_another_id_holding_the_job(replay, vloop,
@@ -464,7 +464,7 @@ def test_bb_relaunch_long_after_shows_a_running_row(replay, vloop,
 def test_bb_relaunch_long_after_is_counted_in_the_pin(replay, vloop,
                                                       monkeypatch, source):
     out = _relaunch_long_after(replay, vloop, monkeypatch, source=source)
-    assert out["pin"] == "💤 aipager_boss (idle, 1 shell running)"
+    assert out["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 @pytest.mark.parametrize("source", SOURCES)

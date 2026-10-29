@@ -277,6 +277,20 @@ def test_stop_button_sends_one_post_and_refreshes(node_bin, tmp_path):
     assert "ok: stop -> menu -> one POST /api/sessions/dev/stop" in proc.stdout, proc.stdout
 
 
+def test_stop_that_ended_agents_shows_the_servers_words(node_bin, tmp_path):
+    """Roadmap 8.121 F5: the stop route's ``detail`` (how many background
+    agents were stopped, the shells left running) is the notice, as it is
+    for resume; the flow stays in the app."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "stop_detail")
+    assert proc.returncode == 0, (
+        f"stop detail scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: stop that ended agents -> notice shows the server's detail" in proc.stdout
+
+
 def test_kill_requires_confirming_a_modal(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
@@ -763,6 +777,42 @@ def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, t
     assert proc.returncode != 0, (
         "harness passed a page where busy perms uses the idle wording"
     )
+
+
+def test_perms_tasks_uses_stop_task_wording(node_bin, tmp_path):
+    """Roadmap 8.121: a session waiting for its own background agents is
+    still working, and a Full access switch restarts it (stopping them):
+    the confirm asks in the busy wording."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "perms_tasks")
+    assert proc.returncode == 0, (
+        f"perms_tasks scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms tasks -> Stop task & switch wording -> POST /api/sessions/dev/perms" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_perms_tasks_falling_back_to_idle_wording(node_bin, tmp_path):
+    """Guard the guard: count only busy as working in the perms confirm and
+    the waiting-for-agents scenario must catch it."""
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    old = "      var busy = isWorking(data.status);\n"
+    new = '      var busy = data.status === "busy";\n'
+    assert SOURCE_INDEX_HTML.count(old) == 1, "perms busy check not found once: page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "perms_tasks", name="broken-perms-tasks.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page where a waiting-for-agents session gets the idle wording"
+    )
+    busy = _drive_controls(
+        node_bin, tmp_path, broken, "perms_busy", name="broken-perms-busy.html",
+    )
+    assert busy.returncode == 0, f"the mutant broke busy too:\n{busy.stdout}\n{busy.stderr}"
 
 
 def test_perms_full_requires_admin_is_inert_with_reason(node_bin, tmp_path):
@@ -1719,6 +1769,11 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
 
 @pytest.mark.parametrize("scenario, expected", [
     ("grid_render", "ok: grid -> 2 beacons, 3 lanterns, 3 on the shelf, pulse sentence"),
+    ("grid_tasks", "ok: grid -> waiting for its agents reads its count, lit, counted working"),
+    ("detail_tasks", "ok: session page -> Waiting for 2 agents, working, lit ring"),
+    ("grid_tasks_recount",
+     "ok: grid -> a recount moves the tile word 2 agents, 1 agent, 3 agents"),
+    ("detail_tasks_recount", "ok: session page -> the state line follows the count"),
     ("grid_keyed", "ok: a changed poll reuses the tile and moves its ring"),
     ("grid_unchanged", "ok: an unchanged poll touches nothing"),
     ("grid_reorder", "ok: reorder moves the same tiles, no FLIP without its APIs"),
@@ -1747,6 +1802,28 @@ def test_lantern_grid_and_answer_scenarios(node_bin, tmp_path, scenario, expecte
 # Guard the guard for each mechanism above: break it in the page and the
 # scenario that names it must fail.
 _GRID_MUTANTS = [
+    # Roadmap 8.121 (guard 8): a session waiting for its own agents is
+    # counted with working and its lamp is lit.
+    pytest.param(
+        '      var st = s.status === "tasks" ? "busy" : s.status;',
+        "      var st = s.status;",
+        "grid_tasks", id="tasks-counted-working"),
+    pytest.param(
+        '  function isWorking(status) { return status === "busy" || status === "tasks"; }',
+        '  function isWorking(status) { return status === "busy"; }',
+        "grid_tasks", id="tasks-lamp-lit"),
+    pytest.param(
+        '    var word = s.status === "tasks" ? tasksWord(s) : stateWord(s.status);',
+        "    var word = stateWord(s.status);",
+        "grid_tasks", id="tasks-tile-word"),
+    pytest.param(
+        '    if (d.status === "tasks") { return tasksLine(d); }',
+        "",
+        "detail_tasks", id="tasks-state-line"),
+    pytest.param(
+        '    return tn("ui.state_line.tasks_agents", Number(d.job_agents) || 0);',
+        '    return tn("ui.state_line.tasks_agents", 2);',
+        "detail_tasks_recount", id="tasks-state-line-count"),
     pytest.param(
         "      if (item) { update(item, s); } else { item = map[s.label] = build(s); }",
         "      item = map[s.label] = build(s);",
@@ -1813,6 +1890,40 @@ def test_the_grid_harness_detects_a_broken_mechanism(node_bin, tmp_path, old, ne
     assert proc.returncode != 0, (
         f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
     )
+
+
+# The agent count is in both change checks, so a tile follows an agent
+# ending even when nothing else on the row moved. The count is dropped from
+# each check on its own, and the scenario must fail on the stale tile word
+# it names, not on a crash.
+_GRID_SIG = '              pctOf(s), s.cost_usd, s.project, s.job_agents].join("|");'
+_TILE_SIG = ('    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
+             '               s.job_agents].join("|");')
+_AGENTS_STALE = 'FAIL: 1 agents left, tile word: "waiting for 2 agents"'
+_COUNT_SIGNATURE_MUTANTS = [
+    pytest.param(
+        _GRID_SIG,
+        '              pctOf(s), s.cost_usd, s.project].join("|");',
+        _AGENTS_STALE, id="tasks-counts-in-grid-signature"),
+    pytest.param(
+        _TILE_SIG,
+        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");',
+        _AGENTS_STALE, id="tasks-counts-in-tile-signature"),
+]
+
+
+@pytest.mark.parametrize("old, new, reason", _COUNT_SIGNATURE_MUTANTS)
+def test_the_grid_harness_detects_a_count_missing_from_a_change_check(
+        node_bin, tmp_path, old, new, reason):
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, "grid_tasks_recount")
+    assert proc.returncode != 0, (
+        f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
+    )
+    assert reason in proc.stderr, f"failed for another reason\nstderr: {proc.stderr}"
 
 
 def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):

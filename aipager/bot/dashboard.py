@@ -54,7 +54,7 @@ from aipager.bot.flood_budget import (
 )
 from aipager.bot.rich_message import get_rate_limiter
 from aipager.policy_snapshot import queue_depth_parts
-from aipager.state import Status, TrackedSession, warn_unstamped
+from aipager.state import SHOWN_TASKS, Status, TrackedSession, warn_unstamped
 from aipager.transcript import last_assistant_preview as _read_preview
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -202,8 +202,12 @@ BUSY_RETRY = Msg("toast.busy_retry", "Busy - try again in a moment",
                  note="Pop-up: Telegram limits this chat right now")
 #: The first line's glyph when no session is waiting: that of the first
 #: state in _PINNED_GLYPH_ORDER any session is in.
-_PINNED_GLYPHS = {"working": "⚙️", "starting": "🔄", "idle": "💤"}
-_PINNED_GLYPH_ORDER = ("working", "starting", "idle")
+_PINNED_GLYPHS = {"working": "⚙️", "tasks": "🔄", "starting": "🔄", "idle": "💤"}
+_PINNED_GLYPH_ORDER = ("working", "tasks", "starting", "idle")
+#: Roadmap 8.121: a state id counted under another on the first line when
+#: several sessions share the chat. A session waiting for its own
+#: background agents counts as working.
+_COUNT_BUCKET = {"tasks": "working"}
 #: The waiting prompt's summary on the first line is cut to this.
 PINNED_SUMMARY_MAX = 40
 PIN_NEEDS_INPUT = Msg("pin.needs_input", "Needs input",
@@ -364,7 +368,7 @@ _prompt_tokens = itertools.count(1)
 #: /status (4.2): a session's state glyph (the pinned bar's words), the
 #: current step cut to this, and how many ended sessions its Ended view
 #: lists (the rest are in /resume).
-_STATUS_GLYPHS = {"working": "⚙️", "needs_you": "⏳", "idle": "💤"}
+_STATUS_GLYPHS = {"working": "⚙️", "needs_you": "⏳", "tasks": "🔄", "idle": "💤"}
 _STATUS_STEP_MAX = 40
 _ENDED_SHOWN_MAX = 10
 
@@ -422,12 +426,27 @@ STATUS_TALK_DM = Msg("status.talk_dm", "Send a message and it goes to {session}.
 
 
 def _pinned_word(sess: TrackedSession) -> str:
-    """The state id: ``working``, ``needs_you``, ``idle`` or ``starting``."""
+    """The state id: ``working``, ``needs_you``, ``tasks`` (idle, but its
+    job's background agents still run: roadmap 8.121), ``idle`` or
+    ``starting``."""
+    if sess.shown_state().state == SHOWN_TASKS:
+        return "tasks"
     return _PINNED_WORDS.get(sess.status, "starting")
 
 
 def _state_text(tr, state_id: str, kind: str = "html") -> str:
     return getattr(tr, kind)(_STATE_MSGS[state_id])
+
+
+def _shown_state_text(tr, sess: TrackedSession, kind: str = "html") -> str:
+    """*sess*'s state in words: ``waiting for 2 agents`` while it waits
+    for its job's background agents, from the same count every surface
+    names (``job_wait.phrase``), else the state's own word."""
+    from aipager.bot import job_wait
+    shown = sess.shown_state()
+    if shown.state == SHOWN_TASKS:
+        return job_wait.phrase(tr, shown.agents, kind=kind)
+    return _state_text(tr, _PINNED_WORDS.get(sess.status, "starting"), kind)
 
 
 def _pinned_running(sess: TrackedSession, tr, kind: str = "html") -> str:
@@ -450,11 +469,16 @@ def _pinned_running(sess: TrackedSession, tr, kind: str = "html") -> str:
 
 
 def _pinned_state(sess: TrackedSession, tr=None) -> str:
-    """``(working)`` / ``(idle, 1 agent running)``: a session's state as
-    the bar shows it (HTML). Parentheses, never a dash (operator,
-    2026-09-25)."""
+    """``(working)`` / ``(idle, 1 agent running)`` / ``(waiting for 2
+    agents)``: a session's state as the bar shows it (HTML). Parentheses,
+    never a dash (operator, 2026-09-25). While it waits for its job's
+    background agents the state names their count and nothing else
+    (roadmap 8.121); otherwise the background work running follows the
+    state (roadmap 8.41)."""
     tr = tr or i18n.for_sess(sess)
-    state = Safe(_state_text(tr, _pinned_word(sess)))
+    state = Safe(_shown_state_text(tr, sess))
+    if _pinned_word(sess) == "tasks":
+        return tr.html(PIN_STATE, state=state)
     running = _pinned_running(sess, tr)
     if running:
         return tr.html(PIN_STATE_RUNNING, state=state, running=Safe(running))
@@ -784,6 +808,7 @@ class DashboardMixin:
             counts: dict[str, int] = {}
             for s in sessions:
                 state_id = _pinned_word(s)
+                state_id = _COUNT_BUCKET.get(state_id, state_id)
                 counts[state_id] = counts.get(state_id, 0) + 1
             shown = " · ".join(tr.n(_COUNT_MSGS[w], counts[w])
                                for w in _PINNED_COUNT_ORDER if w in counts)
@@ -1400,7 +1425,7 @@ class DashboardMixin:
         glyph = _STATUS_GLYPHS.get(state_id, "🔄")
         head = tr.html(STATUS_HEAD, mark=Safe("✍️ " if sess is target else ""),
                        session=sess.label, glyph=Safe(glyph),
-                       state=Safe(_state_text(tr, state_id)))
+                       state=Safe(_shown_state_text(tr, sess)))
         if sess.status == Status.BUSY:
             if sess.busy_started_at:
                 head += f" {tr.clock(time.monotonic() - sess.busy_started_at)}"
@@ -1436,8 +1461,11 @@ class DashboardMixin:
                                    queued=Safe(tr.n(STATUS_QUEUED, queued)),
                                    notes=Safe(tr.n(STATUS_NOTES, notes))))
         # Every subagent running now (as the old Agents row counted), and
-        # the shells Claude runs in the background.
-        for count, plural in ((len(sess.active_subagents), COUNT_AGENTS),
+        # the shells Claude runs in the background. The agents not while
+        # the session waits for them: the head names that count already
+        # (roadmap 8.121).
+        agents = 0 if state_id == "tasks" else len(sess.active_subagents)
+        for count, plural in ((agents, COUNT_AGENTS),
                               (len(sess.bg_shells), COUNT_SHELLS)):
             if count:
                 details.append(tr.n(plural, count))
@@ -1555,7 +1583,7 @@ class DashboardMixin:
         state_id = _pinned_word(sess)
         glyph = _STATUS_GLYPHS.get(state_id, "🔄")
         lines = [tr.html(STATUS_SWITCH, session=sess.label, glyph=Safe(glyph),
-                         state=Safe(_state_text(tr, state_id)),
+                         state=Safe(_shown_state_text(tr, sess)),
                          mode=Safe(shown_label(tr, sess)))]
         rows: list[list[InlineKeyboardButton]] = []
         if sess.status == Status.INTERACTIVE:

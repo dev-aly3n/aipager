@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} دستور پس‌زمینه (shell) تمام شد ({clock})", "other": "{n} دستور پس‌زمینه (shell) تمام شد ({clock})"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} دستور پس‌زمینه (shell) در حال اجرا", "other": "🖥 {n} دستور پس‌زمینه (shell) در حال اجرا"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} دستور پس‌زمینه (shell) متوقف شد ({clock})", "other": "{n} دستور پس‌زمینه (shell) متوقف شد ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"one": "⏹ {n} ایجنت متوقف شد ({clock})", "other": "⏹ {n} ایجنت متوقف شد ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} ایجنت در حال کار", "other": "⏳ {n} ایجنت در حال کار"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} ایجنت دیگر", "other": "+{n} ایجنت دیگر"}}
 {"k": "agents.promise", "src": "29723a21", "v": "وقتی کار ایجنت‌ها تمام شود، نتیجه همین‌جا ارسال می‌شود."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · تمام شد ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · متوقف شد ({clock})"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · منتظر ایجنت‌های خودش"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "← {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"one": "{n} پیام صف حذف شد.", "other": "{n} پیام صف حذف شد."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"one": "{n} دستور پس‌زمینه همچنان در حال اجراست.", "other": "{n} دستور پس‌زمینه همچنان در حال اجراست."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ {session} متوقف شد"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"one": "⏹ {n} ایجنت پس‌زمینه در {session} متوقف شد", "other": "⏹ {n} ایجنت پس‌زمینه در {session} متوقف شد"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"one": "⏹ {person} {n} ایجنت پس‌زمینه را در {session} متوقف کرد", "other": "⏹ {person} {n} ایجنت پس‌زمینه را در {session} متوقف کرد"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} کار {session} را متوقف کرد"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"one": "⏹ {person} کار {session} را متوقف کرد ({n} پیام صف حذف شد)", "other": "⏹ {person} کار {session} را متوقف کرد ({n} پیام صف حذف شد)"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"one": "⏹ {session} متوقف شد ({n} پیام صف حذف شد)", "other": "⏹ {session} متوقف شد ({n} پیام صف حذف شد)"}}
@@ -211,8 +217,6 @@
 {"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 همین حالا ری‌استارت کن"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "همین حالا ری‌استارت کن"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "{mins} دقیقهٔ دیگر صبر کن"}
-{"k": "card.agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
-{"k": "card.agents_typed", "src": "af56f555", "v": {"one": "{n} ایجنت ({types})", "other": "{n} ایجنت ({types})"}}
 {"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · در حال کامپکت کردن گفتگو{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · رد شد"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} رد کرد"}
@@ -230,6 +234,7 @@
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} ابزار اجرا کرد · {clock}", "other": "🤖 {agent} · {n} ابزار اجرا کرد · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (هنوز کار می‌کند)"}
+{"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · متوقف شد ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "ایجنت"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
 {"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 در حال ارسال {n} فایل", "other": "📎 در حال ارسال {n} فایل"}}
@@ -242,8 +247,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "دستور پس‌زمینه: {label} - متوقف شد ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "در حال شروع"}
 {"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} دستور پس‌زمینه", "other": "{n} دستور پس‌زمینه"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"one": "🖥 {n} دستور پس‌زمینه همچنان در حال اجراست.", "other": "🖥 {n} دستور پس‌زمینه همچنان در حال اجراست."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · متوقف شد"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"one": "⚠️ <b>{session}</b> · {n} ایجنت پس‌زمینه متوقف شد", "other": "⚠️ <b>{session}</b> · {n} ایجنت پس‌زمینه متوقف شد"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"one": "⚠️ <b>{session}</b> · {person} {n} ایجنت پس‌زمینه را متوقف کرد", "other": "⚠️ <b>{session}</b> · {person} {n} ایجنت پس‌زمینه را متوقف کرد"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} متوقف کرد"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · دستور وسط اجرا در ترمینال متوقف شد"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · در ترمینال متوقف شد"}
@@ -321,6 +329,7 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "با /new یک سشن شروع کنید."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "برای حرف زدن با یک سشن، روی اسمش در کیبورد بزنید."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code در Telegram"}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"one": "منتظر {n} ایجنت", "other": "منتظر {n} ایجنت"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« بازگشت"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "فرمان‌ها"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "بستن"}
@@ -593,6 +602,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}، {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ پیام‌ها به <b>{session}</b> ارسال می‌شوند"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ این درخواست بسته شد، چون ایجنت پس‌زمینه‌اش متوقف شد."}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "همین گفتگو را ادامه بده"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "شروع گفتگوی جدید"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "ادامه بده"}
@@ -941,6 +951,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "به پیامی از {session} جواب بدهید (یا {bot} را صدا بزنید) تا با آن حرف بزنید."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "به پیامی از {session} جواب بدهید (یا ربات را صدا بزنید) تا با آن حرف بزنید."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} منتظر جواب شماست."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "ایجنت‌های پس‌زمینه در {session} متوقف نشدند. دوباره «توقف» را بزنید."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "در ترمینال {session} یک پنجره باز است. همان‌جا جوابش را بدهید، بعد دوباره «توقف» را بزنید."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "قبلاً جواب داده شده"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "برای این دستور قاعدهٔ «همیشه اجازه بده» نبود - فقط همین یک بار اجازه داده شد [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
@@ -1055,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "در این گروه فقط ادمین‌ها می‌توانند تنظیمات را عوض کنند."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "شما اجازهٔ تغییر تنظیمات این سشن را ندارید."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "آن کار قبلاً تمام شده - از کارت فعلی استفاده کنید"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ {session} در حال توقف است…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "ناشناخته: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "در حال چک کردن…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 فقط ادمین می‌تواند aipager را آپدیت کند."}
@@ -1389,6 +1402,7 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "در حال کار"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "بسته‌شده"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "آماده"}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"one": "منتظر {n} ایجنت", "other": "منتظر {n} ایجنت"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "نامعلوم"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "منتظر شما"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "در پس‌زمینهٔ Claude Code"}
@@ -1397,6 +1411,7 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "منتظر شما ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "آماده"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "آماده، آخرین فعالیت {age}"}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"one": "منتظر {n} ایجنت", "other": "منتظر {n} ایجنت"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "هنوز گزارش نشده"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "در حال کار"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "در حال کار، {clock}"}

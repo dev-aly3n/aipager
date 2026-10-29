@@ -1558,7 +1558,7 @@ def test_waiting_header_single_agent_no_types_over_three():
     sess.active_subagents["a1"] = {"type": "Explore"}
     header = _header(build_stream_card(sess, "Working", waiting=True))
     assert header == (
-        "🔄 **hiva** · 1 agent (Explore) still working · 4:20"
+        "🔄 **hiva** · waiting for 1 agent · 4:20"
     )
 
 
@@ -1570,12 +1570,15 @@ def test_waiting_header_plural_agents():
     assert "2 agents" in header
 
 
-def test_waiting_header_types_sorted_and_comma_joined():
+def test_waiting_header_names_the_count_not_the_types():
+    """Roadmap 8.121: the line says how many agents it waits for, as the
+    bar and /status do; each agent's type is on its own row above."""
     sess = _sess("hiva")
     sess.active_subagents["a1"] = {"type": "Zebra"}
     sess.active_subagents["a2"] = {"type": "Alpha"}
     header = _header(build_stream_card(sess, "Working", waiting=True))
-    assert "(Alpha, Zebra)" in header
+    assert "waiting for 2 agents" in header
+    assert "Alpha" not in header and "Zebra" not in header
 
 
 def test_waiting_header_omits_types_over_three_distinct():
@@ -1592,7 +1595,7 @@ def test_waiting_status_omits_elapsed_when_busy_started_at_falsy():
     sess.busy_started_at = 0.0
     sess.active_subagents["a1"] = {"type": "Explore"}
     status = _header(build_stream_card(sess, "Working", waiting=True))
-    assert status == "🔄 **hiva** · 1 agent (Explore) still working"
+    assert status == "🔄 **hiva** · waiting for 1 agent"
 
 
 def test_waiting_body_is_the_same_timeline_with_a_waiting_status_line():
@@ -1605,8 +1608,7 @@ def test_waiting_body_is_the_same_timeline_with_a_waiting_status_line():
     normal_card = build_stream_card(sess, "Whatever", waiting=False)
     status = status_md(waiting_card)
     assert status.startswith("🔄")
-    assert "still working" in status
-    assert "1 agent (Explore)" in status
+    assert "waiting for 1 agent" in status
     assert _body(waiting_card) == _body(normal_card)
 
 
@@ -1622,7 +1624,7 @@ def test_waiting_status_line_survives_truncation():
     assert len(card.encode("utf-8")) <= 32768
     status = status_md(card)
     assert status.startswith("🔄")
-    assert "still working" in status
+    assert "waiting for 1 agent" in status
 
 
 def test_no_footer_on_normal_and_final_frames():

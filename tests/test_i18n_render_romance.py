@@ -202,7 +202,7 @@ def test_plural_forms_through_the_code_that_sends_them(code, monkeypatch):
     assert animation._tool_fold_summary(1, tr) == one
     assert animation._tool_fold_summary(2, tr) == two
     # One and other really differ (the noun is singular for one).
-    for key in ("card.fold", "card.agents", "status.notes", "ui.pulse.need"):
+    for key in ("card.fold", "jobwait.agents", "status.notes", "ui.pulse.need"):
         assert _form(code, key, 1) != _form(code, key, 2).replace("2", "1"), (code, key)
     # French and Portuguese say 0 in the singular; Spanish and Italian in the plural.
     zero = _form(code, "card.fold", 0)

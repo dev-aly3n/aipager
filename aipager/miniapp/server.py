@@ -2111,16 +2111,35 @@ class MiniAppServer:
             refused = _bg_refusal_response(tr, outcome, outcome.label)
             if refused is not None:
                 return refused
+            from aipager.bot import stop_text
+            if getattr(outcome, "reason", "") in stop_text.STOP_REFUSALS:
+                # A session whose turn has ended: a dialog of Claude's own
+                # is open, or its agents could not be stopped (8.121 F5).
+                return web.json_response({
+                    "error": outcome.reason,
+                    "detail": stop_text.refusal(tr, outcome, html=False),
+                }, status=409)
             return web.json_response({
                 "error": "not_busy", "detail": tr.text(NOT_BUSY_REASON),
             }, status=409)
 
         await self._mirror_session_stopped(
-            scope_chat_id, outcome.label, outcome.dropped,
+            scope_chat_id, outcome.label, outcome.dropped, outcome,
         )
-        return web.json_response({
+        body = {
             "status": "stopped", "label": outcome.label, "dropped": outcome.dropped,
-        })
+        }
+        from aipager.state import STOP_END_JOB, STOP_KILL_AGENTS
+        if getattr(outcome, "mode", "") in (STOP_KILL_AGENTS, STOP_END_JOB):
+            # The agents stopped, the shells left running, and what the
+            # app's notice says, in the viewer's language (8.121 F5). Any
+            # other Stop keeps today's payload and the app's own notice.
+            from aipager.bot import stop_text
+            body["agents"] = getattr(outcome, "agents", 0)
+            body["shells"] = getattr(outcome, "shells", 0)
+            body["detail"] = stop_text.stopped_line(
+                self._viewer_tr(request, user_id), outcome, html=False)
+        return web.json_response(body)
 
     async def _handle_session_answer(self, request):
         """``POST /api/sessions/{label}/answer``: re-send the session's
@@ -2950,11 +2969,13 @@ class MiniAppServer:
         except Exception:
             log.debug("miniapp: session-renamed mirror failed", exc_info=True)
 
-    async def _mirror_session_stopped(self, scope_chat_id, label, dropped) -> None:
+    async def _mirror_session_stopped(self, scope_chat_id, label, dropped,
+                                      outcome=None) -> None:
         """Best-effort — the stop already happened; a failed mirror must
         never fail (or appear to undo) a write that already landed."""
         try:
-            text = chat_lines.stopped(_chat_tr(scope_chat_id), label, dropped)
+            text = chat_lines.stopped(_chat_tr(scope_chat_id), label, dropped,
+                                      outcome=outcome)
             await self.bot._app.bot.send_message(chat_id=scope_chat_id, text=text)
         except Exception:
             log.debug("miniapp: session-stopped mirror failed", exc_info=True)

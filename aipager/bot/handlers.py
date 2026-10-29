@@ -1720,7 +1720,8 @@ class CommandHandlersMixin:
                                   who=update.effective_user)
             return
         outcome = await self._stop_session(sess, update=update)
-        if not outcome.ok:
+        if not outcome.ok and outcome.reason == "":
+            # A refusal with a reason already said why (_stop_session).
             await reply_text(update.message, tr.html(NOT_WORKING, session=sess.label),
                              parse_mode="HTML")
 

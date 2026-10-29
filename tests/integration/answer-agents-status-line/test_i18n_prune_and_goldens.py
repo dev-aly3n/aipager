@@ -22,6 +22,7 @@ import pytest
 from tests.i18n_surfaces import (
     AGENTS_TREE_CARD_SURFACES,
     AGENTS_TREE_NEW_SURFACES,
+    JOB_WAIT_SURFACES,
     APPEARANCE_NEW_SURFACES,
     APPEARANCE_SURFACES,
     MODE_LABEL_SURFACES,
@@ -32,6 +33,7 @@ from tests.i18n_surfaces import (
     with_keyboard_app_removed,
     without_appearance_row,
     without_card_divider,
+    without_job_wait,
     with_agent_calls_folded,
     CARD_FOLD_TAIL_SURFACES,
     without_mode_labels,
@@ -233,7 +235,7 @@ def test_english_surfaces_change_only_under_agents_line():
     exempt = (MODE_LABEL_SURFACES | three | NO_KEYBOARD_APP_SURFACES
               | RESTART_NOW_NEW_SURFACES | AGENTS_TREE_CARD_SURFACES
               | AGENTS_TREE_NEW_SURFACES | APPEARANCE_SURFACES
-              | APPEARANCE_NEW_SURFACES)
+              | APPEARANCE_NEW_SURFACES | JOB_WAIT_SURFACES)
     assert [k for k in changed if k not in exempt] == [
         "agents_line", "language.list"]
     for k in NO_KEYBOARD_APP_SURFACES:
@@ -245,14 +247,25 @@ def test_english_surfaces_change_only_under_agents_line():
         cur = with_agent_calls_folded(new[k]) if k in CARD_FOLD_TAIL_SURFACES else new[k]
         if k in CARD_FOLD_TAIL_SURFACES:
             assert cur != new[k], k
+        # A session waiting for its agents (roadmap 8.121): the waiting
+        # line's new words, and only that.
+        cur = without_job_wait(k, cur)
         assert without_card_divider(cur) == old[k], k
+    for k in JOB_WAIT_SURFACES - AGENTS_TREE_CARD_SURFACES:
+        assert new[k] != old[k], k
+        cur = without_job_wait(k, new[k])
+        if k in MODE_LABEL_SURFACES:
+            assert without_mode_labels(cur) == without_mode_labels(old[k]), k
+        else:
+            assert cur == old[k], k
     for k in APPEARANCE_SURFACES:
         assert new[k] != old[k], k
         assert without_appearance_row(new[k]) == old[k], k
     assert APPEARANCE_NEW_SURFACES <= set(new) - set(old)
     assert set(changed) >= MODE_LABEL_SURFACES
     for k in MODE_LABEL_SURFACES - three:
-        assert without_mode_labels(new[k]) == without_mode_labels(old[k]), k
+        assert (without_mode_labels(without_job_wait(k, new[k]))
+                == without_mode_labels(old[k])), k
 
 
 def test_the_hook_process_never_loads_i18n(tmp_path):

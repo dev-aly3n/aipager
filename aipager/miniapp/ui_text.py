@@ -97,6 +97,13 @@ STATE_BACKGROUND = Msg("ui.state.background", "in the background",
                        note="Mini App: a session's state (short): its conversation moved into "
                             "a Claude Code background job, nothing is typed into it until it "
                             "is brought back")
+# Roadmap 8.121: Claude's own turn ended, but the background agents it
+# started still run. Counted as working.
+STATE_TASKS_AGENTS = Plural("ui.state.tasks_agents", one="waiting for {n} agent",
+                            other="waiting for {n} agents",
+                            note="Mini App: a session's state (short, lowercase): Claude's "
+                                 "own turn ended, but the background agents it started still "
+                                 "run; how many")
 TILE_NO_FOLDER = Msg("ui.tile.no_folder", "no folder",
                      note="Mini App grid: a session without a folder (short)")
 TILE_ARIA = Msg("ui.tile.aria", "{session}, {state}, context {pct}%, {model}, {cost}",
@@ -175,6 +182,11 @@ STATE_LINE_BACKGROUND = Msg("ui.state_line.background", "In Claude Code's backgr
                                  "conversation moved into a Claude Code background job")
 STATE_LINE_UNKNOWN = Msg("ui.state_line.unknown", "Not reported yet",
                          note="Mini App session page: the state is not known yet")
+STATE_LINE_TASKS_AGENTS = Plural("ui.state_line.tasks_agents", one="Waiting for {n} agent",
+                                 other="Waiting for {n} agents",
+                                 note="Mini App session page: the state line while Claude's "
+                                      "own turn ended but the background agents it started "
+                                      "still run; how many")
 KIND_WORD_PERMISSION = Msg("ui.kind_word.permission", "permission",
                            note="Mini App: what a session waits on, inside Needs you (...)")
 KIND_WORD_QUESTION = Msg("ui.kind_word.question", "question",

@@ -362,6 +362,7 @@ def test_stop_while_waiting_resends_nothing(mk_bot, run_async, wire,
     _idle(run_async, bot, sess, INTERIM)
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.press_kill_agents", AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.discard_queued_input",
                         AsyncMock(return_value=True))
     before = len(wire.calls)

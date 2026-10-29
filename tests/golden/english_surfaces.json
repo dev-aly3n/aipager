@@ -114,8 +114,8 @@
   "Stop"
  ],
  "card.waiting": [
-  "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n<details><summary>\u25b8 10 tool calls</summary>\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n</details>\n\n\u23f3 `\ud83e\udd16 general-purpose \u00b7 Read: /x \u00b7 1:05`\n\n\u2705 `Read: /x`\n\n\u23f3 `shell: npm run dev (0:30)`\n\n\u23f3 `Bash: ls`\n\n---\n\n<footer>\ud83d\udd04 <b>x1</b> \u00b7 2 agents (Explore, general-purpose), 1 shell still working \u00b7 4:10</footer>",
-  "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n\u23f3 `\ud83e\udd16 general-purpose`\n\n\u23f3 `Bash: npm run dev`\n\n\u23f3 `Bash: ls`\n\n---\n\n<footer>\ud83d\udd04 <b>x1</b> \u00b7 1 agent (general-purpose) still working \u00b7 4:10</footer>",
+  "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n<details><summary>\u25b8 10 tool calls</summary>\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n</details>\n\n\u23f3 `\ud83e\udd16 general-purpose \u00b7 Read: /x \u00b7 1:05`\n\n\u2705 `Read: /x`\n\n\u23f3 `shell: npm run dev (0:30)`\n\n\u23f3 `Bash: ls`\n\n---\n\n<footer>\ud83d\udd04 <b>x1</b> \u00b7 waiting for 2 agents \u00b7 4:10</footer>",
+  "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n\u23f3 `\ud83e\udd16 general-purpose`\n\n\u23f3 `Bash: npm run dev`\n\n\u23f3 `Bash: ls`\n\n---\n\n<footer>\ud83d\udd04 <b>x1</b> \u00b7 waiting for 1 agent \u00b7 4:10</footer>",
   "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n\u23f3 `\ud83e\udd16 general-purpose`\n\n\u23f3 `Bash: npm run dev`\n\n\u23f3 `Bash: ls`\n\n---\n\n<footer>\ud83d\udd04 <b>x1</b> \u00b7 2 shells still working \u00b7 4:10</footer>",
   "<details><summary>\u25b8 3 tool calls</summary>\n\n\u2705 `Read: /src/app.py`\n\n\u2705 `Grep: TODO in src`\n\n\u2705 `Edit: /src/app.py`\n\n</details>\n\n> Now the agent.\n\n\u2705 `\ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05`\n\n\u2705 `Read: /a`\n\n\u2705 `Grep: b`\n\n\u2705 `Glob: *.py`\n\n\u2705 `shell: npm test - done (1:30)`\n\n\u274c `shell: make all - failed (exit 2)`\n\n\u274c `shell: make lint - failed (1:05)`\n\n\u23f9 `shell: sleep 900 - no end seen (15:00)`\n\n\u23f9 `shell: tail -f log - stopped (0:30)`\n\n\u2705 `\ud83d\udd11 Bash: rm -rf build/ \u2192 Allowed`\n\n\u2705 `\ud83d\udd11 Bash: git push \u2192 Denied`\n\n\u2705 `\u2753 Which database? \u2192 Selected option 2`\n\n\u2705 `\u2753 Pick some \u2192 Selected: A, B`\n\n\u274c `Bash: npm run build`\n\n\u23f3 `\ud83e\udd16 general-purpose`\n\n\u23f3 `Bash: npm run dev`\n\n\u23f3 `Bash: ls`\n\n---\n\n<footer>\ud83d\udd04 <b>x1</b> \u00b7 finishing up \u00b7 4:10</footer>"
  ],
@@ -1144,7 +1144,11 @@
   "\u2699\ufe0f 2 working \u00b7 1 idle \u00b7 1 starting\n\u2022 <b>a</b> (working)\n\u2022 <b>b</b> (idle)\n\u2022 <b>c</b> (starting)\n\u2022 <b>d</b> (working)",
   "\ud83d\udca4 2 idle\n\u2022 <b>e</b> (idle)\n\u2022 <b>f</b> (idle)",
   "\ud83d\udca4 all idle\n\ud83d\udc22 slow mode after a Telegram warning\n\u23f8 card updates paused (hourly limit)",
-  "\ud83d\udca4 all idle\n\u23f8 card updates paused (rate limit)"
+  "\ud83d\udca4 all idle\n\u23f8 card updates paused (rate limit)",
+  "\ud83d\udd04 t (waiting for 2 agents)",
+  "\u2699\ufe0f 1 working \u00b7 1 idle\n\u2022 <b>t</b> (waiting for 2 agents)\n\u2022 <b>e</b> (idle)",
+  "\ud83d\udca4 s (idle, 1 shell running)",
+  "\ud83d\udca4 g (idle)"
  ],
  "pinned.answer_taps": [
   "already answered",
@@ -2116,7 +2120,7 @@
   "\u00ab Back"
  ],
  "status.list": [
-  "\ud83d\udcca <b>Sessions (3)</b>\n\n<b>x1</b> \u00b7 \u2699\ufe0f working 4:10 \u00b7 \ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05\n   Opus 4.7 \u00b7 ctx 45% \u00b7 $1,234.50 \u00b7 queue 3 (2 queued, 1 notes) \u00b7 1 agent \u00b7 2 shells\n\n<b>x2</b> \u00b7 \u23f3 needs you \u00b7 Bash: ls\n   queue 1 (1 queued, 0 notes)\n\n<b>x3</b> \u00b7 \ud83d\udca4 idle\n   sonnet \u00b7 ctx 12% \u00b7 2 agents \u00b7 1 shell",
+  "\ud83d\udcca <b>Sessions (3)</b>\n\n<b>x1</b> \u00b7 \u2699\ufe0f working 4:10 \u00b7 \ud83e\udd16 Explore \u00b7 3 tool calls \u00b7 1:05\n   Opus 4.7 \u00b7 ctx 45% \u00b7 $1,234.50 \u00b7 queue 3 (2 queued, 1 notes) \u00b7 1 agent \u00b7 2 shells\n\n<b>x2</b> \u00b7 \u23f3 needs you \u00b7 Bash: ls\n   queue 1 (1 queued, 0 notes)\n\n<b>x3</b> \u00b7 \ud83d\udd04 waiting for 2 agents\n   sonnet \u00b7 ctx 12% \u00b7 1 shell",
   "\u270d\ufe0f x1",
   "\u23f9 Stop",
   "\u22ee",
@@ -2165,12 +2169,16 @@
   "\u22ee More",
   "\u270d\ufe0f Now talking to <b>x1</b> \u00b7 \u2699\ufe0f working \u00b7 \ud83e\udd16 Auto mode\nSend a message and it goes to x1.",
   "\u22ee More",
+  "\u270d\ufe0f Now talking to <b>x1</b> \u00b7 \ud83d\udd04 waiting for 1 agent \u00b7 \ud83d\udcac Ask mode\nSend a message and it goes to x1.",
+  "\u22ee More",
   "\u270d\ufe0f Now talking to <b>x1</b> \u00b7 \ud83d\udca4 idle \u00b7 \ud83d\udcac Ask mode\nReply to a message from x1 (or mention the bot) to talk to it.",
   "\u22ee More",
   "\u270d\ufe0f Now talking to <b>x1</b> \u00b7 \u23f3 needs you \u00b7 \ud83d\udcac Ask mode\nx1 is waiting for your answer.",
   "Answer x1",
   "\u22ee More",
   "\u270d\ufe0f Now talking to <b>x1</b> \u00b7 \u2699\ufe0f working \u00b7 \ud83e\udd16 Auto mode\nReply to a message from x1 (or mention the bot) to talk to it.",
+  "\u22ee More",
+  "\u270d\ufe0f Now talking to <b>x1</b> \u00b7 \ud83d\udd04 waiting for 1 agent \u00b7 \ud83d\udcac Ask mode\nReply to a message from x1 (or mention the bot) to talk to it.",
   "\u22ee More"
  ],
  "taps.clear_gone": [

@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"few": "انتهت {n} أوامر في الخلفية (shell) ({clock})", "many": "انتهى {n} أمرًا في الخلفية (shell) ({clock})", "one": "انتهى أمر واحد في الخلفية (shell) ({clock})", "other": "انتهى {n} أمر في الخلفية (shell) ({clock})", "two": "انتهى أمران في الخلفية (shell) ({clock})", "zero": "لم ينتهِ أي أمر في الخلفية (shell) ({clock})"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"few": "🖥 {n} أوامر في الخلفية (shell) قيد التشغيل", "many": "🖥 {n} أمرًا في الخلفية (shell) قيد التشغيل", "one": "🖥 أمر واحد في الخلفية (shell) قيد التشغيل", "other": "🖥 {n} أمر في الخلفية (shell) قيد التشغيل", "two": "🖥 أمران في الخلفية (shell) قيد التشغيل", "zero": "🖥 لا أوامر في الخلفية (shell) قيد التشغيل"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"few": "أُوقفت {n} أوامر في الخلفية (shell) ({clock})", "many": "أُوقف {n} أمرًا في الخلفية (shell) ({clock})", "one": "أُوقف أمر واحد في الخلفية (shell) ({clock})", "other": "أُوقف {n} أمر في الخلفية (shell) ({clock})", "two": "أُوقف أمران في الخلفية (shell) ({clock})", "zero": "لم يُوقف أي أمر في الخلفية (shell) ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"few": "⏹ أُوقف {n} وكلاء ({clock})", "many": "⏹ أُوقف {n} وكيلًا ({clock})", "one": "⏹ أُوقف وكيل واحد ({clock})", "other": "⏹ أُوقف {n} وكيل ({clock})", "two": "⏹ أُوقف وكيلان ({clock})", "zero": "⏹ لم يُوقف أي وكيل ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"few": "⏳ {n} وكلاء قيد العمل", "many": "⏳ {n} وكيلًا قيد العمل", "one": "⏳ وكيل واحد قيد العمل", "other": "⏳ {n} وكيل قيد العمل", "two": "⏳ وكيلان قيد العمل", "zero": "⏳ لا وكلاء قيد العمل"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"few": "+{n} وكلاء آخرين", "many": "+{n} وكيلًا آخر", "one": "+وكيل آخر", "other": "+{n} وكيل آخر", "two": "+وكيلان آخران", "zero": "+{n} وكلاء آخرين"}}
 {"k": "agents.promise", "src": "29723a21", "v": "عندما ينتهي عمل الوكلاء، تُرسل النتيجة إلى هنا."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · اكتمل ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · أُوقف ({clock})"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · بانتظار الوكلاء الذين شغّلهم"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "← {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"few": "حُذفت {n} رسائل من قائمة الانتظار.", "many": "حُذفت {n} رسالة من قائمة الانتظار.", "one": "حُذفت رسالة واحدة من قائمة الانتظار.", "other": "حُذفت {n} رسالة من قائمة الانتظار.", "two": "حُذفت رسالتان من قائمة الانتظار.", "zero": "لم تُحذف أي رسالة من قائمة الانتظار."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"few": "لا تزال {n} أوامر في الخلفية تعمل.", "many": "لا يزال {n} أمرًا في الخلفية يعمل.", "one": "لا يزال أمر واحد في الخلفية يعمل.", "other": "لا يزال {n} أمر في الخلفية يعمل.", "two": "لا يزال أمران في الخلفية يعملان.", "zero": "لا يعمل أي أمر في الخلفية."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ أُوقف عمل {session}"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"few": "⏹ أُوقف {n} وكلاء في الخلفية في {session}", "many": "⏹ أُوقف {n} وكيلًا في الخلفية في {session}", "one": "⏹ أُوقف وكيل واحد في الخلفية في {session}", "other": "⏹ أُوقف {n} وكيل في الخلفية في {session}", "two": "⏹ أُوقف وكيلان في الخلفية في {session}", "zero": "⏹ لم يُوقف أي وكيل في الخلفية في {session}"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"few": "⏹ أوقف {person} {n} وكلاء في الخلفية في {session}", "many": "⏹ أوقف {person} {n} وكيلًا في الخلفية في {session}", "one": "⏹ أوقف {person} وكيلًا واحدًا في الخلفية في {session}", "other": "⏹ أوقف {person} {n} وكيل في الخلفية في {session}", "two": "⏹ أوقف {person} وكيلين في الخلفية في {session}", "zero": "⏹ لم يُوقف {person} أي وكيل في الخلفية في {session}"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ أُوقف عمل {session} بواسطة {person}"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"few": "⏹ أُوقف عمل {session} بواسطة {person} (حُذفت {n} رسائل من قائمة الانتظار)", "many": "⏹ أُوقف عمل {session} بواسطة {person} (حُذفت {n} رسالة من قائمة الانتظار)", "one": "⏹ أُوقف عمل {session} بواسطة {person} (حُذفت رسالة واحدة من قائمة الانتظار)", "other": "⏹ أُوقف عمل {session} بواسطة {person} (حُذفت {n} رسالة من قائمة الانتظار)", "two": "⏹ أُوقف عمل {session} بواسطة {person} (حُذفت رسالتان من قائمة الانتظار)", "zero": "⏹ أُوقف عمل {session} بواسطة {person} (لم تُحذف أي رسالة من قائمة الانتظار)"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"few": "⏹ أُوقف عمل {session} (حُذفت {n} رسائل من قائمة الانتظار)", "many": "⏹ أُوقف عمل {session} (حُذفت {n} رسالة من قائمة الانتظار)", "one": "⏹ أُوقف عمل {session} (حُذفت رسالة واحدة من قائمة الانتظار)", "other": "⏹ أُوقف عمل {session} (حُذفت {n} رسالة من قائمة الانتظار)", "two": "⏹ أُوقف عمل {session} (حُذفت رسالتان من قائمة الانتظار)", "zero": "⏹ أُوقف عمل {session} (لم تُحذف أي رسالة من قائمة الانتظار)"}}
@@ -211,8 +217,6 @@
 {"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 إعادة التشغيل الآن"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "إعادة التشغيل الآن"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "الانتظار {mins} د أخرى"}
-{"k": "card.agents", "src": "263711d4", "v": {"few": "{n} وكلاء", "many": "{n} وكيلًا", "one": "وكيل واحد", "other": "{n} وكيل", "two": "وكيلان", "zero": "لا وكلاء"}}
-{"k": "card.agents_typed", "src": "af56f555", "v": {"few": "{n} وكلاء ({types})", "many": "{n} وكيلًا ({types})", "one": "وكيل واحد ({types})", "other": "{n} وكيل ({types})", "two": "وكيلان ({types})", "zero": "لا وكلاء ({types})"}}
 {"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · يجري تلخيص المحادثة{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · مرفوض"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · مرفوض من {person}"}
@@ -230,6 +234,7 @@
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"few": "🤖 {agent} · استخدم {n} أدوات · {clock}", "many": "🤖 {agent} · استخدم {n} أداة · {clock}", "one": "🤖 {agent} · استخدم أداة واحدة · {clock}", "other": "🤖 {agent} · استخدم {n} أداة · {clock}", "two": "🤖 {agent} · استخدم أداتين · {clock}", "zero": "🤖 {agent} · لم يستخدم أي أداة · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (لا يزال يعمل)"}
+{"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · أُوقف ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "وكيل"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} ← {verb}"}
 {"k": "card.row.sending_files", "src": "d10352ba", "v": {"few": "📎 {n} ملفات قيد الإرسال", "many": "📎 {n} ملفًا قيد الإرسال", "one": "📎 ملف واحد قيد الإرسال", "other": "📎 {n} ملف قيد الإرسال", "two": "📎 ملفان قيد الإرسال", "zero": "📎 {n} ملف قيد الإرسال"}}
@@ -242,8 +247,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "أمر في الخلفية: {label} - أُوقف ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "قيد البدء"}
 {"k": "card.shells", "src": "9b747b65", "v": {"few": "{n} أوامر في الخلفية", "many": "{n} أمرًا في الخلفية", "one": "أمر واحد في الخلفية", "other": "{n} أمر في الخلفية", "two": "أمران في الخلفية", "zero": "لا أوامر في الخلفية"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"few": "🖥 لا تزال {n} أوامر في الخلفية تعمل.", "many": "🖥 لا يزال {n} أمرًا في الخلفية يعمل.", "one": "🖥 لا يزال أمر واحد في الخلفية يعمل.", "other": "🖥 لا يزال {n} أمر في الخلفية يعمل.", "two": "🖥 لا يزال أمران في الخلفية يعملان.", "zero": "🖥 لا يعمل أي أمر في الخلفية."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · توقفت"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"few": "⚠️ <b>{session}</b> · أُوقف {n} وكلاء في الخلفية", "many": "⚠️ <b>{session}</b> · أُوقف {n} وكيلًا في الخلفية", "one": "⚠️ <b>{session}</b> · أُوقف وكيل واحد في الخلفية", "other": "⚠️ <b>{session}</b> · أُوقف {n} وكيل في الخلفية", "two": "⚠️ <b>{session}</b> · أُوقف وكيلان في الخلفية", "zero": "⚠️ <b>{session}</b> · لم يُوقف أي وكيل في الخلفية"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"few": "⚠️ <b>{session}</b> · أوقف {person} {n} وكلاء في الخلفية", "many": "⚠️ <b>{session}</b> · أوقف {person} {n} وكيلًا في الخلفية", "one": "⚠️ <b>{session}</b> · أوقف {person} وكيلًا واحدًا في الخلفية", "other": "⚠️ <b>{session}</b> · أوقف {person} {n} وكيل في الخلفية", "two": "⚠️ <b>{session}</b> · أوقف {person} وكيلين في الخلفية", "zero": "⚠️ <b>{session}</b> · لم يُوقف {person} أي وكيل في الخلفية"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · أُوقفت بواسطة {person}"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · أُوقف الأمر من الطرفية أثناء تشغيله"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · أُوقفت من الطرفية"}
@@ -321,6 +329,7 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "يمكنك بدء جلسة عبر /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "للتحدث مع جلسة: الضغط على اسمها في لوحة المفاتيح."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code من Telegram"}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"few": "بانتظار {n} وكلاء", "many": "بانتظار {n} وكيلًا", "one": "بانتظار وكيل واحد", "other": "بانتظار {n} وكيل", "two": "بانتظار وكيلين", "zero": "بانتظار {n} وكيل"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« رجوع"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "الأوامر"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "إنهاء"}
@@ -593,6 +602,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}، {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ الرسائل تذهب إلى <b>{session}</b>"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ أُغلق هذا الطلب لأن وكيله العامل في الخلفية أُوقف."}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "متابعة هذه المحادثة"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "بدء محادثة جديدة"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "استئناف"}
@@ -941,6 +951,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "للتحدث مع {session}: الرد على رسالة منها (أو ذكر {bot})."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "للتحدث مع {session}: الرد على رسالة منها (أو ذكر البوت)."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} بانتظار إجابتك."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "تعذّر إيقاف الوكلاء العاملين في الخلفية في {session}. جرّب «إيقاف» مرة أخرى."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "في الطرفية نافذة حوار مفتوحة لـ {session}. أجب عنها هناك، ثم جرّب «إيقاف» مرة أخرى."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "تمت الإجابة بالفعل"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "لا توجد قاعدة «السماح دائمًا» لهذا الأمر - سُمح به هذه المرة فقط [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
@@ -1055,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "لا يغيّر الإعدادات في هذه المجموعة إلا المشرفون."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "ليس لديك إذن بتغيير إعدادات هذه الجلسة."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "تلك المهمة انتهت بالفعل - يمكنك استخدام البطاقة الحالية"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ يجري إيقاف {session} الآن…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "غير معروف: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "يجري التحقق…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 لا يمكن تحديث aipager إلا للمشرفين."}
@@ -1389,6 +1402,7 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "تعمل"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "انتهت"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "جاهزة"}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"few": "بانتظار {n} وكلاء", "many": "بانتظار {n} وكيلًا", "one": "بانتظار وكيل واحد", "other": "بانتظار {n} وكيل", "two": "بانتظار وكيلين", "zero": "بانتظار {n} وكيل"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "غير معروفة"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "بانتظارك"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "في خلفية Claude Code"}
@@ -1397,6 +1411,7 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "بانتظارك ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "جاهزة"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "جاهزة، آخر نشاط {age}"}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"few": "بانتظار {n} وكلاء", "many": "بانتظار {n} وكيلًا", "one": "بانتظار وكيل واحد", "other": "بانتظار {n} وكيل", "two": "بانتظار وكيلين", "zero": "بانتظار {n} وكيل"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "لا معلومات بعد"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "تعمل"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "تعمل ({clock})"}

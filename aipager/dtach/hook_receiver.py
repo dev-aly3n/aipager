@@ -53,6 +53,7 @@ from aipager.state import (
 )
 from aipager.transcript import (
     _strip_leaked_tool_xml,
+    agents_killed_since,
     extract_last_response_entry,
     extract_last_response_flagged,
     NO_RESPONSE_TEXT,
@@ -854,6 +855,51 @@ def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
     return event in _TURN_ACTIVITY_EVENTS or event.lower() in _TURN_ENDING_EVENTS
 
 
+#: How long the turn Claude Code starts after aipager's kill chord waits
+#: for that Stop's teardown (``TrackedSession.stop_gate``) before it is
+#: handled anyway.
+KILL_WAKE_GATE_SECONDS: float = 5.0
+
+#: How long an event of the session's own turn that came after that wake's
+#: UserPromptSubmit waits for the wake to be routed (its Stop above all):
+#: the wake's own wait for the Stop's teardown, plus room for its routing.
+KILL_WAKE_ORDER_SECONDS: float = KILL_WAKE_GATE_SECONDS + 2.0
+
+
+def _kill_line_floor(sess, ids=None) -> float:
+    """The oldest an ``agents_killed`` transcript line may be to be about
+    the agents on record (*ids*, all of them when None): the last Stop that
+    closed a turn, or the newest of their starts when later (an agent
+    started after a kill was not stopped by it). Not the last Stop alone:
+    a Stop that leaves the job's agents running does not move it, so a
+    line from earlier in the same job would count again, and a kill
+    pressed while Claude's own turn ran (its line written before that
+    turn's Stop, probe G4) must still count."""
+    newest = sess.newest_agent_start_wall(time.monotonic(), time.time(), ids)
+    return max(sess.files_turn_closed_wall, newest)
+
+
+def _note_kill_line(sess, at) -> None:
+    """Remember an ``agents_killed`` line handled (S1, S2 or S3), so it
+    never counts again for agents started later."""
+    if at is not None and at > sess.agents_killed_seen_wall:
+        sess.agents_killed_seen_wall = at
+
+
+def _markerless_prompt(prompt) -> bool:
+    """A prompt with none of the structural marks a prompt's origin is told
+    by: aipager's Telegram marker, Claude Code's <task-notification> or
+    <cross-session-message> wrappers. What Claude Code types after its kill
+    chord (a plain sentence) is one; so is a prompt typed at the terminal.
+    Never the sentence's words."""
+    if not isinstance(prompt, str) or not prompt:
+        return False
+    head = prompt.lstrip()
+    return not (prompt.startswith(_TASK_NOTIFICATION_PREFIX)
+                or prompt.startswith(_TELEGRAM_MARKER)
+                or head.startswith("<cross-session-message"))
+
+
 # A longer ``aipager_version`` is not a version: ignored.
 _HOOK_VERSION_MAX_CHARS = 40
 
@@ -1033,6 +1079,159 @@ class HookReceiver:
         log.info("[%s] another open prompt: %s (agent %s)", sess.label,
                  summary, order["owner"] or "-")
         await self.notify_fn(sess, "extra_prompt", context)
+
+    async def _agent_finished(self, sess, agent_id: str, agent_type: str,
+                              info: dict | None, elapsed: float, *,
+                              stopped: bool = False) -> None:
+        """Tell the bot an agent ended (its card row settles): what
+        SubagentStop sends, and a kill (:meth:`_agents_killed`) too.
+        *stopped*: a kill ended it, so its row reads stopped, never done."""
+        await self.notify_fn(sess, "subagent_stop", {
+            "stopped": stopped,
+            "agent_id": agent_id,
+            "agent_type": agent_type,
+            "elapsed": elapsed,
+            "history_idx": info["history_idx"] if info else None,
+            "tool_count": info.get("tool_count", 0) if info else 0,
+            # Its card row's name, as its start drew it.
+            "card_label": (info.get("card_label") or "") if info else "",
+        })
+
+    def _kill_wake_source(self, sess, prompt, transcript_path: str) -> str:
+        """Whether a parent UserPromptSubmit carrying *prompt* is the turn
+        Claude Code starts by itself after its kill chord stopped the
+        background agents (roadmap 8.121 F5), and how that is known:
+        ``"aipager"`` inside the window aipager's own chord armed (one-shot,
+        consumed here), ``"transcript"`` when the session has agents and
+        the transcript's ``agents_killed`` line is newer than any handled
+        before and than :func:`_kill_line_floor`; ``""`` otherwise.
+        Structural signals only, never the sentence's words. The line a
+        match is about is remembered (``agents_killed_seen_wall``), so it
+        never counts again for agents started later."""
+        if not _markerless_prompt(prompt):
+            return ""
+        path = transcript_path or sess.transcript_path
+        if sess.kill_expected_until and time.monotonic() < sess.kill_expected_until:
+            sess.kill_expected_until = 0.0
+            _note_kill_line(sess, agents_killed_since(
+                path, max(sess.files_turn_closed_wall, sess.agents_killed_seen_wall)))
+            return "aipager"
+        if not (sess.active_subagents or sess.bg_agents):
+            return ""
+        at = agents_killed_since(path, _kill_line_floor(sess))
+        if at is not None and at > sess.agents_killed_seen_wall:
+            sess.agents_killed_seen_wall = at
+            return "transcript"
+        return ""
+
+    async def _await_stop_gate(self, sess) -> None:
+        """Wait (at most :data:`KILL_WAKE_GATE_SECONDS`) for the Stop that
+        pressed the kill chord to finish its teardown, so this wake is
+        routed against the state it leaves and its card edit does not
+        overwrite this turn's."""
+        gate = sess.stop_gate
+        if gate is None or gate.is_set():
+            return
+        try:
+            await asyncio.wait_for(gate.wait(), timeout=KILL_WAKE_GATE_SECONDS)
+        except asyncio.TimeoutError:
+            log.warning("[%s] the Stop that stopped the agents is still not done "
+                        "after %.0fs - handling its wake anyway", sess.label,
+                        KILL_WAKE_GATE_SECONDS)
+
+    async def _await_wake_routed(self, sess, routed: asyncio.Event,
+                                 event: str) -> None:
+        """Wait (at most :data:`KILL_WAKE_ORDER_SECONDS`) until the wake of
+        aipager's kill chord that arrived before this event is routed, so
+        the wake turn's events are handled in the order they came."""
+        try:
+            await asyncio.wait_for(routed.wait(), timeout=KILL_WAKE_ORDER_SECONDS)
+        except asyncio.TimeoutError:
+            log.warning("[%s] the turn after the background agents were stopped is "
+                        "still not routed after %.0fs - handling its %s anyway",
+                        sess.label, KILL_WAKE_ORDER_SECONDS, event)
+
+    async def _agents_killed(self, sess, ids, *, source: str) -> None:
+        """Background agents Claude Code's kill chord stopped (roadmap
+        8.121 F5), which fire no SubagentStop: end them as SubagentStop
+        would, close their prompts (their dialogs went with them), and arm
+        the job's grace window as the last agent's end does. *ids* None:
+        every agent of the session (the chord stops them all). *source*:
+        ``"aipager"``, ``"transcript"`` or ``"stop-tasks"`` (a Stop no
+        longer listing them)."""
+        now = time.monotonic()
+        own_over = sess.own_turn_over()
+        targets = (set(sess.active_subagents) | set(sess.bg_agents)
+                   if ids is None else {i for i in ids if isinstance(i, str) and i})
+
+        def theirs(perm) -> bool:
+            owner = _perm_owner(perm)
+            return bool(owner) and owner in targets
+
+        records = [rec for _where, perm, rec in sess.open_prompt_records()
+                   if isinstance(rec, dict) and theirs(perm)]
+        outcome = "stopped"
+        if source == "stop-tasks":
+            at = agents_killed_since(sess.transcript_path,
+                                     _kill_line_floor(sess, targets))
+            if at is None:
+                # Gone from the list with no kill on record after they
+                # started: a lost SubagentStop, not a person's Stop.
+                outcome = "done"
+            else:
+                _note_kill_line(sess, at)
+        closed, inline_closed = sess.close_prompts(theirs)
+        ended = sess.end_killed_agents(now, ids, outcome=outcome)
+        for agent_id, info in ended:
+            if info is not None:
+                elapsed = max(0.0, now - (info.get("started_at") or now))
+                await self._agent_finished(sess, agent_id,
+                                           str(info.get("type") or "unknown"),
+                                           info, elapsed,
+                                           stopped=outcome == "stopped")
+        if (ended and not sess.job_work_running() and sess.job_interim_seen):
+            # As the last agent's SubagentStop: Claude's own wake-up turn
+            # comes next, and the job stays open across the gap.
+            sess.job_grace_until = now + JOB_CONTINUATION_GRACE_SECONDS
+        if closed:
+            await self.notify_fn(sess, "agent_prompts_stopped", {"records": records})
+            if not sess.open_prompts() and own_over:
+                # The kill answers nothing, and Claude's turn is over:
+                # never BUSY here.
+                self.registry.transition(sess.name, Status.IDLE)
+            else:
+                await self._prompts_closed(sess, closed, inline_closed,
+                                           "agents-killed",
+                                           preserve_job_state=bool(sess.active_subagents))
+        self.registry.mark_dirty()
+        log.info("[%s] background agents ended by a kill (%s): %d", sess.label,
+                 source, len(ended))
+
+    async def _ended_unlisted_agents(self, sess, tasks) -> None:
+        """At a parent Stop: the agents Claude Code listed in an earlier
+        Stop's ``background_tasks`` and lists no longer, still running in
+        aipager's tables, are ended (:meth:`_agents_killed`); then what it
+        lists now is remembered. Only ids it listed before: an agent it
+        never listed (nested, a teammate) is left to its own SubagentStop.
+        An agent paused for agents of its own is not ended."""
+        if not isinstance(tasks, list):
+            return
+        listed = [t["id"] for t in tasks
+                  if isinstance(t, dict) and isinstance(t.get("id"), str) and t["id"]]
+        listed_set = set(listed)
+        gone = []
+        for agent_id in sess.bg_task_ids_seen:
+            if agent_id in listed_set:
+                continue
+            if agent_id not in sess.active_subagents and agent_id not in sess.bg_agents:
+                continue
+            info = sess.bg_agents.get(agent_id)
+            if isinstance(info, dict) and info.get("waiting"):
+                continue
+            gone.append(agent_id)
+        if gone:
+            await self._agents_killed(sess, gone, source="stop-tasks")
+        sess.note_bg_task_ids(listed)
 
     async def _prompts_closed(self, sess, closed: int, inline_closed: bool,
                               reason: str, *,
@@ -1337,6 +1536,21 @@ class HookReceiver:
                     _DIALOG_DATAGRAMS.pop(session, None)
 
     async def _on_datagram(self, data: bytes, *, spilled: int = 0) -> None:
+        """Handle one hook datagram (:meth:`_handle_datagram`). A wake of
+        aipager's kill chord it routed is marked routed when it is done,
+        however it ends, so the events held behind it go on."""
+        wake_routing: list = []
+        try:
+            await self._handle_datagram(data, spilled=spilled,
+                                        wake_routing=wake_routing)
+        finally:
+            for sess, routed in wake_routing:
+                routed.set()
+                if sess.kill_wake_routing is routed:
+                    sess.kill_wake_routing = None
+
+    async def _handle_datagram(self, data: bytes, *, spilled: int,
+                               wake_routing: list) -> None:
         try:
             msg = json.loads(data)
         except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
@@ -1519,6 +1733,31 @@ class HookReceiver:
             sess_ref.cwd = cwd
             self.registry.mark_dirty()
 
+        # Roadmap 8.121 F5: the turn Claude Code starts by itself after its
+        # kill chord stopped the background agents (a plain sentence, no
+        # wrapper) is the job's own wake, never a person's terminal turn.
+        # Told here, in the step the datagram arrives in (no await before
+        # it), so the events that come after it know it is ahead of them.
+        kill_wake = ""
+        wake_ahead = None
+        if event == "UserPromptSubmit" and not hook_agent_id:
+            kill_wake = self._kill_wake_source(sess_ref, msg.get("prompt"),
+                                               transcript_path)
+        if kill_wake == "aipager":
+            # Held below until that Stop's teardown is done. Every later
+            # event of the session's own turn (its Stop above all) waits
+            # until this prompt is routed: handled first, a Stop would find
+            # the session IDLE already, and this prompt would then leave it
+            # BUSY with no Stop to come (live round 2, H3).
+            routed = asyncio.Event()
+            sess_ref.kill_wake_routing = routed
+            wake_routing.append((sess_ref, routed))
+        elif (not hook_agent_id and event not in _INTERNAL_HOOK_EVENTS
+                and event not in _NOT_TURN_EVIDENCE):
+            ahead = sess_ref.kill_wake_routing
+            if ahead is not None and not ahead.is_set():
+                wake_ahead = ahead
+
         # The permission mode Claude Code is in, from every event that
         # carries it (aipager/perm_modes.py). The parent's own events only:
         # a subagent's or the prompt-suggestion helper's mode is not the
@@ -1547,8 +1786,12 @@ class HookReceiver:
 
         log.debug("Hook event: %s from %s", event, session_name)
 
-        if _is_turn_activity(event, msg):
+        if _is_turn_activity(event, msg) or kill_wake:
             await self._hold_for_turn_state(sess_ref, event, msg)
+        if kill_wake == "aipager":
+            await self._await_stop_gate(sess_ref)
+        elif wake_ahead is not None:
+            await self._await_wake_routed(sess_ref, wake_ahead, event)
 
         if event == "PermissionRequest":
             # Primary path: structured tool data directly from hook payload
@@ -1784,7 +2027,14 @@ class HookReceiver:
             # at once). A genuinely new turn clears it in transition(), an
             # interrupted step through PostToolUseFailure (is_interrupt),
             # a finished turn at Stop.
-            if prompt.startswith(_TASK_NOTIFICATION_PREFIX):
+            if prompt.startswith(_TASK_NOTIFICATION_PREFIX) or kill_wake:
+                if kill_wake:
+                    # Claude Code fires no SubagentStop for the agents its
+                    # kill chord stopped: they end here (after aipager's own
+                    # Stop they already have).
+                    killed_sess = self.registry.get_or_create(session_name)
+                    if killed_sess.active_subagents or killed_sess.bg_agents:
+                        await self._agents_killed(killed_sess, None, source=kill_wake)
                 # Roadmap 8.41: an agent that stopped with background work
                 # of its own still running resumes later — its SubagentStop
                 # (a moment ago) did not end it. Claude Code says so in this
@@ -1834,6 +2084,7 @@ class HookReceiver:
                     cont_sess.job_grace_until = 0.0
                     # Claude's turn runs again (8.120).
                     cont_sess.resumed_after_stop = False
+                    cont_sess.wait_from_idle = False
                     if not (cont_sess.status == Status.INTERACTIVE
                             and _prompt_waits_on(cont_sess)):
                         # An open prompt stays open: an agent finishing
@@ -1842,6 +2093,10 @@ class HookReceiver:
                         self.registry.transition(
                             session_name, Status.BUSY, preserve_job_state=True,
                         )
+                    if kill_wake:
+                        # Its hook wrote a "terminal" origin for this
+                        # markerless prompt: not a person's terminal turn.
+                        cont_sess.kill_wake_turn = True
                     await self.notify_fn(cont_sess, "job_continuation", {})
                     return
                 # Nothing to continue. The daemon has no turn or job open
@@ -1863,11 +2118,21 @@ class HookReceiver:
                 # a card for them was three calls for one line. The card
                 # waits for the turn's first tool use or
                 # SELF_WOKEN_CARD_DELAY, whichever comes first.
-                log.info(
-                    "[%s] <task-notification> with no open job — starting "
-                    "a fresh turn", cont_sess.label,
-                )
+                if kill_wake:
+                    log.info("[%s] the turn after the background agents were "
+                             "stopped (%s) - starting a fresh self-woken turn",
+                             cont_sess.label, kill_wake)
+                else:
+                    log.info(
+                        "[%s] <task-notification> with no open job — starting "
+                        "a fresh turn", cont_sess.label,
+                    )
                 fresh = self.registry.transition(session_name, Status.BUSY)
+                if kill_wake:
+                    # Its hook wrote a "terminal" origin for this markerless
+                    # prompt: not a person's terminal turn (the per-member
+                    # tool denies, ``_turn_is_pure_terminal``).
+                    cont_sess.kill_wake_turn = True
                 if fresh:
                     await self.notify_fn(fresh, "user_prompt_submit",
                                          {"self_woken": True})
@@ -1898,6 +2163,9 @@ class HookReceiver:
                 # dialogs, never an agent's (roadmap 8.120): with one of
                 # those still open the session keeps waiting on it, as a
                 # message sent into a running turn does.
+                # A turn of Claude's runs now (8.121 F5): Stop interrupts
+                # it with the Escapes, never the kill chord.
+                waiting.wait_from_idle = False
                 closed, inline_closed = waiting.close_prompts(_owned_by(""))
                 await self._prompts_closed(waiting, closed, inline_closed,
                                            "typed-prompt")
@@ -2159,6 +2427,7 @@ class HookReceiver:
                 # feature existed.
                 # Claude's own step: its turn runs (8.120).
                 sess.resumed_after_stop = False
+                sess.wait_from_idle = False
                 if sess.status == Status.INTERACTIVE:
                     # Claude working again proves its own dialogs closed,
                     # never an agent's (roadmap 8.120): a background
@@ -2468,6 +2737,15 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
+                recent = sess.bg_agents_recent.get(agent_id)
+                if (isinstance(recent, dict) and recent.get("ended_by") == "killed"
+                        and agent_id not in sess.active_subagents
+                        and agent_id not in sess.bg_agents):
+                    # Roadmap 8.121 F5: ended already by a kill (its card
+                    # row settled); a late stop would add a second row.
+                    log.info("[%s] SubagentStop: %s (%s) - already ended by a "
+                             "kill, ignored", sess.label, agent_type, agent_id)
+                    return
                 if sess.dialog_is_open():
                     # (Also during the Stop that carries its prompt over:
                     # that prompt must not be waited on again, 8.120.)
@@ -2527,15 +2805,7 @@ class HookReceiver:
                             time.monotonic() + JOB_CONTINUATION_GRACE_SECONDS
                         )
                 log.info("[%s] SubagentStop: %s (%s, %.1fs)", sess.label, agent_type, agent_id, elapsed)
-                await self.notify_fn(sess, "subagent_stop", {
-                    "agent_id": agent_id,
-                    "agent_type": agent_type,
-                    "elapsed": elapsed,
-                    "history_idx": info["history_idx"] if info else None,
-                    "tool_count": info.get("tool_count", 0) if info else 0,
-                    # Its card row's name, as its start drew it.
-                    "card_label": (info.get("card_label") or "") if info else "",
-                })
+                await self._agent_finished(sess, agent_id, agent_type, info, elapsed)
 
         elif event == "safety_blocked":
             # The PreToolUse hook denied a Telegram-driven tool call.
@@ -2867,6 +3137,14 @@ class HookReceiver:
                     log.debug("[%s] idle notification while waiting — already "
                               "reminded this wait", waiting.label)
                 return
+            if (event.lower() == "stop" and waiting is not None
+                    and not msg.get("agent_id")):
+                # Roadmap 8.121 F5: agents Claude Code listed at an earlier
+                # Stop and no longer lists ended with no SubagentStop (its
+                # kill chord, pressed at the terminal): ended before the
+                # finish, so it settles as Finished, not another interim.
+                # Claude's own Stop only: an agent's lists its own tasks.
+                await self._ended_unlisted_agents(waiting, msg.get("background_tasks"))
             # A risky-removal prompt past its refusal window was refused by
             # Claude Code itself (roadmap 8.128): said before the IDLE
             # transition, so its row is on the finished card.

@@ -60,5 +60,22 @@ def test_counts_follow_the_ids_in_their_order(bot):
 def test_the_status_glyph_follows_the_id(bot):
     sess = _sess(bot, "x1", Status.INTERACTIVE)
     assert dashboard._STATUS_GLYPHS[dashboard._pinned_word(sess)] == "⏳"
-    assert set(dashboard._STATUS_GLYPHS) | {"starting"} == set(dashboard._STATE_MSGS)
+    # "tasks" has no word of its own: it names its counts (job_wait).
+    assert (set(dashboard._STATUS_GLYPHS) | {"starting"}
+            == set(dashboard._STATE_MSGS) | {"tasks"})
     assert dashboard._pinned_word(sess) == "needs_you"
+
+
+def test_a_session_waiting_for_its_agents_keeps_its_glyph_and_its_bucket(bot):
+    """Roadmap 8.121: alone it has 🔄 and its counts in the chat's words;
+    with others it is counted with working (⚙️), whatever the language."""
+    tasks = _sess(bot, "x1", Status.IDLE)
+    tasks.active_subagents = {"a": {"type": "Explore"}, "b": {"type": "Plan"}}
+    assert dashboard._pinned_word(tasks) == "tasks"
+    first = _first(bot, [tasks])
+    assert first.startswith("🔄 ") and "⟦" in first and "2" in first
+    idle = _sess(bot, "x2", Status.IDLE)
+    first = _first(bot, [tasks, idle])
+    assert first.startswith("⚙️ ")
+    parts = first[len("⚙️ "):].split(" · ")
+    assert [p.split(" ")[0].lstrip("⟦") for p in parts] == ["1", "1"]

@@ -298,6 +298,9 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
                                      RESTART_NOW_NEW_SURFACES, with_keyboard_app_removed,
                                      without_appearance_row, without_card_divider)
     from tests.i18n_surfaces import CARD_FOLD_TAIL_SURFACES, with_agent_calls_folded
+    # A session waiting for its agents (roadmap 8.121) changed the waiting
+    # card's words and added renders to the bar, /status and /x.
+    from tests.i18n_surfaces import JOB_WAIT_SURFACES, without_job_wait
     # Restart now without a service (2026-10-12) added one new surface.
     # The agents tree (2026-10-14) changed the block under an answer, put a
     # divider above the card's status line, and added one surface.
@@ -306,7 +309,9 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
     assert sorted(changed - JUSTIFIED - NO_KEYBOARD_APP_SURFACES
                   - RESTART_NOW_NEW_SURFACES - AGENTS_TREE_SURFACES
                   - AGENTS_TREE_NEW_SURFACES - APPEARANCE_SURFACES
-                  - APPEARANCE_NEW_SURFACES) == []
+                  - APPEARANCE_NEW_SURFACES - JOB_WAIT_SURFACES) == []
+    for k in JOB_WAIT_SURFACES - AGENTS_TREE_CARD_SURFACES - JUSTIFIED:
+        assert without_job_wait(k, after[k]) == before[k], k
     for k in APPEARANCE_SURFACES:
         assert without_appearance_row(after[k]) == before[k], k
     for k in NO_KEYBOARD_APP_SURFACES:
@@ -316,4 +321,5 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
         # show plain where they were folded, and only that.
         cur = (with_agent_calls_folded(after[k]) if k in CARD_FOLD_TAIL_SURFACES
                else after[k])
+        cur = without_job_wait(k, cur)
         assert without_card_divider(cur) == before[k], k

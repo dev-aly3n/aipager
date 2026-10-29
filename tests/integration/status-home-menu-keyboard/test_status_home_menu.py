@@ -86,7 +86,9 @@ def test_each_state_reads_in_words_with_the_target_marked(bot, mk_update, run_as
 
 
 def test_the_details_line_says_model_context_cost_queue_and_agents(bot, mk_update, run_async):
-    sess = _sess(bot, "x1", model_name="Opus 5.5", last_token_pct=42,
+    # Working: an idle session with job agents names them in its head
+    # instead (roadmap 8.121, tests/test_shown_state_surfaces.py).
+    sess = _sess(bot, "x1", Status.BUSY, model_name="Opus 5.5", last_token_pct=42,
                  active_subagents={"a1": {}, "a2": {}}, bg_shells={"b1": {}})
     sess.queue_prompt("later", 1)
     bot._read_status_file = MagicMock(return_value={"model": "Opus 5.5", "ctx_pct": 42,

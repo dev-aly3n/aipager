@@ -81,6 +81,10 @@ APPEARANCE_BODIES = {"get_preferences"}
 #: "parked" and "parked_seconds_ago" (a session whose conversation moved
 #: into a background job), and nothing else: none of them is parked.
 BG_JOB_BODIES = {"get_detail_busy", "get_detail_idle", "get_detail_viewer"}
+#: The scenarios whose body roadmap 8.121 gave "job_agents" (how many
+#: agents a session waiting for them waits for), and nothing else: none of
+#: them waits, so it is 0.
+JOB_WAIT_BODIES = {"get_detail_busy", "get_detail_idle", "get_detail_viewer"}
 
 
 @pytest.mark.parametrize("name", sorted(_scenarios.SCENARIOS))
@@ -96,6 +100,9 @@ def test_english_body_is_todays(env, golden, name):
         body = dict(body)
         assert body.pop("parked") is False
         assert body.pop("parked_seconds_ago", None) is None
+    if name in JOB_WAIT_BODIES:
+        body = dict(body)
+        assert body.pop("job_agents") == 0
     assert body == golden[name]["body"]
 
 

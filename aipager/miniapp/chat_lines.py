@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from aipager.i18n import Msg, Plural, Safe
 from aipager.miniapp.phrase import say
+from aipager.state import STOP_END_JOB, STOP_KILL_AGENTS
 
 __all__ = ["compacted", "deleted", "folder_created", "killed", "model_switched",
            "perms_switched", "queue_cleared", "renamed", "restarted", "resumed",
@@ -179,10 +180,20 @@ def renamed(tr, previous_label: str, new_label: str) -> str:
     return tr.text(_RENAMED, old=previous_label, new=new_label)
 
 
-def stopped(tr, label: str, dropped: int) -> str:
+def stopped(tr, label: str, dropped: int, *, outcome=None) -> str:
+    """The mirror of a Mini App Stop. One that ended a session's
+    background agents says so as every Stop surface does; one that ended
+    a job with no keys adds the shells left running (roadmap 8.121 F5,
+    ``aipager.bot.stop_text``)."""
     if dropped:
-        return tr.n(_STOPPED_DROPPED, dropped, kind="text", session=label)
-    return tr.text(_STOPPED, session=label)
+        first = tr.n(_STOPPED_DROPPED, dropped, kind="text", session=label)
+    else:
+        first = tr.text(_STOPPED, session=label)
+    if outcome is not None and getattr(outcome, "mode", "") in (STOP_KILL_AGENTS,
+                                                                 STOP_END_JOB):
+        from aipager.bot import stop_text
+        return stop_text.stopped_line(tr, outcome, html=False, first=first)
+    return first
 
 
 def killed(tr, label: str) -> str:

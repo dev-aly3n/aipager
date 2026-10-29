@@ -125,6 +125,53 @@ def with_agent_calls_folded(value):
     return [v.replace(_EXPLORE_CALLS_PLAIN, _EXPLORE_CALLS_FOLDED) for v in value]
 
 
+#: The surfaces roadmap 8.121 changed: a session waiting for its own
+#: background agents says "waiting for 2 agents" on the busy card, the
+#: pinned bar, /status and /x (see :func:`without_job_wait`).
+JOB_WAIT_SURFACES = frozenset({"card.waiting", "pinned", "status.list", "status.switch"})
+#: The busy card's waiting lines before roadmap 8.121, by their new words.
+_OLD_WAITING_LINES = (
+    ("waiting for 2 agents", "2 agents (Explore, general-purpose), 1 shell still working"),
+    ("waiting for 1 agent", "1 agent (general-purpose) still working"),
+)
+#: The bar renders roadmap 8.121 added that show no waiting words: a job
+#: with only a shell, and one with nothing left running, both idle.
+_ADDED_IDLE_PINS = ("\U0001f4a4 s (idle, 1 shell running)", "\U0001f4a4 g (idle)")
+
+
+def without_job_wait(name: str, value):
+    """*value* (surface *name*'s list of texts) as goldens recorded before
+    roadmap 8.121 have it: the card's old waiting words, /status's x3 idle
+    with its agent count on the details line, and without the renders the
+    feature added to the bar and the /x reply. Nothing else changed."""
+    if name == "card.waiting":
+        out = []
+        for v in value:
+            for new, old in _OLD_WAITING_LINES:
+                v = v.replace(f"· {new} ·", f"· {old} ·")
+            out.append(v)
+        return out
+    if name == "status.list":
+        return [v.replace("<b>x3</b> · \U0001f504 waiting for 2 agents\n   sonnet · ctx 12% · ",
+                          "<b>x3</b> · \U0001f4a4 idle\n   sonnet · ctx 12% · 2 agents · ")
+                for v in value]
+    if name == "status.switch":
+        out, skip = [], False
+        for v in value:
+            if skip:
+                skip = False
+                continue
+            if "\U0001f504 waiting for" in v:
+                skip = True     # and its "⋮ More"
+                continue
+            out.append(v)
+        return out
+    if name == "pinned":
+        return [v for v in value
+                if "waiting for" not in v and v not in _ADDED_IDLE_PINS]
+    return value
+
+
 def without_appearance_row(value):
     """*value* (a settings menu's list of texts) without the "🎨 Appearance"
     row goldens recorded on older bases do not have."""
@@ -1226,6 +1273,21 @@ def _pinned_bar(env):
     out += _pinned(env, [e, f])
     out += _pinned(env, [], limiter=_Limiter())
     out += _pinned(env, [], limiter=_Limiter(warning=0, hourly=False, minimal=True))
+    # Roadmap 8.121: idle, waiting for its job's agents (alone, then
+    # counted as working beside an idle one; its job's shell is not
+    # named), then a job with only a shell and one with nothing left
+    # running, both idle (agents only, design-amend-5).
+    tasks = _sess(name="claude-t", label="t", status=Status.IDLE)
+    tasks.active_subagents = {"a": {"type": "Explore"}, "b": {"type": "Plan"}}
+    tasks.bg_shells = {"t": {"label": "npm", "in_job": True}}
+    out += _pinned(env, [tasks])
+    out += _pinned(env, [tasks, e])
+    shells = _sess(name="claude-s", label="s", status=Status.IDLE)
+    shells.bg_shells = {"t": {"label": "npm", "in_job": True}}
+    out += _pinned(env, [shells])
+    finishing = _sess(name="claude-g", label="g", status=Status.IDLE)
+    finishing.job_continuation_active = True
+    out += _pinned(env, [finishing])
     return out
 
 
@@ -1353,6 +1415,11 @@ def _status_switch(env):
             sess.perm_mode = "auto" if status == Status.BUSY else "ask"
             text, kb = bot._render_switch_reply(chat, sess)
             out += [text, *_inline(kb)]
+        # Roadmap 8.121: waiting for its job's agent.
+        sess = _registered(bot, _sess(chat=chat, status=Status.IDLE))
+        sess.active_subagents = {"a": {"type": "Explore"}}
+        text, kb = bot._render_switch_reply(chat, sess)
+        out += [text, *_inline(kb)]
     return out
 
 

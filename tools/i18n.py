@@ -115,6 +115,9 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"card\.[a-z0-9_.]+", "card", "chars", 160, ""),
     (r"log\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"agents\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    # What an idle session waits for (aipager/bot/job_wait.py): a state
+    # word on the pinned bar, /status and the busy card's last line.
+    (r"jobwait\.[a-z0-9_.]+", "label", "chars", 60, ""),
     # The resume card's default mode button wraps a whole mode label
     # (whose own budget is 40 cells) and has a row of its own: it gets the
     # label's budget.
@@ -122,6 +125,10 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"perm\.btn\.[a-z0-9_]+", "button", "cells", 24, ""),
     (r"perm\.[a-z0-9_.]+", "message", "chars", 300, ""),
     (r"ans\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    # Why a Stop changed nothing (aipager/bot/stop_text.py): also a pop-up.
+    (r"stop\.[a-z0-9_.]+", "toast", "chars", 200, ""),
+    # A line added under a prompt's own message once it closed.
+    (r"prompt\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"fin\.[a-z0-9_.]+", "message", "chars", 120, ""),
     # The pinned bar's first line is what Telegram's pinned preview shows
     # (design 9.7): short in every language.

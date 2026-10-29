@@ -39,6 +39,9 @@ _KILL_POLL_INTERVAL: float = 0.02
 # and the gaps between its Ctrl+U writes).
 _create_subprocess_exec = asyncio.create_subprocess_exec
 _key_gap_sleep = asyncio.sleep
+# The clock press_kill_agents reads for its two presses (tests replace this
+# attribute, never ``time``).
+_kill_clock = time.monotonic
 
 
 def _credentials_path(path: Path | None) -> Path:
@@ -245,7 +248,15 @@ KEYS = {
     # Shift+Tab: Claude Code cycles its permission mode on it
     # (press_mode_cycle below).
     "BackTab": "\x1b[Z",
+    # Claude Code's ``chat:killAgents`` (ctrl+x ctrl+k): pressed twice
+    # within 3 s it stops every background agent of the session (2.1.312,
+    # live). One write per press. Only press_kill_agents below writes it:
+    # send_keys and press_key_in_dialog refuse it, so a lone press is never
+    # sent from anywhere else.
+    "KillAgents": "\x18\x0b",
 }
+# Key names only press_kill_agents may write (see KEYS["KillAgents"]).
+_GATED_KEYS: frozenset[str] = frozenset({"KillAgents"})
 
 
 def _count_dtach_failure() -> None:
@@ -340,6 +351,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # - ``press_key_in_dialog``: ONE hold across its "is the dialog still
 #   open?" check (one small file read off the event loop, roadmap 8.127)
 #   and its one key write, so no key lands in a dialog that closed.
+# - ``press_kill_agents``: ONE hold across both presses of the kill
+#   chord and the 1 s gap between them (``KILL_AGENTS_PRESS_GAP``), so no
+#   prompt's text lands between the presses.
 # Waiting is FIFO. The bound on any writer's wait (Stop's Escape
 # included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
 # then the lock hold in progress: one ``dtach -p`` write, a prompt's
@@ -349,7 +363,9 @@ _LAST_WRITE_AT: dict[str, float] = {}
 # and Ctrl+U writes (about 0.3 s for a short queue, longer only for a long
 # one, see above). So one writer ahead costs at most ~0.5 s plus the
 # writes and gaps in flight (about 1.2 s behind a full-length message), or
-# a long discard. A prompt or a mode switch also looks at the typing gate
+# a long discard, or a kill chord's two presses and its gap (about 1.1 s,
+# after the gate's look before the first press). A prompt or a mode switch
+# (or a kill chord) also looks at the typing gate
 # under the lock before each piece, Enter or press; that look waits only
 # when a tool call passed its hook while the marker was up (one held past
 # its hook's cap), at most ``GATE_WAIT_HARD_LIMIT`` per look, so such a
@@ -559,6 +575,10 @@ async def send_keys(session: str, keys: str) -> bool:
         log.warning("send_keys: %r is not a key name; nothing sent to %s",
                     keys, session)
         return False
+    if keys in _GATED_KEYS:
+        log.warning("send_keys: %r is pressed only through its own writer; "
+                    "nothing sent to %s", keys, session)
+        return False
     if _refuse_parked(session):
         return False
     await _await_chord(session)
@@ -683,13 +703,17 @@ def _gate_finish(session: str, ok: bool) -> None:
         _gate_end(session)
 
 
-async def _await_quiet_gate(session: str, *, renew: bool = False) -> bool:
+async def _await_quiet_gate(session: str, *, renew: bool = False,
+                            blocked: Callable[[str], bool] | None = None) -> bool:
     """Wait until no tool call passed its PreToolUse hook in the last
     :data:`GATE_FRESH_SECONDS` (at most :data:`GATE_WAIT_LIMIT_SECONDS`;
     then on, unless one passed in the last :data:`GATE_MIN_PASS_AGE`, its
     dialog perhaps drawing right now, up to :data:`GATE_WAIT_HARD_LIMIT`).
     False as soon as a dialog is open. *renew*: the typing marker's expiry
-    starts again first (a send that holds the lock long stays gated)."""
+    starts again first (a send that holds the lock long stays gated).
+    *blocked*, when given, is asked in place of the dialog probe (the kill
+    chord's own check: an agent's dialog does not stop it)."""
+    is_blocked = dialog_open if blocked is None else blocked
     if renew:
         try:
             typing_gate.begin(_gate_base(), session)
@@ -700,7 +724,7 @@ async def _await_quiet_gate(session: str, *, renew: bool = False) -> bool:
     deadline = started + GATE_WAIT_LIMIT_SECONDS
     hard_deadline = started + GATE_WAIT_HARD_LIMIT
     while True:
-        if dialog_open(session):
+        if is_blocked(session):
             return False
         fresh = _fresh_passes(session, GATE_FRESH_SECONDS)
         if not fresh:
@@ -876,8 +900,8 @@ async def press_key_in_dialog(session: str, key: str,
     one, or a turn. Not through the dialog probe (the dialog is the
     target). Refused for a parked session. True once the key went out."""
     seq = KEYS.get(key)
-    if seq is None:
-        log.warning("press_key_in_dialog: %r is not a key name; nothing sent to %s",
+    if seq is None or key in _GATED_KEYS:
+        log.warning("press_key_in_dialog: %r is not a dialog key; nothing sent to %s",
                     key, session)
         return False
     if _refuse_parked(session):
@@ -1086,6 +1110,86 @@ async def press_mode_cycle(session: str, presses: int, *,
         _gate_finish(session, ok)
     log.info("Pressed Shift+Tab x%d → %s", presses, session)
     return True
+
+
+# Claude Code's kill chord (KEYS["KillAgents"]) counts only when its second
+# press comes within 3 s of the first (2.1.312, ``i$e=3000``); a later one
+# is a new first press. 1 s apart is safe (probe G1, G3: 2.5 s still
+# counted, 3.2 s did not); the second press is not written after
+# KILL_AGENTS_MAX_GAP.
+KILL_AGENTS_PRESS_GAP: float = 1.0
+KILL_AGENTS_MAX_GAP: float = 2.5
+
+
+async def press_kill_agents(session: str, may_press: Callable[[], bool],
+                            before_second_press: Callable[[], None] | None = None,
+                            ) -> bool | _SendStopped:
+    """Press Claude Code's ``chat:killAgents`` chord twice in *session*,
+    ``KILL_AGENTS_PRESS_GAP`` apart: it stops every background agent of the
+    session (an agent's open dialog goes with its agent), types nothing
+    into a draft and answers no dialog of Claude's own (2.1.312, live).
+
+    Through the typing gate, as a prompt is, with *may_press* in place of
+    the dialog probe: an agent's dialog does not stop the chord, a dialog
+    of Claude's own (or one nobody can name yet) does, and *may_press* says
+    which. Asked before the first press (False: nothing is pressed,
+    :data:`DIALOG_BEFORE_TYPING`) and again before the second (False: the
+    second press is not written and this returns False; a lone first press
+    only shows Claude Code's confirm line for 3 s). Both presses and the
+    gap under ONE hold of the write lock, counted once. True only when
+    both writes went out, the second within ``KILL_AGENTS_MAX_GAP``.
+
+    *before_second_press* runs once every check before the second press
+    passed, right before it is written, with no await in between: the
+    turn Claude Code starts after the kill cannot come before that press
+    (one press stops nothing), so a prompt typed at the terminal any
+    earlier is never mistaken for it."""
+    if _refuse_parked(session):
+        return False
+    await _await_chord(session)
+    sock = _sock_path(session)
+    seq = KEYS["KillAgents"].encode()
+
+    def blocked(_s: str) -> bool:
+        return not may_press()
+
+    _gate_begin(session)
+    ok = False
+    try:
+        if not await _await_quiet_gate(session, blocked=blocked):
+            log.info("Kill-agents chord not pressed in %s: a dialog is open", session)
+            return DIALOG_BEFORE_TYPING
+        async with _write_lock(session):
+            if _refuse_parked(session):
+                return False
+            if not await _await_quiet_gate(session, renew=True, blocked=blocked):
+                log.info("Kill-agents chord not pressed in %s: a dialog is open",
+                         session)
+                return DIALOG_BEFORE_TYPING
+            _note_write(session)
+            first, _ = await _run([_DTACH, "-p", sock], stdin=seq)
+            if not first:
+                log.warning("Kill-agents chord → %s: the first press failed", session)
+                return False
+            t1 = _kill_clock()
+            await _key_gap_sleep(KILL_AGENTS_PRESS_GAP)
+            if _refuse_parked(session):
+                return False
+            if not may_press():
+                log.info("Kill-agents chord → %s: second press not written, "
+                         "the session changed during the gap", session)
+                return False
+            if _kill_clock() - t1 > KILL_AGENTS_MAX_GAP:
+                log.warning("Kill-agents chord → %s: second press not written, "
+                            "%.1f s after the first", session, _kill_clock() - t1)
+                return False
+            if before_second_press is not None:
+                before_second_press()
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=seq)
+    finally:
+        _gate_finish(session, ok)
+    log.info("Sent kill-agents chord → %s (%s)", session, "ok" if ok else "failed")
+    return ok
 
 
 def _proc_socket_pids(sock: str) -> list[int]:

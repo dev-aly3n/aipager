@@ -583,3 +583,82 @@ def test_the_detectors_see_the_verbs_that_carry_a_turn():
     assert {"ststop*", "endok*", "pstop*", "modeask*", "restartok*"} <= verbs, sorted(verbs)
     sites = {loc.split(" ")[1] for loc, _ok in _destructive_button_paths()}
     assert "_kill_session_core()" in sites
+
+
+# ── a new turn in the loop pass before the Stop's task runs ────────────
+#
+# The Stop core runs in its own task (``_stop_for_tap``), one loop pass
+# after the caller's turn check. A turn that opens in that pass must not
+# be stopped by the older button: the task checks the turn again before
+# the core.
+
+def _new_turn_after_the_first_check(monkeypatch, sess, open_turn):
+    """The caller's check passes; right after it (before the Stop's task
+    runs) a new turn opens."""
+    import asyncio
+
+    real = sess.tap_is_for_this_turn
+    seen: list[bool] = []
+
+    def check(tapped, *, turn=None):
+        ok = real(tapped, turn=turn)
+        if not seen:
+            asyncio.get_running_loop().call_soon(open_turn)
+        seen.append(ok)
+        return ok
+
+    monkeypatch.setattr(sess, "tap_is_for_this_turn", check)
+    return seen
+
+
+def test_a_turn_opened_before_the_stops_task_runs_is_not_stopped(
+        running, run_async, monkeypatch):
+    bot, sess, keys = running
+
+    def open_turn():
+        sess.busy_msg_id = BUSY_CARD + 100  # the new turn's card
+
+    seen = _new_turn_after_the_first_check(monkeypatch, sess, open_turn)
+    answers = _tap_stop(bot, run_async, message_id=BUSY_CARD)
+
+    assert seen[0] is True, "the caller's own check refused the tap"
+    assert keys == [], "an old card's Stop reached the new turn"
+    assert sess.status is Status.BUSY and len(sess.pending_queue) == 2
+    toasts = [a for a in answers if a]
+    assert toasts and ("finished" in toasts[-1].lower()
+                       or "current" in toasts[-1].lower()), answers
+
+
+def test_a_turn_opened_before_a_status_stops_task_runs_is_not_stopped(
+        running, run_async, monkeypatch):
+    """The same for /status's Stop and the picker (the button's turn)."""
+    from aipager.bot.callbacks import MOVED_ON_STATUS
+
+    bot, sess, keys = running
+    bot._can_prompt_user = MagicMock(return_value=True)
+    answers: list[str] = []
+    bot._safe_answer = AsyncMock(
+        side_effect=lambda q, text="", **kw: answers.append(text))
+    shown = sess.turn_key
+
+    def open_turn():
+        sess.turn_key = shown + 1
+
+    seen = _new_turn_after_the_first_check(monkeypatch, sess, open_turn)
+    query = MagicMock()
+    query.message = MagicMock(text="list", message_id=BUSY_CARD - 300)
+    query.message.chat = MagicMock(id=CHAT_ID)
+    query.from_user = MagicMock(id=1)
+    update = MagicMock()
+    update.callback_query = query
+    update.effective_chat = MagicMock(id=CHAT_ID)
+    update.effective_user = MagicMock(id=1)
+
+    looked, outcome = run_async(bot._stop_the_turn_shown(
+        update, query, NAME, shown, again=MOVED_ON_STATUS))
+
+    assert seen[0] is True, "the caller's own check refused the tap"
+    assert looked is True and outcome is None
+    assert keys == [], "an old list's Stop reached the new turn"
+    assert sess.status is Status.BUSY
+    assert any("moved on" in a for a in answers), answers

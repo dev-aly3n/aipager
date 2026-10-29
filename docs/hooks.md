@@ -307,6 +307,18 @@ agents, waiting ones included, are kept across a daemon restart.
 `SubagentStop` events with no type and an unknown id arrive often and
 are ignored.
 
+Agents stopped with Claude Code's "stop background agents" keys (ctrl+x
+ctrl+k, pressed twice) fire no `SubagentStop`. aipager ends them itself:
+at once when its own Stop pressed those keys, when Claude Code's
+transcript gets its `agents_killed` line (read at the `UserPromptSubmit`
+of the turn Claude Code then starts by itself, whose prompt is a plain
+sentence with no wrapper), or when a `Stop` event's `background_tasks`
+no longer lists agents an earlier `Stop` listed. Their open prompts
+close (no hook says so), and a `SubagentStop` that still comes later
+for one of them is ignored. That turn is not taken for a prompt typed
+in the terminal when aipager's own Stop pressed those keys, or once
+Claude Code's transcript shows the kill.
+
 ### `PreCompact` / `PostCompact`
 
 Claude is compacting its context (`trigger` is `auto` or `manual`). The

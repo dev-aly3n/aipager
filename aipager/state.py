@@ -25,7 +25,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
@@ -173,6 +173,22 @@ FINISHED_SUBAGENTS_CAP: int = 100
 # subagent stopping mid-turn never arms it, so ordinary turns close
 # exactly as before.
 JOB_CONTINUATION_GRACE_SECONDS: float = 60.0
+# Roadmap 8.121 F5: what Stop does (``TrackedSession.stop_mode``). KEYS:
+# Claude's own turn runs or its own prompt is open, the two Escapes.
+# KILL_AGENTS: Claude's turn is over and background agents still run (or
+# ask), Claude Code's kill chord (aipager.dtach.inject.press_kill_agents).
+# END_JOB: Claude's turn is over and nothing but the job's grace window or
+# shells is left, no keys at all.
+STOP_KEYS = "keys"
+STOP_KILL_AGENTS = "kill_agents"
+STOP_END_JOB = "end_job"
+# After aipager's kill chord, how long a markerless UserPromptSubmit is
+# taken for the turn Claude Code starts by itself to say the agents were
+# stopped (it came 0.2 s after the press, live).
+KILL_WAKE_EXPECT_SECONDS: float = 10.0
+# Ids Claude Code listed in a Stop's ``background_tasks`` remembered per
+# session (newest kept), so one it no longer lists can be told ended.
+BG_TASK_IDS_SEEN_CAP: int = 64
 # Roadmap 8.41 — the background agents a session has running, for the
 # status block under an answer and the pinned bar.
 # How long an agent or shell an answer's block lists must have stayed gone
@@ -425,6 +441,33 @@ class Status(Enum):
     IDLE = auto()
     INTERACTIVE = auto()
     GONE = auto()
+
+
+# Roadmap 8.121: the state a surface shows for a session, derived from its
+# Status and its job (``TrackedSession.shown_state()``). Ids only: each
+# surface picks its own words from them, never the other way round.
+SHOWN_BUSY = "busy"
+SHOWN_NEEDS_YOU = "needs_you"
+SHOWN_TASKS = "tasks"  # idle, but its job's background agents still run
+SHOWN_IDLE = "idle"
+SHOWN_GONE = "gone"
+SHOWN_UNKNOWN = "unknown"
+
+_SHOWN_BY_STATUS: dict[Status, str] = {
+    Status.BUSY: SHOWN_BUSY,
+    Status.INTERACTIVE: SHOWN_NEEDS_YOU,
+    Status.IDLE: SHOWN_IDLE,
+    Status.GONE: SHOWN_GONE,
+    Status.UNKNOWN: SHOWN_UNKNOWN,
+}
+
+
+class ShownState(NamedTuple):
+    """What every surface shows for a session: a ``SHOWN_*`` id and, for
+    ``SHOWN_TASKS`` only, how many of the job's background agents still
+    run (0 in every other state)."""
+    state: str
+    agents: int
 
 
 # Minimum seconds between IDLE notifications for the same session.
@@ -750,6 +793,37 @@ class TrackedSession:
     # by Claude's own turn activity (a tool call, a continuation).
     # Transient.
     resumed_after_stop: bool = False
+    # Roadmap 8.121 F5: the INTERACTIVE wait was entered straight from IDLE
+    # (an agent asked while Claude's own turn was over). Set by
+    # ``SessionRegistry.transition`` on IDLE -> INTERACTIVE, cleared by any
+    # other status change and by Claude's own turn activity (a tool call, a
+    # continuation, a prompt typed at the terminal during the wait).
+    # Transient.
+    wait_from_idle: bool = False
+    # Roadmap 8.121 F5, all transient: until when (monotonic) a markerless
+    # prompt is taken for the turn Claude Code starts after aipager's kill
+    # chord (one-shot); the newest ``agents_killed`` transcript line already
+    # handled (wall); the ids Claude Code listed in a Stop's
+    # ``background_tasks`` (newest last, capped); and the event set when a
+    # Stop's teardown is done (None when no Stop runs), which the kill's
+    # wake waits for.
+    kill_expected_until: float = 0.0
+    agents_killed_seen_wall: float = 0.0
+    # Roadmap 8.121 F5: the running turn is the one Claude Code started by
+    # itself after a kill chord (S1/S2 in hook_receiver). Its hook wrote a
+    # fresh "terminal" origin for that markerless prompt, so the daemon's
+    # per-member tool denies must not read it as a person's terminal turn
+    # (``AuthMixin._turn_is_pure_terminal``). Cleared when no turn runs.
+    # Transient.
+    kill_wake_turn: bool = False
+    bg_task_ids_seen: list = field(default_factory=list, repr=False)
+    stop_gate: asyncio.Event | None = field(default=None, repr=False)
+    # Roadmap 8.121 F5 (live round 2): set by the hook receiver while the
+    # wake of aipager's kill chord (its UserPromptSubmit) waits for that
+    # Stop's teardown, until it is routed; the session's own events that
+    # come after it wait for it, so its Stop is never handled first.
+    # Transient.
+    kill_wake_routing: asyncio.Event | None = field(default=None, repr=False)
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -1873,6 +1947,188 @@ class TrackedSession:
         return (self.status in (Status.BUSY, Status.INTERACTIVE)
                 or self.job_background_open())
 
+    def own_turn_over(self) -> bool:
+        """Whether Claude's own turn is over (roadmap 8.121 F5): IDLE, or an
+        INTERACTIVE wait on agents' prompts only, entered after Claude's
+        turn ended (carried over a Stop, or opened while idle). A prompt of
+        Claude's own, or one whose tool is not known, means its turn may
+        run: False (Stop then takes the Escape path)."""
+        if self.status is Status.IDLE:
+            return True
+        if self.status is not Status.INTERACTIVE:
+            return False
+        if not (self.resumed_after_stop or self.wait_from_idle):
+            return False
+        prompts = self.open_prompts()
+        if not prompts:
+            return False
+        for perm in prompts:
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            if not isinstance(info, dict) or not info.get("agent_id"):
+                return False
+        return True
+
+    def unnamed_prompt_after_turn(self) -> bool:
+        """An INTERACTIVE wait entered after Claude's own turn ended
+        (carried over a Stop, or opened while idle) with a prompt whose
+        owner is not known and none of Claude's own (roadmap 8.121 F5).
+        Claude's turn is over, so that prompt is almost surely an agent's:
+        two Escapes would cancel it, then open the Rewind menu on the idle
+        prompt. Stop refuses then, with no key at all."""
+        if (self.status is not Status.INTERACTIVE
+                or not (self.resumed_after_stop or self.wait_from_idle)):
+            return False
+        unknown = False
+        for perm in self.open_prompts():
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            if not isinstance(info, dict):
+                unknown = True
+            elif not info.get("agent_id"):
+                return False  # Claude's own: its turn may run
+        return unknown
+
+    def no_escape(self) -> bool:
+        """No Escape may be typed into this session: Claude's own turn is
+        over (:meth:`own_turn_over`), or it waits on a prompt nobody can
+        name after that turn ended (:meth:`unnamed_prompt_after_turn`)."""
+        return self.own_turn_over() or self.unnamed_prompt_after_turn()
+
+    def own_dialog_open(self) -> bool:
+        """A dialog of Claude's own is open, or one nobody can name: a
+        terminal dialog no hook tells of, or an open prompt that is not an
+        agent's (its owner ``""`` or not known). The kill chord is never
+        pressed then."""
+        if self.terminal_dialog_open():
+            return True
+        for perm in self.open_prompts():
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            if not isinstance(info, dict) or not info.get("agent_id"):
+                return True
+        return False
+
+    def stop_mode(self) -> str:
+        """What Stop does now (roadmap 8.121 F5): :data:`STOP_KEYS` while
+        Claude's own turn runs or its own prompt is open (the two
+        Escapes); with its turn over, :data:`STOP_KILL_AGENTS` while a
+        background agent runs or an agent's prompt is open, else
+        :data:`STOP_END_JOB` (no keys). A wait entered after that turn
+        ended on a prompt nobody can name is :data:`STOP_KILL_AGENTS` too,
+        where the chord's own checks refuse it with no key. Pure."""
+        if self.status is Status.BUSY:
+            return STOP_KEYS
+        if not self.own_turn_over():
+            if self.unnamed_prompt_after_turn():
+                # Never an Escape: the kill path's own checks refuse it
+                # (``own_dialog_open``), with no key typed.
+                return STOP_KILL_AGENTS
+            return STOP_KEYS
+        if self.active_subagents or self.prompt_owners():
+            return STOP_KILL_AGENTS
+        return STOP_END_JOB
+
+    def end_killed_agents(self, now: float, ids=None, outcome: str = "stopped", *,
+                          row=None) -> list[tuple[str, dict | None]]:
+        """End agents Claude Code stopped with no SubagentStop (its kill
+        chord, roadmap 8.121 F5): SubagentStop's bookkeeping without its
+        notify. *ids* None: every agent in ``active_subagents`` and
+        ``bg_agents`` (the chord stops all of the session's). *now* is
+        monotonic. Each leaves ``bg_agents`` for ``bg_agents_recent``
+        marked ``ended_by: "killed"`` (answers' blocks get *outcome*), and
+        ``active_subagents`` (archived as finished) and
+        ``agent_tool_calls``. A stopped one's card row is marked
+        ``bg_shells.STOPPED`` (never done), its text *row(name, seconds)*
+        when given (the daemon's ``card_rows.stopped_agent_row``; this
+        module never loads the bot). Returns ``(id, active entry or None)``
+        per id ended, for the caller's card rows."""
+        if ids is None:
+            targets = list(dict.fromkeys(
+                [*self.active_subagents, *self.bg_agents]))
+        else:
+            targets = list(dict.fromkeys(i for i in ids if isinstance(i, str) and i))
+        ended: list[tuple[str, dict | None]] = []
+        for agent_id in targets:
+            known = agent_id in self.active_subagents or agent_id in self.bg_agents
+            if not known:
+                continue
+            if not self.bg_agent_stopped(agent_id, now, outcome=outcome):
+                self._end_in_lines(agent_id, outcome, now)
+            recent = self.bg_agents_recent.get(agent_id)
+            if isinstance(recent, dict):
+                recent["ended_by"] = "killed"
+            info = self.active_subagents.pop(agent_id, None)
+            if isinstance(info, dict):
+                elapsed = max(0.0, now - (info.get("started_at") or now))
+                self.archive_finished_subagent(
+                    str(info.get("type") or "unknown"), info, elapsed)
+                if outcome == "stopped":
+                    self._mark_agent_row_stopped(info, elapsed, row)
+            self.agent_tool_calls.pop(agent_id, None)
+            ended.append((agent_id, info if isinstance(info, dict) else None))
+        return ended
+
+    def _mark_agent_row_stopped(self, info: dict, elapsed: float, row) -> None:
+        """A killed agent's card row reads stopped (the ⏹ mark a stopped
+        shell's row has, and *row*'s text when given), never done,
+        whichever card draws it next."""
+        idx = info.get("history_idx")
+        if (isinstance(idx, int) and not isinstance(idx, bool)
+                and 0 <= idx < len(self.tool_history)):
+            text = self.tool_history[idx][0]
+            if row is not None:
+                text = row(str(info.get("card_label") or info.get("type") or "unknown"),
+                           elapsed)
+            self.tool_history[idx] = (text, _bg_shells.STOPPED)
+
+    def newest_agent_start_wall(self, now_mono: float, now_wall: float,
+                                ids=None) -> float:
+        """The wall clock of the newest start among the agents still on
+        record (``active_subagents`` and ``bg_agents``; only *ids* when
+        given), 0.0 with none. A kill line older than it cannot be about
+        all of them (roadmap 8.121 F5): an agent started after a kill was
+        not stopped by it."""
+        wanted = None if ids is None else set(ids)
+        starts = [info.get("started_at") for key, info in self.active_subagents.items()
+                  if isinstance(info, dict) and (wanted is None or key in wanted)]
+        starts += [info.get("started") for key, info in self.bg_agents.items()
+                   if isinstance(info, dict) and (wanted is None or key in wanted)]
+        starts = [float(t) for t in starts
+                  if isinstance(t, (int, float)) and not isinstance(t, bool) and t > 0]
+        if not starts:
+            return 0.0
+        return now_wall - max(0.0, now_mono - max(starts))
+
+    def note_bg_task_ids(self, ids) -> None:
+        """Remember ids Claude Code listed in a Stop's ``background_tasks``
+        (newest last, at most :data:`BG_TASK_IDS_SEEN_CAP`)."""
+        seen = [i for i in self.bg_task_ids_seen if i not in ids]
+        seen.extend(i for i in ids if isinstance(i, str) and i)
+        if len(seen) > BG_TASK_IDS_SEEN_CAP:
+            del seen[: len(seen) - BG_TASK_IDS_SEEN_CAP]
+        self.bg_task_ids_seen = seen
+
+    def job_agent_count(self) -> int:
+        """The job's running background agents: what an idle session waits
+        for. The ONE count every surface names (roadmap 8.121);
+        ``bg_agents`` is the session's whole running set, which also holds
+        agents outside the job."""
+        return len(self.active_subagents)
+
+    def shown_state(self) -> ShownState:
+        """The state the bar, /status, the Mini App and the CLI show
+        (roadmap 8.121). An idle session whose job still runs background
+        agents is ``SHOWN_TASKS`` with their count. Agents only: a
+        background shell alone never makes it wait (a dev server would
+        keep it "waiting" through every later turn, live F3), and neither
+        does the job's grace window with nothing left running (nothing
+        records whether an agent or a shell armed it). Pure: no I/O, no
+        text, no clock."""
+        state = _SHOWN_BY_STATUS.get(self.status, SHOWN_UNKNOWN)
+        if state == SHOWN_IDLE:
+            agents = self.job_agent_count()
+            if agents > 0:
+                return ShownState(SHOWN_TASKS, agents)
+        return ShownState(state, 0)
+
     def job_background_open(self) -> bool:
         """True while a background agent launched by this job is still
         running (design.md "model Claude Code background-agent jobs").
@@ -2058,11 +2314,13 @@ class TrackedSession:
                 rec.setdefault("ends", {})[item_id] = {"outcome": outcome,
                                                        "at": now}
 
-    def bg_agent_stopped(self, agent_id: str, now: float) -> bool:
+    def bg_agent_stopped(self, agent_id: str, now: float, *,
+                         outcome: str = "done") -> bool:
         """SubagentStop: the matching agent stopped. An id never started
         (the constant phantom SubagentStops) matches nothing. Its links go
         with it: an agent finished is nobody's running child, and an id
-        used again starts with no children of its own."""
+        used again starts with no children of its own. *outcome* is what
+        the answers listing it show ("stopped" for a kill)."""
         info = self.bg_agents.pop(agent_id, None)
         if info is None:
             return False
@@ -2079,7 +2337,7 @@ class TrackedSession:
         self.bg_agents_recent[agent_id] = info
         while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
             self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
-        self._end_in_lines(agent_id, "done", now)
+        self._end_in_lines(agent_id, outcome, now)
         return True
 
     def agent_launch(self, agent_id: str) -> str:
@@ -3869,6 +4127,10 @@ class SessionRegistry:
         # until the first refresh. Transient.
         self.refreshed_live: set[str] | None = None
         self._dirty: bool = False
+        # Roadmap 8.121: name -> the shown state the last save wrote, so
+        # save_if_dirty() saves again when it changes (background agents
+        # starting or ending) although no event marked the registry dirty.
+        self._shown_saved: dict[str, ShownState] = {}
         # Claude Code session id -> monotonic time aipager's own /kill
         # ended that process (bot.session_ops._kill_session_core). Its
         # SessionEnd is not announced; a new process under the same name
@@ -4239,6 +4501,7 @@ class SessionRegistry:
             # keeps it: the job is the turn, and its agent and its later
             # continuation run under the job's rules.
             sess.turn_sender_id = None
+            sess.kill_wake_turn = False
             # And no file Claude sends can come from one (outbox.py). An
             # idle session keeps when it ended: a call of a turn Claude
             # Code starts with no hook after it can still count
@@ -4260,6 +4523,14 @@ class SessionRegistry:
                                        and sess.resumed_after_stop))
                     else "ended")
         sess.resumed_after_stop = False
+        # Roadmap 8.121 F5: an agent's prompt that opened while Claude's
+        # own turn was over (``own_turn_over``).
+        sess.wait_from_idle = (sess.status is Status.IDLE
+                               and new_status is Status.INTERACTIVE)
+        if (new_status is Status.BUSY
+                and sess.status not in (Status.BUSY, Status.INTERACTIVE)):
+            # A new turn: a kill's wake marks itself after this.
+            sess.kill_wake_turn = False
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:
@@ -4733,6 +5004,7 @@ class SessionRegistry:
     def save(self) -> None:
         """Serialize persistable state to JSON (atomic write)."""
         sessions = {}
+        shown_saved: dict[str, ShownState] = {}
         for name, sess in self._sessions.items():
             d: dict = {}
             for f in self._PERSIST_FIELDS:
@@ -4791,6 +5063,18 @@ class SessionRegistry:
                 if kind:
                     d["waiting_kind"] = kind
                     d["waiting_summary"] = summary or ""
+            # Roadmap 8.121: computed, only while the session waits for its
+            # job's background agents, for `aipager status`; every way out
+            # drops it from the next save. load() never reads it.
+            shown = sess.shown_state()
+            shown_saved[name] = shown
+            # The state every chat surface shows (``SHOWN_*`` id), so the
+            # CLI agrees with them: an idle session whose job card still
+            # lives (a shell-only job, the grace window) is idle there too.
+            # Kept current by ``_shown_moved``. load() never reads it.
+            d["shown"] = shown.state
+            if shown.state == SHOWN_TASKS:
+                d["job_wait"] = {"agents": shown.agents}
             # Roadmap 8.101: computed, not a field (see card_started_wall).
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
             if started_wall > 0:
@@ -4886,6 +5170,15 @@ class SessionRegistry:
         except OSError:
             log.exception("Failed to save session state")
             tmp.unlink(missing_ok=True)
+        self._shown_saved = shown_saved
+
+    def _shown_moved(self) -> bool:
+        """True when a session's shown state or its count differs from
+        what the last save wrote (roadmap 8.121): background agents start
+        and end with no event marking the registry dirty."""
+        saved = self._shown_saved
+        return any(sess.shown_state() != saved.get(name)
+                   for name, sess in self._sessions.items())
 
     def load(self) -> None:
         """Load persisted state from JSON. Missing or corrupt file → start fresh."""
@@ -5332,7 +5625,10 @@ class SessionRegistry:
             [self._target_seq] + [o for _n, o in self._user_targets.values()])
 
     def save_if_dirty(self) -> None:
-        """Save state if it has been modified since last save."""
+        """Save state if it has been modified since last save, or when a
+        session's shown state moved since the last save wrote it."""
+        if not self._dirty and self._shown_moved():
+            self._dirty = True
         if self._dirty:
             self.save()
             self._dirty = False

@@ -5,12 +5,14 @@
 {"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} lệnh chạy nền (shell) đã xong ({clock})"}}
 {"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} lệnh chạy nền (shell) đang chạy"}}
 {"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} lệnh chạy nền (shell) đã dừng ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"other": "⏹ Đã dừng {n} agent ({clock})"}}
 {"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} agent đang làm việc"}}
 {"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n} agent khác"}}
 {"k": "agents.promise", "src": "29723a21", "v": "Khi các agent xong, kết quả sẽ được gửi ngay tại đây."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · đã xong ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
 {"k": "agents.row.item_working_bare", "src": "83e5d7e4", "v": "🤖 **{agent}**"}
+{"k": "agents.row.stopped", "src": "a5cc07fb", "v": "✗ 🤖 **{agent}** · đã dừng ({clock})"}
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · đang chờ các agent của chính nó"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
@@ -25,7 +27,11 @@
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"other": "Đã xóa {n} tin nhắn trong hàng đợi."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"other": "{n} lệnh chạy nền vẫn tiếp tục chạy."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ Đã dừng {session}"}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"other": "⏹ Đã dừng {n} agent chạy nền của {session}"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"other": "⏹ {person} đã dừng {n} agent chạy nền của {session}"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} đã dừng {session}"}
 {"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)"}}
 {"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ Đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)"}}
@@ -211,8 +217,6 @@
 {"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 Khởi động lại ngay"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Khởi động lại ngay"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "Chờ thêm {mins} phút"}
-{"k": "card.agents", "src": "263711d4", "v": {"other": "{n} agent"}}
-{"k": "card.agents_typed", "src": "af56f555", "v": {"other": "{n} agent ({types})"}}
 {"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Đang thu gọn cuộc trò chuyện{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Đã từ chối"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} đã từ chối"}
@@ -230,6 +234,7 @@
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} công cụ đã chạy · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (vẫn đang chạy)"}
+{"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · đã dừng ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agent"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
 {"k": "card.row.sending_files", "src": "d10352ba", "v": {"other": "📎 Đang gửi {n} file"}}
@@ -242,8 +247,11 @@
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "lệnh chạy nền: {label} - đã dừng ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "đang khởi động"}
 {"k": "card.shells", "src": "9b747b65", "v": {"other": "{n} lệnh chạy nền"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"other": "🖥 {n} lệnh chạy nền vẫn tiếp tục chạy."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Đã dừng"}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"other": "⚠️ <b>{session}</b> · Đã dừng {n} agent chạy nền"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"other": "⚠️ <b>{session}</b> · {person} đã dừng {n} agent chạy nền"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} đã dừng"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Lệnh đã bị dừng trong terminal khi đang chạy"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Đã dừng trong terminal"}
@@ -321,6 +329,7 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "Bắt đầu một phiên bằng /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Chạm vào tên một phiên trên bàn phím để nói chuyện với phiên đó."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code từ Telegram"}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"other": "đang chờ {n} agent"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Quay lại"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Lệnh"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "tắt"}
@@ -593,6 +602,7 @@
 {"k": "pin.state_running", "src": "a390d47b", "v": "({state}, {running})"}
 {"k": "pin.summary", "src": "d1064fa2", "v": "- {summary}"}
 {"k": "pin.target", "src": "c9c5350f", "v": "✍️ Tin nhắn sẽ đến <b>{session}</b>"}
+{"k": "prompt.agent_stopped", "src": "a043e385", "v": "⏹ Yêu cầu này đã đóng vì agent chạy nền của nó đã bị dừng."}
 {"k": "rdlg.btn_continue", "src": "309d17d6", "v": "Tiếp tục cuộc trò chuyện này"}
 {"k": "rdlg.btn_new", "src": "d1d9a4cd", "v": "Bắt đầu cuộc trò chuyện mới"}
 {"k": "rdlg.btn_resume", "src": "b3bd0b5a", "v": "Tiếp tục"}
@@ -941,6 +951,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "Trả lời một tin nhắn của {session} (hoặc nhắc đến {bot}) để nói chuyện với phiên đó."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Trả lời một tin nhắn của {session} (hoặc nhắc đến bot) để nói chuyện với phiên đó."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} đang chờ bạn trả lời."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "Không dừng được các agent chạy nền của {session}. Hãy bấm Dừng lần nữa."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "{session} đang mở một hộp thoại trong terminal. Hãy trả lời ở đó, rồi bấm Dừng lần nữa."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "đã được trả lời rồi"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "Không có quy tắc “luôn cho phép” cho lệnh này - chỉ cho phép lần này [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}
@@ -1055,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "Chỉ quản trị viên mới đổi được cài đặt trong nhóm này."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Bạn không được phép thay đổi tùy chọn của phiên này."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "Việc đó đã xong - hãy dùng thẻ hiện tại"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ Đang dừng {session}…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "Không xác định: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "Đang kiểm tra…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 Chỉ quản trị viên mới cập nhật được aipager."}
@@ -1389,6 +1402,7 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "đang làm việc"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "đã kết thúc"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "sẵn sàng"}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"other": "đang chờ {n} agent"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "không rõ"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "đang chờ bạn"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "Trong chế độ chạy nền của Claude Code"}
@@ -1397,6 +1411,7 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Đang chờ bạn ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "Sẵn sàng"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Sẵn sàng, hoạt động lần cuối {age}"}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"other": "Đang chờ {n} agent"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Chưa có thông tin"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Đang làm việc"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Đang làm việc ({clock})"}

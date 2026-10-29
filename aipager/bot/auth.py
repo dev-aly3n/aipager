@@ -385,9 +385,11 @@ class AuthMixin:
         """True when the running turn was typed in the terminal and no
         Telegram message has joined it: ``turn_sender_id`` says terminal,
         or is not known while the policy snapshot the hook wrote for the
-        turn says so (``turn_origin``). A joined turn is enforced by the
-        hook with the joiner's rules (``joined_from_telegram``), so it is
-        not pure terminal here either."""
+        turn says so (``turn_origin``), unless it is the turn Claude Code
+        started after a kill chord (``kill_wake_turn``). A joined turn is
+        enforced by the hook with the joiner's rules
+        (``joined_from_telegram``), so it is not pure terminal here
+        either."""
         from aipager import policy_snapshot
         snap = policy_snapshot.read_snapshot(sess.name)
         snap = snap if isinstance(snap, dict) else {}
@@ -395,6 +397,11 @@ class AuthMixin:
             return False
         if sess.turn_sender_id == TURN_SENDER_TERMINAL:
             return True
+        if sess.kill_wake_turn:
+            # The turn Claude Code started by itself after a kill chord
+            # (roadmap 8.121 F5): its hook wrote "terminal" for that
+            # markerless prompt, but nobody typed it.
+            return False
         return snap.get("turn_origin") == "terminal"
 
     def _person_denies(

@@ -22,7 +22,7 @@ import httpx
 from telegram.error import RetryAfter
 
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
-from aipager.bot import card_rows, claude_bidi, question_form, rm_refusal
+from aipager.bot import card_rows, claude_bidi, job_wait, question_form, rm_refusal
 from aipager.bot.divider import DIVIDER_SEP, without_dividers
 from aipager.bot.footer import footer, without_last_footer
 from aipager.i18n import Msg, Plural, Safe, Span
@@ -245,20 +245,15 @@ CARD_STATUS = Msg("card.status", "{mark} **{session}** · {verb}",
                        "it is doing; the clock and counts follow",
                   eg={"mark": "⏳", "session": "x1", "verb": "Working"})
 WAITING_STATE = Msg("card.waiting.state", "🔄 **{session}** · {phrase}",
-                    note="The busy card's last line while a background job finishes; "
-                         "{phrase} is the finishing words",
-                    eg={"session": "x1", "phrase": "finishing up"})
+                    note="The busy card's last line while Claude's turn ended but its "
+                         "background agents still run, or while the job finishes; "
+                         "{phrase} says what it waits for, or the finishing words",
+                    eg={"session": "x1", "phrase": "waiting for 2 agents"})
 WAITING_WORKING = Msg("card.waiting.working", "🔄 **{session}** · {agents} still working",
                       note="The busy card's last line while background agents or shells run",
                       eg={"session": "x1", "agents": "2 agents (Explore), 1 shell"})
 FINISHING = Msg("card.finishing", "finishing up",
                 note="A background job between its last agent and Claude's wake-up")
-AGENTS = Plural("card.agents", one="{n} agent", other="{n} agents",
-                note="How many background agents are running")
-AGENTS_TYPED = Plural("card.agents_typed", one="{n} agent ({types})",
-                      other="{n} agents ({types})",
-                      note="How many background agents run, and their types (names)",
-                      eg={"types": "Explore, Plan"})
 SHELLS = Plural("card.shells", one="{n} shell", other="{n} shells",
                 note="How many background shell commands are running")
 FOLD = Plural("card.fold", one="▸ {n} tool call", other="▸ {n} tool calls",
@@ -1351,39 +1346,6 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
     return f"{_SUBAGENT_MARK}{agent_type} · {activity} · {elapsed}"
 
 
-#: The waiting line's two states (:func:`_agent_phrase`).
-_FINISHING, _WORKING = "finishing", "working"
-
-
-def _agent_phrase(sess: TrackedSession, tr=None) -> tuple[str, str]:
-    """``(state, phrase)`` for the waiting status line: the state id
-    (:data:`_FINISHING` or :data:`_WORKING`) and the shown fragment, "N
-    agent(s) (types), M shell(s)". During the continuation-grace
-    window the table is legitimately EMPTY (the agent finished, the
-    wake-up hasn't arrived) — "0 agents still working" would read as
-    broken (review rev-iter1-004), so that state says "finishing up"
-    instead. The caller branches on the id, never on the words."""
-    if tr is None:
-        tr = i18n.for_sess(sess)
-    n = len(sess.active_subagents)
-    shells = len(sess.job_shell_ids())
-    if n == 0 and shells == 0:
-        return _FINISHING, tr.md(FINISHING)
-    parts = []
-    if n:
-        types = sorted({info.get("type", "")
-                        for info in sess.active_subagents.values()
-                        if info.get("type")})
-        if 1 <= len(types) <= 3:
-            parts.append(tr.n(AGENTS_TYPED, n, kind="md",
-                              types=Safe(tr.join(_md_escape(t) for t in types))))
-        else:
-            parts.append(tr.n(AGENTS, n, kind="md"))
-    if shells:
-        parts.append(tr.n(SHELLS, shells, kind="md"))
-    return _WORKING, tr.join(parts)
-
-
 def _card_rtl(sess: TrackedSession, tr=None) -> bool:
     """The card's ONE direction: the chat's language's (operator,
     2026-10-17), whatever language Claude or the prompt is written in.
@@ -1446,10 +1408,22 @@ def _status_line(
         return tr.clock(time.monotonic() - started, unit)
 
     if waiting and not final:
-        state, phrase = _agent_phrase(sess, tr)
-        line = (tr.md(WAITING_STATE, session=label, phrase=Safe(phrase))
-                if state == _FINISHING
-                else tr.md(WAITING_WORKING, session=label, agents=Safe(phrase)))
+        # The card follows the job (agents, job shells, the grace window).
+        # With agents running it says what the bar, /status and the Mini
+        # App say ("waiting for 2 agents", roadmap 8.121; each agent's
+        # type is on its own row above). With only the job's shells, or
+        # nothing left running, it keeps its own words: those states are
+        # idle everywhere else.
+        agents = sess.job_agent_count()
+        shells = len(sess.job_shell_ids())
+        if agents:
+            line = tr.md(WAITING_STATE, session=label,
+                         phrase=Safe(job_wait.phrase(tr, agents, kind="md")))
+        elif shells:
+            line = tr.md(WAITING_WORKING, session=label,
+                         agents=Safe(tr.n(SHELLS, shells, kind="md")))
+        else:
+            line = tr.md(WAITING_STATE, session=label, phrase=Safe(tr.md(FINISHING)))
         if sess.busy_started_at:
             line += f" · {_clock(sess.busy_started_at)}"
         return claude_bidi.row(tr, tr.line(line, kind="md"))

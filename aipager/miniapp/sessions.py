@@ -42,7 +42,7 @@ from aipager.i18n import Msg
 from aipager.miniapp import ui_text
 from aipager.miniapp.phrase import Phrase, say
 from aipager.policy_snapshot import combined_queue_depth
-from aipager.state import QUEUE_CAP, Status
+from aipager.state import QUEUE_CAP, SHOWN_TASKS, Status
 from aipager.statusline_file import latest_stats
 from aipager.transcript import cached_last_assistant_preview
 
@@ -55,6 +55,9 @@ if TYPE_CHECKING:
 _WAITING_STATUS = "waiting"
 # A live session parked on a Claude Code background job.
 _BACKGROUND_STATUS = "background"
+# Roadmap 8.121: Claude's own turn ended, but its job's background agents
+# still run (``TrackedSession.shown_state()``). Counted as working.
+_STATUS_TASKS = "tasks"
 
 # Shared verbatim between session_actions()'s client-facing reason and
 # server.py's Resume 409 body (design.md file-by-file plan), so the
@@ -190,11 +193,17 @@ def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]
     (needs you), still ``parked`` (:func:`_parked`). A prompt that can
     only be answered with keys (a question, the keystroke fallback) stays
     ``"background"``.
+
+    An idle session whose job's background agents still run is
+    ``"tasks"`` (roadmap 8.121), the same derivation every other surface
+    reads; parking keeps ``"background"`` before it.
     """
     if sess.parked_job and sess.status != Status.GONE:
         if not (sess.status == Status.INTERACTIVE
                 and (sess.pending_permission or {}).get("hook_reply")):
             return _BACKGROUND_STATUS, None, None
+    if sess.shown_state().state == SHOWN_TASKS:
+        return _STATUS_TASKS, None, None
     if sess.status != Status.INTERACTIVE:
         return sess.status.name.lower(), None, None
 
@@ -214,7 +223,10 @@ def _parked(sess: "TrackedSession", status: str) -> bool:
 # graveyard — the failure observed live, 14 dead sessions padding the view).
 # Computed server-side rather than in JavaScript so it is a pure function
 # pytest can exercise directly; the client renders the order it is given.
-_STATUS_RANK = {"waiting": 0, "busy": 1, "idle": 2, "background": 2, "unknown": 3, "gone": 4}
+# A session waiting for its own background agents ranks with the working
+# ones (roadmap 8.121).
+_STATUS_RANK = {"waiting": 0, "busy": 1, "tasks": 1, "idle": 2, "background": 2,
+                "unknown": 3, "gone": 4}
 _UNKNOWN_RANK = _STATUS_RANK["unknown"]
 
 
@@ -271,6 +283,14 @@ def grid_waiting_summary(summary: str | None) -> str:
     return line
 
 
+def _job_agents(sess: "TrackedSession", status: str) -> int:
+    """The job's running background agents for a ``tasks`` row (the count
+    every surface names), else 0."""
+    if status != _STATUS_TASKS:
+        return 0
+    return sess.shown_state().agents
+
+
 def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     """Shape one grid-row entry for ``GET /api/sessions``.
 
@@ -287,6 +307,7 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     status, waiting_kind, summary = _derive_status(sess)
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
     stats = latest_stats(sess)
+    job_agents = _job_agents(sess, status)
     return {
         "label": sess.label,
         "status": status,
@@ -300,6 +321,8 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
         "last_active_seconds_ago": last_active,
         "project": os.path.basename(sess.cwd) if sess.cwd else "",
         "parked": _parked(sess, status),
+        # What a ``tasks`` row waits for (0 in every other state).
+        "job_agents": job_agents,
     }
 
 
@@ -329,6 +352,10 @@ _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
     "waiting": frozenset({"stop", "clearqueue", "rename", "perms", "restart"}),
     "idle": frozenset({"kill", "compact", "rename", "perms", "restart"}),
     "gone": frozenset({"resume", "rename", "delete"}),
+    # Waiting for its own background agents (roadmap 8.121):
+    # Claude's prompt is free, so the idle set, plus Stop (the stop route
+    # takes it, as /status's Stop does).
+    "tasks": frozenset({"stop", "compact", "rename", "kill", "perms", "restart"}),
     # Parked on a Claude Code background job: nothing is typed into it, so
     # no compact, mode switch or queue clear. Stop stops the job's work and
     # brings the conversation back; Restart brings it back too.
@@ -425,7 +452,7 @@ def model_switch_state(
     :func:`session_actions` entries, with the same precedence — a caller
     who cannot prompt is told that, never some other reason.
     """
-    if status not in ("idle", "busy", _WAITING_STATUS):
+    if status not in ("idle", _STATUS_TASKS, "busy", _WAITING_STATUS):
         return None
     if not can_act:
         return {"available": False, "reason": say(tr, NO_PERMISSION_REASON)}
@@ -516,6 +543,7 @@ def session_detail(
         "parked": _parked(sess, status),
         "parked_seconds_ago": _parked_age(sess) if _parked(sess, status) else None,
     }
+    detail["job_agents"] = _job_agents(sess, status)
     detail["modes"] = mode_options(sess, can_act=can_act, is_admin=is_admin, tr=tr)
     if status != "gone":
         detail["mode_label"] = _shown_mode(sess, tr)

@@ -403,14 +403,31 @@ APP_JS = r"""
   // poll touches nothing and a tile never flickers or jumps.
 
   // Keyed by the status id: the word is shown, the id decides.
+  // "tasks" (Claude's turn ended, its background agents still run) is
+  // counted as working: the header pill says so, the tile and the state
+  // line name how many agents it waits for.
   var STATE_WORDS = {
     busy: "ui.state.busy", idle: "ui.state.idle", waiting: "ui.state.waiting",
-    gone: "ui.state.gone", unknown: "ui.state.unknown", background: "ui.state.background"
+    gone: "ui.state.gone", unknown: "ui.state.unknown", background: "ui.state.background",
+    tasks: "ui.state.busy"
   };
 
   function stateWord(status) {
     return STATE_WORDS[status] ? t(STATE_WORDS[status]) : String(status || "");
   }
+
+  // What a "tasks" session waits for, from its agent count (the chat's
+  // job_wait.phrase in the page's words): the tile's short word.
+  function tasksWord(s) {
+    return tn("ui.state.tasks_agents", Number(s.job_agents) || 0);
+  }
+
+  // The same for the session page's state line (sentence case).
+  function tasksLine(d) {
+    return tn("ui.state_line.tasks_agents", Number(d.job_agents) || 0);
+  }
+
+  function isWorking(status) { return status === "busy" || status === "tasks"; }
 
   function money(v) { return num("$" + (Number(v) || 0).toFixed(2)); }
 
@@ -485,12 +502,13 @@ APP_JS = r"""
 
   function updateTile(tile, s) {
     var pct = pctOf(s);
-    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");
+    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,
+               s.job_agents].join("|");
     if (tile.sig === sig) { return; }
     tile.sig = sig;
-    var word = stateWord(s.status);
+    var word = s.status === "tasks" ? tasksWord(s) : stateWord(s.status);
     setClass(tile.el, "tile tile-" + s.status);
-    setClass(tile.lamp, "lamp " + (s.status === "busy" ? "lamp-work" : "lamp-rest"));
+    setClass(tile.lamp, "lamp " + (isWorking(s.status) ? "lamp-work" : "lamp-rest"));
     setAttr(tile.lamp, "style", "--pct:" + pct);
     setText(tile.numText, num(pct));
     setText(tile.pct, L.percent);
@@ -680,7 +698,9 @@ APP_JS = r"""
     var count = { waiting: 0, busy: 0, idle: 0, background: 0, other: 0 };
     sessions.forEach(function (s) {
       if (s.status === "gone") { return; }
-      if (count[s.status] !== undefined && s.status !== "other") { count[s.status] += 1; } else { count.other += 1; }
+      // Waiting for its own background work counts as working.
+      var st = s.status === "tasks" ? "busy" : s.status;
+      if (count[st] !== undefined && st !== "other") { count[st] += 1; } else { count.other += 1; }
     });
     var clauses = [];
     if (count.waiting) { clauses.push(["pulse-need", tn("ui.pulse.need", count.waiting)]); }
@@ -729,7 +749,7 @@ APP_JS = r"""
   function gridSignature(data) {
     var rows = (data.sessions || []).map(function (s) {
       return [s.label, s.status, s.waiting_kind, s.waiting_summary, s.model,
-              pctOf(s), s.cost_usd, s.project].join("|");
+              pctOf(s), s.cost_usd, s.project, s.job_agents].join("|");
     });
     var t = data.totals || {};
     return JSON.stringify([rows, t.cost_usd, data.can_act === false, goneCollapsed]);
@@ -1001,6 +1021,7 @@ APP_JS = r"""
             { clock: clockOf(d.busy_elapsed_seconds, d.busy_elapsed_unit) })
         : t("ui.state_line.working");
     }
+    if (d.status === "tasks") { return tasksLine(d); }
     if (d.status === "waiting") {
       return d.waiting_kind
         ? t("ui.state_line.needs_you_kind", {
@@ -1019,7 +1040,7 @@ APP_JS = r"""
   // The header ring: context as fuel, unlit once finished.
   function paintRing(status, pct) {
     var ring = document.getElementById("detail-ring");
-    var lamp = status === "busy" ? "lamp-work" : status === "waiting" ? "lamp-need"
+    var lamp = isWorking(status) ? "lamp-work" : status === "waiting" ? "lamp-need"
       : status === "gone" ? "lamp-out" : "lamp-rest";
     setClass(ring, "lamp lamp-lg " + lamp);
     if (status === "gone") {
@@ -1774,7 +1795,7 @@ APP_JS = r"""
         // says so; an Ask/Auto switch is sent, not yet confirmed.
         var done = (action === "perms" && r.data && r.data.status === "sent")
           ? "ui.done.mode_sent" : (ACTION_SUCCESS_NOTICE[action] || "ui.done.generic");
-        showNotice((action === "resume" && r.data && r.data.detail)
+        showNotice(((action === "resume" || action === "stop") && r.data && r.data.detail)
           ? plain(r.data.detail) : t(done), "ok");
         pollTick();
         return;
@@ -1886,7 +1907,8 @@ APP_JS = r"""
         return;
       }
       // Into or out of Full access: the session restarts.
-      var busy = data.status === "busy";
+      // Waiting for its background agents counts too: the restart stops them.
+      var busy = isWorking(data.status);
       var session = { session: label };
       openConfirm({
         label: label,

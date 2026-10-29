@@ -30,7 +30,7 @@ from aipager.session_monitor import SessionMonitor
 CHAT = 256113222
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
-IDLE = "💤 aipager_boss (idle)"
+IDLE = "💤 frontend (idle)"
 #: A silence well past the agents' 30-minute window.
 SILENT = 31 * 60
 
@@ -301,13 +301,17 @@ def test_bb_swept_agent_card_not_finished_as_agent_lost(replay, vloop,
 def test_bb_swept_agent_card_still_waits_on_the_shell(replay, vloop,
                                                       monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
-    assert "1 shell still working" in out["card"]
+    # The card's last edit may predate the sweep (its edits keep their
+    # tier), so it may still name the agent; either way it still waits.
+    last = out["card"].splitlines()[-1]
+    assert "🔄 <b>frontend</b> · " in last, last
+    assert "1 shell still working · " in last or "waiting for 1 agent · " in last, last
 
 
 def test_bb_swept_agent_pin_still_counts_the_shell(replay, vloop,
                                                    monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
-    assert out["pin"] == "💤 aipager_boss (idle, 1 shell running)"
+    assert out["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 def test_bb_swept_agent_sends_no_notice(replay, vloop, monkeypatch):

@@ -100,7 +100,7 @@ def test_waiting_card_says_a_shell_is_still_working(replay, vloop):
         return alone
 
     alone = _run(vloop, scenario())
-    assert "🔄 **aipager_boss** · 1 shell still working · " in alone
+    assert "🔄 **frontend** · 1 shell still working · " in alone
     assert "finishing up" not in alone
 
 
@@ -120,7 +120,7 @@ def test_waiting_card_names_agents_and_shells(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert ("· 1 agent (ship-reviewer), 1 shell still working ·"
+    assert ("· waiting for 1 agent ·"
             in _only_card(r)["text"])
 
 
