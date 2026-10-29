@@ -2195,6 +2195,13 @@ class SessionOpsMixin:
             if ended is not None:
                 return ended
 
+        # The prompt messages this Stop closes (their buttons go below,
+        # live round 2, H4), read before any await: the hooks the Escapes
+        # fire can move the status off INTERACTIVE, and the open prompts
+        # then no longer read as open (an extra one is even dropped).
+        closed_records = [rec for _where, _perm, rec in sess.open_prompt_records()
+                          if isinstance(rec, dict)]
+
         # 0. Read Claude's queue BEFORE the Escapes below: the first one
         # makes Claude Code pull it into the input box and write
         # `popAll`, and a later read would see that line, forget the
@@ -2248,12 +2255,7 @@ class SessionOpsMixin:
         sess.turn_sender_id = None
         # The job ends, background agents included: every open prompt
         # with it (roadmap 8.120), and their buttons type nothing. Their
-        # own messages lose their buttons below (live round 2, H4).
-        closed_records = [rec for _where, _perm, rec in sess.open_prompt_records()
-                          if isinstance(rec, dict)]
-        closed_records += [rec for rec in sess.extra_prompts
-                           if isinstance(rec, dict)
-                           and not any(rec is r for r in closed_records)]
+        # own messages (read before the Escapes) lose their buttons below.
         sess.close_all_prompts()
         sess.pending_permission = None
         sess.status = Status.IDLE

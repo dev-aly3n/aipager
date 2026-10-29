@@ -85,3 +85,36 @@ def test_control_without_the_stop_the_tap_answers(env):
     msg_id = _own_prompt(env, agent=True)
     env.rig.tap(msg_id, "allow")
     assert env.rig.keys == ["Enter"]
+
+
+def test_stop_closes_an_agents_prompt_too_when_the_escapes_move_the_status(
+        env, monkeypatch):
+    """Claude's prompt and an agent's (in its own message) are open when
+    Stop is tapped, and a hook the Escapes fire takes the session off
+    INTERACTIVE before the teardown (which then drops the agent's prompt
+    as the wait's). Both messages still lose their buttons: the Stop read
+    them before its first await. Mutant: they are read after the Escapes,
+    and neither is stripped."""
+    from aipager.dtach import inject
+    env.rig.launch(BG)
+    env.rm(hook=False)
+    env.rig.agent_bash(BG, mode="default")
+    sess = env.rig.sess
+    assert sess.status is Status.INTERACTIVE and len(sess.extra_prompts) == 1
+    primary, extra = env.separate_ids()
+    real_keys = inject.send_keys
+
+    async def keys(name, key, *a, **k):
+        if sess.status is Status.INTERACTIVE:
+            env.rig.bot.registry.transition(sess.name, Status.BUSY)
+        return await real_keys(name, key, *a, **k)
+
+    monkeypatch.setattr(inject, "send_keys", keys)
+    outcome = env.run_async(env.rig.bot._stop_session_core(sess))
+    assert outcome.ok and env.rig.keys == ["Escape", "Escape"]
+    texts, _marks = _edits_of(env, primary)
+    assert texts and texts[-1]["reply_markup"] is None, texts
+    assert CLOCK_HEAD not in texts[-1]["text"]
+    _texts, marks = _edits_of(env, extra)
+    assert marks and marks[-1]["reply_markup"] is None, marks
+
