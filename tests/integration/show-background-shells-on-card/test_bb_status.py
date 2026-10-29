@@ -19,10 +19,10 @@ from tests.footer_text import unfooter
 CHAT = 256113222
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
-IDLE = "💤 aipager_boss (idle)"
-IDLE_ONE = "💤 aipager_boss (idle, 1 shell running)"
+IDLE = "💤 frontend (idle)"
+IDLE_ONE = "💤 frontend (idle, 1 shell running)"
 # Roadmap 8.121: Claude's turn ended while its job's shell runs.
-TASKS_ONE = "🔄 aipager_boss (waiting for 1 shell)"
+TASKS_ONE = "🔄 frontend (waiting for 1 shell)"
 
 
 def _run(vloop, coro):
@@ -154,7 +154,7 @@ def test_bb_kill_drops_shells_from_the_pin(replay, vloop, monkeypatch):
     async def scenario():
         w = _worker(r)
         await _job_waiting(r)
-        await r.bot._kill_session_core(r.sess.name, "aipager_boss")
+        await r.bot._kill_session_core(r.sess.name, "frontend")
         await asyncio.sleep(5)
         w.cancel()
         return _pin(r)

@@ -252,7 +252,7 @@ def _rows(card: str) -> list[str]:
 
 
 def test_the_operators_card_rows_read_in_order(frozen):
-    s = _card_session("safar")
+    s = _card_session("frontend")
     s.tool_history = [
         ("\U0001f916 general-purpose · 43 tool calls · 17:38", True),
         ("\U0001f916 general-purpose", False),
@@ -280,15 +280,15 @@ def test_the_operators_card_rows_read_in_order(frozen):
 
 
 def test_the_waiting_line_reads_in_order(frozen):
-    s = _card_session("safar")
+    s = _card_session("frontend")
     s.busy_started_at = surf.NOW - (39 * 60 + 30)
     s.active_subagents = {f"a{i}": {"type": "general-purpose", "started_at": surf.NOW}
                           for i in range(5)}
     card, _ = animation.build_stream_card_ex(s, "Working", waiting=True, rtl=True)
     status = status_md(card)
-    assert "**" in status and "safar" in status
+    assert "**" in status and "frontend" in status
     seen = _judge(status)
-    assert seen == "\U0001f504safar·waitingfor5agents·39:30"
+    assert seen == "\U0001f504frontend·waitingfor5agents·39:30"
 
 
 def test_the_waiting_line_with_a_persian_name_keeps_the_mark_first(frozen):

@@ -263,14 +263,14 @@ def test_card_row_with_a_persian_file_name_keeps_the_check_first():
 
 @PARAS
 def test_card_waiting_line_reads_in_order(para):
-    _in_order(kit.line_with(_card("safar", waiting=True, waiting_agents=3),
+    _in_order(kit.line_with(_card("frontend", waiting=True, waiting_agents=3),
                             "waiting for"), para)
 
 
 def test_card_waiting_line_shows_the_arrows_first_and_the_clock_last():
-    line = kit.line_with(_card("safar", waiting=True, waiting_agents=3), "waiting for")
+    line = kit.line_with(_card("frontend", waiting=True, waiting_agents=3), "waiting for")
     shown = kit.visual_text(line, 1)
-    assert shown == "\U0001f504safar·waitingfor5agents·2:05", shown
+    assert shown == "\U0001f504frontend·waitingfor5agents·2:05", shown
 
 
 def test_card_waiting_line_with_a_persian_name_keeps_the_name_after_the_arrows():

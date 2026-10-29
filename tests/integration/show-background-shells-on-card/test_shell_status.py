@@ -109,9 +109,9 @@ def test_pin_counts_a_running_shell(replay, vloop):
         return working, idle
 
     working, idle = _run(vloop, scenario())
-    assert working == "⚙️ aipager_boss (working, 1 shell running)"
-    assert idle == "🔄 aipager_boss (waiting for 1 shell)"
-    assert _pin(r) == "💤 aipager_boss (idle)"
+    assert working == "⚙️ frontend (working, 1 shell running)"
+    assert idle == "🔄 frontend (waiting for 1 shell)"
+    assert _pin(r) == "💤 frontend (idle)"
 
 
 def test_pin_counts_agents_and_shells(replay, vloop):
@@ -134,7 +134,7 @@ def test_pin_counts_agents_and_shells(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert _pin(r) == "🔄 aipager_boss (waiting for 2 agents and 2 shells)"
+    assert _pin(r) == "🔄 frontend (waiting for 2 agents and 2 shells)"
 
 
 # ── the answer line ─────────────────────────────────────────────────────────
@@ -236,12 +236,12 @@ def test_shell_past_max_age_closes_the_job_with_a_notice(replay, vloop,
         return early
 
     early = _run(vloop, scenario())
-    assert early == "🔄 aipager_boss (waiting for 1 shell)"
-    assert _pin(r) == "💤 aipager_boss (idle)"
+    assert early == "🔄 frontend (waiting for 1 shell)"
+    assert _pin(r) == "💤 frontend (idle)"
     card = _only_card(r)
     assert card["stop"] is False
     assert card["text"].startswith(
-        "⚠️ <b>aipager_boss</b> · Finished (no end seen for a background "
+        "⚠️ <b>frontend</b> · Finished (no end seen for a background "
         "shell after ")
 
 
@@ -364,11 +364,11 @@ def test_stop_closes_the_job_but_keeps_the_shell_counted(replay, vloop,
         return after_stop
 
     after_stop = _run(vloop, scenario())
-    assert after_stop == "💤 aipager_boss (idle, 1 shell running)"
+    assert after_stop == "💤 frontend (idle, 1 shell running)"
     first = r.chat.cards[min(r.chat.cards)]
     assert "Stopped" in first["text"]
     assert len(r.chat.cards) == 2
-    assert _pin(r) == "💤 aipager_boss (idle)"
+    assert _pin(r) == "💤 frontend (idle)"
 
 
 def test_kill_removes_shells(replay, vloop, monkeypatch):
@@ -447,7 +447,7 @@ def test_many_shells_are_capped(replay, vloop):
 
     _run(vloop, scenario())
     assert _pin(r) == \
-        f"⚙️ aipager_boss (working, {BG_SHELLS_CAP} shells running)"
+        f"⚙️ frontend (working, {BG_SHELLS_CAP} shells running)"
     assert "bshell000" not in r.sess.bg_shells
     assert f"bshell{BG_SHELLS_CAP + 4:03d}" in r.sess.bg_shells
 

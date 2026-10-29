@@ -30,7 +30,7 @@ from aipager.session_monitor import SessionMonitor
 CHAT = 256113222
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
-IDLE = "💤 aipager_boss (idle)"
+IDLE = "💤 frontend (idle)"
 #: A silence well past the agents' 30-minute window.
 SILENT = 31 * 60
 
@@ -309,7 +309,7 @@ def test_bb_swept_agent_card_still_waits_on_the_shell(replay, vloop,
 def test_bb_swept_agent_pin_still_counts_the_shell(replay, vloop,
                                                    monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
-    assert out["pin"] == "🔄 aipager_boss (waiting for 1 shell)"
+    assert out["pin"] == "🔄 frontend (waiting for 1 shell)"
 
 
 def test_bb_swept_agent_sends_no_notice(replay, vloop, monkeypatch):

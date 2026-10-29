@@ -47,7 +47,7 @@ def test_waiting_header_plural_agent_count():
 def test_waiting_status_never_says_finished():
     """Contract change ("status-line-at-card-bottom"): the waiting frame's
     status line says what it waits for ("waiting for 1 agent", roadmap
-    8.121: the words every surface uses) — the old header's "waiting on
+    8.121: the words every surface uses); the old header's "waiting on
     background work" phrasing folded into it when the header and footer
     were unified into one bottom line."""
     sess = _waiting_sess()
