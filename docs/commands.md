@@ -18,8 +18,8 @@ and on every session change.
 | `/start` | - | The home screen: this chat's sessions, where a plain message goes (`✍️ Messages go to x1.`), and `🆕 New session`, `⚙️ Settings` and, when this chat has an ended session to bring back, `↩️ Resume`. Also shows the persistent keyboard. |
 | `/help` | - | A short guide by task (start, talk, control, manage, settings, and for admins `/update`), with the tip that tapping a command sends it at once: long-press it (phone) or press Tab (desktop) to add text first. For the owner of the install (the person in its own private chat with the bot) it also has a `🐞 Report a problem` button: it opens a preview of the exact problem report in that private chat, with Send, Add a note and Cancel. Nothing is sent until you tap Send ([what a report contains](problem-reports.md)). |
 | `/app` | - | Open the Mini App dashboard (sessions, diff viewer, settings). |
-| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3:12 · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `🔄 waiting for 2 agents` when Claude's turn ended but the agents or shells it started in the background still run, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells (a session waiting for its agents names them in its state instead). Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works or waits for its agents, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
-| `/stop [label]` | optional | Interrupt a session's current turn. Bare, it stops the one session of this chat that is working (even if your messages go to another one; a session whose background agent or shell is still running counts as working), asks which with a picker when several are, and says `Nothing is running.` when none is. `/stop x1` (or `/x1 stop`) stops x1 (or replies `x1 is not working.` when it is not). Also discards queued messages and replies with how many were discarded. On a session in Claude Code's background that is working, it stops the background job's work and brings the session back. |
+| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3:12 · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `🔄 waiting for 2 agents` when Claude's turn ended but the agents it started in the background still run, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells (a session waiting for its agents names them in its state instead). Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works or waits for its agents, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
+| `/stop [label]` | optional | Interrupt a session's current turn. Bare, it stops the one session of this chat that is working (even if your messages go to another one; a session whose background agent or shell is still running counts as working), asks which with a picker when several are, and says `Nothing is running.` when none is. `/stop x1` (or `/x1 stop`) stops x1 (or replies `x1 is not working.` when it is not). Also discards queued messages and replies with how many were discarded. When Claude's own turn has already ended and the session only waits for agents or commands it started in the background, Stop types nothing into the session (keys there would open Claude Code's Rewind menu): the card reads Stopped and the turn's job ends, but the background work keeps running, and the pinned bar counts it (`💤 x1 (idle, 1 agent running)`). On a session in Claude Code's background that is working, it stops the background job's work and brings the session back. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
 | `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. In a group, reply to the card with the name (or mention the bot: `@aipagerbot x1`), since a plain message there does not reach the bot. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to another mode or change the model. New sessions start in Auto mode for everyone; change what /new uses in `/settings` → New sessions. A `!` before the name starts the session in Full access mode, for an admin (the `owner` and `admin` roles) or a person in their own private chat with the bot whose role may send prompts and answer Claude (`user`, not `read_only`); for anyone else it starts in Auto mode and the card says why. A name that is in use offers `↩️ Switch to it` (when that session runs) or `♻️ Resume` (when it ended), `🆕 Replace (fresh)` and `↩️ Cancel`, for the person who sent `/new` only. The card that asks for a name expires after 10 minutes unused (`⏱ This new-session card expired. Send /new again.`). A member whose role lacks `can_manage` (`user`, `read_only`) starts only inside the chat's [root folder](groups.md#root-folders): the card's folder is the root folder, the Folder page lists it and the folders directly inside it (no "Default folder" row), New folder creates inside the one picked, and Switch to it, Resume and Replace on a session working outside the root folder are refused ("This session works outside your folder ~/..., so your role can't resume, restart or switch it. Ask an admin."). |
 | `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session comes back in the mode it was in. A session that was in Full access mode comes back in Full access only for an admin or a person in their own private chat; for anyone else it comes back in Auto mode and the reply says so (`♻️ Resumed x1 in Auto mode: Full access mode needs an admin.`). A session saved by an older aipager in its old Auto (which ran with no checks) comes back in Full access mode, and one saved in Ask comes back in Ask mode. A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. A member whose role lacks `can_manage` cannot resume a session whose folder is outside the chat's [root folder](groups.md#root-folders) (owners and admins can); the same holds for Restart and every mode switch, the in-place one between Ask and Auto included. Resume follows a conversation that moved on in Claude Code (the newest one comes back), and when a Claude Code background job still holds the conversation it stops that job first when it is idle, or asks (`Stop and bring back` / `Leave it`) while it works; the same goes for Restart. |
@@ -121,14 +121,12 @@ the CLI; no Telegram round-trip for the session list itself.
 On the machine, `aipager status` and `aipager session ls` give each session
 one state: `IDLE`, `BUSY`, `WAITING` (a permission or a question waits for
 you, with what it is when known, for example `permission: Bash: make
-deploy`), `TASKS` (Claude's turn ended, but the agents or shells it started
-in the background still run, with what it waits for, for example `waiting
-for 2 agents and 1 shell`, or `finishing up` while Claude is about to go on
-with their results; it counts as working) or `GONE`. With `--json`, each
-session also has `waiting_kind` (`permission` or `question`) and
-`waiting_summary`, both `null` unless it is waiting, and `job_agents` and
-`job_shells`, how many agents and shells a `TASKS` session waits for (`0`
-otherwise).
+deploy`), `TASKS` (Claude's turn ended, but the agents it started in the
+background still run, with how many, for example `waiting for 2 agents`; it
+counts as working) or `GONE`. With `--json`, each session also has
+`waiting_kind` (`permission` or `question`) and `waiting_summary`, both
+`null` unless it is waiting, and `job_agents`, how many agents a `TASKS`
+session waits for (`0` otherwise).
 
 ## Languages
 
@@ -191,7 +189,7 @@ Tiếng Việt, each listed in its own name.
 `/app` (and the Telegram menu button) opens a dashboard served by the daemon itself. It is on by default; manage it with `aipager miniapp enable|disable|status`. Every request is verified against Telegram's `initData` signature (see [security → Mini App tunnel](security.md#mini-app-tunnel)). The page loads nothing from anywhere else: no fonts, images or scripts from other sites.
 
 - **Chats.** The app shows one chat at a time. If you belong to more than one chat (your DM and a group, say), a row of chat names at the top switches between them; the app opens on your own DM and remembers your last choice on that phone. Everything below is for the chosen chat, with your role in it. With one chat the row is not shown. See [groups](groups.md).
-- **Sessions.** One sentence sums up the chat, for example "1 needs you, 2 working, 3 resting", with what has been spent beneath it. Each live session is a tile with a context ring, its folder, model and cost; working ones glow in the accent colour. A session whose turn ended while the agents or shells it started in the background still run counts as working and glows too, and its tile says what it waits for ("waiting for 2 agents"). Finished sessions rest on a collapsible **Finished** shelf. The **+** button starts a new session.
+- **Sessions.** One sentence sums up the chat, for example "1 needs you, 2 working, 3 resting", with what has been spent beneath it. Each live session is a tile with a context ring, its folder, model and cost; working ones glow in the accent colour. A session whose turn ended while the agents it started in the background still run counts as working and glows too, and its tile says how many it waits for ("waiting for 2 agents"). Finished sessions rest on a collapsible **Finished** shelf. The **+** button starts a new session.
 - **Needs you.** A session waiting on a permission prompt or a question sits in an amber tray at the top, showing what it is asking. A session in Claude Code's background whose job waits on a permission prompt sits there too, since you can answer it from the chat; its page also offers Bring it back. **Answer in chat** re-sends that prompt, with its buttons, to the bottom of the chat, the same as the pinned bar's **Answer** button, and you answer it there. If it was the only session waiting, the app closes so the prompt is right in front of you; otherwise it stays open and says "Sent to the chat". It needs the right to prompt the session, and a copy tapped after the prompt was answered or replaced says "already answered".
 - **A session's page.** The header shows the context ring, the state ("Working for 3:12", "Waiting for 2 agents", "Needs you (permission)", "Resting, last active 5m ago", "In Claude Code's background", "Finished") and a one-tap **Bring it back** (for a session in Claude Code's background), **Stop** (while working, waiting for its agents, or waiting for you) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before. A session whose conversation moved into Claude Code's background (see [troubleshooting](troubleshooting.md#a-session-moved-to-claude-codes-background)) offers Bring it back, Stop, Rename, Kill and Restart; when the background job is still working, Bring it back, Restart and Resume ask on the page itself, **Stop and bring back** or **Leave it**, and the chat reads `↩️ x1 is back from Claude Code's background.` once it is back.
 - **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**. For a member whose role lacks `can_manage`, "where" offers only the chat's [root folder](groups.md#root-folders) and the folders directly inside it (the root folder is the default, and New folder creates inside the one picked); a folder outside it is refused with the reason, and Resume, Restart and the mode switch of a session working outside it answer "This session works outside your folder ~/..., so your role can't resume, restart or switch it. Ask an admin."
@@ -246,7 +244,7 @@ together, so that line says what most needs you:
 |---|---|
 | `⏳ jim needs you - Bash: make deploy` | a session is waiting on a permission prompt, a question or an interactive prompt; `(+2 more)` when others are waiting too |
 | `⚙️ jim (working)` / `💤 jim (idle)` | the chat has one live session and it is working / idle (`🔄 jim (starting)` while it starts): this line is the whole bar, apart from a flood line |
-| `🔄 jim (waiting for 2 agents)` | the one live session's turn ended, but the agents or shells it started in the background still run (`waiting for 1 shell`, `waiting for 2 agents and 1 shell`, or `finishing up` while Claude is about to go on with their results) |
+| `🔄 jim (waiting for 2 agents)` | the one live session's turn ended, but the agents it started in the background still run |
 | `⚙️ 2 working · 1 idle` | several sessions, none waiting: how many are in each state (`working`, `idle`, `starting`; a session waiting for its agents counts as working); `🔄` when none is working and one is starting, `💤` when all are idle |
 | `💤 all idle` | no live session |
 
@@ -262,17 +260,15 @@ per session with its state: `working`, `needs you`, `waiting for 2 agents`,
 each session once: the waiting session the first line names gets no
 line of its own, and the first line never lists names the lines below
 repeat.
-A session whose turn ended while the agents or commands it started in the
-background still run says what it waits for on its own line (or on the
-one line, with a single session): `🔄 jim (waiting for 1 agent)`,
-`(waiting for 1 shell)`, or `(waiting for 2 agents and 1 shell)` with
-both, the same counts its busy card, `/status` and the Mini App show.
-Background work that no longer belongs to a turn (a dev server an earlier
-turn left running, an agent that kept going after `/stop`) is counted
-after the state instead: `💤 jim (idle, 1 shell running)`,
-`(idle, 1 agent running)` or `(working, 2 agents, 1 shell running)`.
-Either way it is a count, never their names, so the bar moves only when
-the count does.
+A session whose turn ended while the agents it started in the background
+still run says how many it waits for on its own line (or on the one line,
+with a single session): `🔄 jim (waiting for 1 agent)`, the same count its
+busy card, `/status` and the Mini App show. Commands Claude runs in the
+background never put a session in that state: they are counted after its
+state, `💤 jim (idle, 1 shell running)`, as are agents that kept going
+after `/stop` (`(idle, 1 agent running)`), or `(working, 2 agents, 1 shell
+running)` during a turn. Either way it is a count, never their names, so
+the bar moves only when the count does.
 Tap the bar to jump to the message.
 
 **Where a plain message goes.** A message that is not a reply goes to the
@@ -592,8 +588,8 @@ settles to `✅ shell: <description> - done (6:12)`, `❌ ... - failed (exit
 Claude Code stopped it under memory pressure); failed and stopped rows
 keep that mark on the finished card. A turn that ends while such a
 command still runs is not finished: the card waits as the job's status
-(`🔄 name · waiting for 1 shell · 4:10`, or `waiting for 1 agent and 1
-shell` with an agent too), and when the command ends
+(`🔄 name · 1 shell still working · 4:10`, or `waiting for 1 agent` while
+an agent runs too), and when the command ends
 Claude's follow-up continues on that same card. Commands started inside
 an agent are that agent's and are not shown. A command whose end
 aipager never sees (a restart, a lost event) stops counting after two
