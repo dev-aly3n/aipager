@@ -577,3 +577,19 @@ def test_the_keyless_end_rechecks_after_reading_the_queue(rig, monkeypatch):
     outcome = rig.run_async(rig.bot._stop_session_core(sess))
     assert outcome.ok and outcome.mode == "keys"
     assert rig.writes.bytes() == [ESC, ESC]
+
+
+def test_a_wait_that_opens_during_the_dialog_look_gets_no_escape(rig, monkeypatch):
+    """The session stops being one whose turn is over while Stop looks for
+    a terminal dialog, but no turn of Claude's runs (not BUSY): refused,
+    never the Escapes."""
+    sess = waiting(rig)
+
+    async def _look(_sess):
+        sess.status = Status.INTERACTIVE
+        return False
+
+    monkeypatch.setattr(rig.bot, "_terminal_dialog_before_typing", _look)
+    outcome = rig.run_async(rig.bot._stop_session_core(sess))
+    assert not outcome.ok and outcome.reason == "dialog_open"
+    assert rig.writes == []
