@@ -765,6 +765,42 @@ def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, t
     )
 
 
+def test_perms_tasks_uses_stop_task_wording(node_bin, tmp_path):
+    """Roadmap 8.121: a session waiting for its own background agents is
+    still working, and a Full access switch restarts it (stopping them):
+    the confirm asks in the busy wording."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "perms_tasks")
+    assert proc.returncode == 0, (
+        f"perms_tasks scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms tasks -> Stop task & switch wording -> POST /api/sessions/dev/perms" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_perms_tasks_falling_back_to_idle_wording(node_bin, tmp_path):
+    """Guard the guard: count only busy as working in the perms confirm and
+    the waiting-for-agents scenario must catch it."""
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    old = "      var busy = isWorking(data.status);\n"
+    new = '      var busy = data.status === "busy";\n'
+    assert SOURCE_INDEX_HTML.count(old) == 1, "perms busy check not found once: page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "perms_tasks", name="broken-perms-tasks.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page where a waiting-for-agents session gets the idle wording"
+    )
+    busy = _drive_controls(
+        node_bin, tmp_path, broken, "perms_busy", name="broken-perms-busy.html",
+    )
+    assert busy.returncode == 0, f"the mutant broke busy too:\n{busy.stdout}\n{busy.stderr}"
+
+
 def test_perms_full_requires_admin_is_inert_with_reason(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
@@ -1721,6 +1757,10 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
     ("grid_render", "ok: grid -> 2 beacons, 3 lanterns, 3 on the shelf, pulse sentence"),
     ("grid_tasks", "ok: grid -> waiting for its tasks reads its counts, lit, counted working"),
     ("detail_tasks", "ok: session page -> Waiting for 2 agents, working, lit ring"),
+    ("grid_tasks_recount",
+     "ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up"),
+    ("detail_tasks_recount",
+     "ok: session page -> the state line follows the counts to Finishing up"),
     ("grid_keyed", "ok: a changed poll reuses the tile and moves its ring"),
     ("grid_unchanged", "ok: an unchanged poll touches nothing"),
     ("grid_reorder", "ok: reorder moves the same tiles, no FLIP without its APIs"),
@@ -1767,6 +1807,29 @@ _GRID_MUTANTS = [
         '    if (d.status === "tasks") { return tasksLine(d); }',
         "",
         "detail_tasks", id="tasks-state-line"),
+    # The counts are in both change checks, so a tile follows an agent
+    # ending (2, 1, finishing up) even when nothing else on the row moved.
+    pytest.param(
+        '              pctOf(s), s.cost_usd, s.project, s.job_agents, s.job_shells].join("|");',
+        '              pctOf(s), s.cost_usd, s.project].join("|");',
+        "grid_tasks_recount", id="tasks-counts-in-grid-signature"),
+    pytest.param(
+        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
+        '               s.job_agents, s.job_shells].join("|");',
+        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");',
+        "grid_tasks_recount", id="tasks-counts-in-tile-signature"),
+    pytest.param(
+        '    if (m) { return tn("ui.state.tasks_shells", m); }',
+        "",
+        "grid_tasks_recount", id="tasks-tile-word-shells"),
+    pytest.param(
+        '    if (m) { return tn("ui.state_line.tasks_shells", m); }',
+        "",
+        "detail_tasks_recount", id="tasks-state-line-shells"),
+    pytest.param(
+        '      return t("ui.state_line.tasks_both",',
+        '      return t("ui.state_line.tasks_finishing",',
+        "detail_tasks_recount", id="tasks-state-line-both"),
     pytest.param(
         "      if (item) { update(item, s); } else { item = map[s.label] = build(s); }",
         "      item = map[s.label] = build(s);",

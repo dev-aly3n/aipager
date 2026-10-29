@@ -345,6 +345,18 @@ function fullActionsFor(status, opts) {
     }
     return out;
   }
+  if (status === "tasks") {
+    // Roadmap 8.121: idle, but its job's agents or shells still run
+    // (sessions._RELEVANT_ACTIONS["tasks"]).
+    return {
+      stop: { available: true, reason: null },
+      compact: { available: true, reason: null },
+      rename: { available: true, reason: null },
+      kill: { available: true, reason: null },
+      perms: permsEntry,
+      restart: { available: true, reason: null },
+    };
+  }
   if (status === "idle") {
     return {
       compact: { available: true, reason: null },
@@ -382,6 +394,8 @@ function fullDetailFor(status, opts) {
 Object.assign(SESSION_DETAIL_FIXTURES, {
   perms_idle: fullDetailFor("idle", { isAdmin: true, mode: "ask" }),
   perms_busy: fullDetailFor("busy", { isAdmin: true, mode: "ask" }),
+  perms_tasks: Object.assign(fullDetailFor("tasks", { isAdmin: true, mode: "ask" }),
+                             { job_agents: 2, job_shells: 0 }),
   perms_full_requires_admin: fullDetailFor("idle", { isAdmin: false, mode: "ask" }),
   perms_in_place: fullDetailFor("busy", { isAdmin: false, mode: "ask" }),
   perms_leave_full: fullDetailFor("idle", { isAdmin: false, mode: "full" }),
@@ -780,16 +794,23 @@ const GRID_FIXTURES = {
     row("echo", "idle"),
   ]),
   detail_tasks: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
+  detail_tasks_recount: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
+  // Consecutive polls while the agents end one by one (2, 1, none left).
+  grid_tasks_recount: () => gridOf([
+    row("tasker", "tasks", { job_agents: 2, job_shells: 0 }),
+    row("server", "tasks", { job_agents: 0, job_shells: 1 }),
+    row("echo", "idle"),
+  ]),
   grid_empty_then_expired: () => gridOf([]),
   grid_empty_then_offline: () => gridOf([]),
 };
-if (SCENARIO === "detail_tasks") {
+if (SCENARIO === "detail_tasks" || SCENARIO === "detail_tasks_recount") {
   FIXTURES["/api/sessions/tasker"] = Object.assign(fullDetailFor("tasks"), {
     label: "tasker", job_agents: 2, job_shells: 0, context_pct: 30 });
 }
 if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
     SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton" ||
-    SCENARIO === "detail_tasks") {
+    SCENARIO === "detail_tasks" || SCENARIO === "detail_tasks_recount") {
   FIXTURES["/api/sessions"] = (GRID_FIXTURES[SCENARIO] || (() => gridOf(mixedRows())))();
   FIXTURES["/api/sessions/alpha/answer"] = { status: "sent", label: "alpha" };
   FIXTURES["/api/sessions/alpha"] = Object.assign(fullDetailFor("waiting", { isAdmin: true }), {
@@ -1365,6 +1386,17 @@ function drivePermsIdle() {
 
 // ---- scenario: perms, BUSY -- Stop task & switch wording ---------------
 function drivePermsBusy() {
+  permsStopsTheWork("busy");
+}
+
+// Roadmap 8.121: a session waiting for its own background agents is still
+// working, and a Full access switch restarts it (stopping them), so it is
+// asked in the busy wording too.
+function drivePermsTasks() {
+  permsStopsTheWork("tasks");
+}
+
+function permsStopsTheWork(state) {
   api.openDetail("dev");
   setTimeoutReal(() => {
     const menu = openMenu();
@@ -1372,23 +1404,24 @@ function drivePermsBusy() {
 
     item.click();
     if (!modalIsOpen())
-      fail("choosing perms on a busy session did not open the confirm modal");
+      fail("choosing perms on a " + state + " session did not open the confirm modal");
     if (byId["confirm-title"].textContent.indexOf("Stop the current task") === -1)
-      fail("busy perms confirm must use the stop-task wording: " +
+      fail(state + " perms confirm must use the stop-task wording: " +
            JSON.stringify(byId["confirm-title"].textContent));
     if (byId["confirm-ok"].textContent !== "Stop task & switch")
-      fail("busy perms confirm label wrong: " +
+      fail(state + " perms confirm label wrong: " +
            JSON.stringify(byId["confirm-ok"].textContent));
     if (byId["confirm-cancel"].textContent !== "Not now")
-      fail("busy perms cancel label wrong: " +
+      fail(state + " perms cancel label wrong: " +
            JSON.stringify(byId["confirm-cancel"].textContent));
 
     const before = fetchCalls.length;
     byId["confirm-ok"].click();
     const sent = fetchCalls.slice(before);
-    if (postedMode(sent) !== "full") fail("busy switch sent the wrong mode");
+    if (postedMode(sent) !== "full") fail(state + " switch sent the wrong mode");
 
-    console.log("ok: perms busy -> Stop task & switch wording -> POST /api/sessions/dev/perms");
+    console.log("ok: perms " + state +
+                " -> Stop task & switch wording -> POST /api/sessions/dev/perms");
     process.exit(0);
   }, 10);
 }
@@ -3188,6 +3221,7 @@ const DRIVERS = {
   confirm_isolation: driveConfirmIsolation,
   perms_idle: drivePermsIdle,
   perms_busy: drivePermsBusy,
+  perms_tasks: drivePermsTasks,
   perms_full_requires_admin: drivePermsFullRequiresAdmin,
   perms_in_place: drivePermsInPlace,
   perms_leave_full: drivePermsLeaveFull,
@@ -3284,6 +3318,76 @@ function driveDetailTasks() {
       console.log("ok: session page -> Waiting for 2 agents, working, lit ring");
       process.exit(0);
     }, 10);
+  }, 10);
+}
+
+// The counts move between two polls with nothing else changing: the tile
+// must follow them (the grid's and the tile's change checks both carry
+// the counts), on the same tile, still lit and counted working.
+function driveGridTasksRecount() {
+  setTimeoutReal(() => {
+    const tile = tiles()[0];
+    if (tileLabel(tile) !== "tasker") fail("first tile: " + tileLabel(tile));
+    if (tileWord(tile) !== "waiting for 2 agents")
+      fail("first poll tile word: " + JSON.stringify(tileWord(tile)));
+    if (tileWord(tiles()[1]) !== "waiting for 1 shell")
+      fail("shells-only tile word: " + JSON.stringify(tileWord(tiles()[1])));
+    if (pulseText() !== "2 working, 1 resting")
+      fail("first poll pulse: " + JSON.stringify(pulseText()));
+    const steps = [[1, "waiting for 1 agent"], [0, "finishing up"]];
+    let data = clone(FIXTURES["/api/sessions"]);
+    steps.forEach(([agents, want]) => {
+      data = clone(data);
+      data.sessions[0].job_agents = agents;
+      api.renderGrid(data);
+      if (tiles()[0] !== tile) fail("a recount rebuilt the tile instead of updating it");
+      if (tileWord(tile) !== want)
+        fail(agents + " agents left, tile word: " + JSON.stringify(tileWord(tile)));
+      if (tileLamp(tile).className !== "lamp lamp-work")
+        fail(agents + " agents left, lamp: " + tileLamp(tile).className);
+      if (pulseText() !== "2 working, 1 resting")
+        fail(agents + " agents left, pulse: " + JSON.stringify(pulseText()));
+    });
+    console.log("ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up");
+    process.exit(0);
+  }, 10);
+}
+
+// The session page's state line follows the counts poll by poll: agents,
+// both, shells, then finishing up.
+function driveDetailTasksRecount() {
+  const steps = [
+    [1, 1, "Waiting for 1 agent and 1 shell"],
+    [0, 2, "Waiting for 2 shells"],
+    [0, 0, "Finishing up"],
+  ];
+  function detail(agents, shells) {
+    return Object.assign(fullDetailFor("tasks"), {
+      label: "tasker", job_agents: agents, job_shells: shells, context_pct: 30 });
+  }
+  function next(i) {
+    if (i === steps.length) {
+      console.log("ok: session page -> the state line follows the counts to Finishing up");
+      process.exit(0);
+    }
+    const [agents, shells, want] = steps[i];
+    FIXTURES["/api/sessions/tasker"] = detail(agents, shells);
+    api.pollTick();
+    setTimeoutReal(() => {
+      if (byId["detail-state"].textContent !== want)
+        fail(agents + " agents, " + shells + " shells, state line: " +
+             JSON.stringify(byId["detail-state"].textContent));
+      if (byId["detail-ring"].className !== "lamp lamp-lg lamp-work")
+        fail(agents + " agents, " + shells + " shells, ring: " +
+             byId["detail-ring"].className);
+      next(i + 1);
+    }, 10);
+  }
+  api.openDetail("tasker");
+  setTimeoutReal(() => {
+    if (byId["detail-state"].textContent !== "Waiting for 2 agents")
+      fail("first state line: " + JSON.stringify(byId["detail-state"].textContent));
+    next(0);
   }, 10);
 }
 
@@ -3501,6 +3605,8 @@ Object.assign(DRIVERS, {
   grid_render: driveGridRender,
   grid_tasks: driveGridTasks,
   detail_tasks: driveDetailTasks,
+  grid_tasks_recount: driveGridTasksRecount,
+  detail_tasks_recount: driveDetailTasksRecount,
   grid_empty: driveGridEmpty,
   grid_expired: driveGridExpired,
   grid_empty_then_expired: driveGridEmptyThenExpired,
