@@ -110,6 +110,8 @@ aipager 读取 Claude Code 的 `notification_type`：
 
 一个后台代理在它启动的代理仍在运行时停下，也会收到 `SubagentStop`。aipager 把它当作暂停，而不是结束：这个代理仍算作正在运行（它的那一行、这项工作、回答下方的状态、置顶栏）。它下一次带同一 ID 的 `SubagentStart` 表示它继续了，不会再添加第二行；它自己的任何工具调用也算作继续。当它在自己的代理都已不在运行时停下，它才算结束。如果在其中最后一个代理结束两分钟后它仍未继续，它就不再算作正在运行，但绝不会显示为已完成。正在运行的代理，包括正在等待的那些，在 aipager 重启后都会保留。
 
+用 Claude Code 停止后台代理的按键（ctrl+x ctrl+k，按两次）停止的代理不会触发 `SubagentStop`。aipager 会自己结束它们：它自己的停止按下了这些按键时立即结束；Claude Code 的对话记录出现 `agents_killed` 行时（在 Claude Code 随后自己开始的任务的 `UserPromptSubmit` 中读取，那个提示是一句没有包装的普通句子）；或者某个 `Stop` 事件的 `background_tasks` 不再列出之前某个 `Stop` 列出过的代理时。它们打开着的请求会关闭（没有任何 hook 告知这一点），之后才到达的、属于其中某个代理的 `SubagentStop` 会被忽略。这个任务绝不会被当成在终端里输入的消息。
+
 ### <a id="precompact--postcompact"></a>`PreCompact` / `PostCompact`
 
 Claude 正在压缩它的上下文（`trigger` 为 `auto` 或 `manual`）。工作卡片显示 `🔄 name · 正在压缩对话`（没有卡片时会新发一条消息），这样这段停顿不会看起来像崩溃。`PostCompact` 结束这个状态；`📦 name · 对话已压缩（压缩前 X%）` 这一行来自随后的 `SessionStart`，如果错过了，则来自状态行。Claude Code 的状态行在下一条消息之前一直显示 0%，所以还不知道新的大小：两个任务之间的压缩，等状态行报出大小后，这一行会变成 `📦 name · 对话已压缩：X% → Y%`。状态行还会在上下文达到 80% 时给出警告 `⚠️ name · 上下文已用 82%，即将自动压缩`（带一个“立即压缩”按钮），每个对话只给一次：压缩不会让它再次出现，新的对话（例如 `/clear` 之后）会再收到一次。
