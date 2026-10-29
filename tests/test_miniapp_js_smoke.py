@@ -1719,6 +1719,8 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
 
 @pytest.mark.parametrize("scenario, expected", [
     ("grid_render", "ok: grid -> 2 beacons, 3 lanterns, 3 on the shelf, pulse sentence"),
+    ("grid_tasks", "ok: grid -> waiting for its tasks reads its counts, lit, counted working"),
+    ("detail_tasks", "ok: session page -> Waiting for 2 agents, working, lit ring"),
     ("grid_keyed", "ok: a changed poll reuses the tile and moves its ring"),
     ("grid_unchanged", "ok: an unchanged poll touches nothing"),
     ("grid_reorder", "ok: reorder moves the same tiles, no FLIP without its APIs"),
@@ -1747,6 +1749,24 @@ def test_lantern_grid_and_answer_scenarios(node_bin, tmp_path, scenario, expecte
 # Guard the guard for each mechanism above: break it in the page and the
 # scenario that names it must fail.
 _GRID_MUTANTS = [
+    # Roadmap 8.121 (guard 8): a session waiting for its own agents or
+    # shells is counted with working and its lamp is lit.
+    pytest.param(
+        '      var st = s.status === "tasks" ? "busy" : s.status;',
+        "      var st = s.status;",
+        "grid_tasks", id="tasks-counted-working"),
+    pytest.param(
+        '  function isWorking(status) { return status === "busy" || status === "tasks"; }',
+        '  function isWorking(status) { return status === "busy"; }',
+        "grid_tasks", id="tasks-lamp-lit"),
+    pytest.param(
+        '    var word = s.status === "tasks" ? tasksWord(s) : stateWord(s.status);',
+        "    var word = stateWord(s.status);",
+        "grid_tasks", id="tasks-tile-word"),
+    pytest.param(
+        '    if (d.status === "tasks") { return tasksLine(d); }',
+        "",
+        "detail_tasks", id="tasks-state-line"),
     pytest.param(
         "      if (item) { update(item, s); } else { item = map[s.label] = build(s); }",
         "      item = map[s.label] = build(s);",

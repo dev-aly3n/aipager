@@ -771,11 +771,25 @@ const GRID_FIXTURES = {
   ]),
   answer_viewer: () => gridOf(mixedRows(), { can_act: false }),
   grid_empty: () => gridOf([]),
+  // Roadmap 8.121: two sessions waiting for their own background work
+  // (one with counts, one finishing up) beside a working and an idle one.
+  grid_tasks: () => gridOf([
+    row("charlie", "busy"),
+    row("tasker", "tasks", { job_agents: 2, job_shells: 1 }),
+    row("finisher", "tasks", { job_agents: 0, job_shells: 0 }),
+    row("echo", "idle"),
+  ]),
+  detail_tasks: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
   grid_empty_then_expired: () => gridOf([]),
   grid_empty_then_offline: () => gridOf([]),
 };
+if (SCENARIO === "detail_tasks") {
+  FIXTURES["/api/sessions/tasker"] = Object.assign(fullDetailFor("tasks"), {
+    label: "tasker", job_agents: 2, job_shells: 0, context_pct: 30 });
+}
 if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
-    SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton") {
+    SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton" ||
+    SCENARIO === "detail_tasks") {
   FIXTURES["/api/sessions"] = (GRID_FIXTURES[SCENARIO] || (() => gridOf(mixedRows())))();
   FIXTURES["/api/sessions/alpha/answer"] = { status: "sent", label: "alpha" };
   FIXTURES["/api/sessions/alpha"] = Object.assign(fullDetailFor("waiting", { isAdmin: true }), {
@@ -3229,6 +3243,50 @@ function driveGridRender() {
   }, 10);
 }
 
+function tileWord(t) { return t.children[0].children[1].children[0].textContent; }
+
+// Roadmap 8.121: a session waiting for its own agents or shells names
+// them on its tile, lights the work lamp, and counts with working.
+function driveGridTasks() {
+  setTimeoutReal(() => {
+    const byLabel = {};
+    tiles().forEach(t => { byLabel[tileLabel(t)] = t; });
+    const tasker = byLabel.tasker;
+    const finisher = byLabel.finisher;
+    if (!tasker || !finisher) fail("the waiting sessions have no tiles");
+    if (tileWord(tasker) !== "waiting for 2 agents and 1 shell")
+      fail("tile word: " + JSON.stringify(tileWord(tasker)));
+    if (tileWord(finisher) !== "finishing up")
+      fail("finishing tile word: " + JSON.stringify(tileWord(finisher)));
+    if (tileLamp(tasker).className !== "lamp lamp-work")
+      fail("tile lamp: " + tileLamp(tasker).className);
+    if (!/^tile tile-tasks\b/.test(tasker.className)) fail("tile class: " + tasker.className);
+    if (tileLamp(byLabel.echo).className !== "lamp lamp-rest") fail("the idle lamp is lit");
+    if (pulseText() !== "3 working, 1 resting")
+      fail("pulse sentence: " + JSON.stringify(pulseText()));
+    console.log("ok: grid -> waiting for its tasks reads its counts, lit, counted working");
+    process.exit(0);
+  }, 10);
+}
+
+function driveDetailTasks() {
+  setTimeoutReal(() => {
+    api.openDetail("tasker");
+    setTimeoutReal(() => {
+      if (byId["detail-state"].textContent !== "Waiting for 2 agents")
+        fail("state line: " + JSON.stringify(byId["detail-state"].textContent));
+      if (byId["detail-status"].textContent !== "working")
+        fail("status chip: " + byId["detail-status"].textContent);
+      if (byId["detail-status"].className !== "status status-tasks")
+        fail("status chip class: " + byId["detail-status"].className);
+      if (byId["detail-ring"].className !== "lamp lamp-lg lamp-work")
+        fail("header ring: " + byId["detail-ring"].className);
+      console.log("ok: session page -> Waiting for 2 agents, working, lit ring");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 // Empty: one "New session" (the empty state's own), not two.
 function driveGridEmpty() {
   setTimeoutReal(() => {
@@ -3441,6 +3499,8 @@ function driveDetailAnswer() {
 
 Object.assign(DRIVERS, {
   grid_render: driveGridRender,
+  grid_tasks: driveGridTasks,
+  detail_tasks: driveDetailTasks,
   grid_empty: driveGridEmpty,
   grid_expired: driveGridExpired,
   grid_empty_then_expired: driveGridEmptyThenExpired,

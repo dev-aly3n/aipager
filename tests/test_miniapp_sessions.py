@@ -639,3 +639,73 @@ def test_build_timeline_trailing_commentary_past_last_tool_is_appended():
     rows = build_timeline(sess)
     assert {"kind": "commentary", "text": "Trailing thought"} in rows
     assert len(rows) == 2
+
+
+# ===== roadmap 8.121: waiting for its own background agents or shells =====
+
+def _tasks_sess(**kwargs) -> TrackedSession:
+    sess = _sess(status=Status.IDLE, **kwargs)
+    now = time.monotonic()
+    sess.active_subagents = {"a1": {"type": "Explore", "started_at": now},
+                             "a2": {"type": "Plan", "started_at": now}}
+    sess.bg_shells = {"s1": {"label": "npm test", "in_job": True, "started_at": now},
+                      "s2": {"label": "npm run dev", "in_job": False, "started_at": now}}
+    return sess
+
+
+def test_derive_status_idle_with_an_open_job_is_tasks():
+    assert _derive_status(_tasks_sess()) == ("tasks", None, None)
+
+
+def test_derive_status_busy_with_job_agents_stays_busy():
+    sess = _tasks_sess()
+    sess.status = Status.BUSY
+    assert _derive_status(sess) == ("busy", None, None)
+
+
+def test_a_parked_session_with_an_open_job_stays_background():
+    """Guard 6: parking (Claude Code's own background job) is checked
+    before the tasks state."""
+    sess = _tasks_sess(parked_job="bg-1")
+    assert _derive_status(sess) == ("background", None, None)
+
+
+def test_the_grid_row_carries_the_job_counts():
+    row = session_summary(_tasks_sess(), time.monotonic())
+    assert (row["status"], row["job_agents"], row["job_shells"]) == ("tasks", 2, 1)
+
+
+@pytest.mark.parametrize("status", [Status.IDLE, Status.BUSY, Status.GONE],
+                         ids=["idle", "busy", "gone"])
+def test_the_other_rows_carry_zero_counts(status):
+    sess = _sess(status=status)
+    sess.active_subagents = {"a1": {"type": "Explore"}} if status != Status.IDLE else {}
+    row = session_summary(sess, time.monotonic())
+    assert (row["job_agents"], row["job_shells"]) == (0, 0)
+    detail = session_detail(sess, time.monotonic())
+    assert (detail["job_agents"], detail["job_shells"]) == (0, 0)
+
+
+def test_the_detail_offers_stop_and_the_idle_set_while_it_waits():
+    """Guard 7: Stop is offered and available (its route takes the session,
+    `can_be_stopped()`), with the idle actions, in canonical order."""
+    detail = session_detail(_tasks_sess(), time.monotonic())
+    assert detail["status"] == "tasks"
+    assert (detail["job_agents"], detail["job_shells"]) == (2, 1)
+    assert list(detail["actions"]) == ["stop", "compact", "rename", "kill", "perms", "restart"]
+    assert detail["actions"]["stop"] == {"available": True, "reason": None}
+    assert detail["model_switch"] == {"available": True, "reason": None}
+    assert detail["answer"] is None
+
+
+def test_a_waiting_session_ranks_with_the_working_ones():
+    """Guard 7: rank 1, so it sorts before every idle row however recent."""
+    from aipager.miniapp.sessions import sort_for_display
+    rows = [
+        {"label": "a-idle", "status": "idle", "last_active_seconds_ago": 1},
+        {"label": "b-tasks", "status": "tasks", "last_active_seconds_ago": 500},
+        {"label": "c-busy", "status": "busy", "last_active_seconds_ago": 100},
+        {"label": "d-waiting", "status": "waiting", "last_active_seconds_ago": 900},
+    ]
+    assert [r["label"] for r in sort_for_display(rows)] == [
+        "d-waiting", "c-busy", "b-tasks", "a-idle"]
