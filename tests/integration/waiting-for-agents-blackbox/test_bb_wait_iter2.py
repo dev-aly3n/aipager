@@ -4,7 +4,10 @@
   never glued from fragments): every catalog's both-counts sentence
   (``jobwait.both``, ``ui.state.tasks_both``, ``ui.state_line.tasks_both``)
   keeps both placeholders once each; the Arabic one joins them with the
-  conjunction "و" like the other 13 languages join theirs with "and";
+  Arabic comma, main's two-count pattern (``pin.running_both``), since a
+  "و" glued to ``{shells}`` puts the count's leading RLM between two word
+  characters (iPhone RTL); no rendering of the phrase, in any language
+  or direction, holds a direction mark between two word characters;
   ``job_wait.phrase`` names both counts in every language.
 * entrypoints.md CLI: a TASKS row's "waiting for ..." text appears exactly
   once per row in ``aipager status`` and ``aipager session ls`` plain output.
@@ -61,23 +64,42 @@ def test_both_sentence_has_no_em_dash(code, key):
 
 
 @pytest.mark.parametrize("key", BOTH_KEYS)
-def test_arabic_both_sentence_joins_the_counts_with_and(key):
-    """review-1 nit: "{agents}، {shells}" dropped "and"; the sentence joins
-    the two counts with "و" (the conjunction, prefixed or spaced)."""
+def test_arabic_both_sentence_joins_the_counts_with_the_arabic_comma(key):
+    """The regression run's failure: "{agents} و{shells}" put the shell
+    count's leading RLM between "و" and the count. The sentence uses the
+    two-count pattern ar ``pin.running_both`` already has."""
     text = core._catalog("ar")[key]
-    assert re.search(r"\{agents\}\s*و\s*\{shells\}", text), text
+    assert re.search(r"\{agents\}\u060c \{shells\}", text), text
 
 
 @pytest.mark.parametrize("key", BOTH_KEYS)
-def test_arabic_both_sentence_has_no_comma_between_the_counts(key):
-    text = core._catalog("ar")[key]
-    assert not re.search(r"\{agents\}\s*[،,]\s*\{shells\}", text), text
+@pytest.mark.parametrize("code", ("ar", "fa"))
+def test_right_to_left_both_sentence_glues_no_letter_to_a_placeholder(code, key):
+    text = core._catalog(code)[key]
+    assert not re.search(r"\w\{|\}\w", text), text
 
 
-def test_arabic_phrase_carries_the_conjunction():
+def test_arabic_phrase_joins_the_counts_with_the_arabic_comma():
     # 7 and 3: Arabic writes 1 and 2 as words (singular, dual), not digits.
     out = job_wait.phrase(i18n.get("ar"), 7, 3, "text")
-    assert "و" + _digit("ar", 3) in out.replace("\u200f", "").replace("\u200e", ""), out
+    bare = out.replace("\u200f", "").replace("\u200e", "")
+    assert re.search("\u060c " + _digit("ar", 3), bare), out
+
+
+_SPLIT_WORD = re.compile("\\w[\u200e\u200f]+\\w")
+
+
+@pytest.mark.parametrize("rtl", (None, True, False), ids=("own", "rtl", "ltr"))
+@pytest.mark.parametrize("kind", ("text", "html", "md"))
+@pytest.mark.parametrize("code", list(LOCALES))
+def test_both_phrase_holds_no_mark_between_two_word_characters(code, kind, rtl):
+    """A mark between two word characters breaks a right-to-left line on
+    iPhone; zh-Hans "{agents}和" did it in its in-RTL form (the agents
+    count's closing LRM before 和)."""
+    tr = i18n.get(code).directed(rtl)
+    bad = [_SPLIT_WORD.search(re.sub(r"<[^>]+>", "", job_wait.phrase(tr, a, s, kind)))
+           for a, s in ((1, 1), (2, 3), (7, 11))]
+    assert not any(bad), [m.group() for m in bad if m]
 
 
 @pytest.mark.parametrize("code", list(LOCALES))
