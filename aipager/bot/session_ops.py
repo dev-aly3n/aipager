@@ -2202,6 +2202,9 @@ class SessionOpsMixin:
         # live round 2, H4), read before any await: the hooks the Escapes
         # fire can move the status off INTERACTIVE, and the open prompts
         # then no longer read as open (an extra one is even dropped).
+        # One that another path closes meanwhile (refused by Claude Code,
+        # answered, its agent stopped) is that path's to show: never edited
+        # again below (rev-iter10-001).
         closed_records = [rec for _where, _perm, rec in sess.open_prompt_records()
                           if isinstance(rec, dict)]
 
@@ -2258,7 +2261,10 @@ class SessionOpsMixin:
         sess.turn_sender_id = None
         # The job ends, background agents included: every open prompt
         # with it (roadmap 8.120), and their buttons type nothing. Their
-        # own messages (read before the Escapes) lose their buttons below.
+        # own messages (read before the Escapes) lose their buttons below,
+        # except those another path closed during the awaits above: its
+        # edit (the refused line, the stopped line) stays.
+        closed_records = [rec for rec in closed_records if not rec.get("closed")]
         sess.close_all_prompts()
         sess.pending_permission = None
         sess.status = Status.IDLE

@@ -3618,8 +3618,9 @@ class TrackedSession:
     def close_prompts(self, pred, *, mark: bool = True) -> tuple[int, bool]:
         """Close every open prompt *pred(perm)* is true for: its surface
         (the card for the inline one, else its own message) is marked
-        closed, so its buttons type nothing, and its record goes. When the
-        primary slot empties while others stay open, the oldest of them
+        closed, so its buttons type nothing, and its record goes, marked
+        ``closed`` (a Stop that read it earlier leaves its message to the
+        path that closed it). When the primary slot empties while others stay open, the oldest of them
         becomes the primary (its message, token and registration are
         unchanged). *mark* False leaves the surfaces unmarked (the
         INTERACTIVE watchdog: a prompt nobody answered is not known
@@ -3642,9 +3643,11 @@ class TrackedSession:
                 self.carried_inline_prompt = None
             elif where == "separate":
                 stamp(rec.get("msg_id"))
+                rec["closed"] = True
                 self.pending_prompt_msg = None
             else:
                 stamp(rec.get("msg_id"))
+                rec["closed"] = True
                 self.extra_prompts = [r for r in self.extra_prompts if r is not rec]
         shown = [r for r in self.extra_prompts
                  if isinstance(r, dict) and not r.get("auto_deny_due")]
