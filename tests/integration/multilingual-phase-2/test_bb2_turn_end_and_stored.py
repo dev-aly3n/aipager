@@ -248,21 +248,19 @@ def test_russian_running_line_for_one_agent_still_reads_russian(n):
     assert CYRILLIC.search(_block(agents=n).split("\n\n")[0])
 
 
-# Roadmap 8.121: the waiting line says what the session waits for, with
-# both counts filled in from their own Plurals.
-WAITING = i18n.Msg("jobwait.both", "waiting for {agents} and {shells}")
+WAITING = i18n.Msg("card.waiting.working", "\U0001f504 **{session}** · {agents} still working")
 
 
 @pytest.mark.parametrize("agents", ["1 агент", "21 агент", "2 агента", "5 агентов",
                                     "1 команда"])
 def test_the_russian_waiting_line_agrees_with_any_count(agents):
-    out = i18n.get("ru").md(WAITING, agents=agents, shells="1 фоновая команда")
+    out = i18n.get("ru").md(WAITING, session="x1", agents=agents)
     assert not PLURAL_VERB.search(out)
 
 
 def test_the_russian_waiting_line_is_russian():
-    out = i18n.get("ru").md(WAITING, agents="1 агент", shells="1 фоновая команда")
-    assert CYRILLIC.search(out.replace("агент", "").replace("фоновая команда", ""))
+    out = i18n.get("ru").md(WAITING, session="x1", agents="1 агент")
+    assert CYRILLIC.search(out.replace("агент", ""))
 
 
 BY_KEYS = ["ans.stopped_by", "ans.stopped_by_dropped", "card.stopped_by", "card.denied_by"]

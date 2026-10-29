@@ -97,31 +97,13 @@ STATE_BACKGROUND = Msg("ui.state.background", "in the background",
                        note="Mini App: a session's state (short): its conversation moved into "
                             "a Claude Code background job, nothing is typed into it until it "
                             "is brought back")
-# Roadmap 8.121: Claude's own turn ended, but the background agents or
-# shells it started still run. Counted as working.
-COUNT_AGENTS = Plural("ui.count.agents", one="{n} agent", other="{n} agents",
-                      note="Mini App: how many background agents")
-COUNT_SHELLS = Plural("ui.count.shells", one="{n} shell", other="{n} shells",
-                      note="Mini App: how many background shell commands")
+# Roadmap 8.121: Claude's own turn ended, but the background agents it
+# started still run. Counted as working.
 STATE_TASKS_AGENTS = Plural("ui.state.tasks_agents", one="waiting for {n} agent",
                             other="waiting for {n} agents",
                             note="Mini App: a session's state (short, lowercase): Claude's "
                                  "own turn ended, but the background agents it started still "
                                  "run; how many")
-STATE_TASKS_SHELLS = Plural("ui.state.tasks_shells", one="waiting for {n} shell",
-                            other="waiting for {n} shells",
-                            note="Mini App: a session's state (short, lowercase): Claude's "
-                                 "own turn ended, but the background shell commands it "
-                                 "started still run; how many")
-STATE_TASKS_BOTH = Msg("ui.state.tasks_both", "waiting for {agents} and {shells}",
-                       eg={"agents": "2 agents", "shells": "1 shell"},
-                       note="Mini App: a session's state (short, lowercase): Claude's own "
-                            "turn ended, but the background agents and shell commands it "
-                            "started still run")
-STATE_TASKS_FINISHING = Msg("ui.state.tasks_finishing", "finishing up",
-                            note="Mini App: a session's state (short, lowercase): its "
-                                 "background agents or shells just ended and Claude is about "
-                                 "to continue")
 TILE_NO_FOLDER = Msg("ui.tile.no_folder", "no folder",
                      note="Mini App grid: a session without a folder (short)")
 TILE_ARIA = Msg("ui.tile.aria", "{session}, {state}, context {pct}%, {model}, {cost}",
@@ -205,20 +187,6 @@ STATE_LINE_TASKS_AGENTS = Plural("ui.state_line.tasks_agents", one="Waiting for 
                                  note="Mini App session page: the state line while Claude's "
                                       "own turn ended but the background agents it started "
                                       "still run; how many")
-STATE_LINE_TASKS_SHELLS = Plural("ui.state_line.tasks_shells", one="Waiting for {n} shell",
-                                 other="Waiting for {n} shells",
-                                 note="Mini App session page: the state line while Claude's "
-                                      "own turn ended but the background shell commands it "
-                                      "started still run; how many")
-STATE_LINE_TASKS_BOTH = Msg("ui.state_line.tasks_both", "Waiting for {agents} and {shells}",
-                            eg={"agents": "2 agents", "shells": "1 shell"},
-                            note="Mini App session page: the state line while Claude's own "
-                                 "turn ended but the background agents and shell commands it "
-                                 "started still run")
-STATE_LINE_TASKS_FINISHING = Msg("ui.state_line.tasks_finishing", "Finishing up",
-                                 note="Mini App session page: the state line when the "
-                                      "background agents or shells just ended and Claude is "
-                                      "about to continue")
 KIND_WORD_PERMISSION = Msg("ui.kind_word.permission", "permission",
                            note="Mini App: what a session waits on, inside Needs you (...)")
 KIND_WORD_QUESTION = Msg("ui.kind_word.question", "question",

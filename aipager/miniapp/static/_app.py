@@ -403,9 +403,9 @@ APP_JS = r"""
   // poll touches nothing and a tile never flickers or jumps.
 
   // Keyed by the status id: the word is shown, the id decides.
-  // "tasks" (Claude's turn ended, its background agents or shells still
-  // run) is counted as working: the header pill says so, the tile and the
-  // state line name what it waits for.
+  // "tasks" (Claude's turn ended, its background agents still run) is
+  // counted as working: the header pill says so, the tile and the state
+  // line name how many agents it waits for.
   var STATE_WORDS = {
     busy: "ui.state.busy", idle: "ui.state.idle", waiting: "ui.state.waiting",
     gone: "ui.state.gone", unknown: "ui.state.unknown", background: "ui.state.background",
@@ -416,31 +416,15 @@ APP_JS = r"""
     return STATE_WORDS[status] ? t(STATE_WORDS[status]) : String(status || "");
   }
 
-  // What a "tasks" session waits for, from its counts (the same choice the
-  // chat's job_wait.phrase makes): the tile's short word.
+  // What a "tasks" session waits for, from its agent count (the chat's
+  // job_wait.phrase in the page's words): the tile's short word.
   function tasksWord(s) {
-    var a = Number(s.job_agents) || 0;
-    var m = Number(s.job_shells) || 0;
-    if (a && m) {
-      return t("ui.state.tasks_both",
-               { agents: tn("ui.count.agents", a), shells: tn("ui.count.shells", m) });
-    }
-    if (a) { return tn("ui.state.tasks_agents", a); }
-    if (m) { return tn("ui.state.tasks_shells", m); }
-    return t("ui.state.tasks_finishing");
+    return tn("ui.state.tasks_agents", Number(s.job_agents) || 0);
   }
 
   // The same for the session page's state line (sentence case).
   function tasksLine(d) {
-    var a = Number(d.job_agents) || 0;
-    var m = Number(d.job_shells) || 0;
-    if (a && m) {
-      return t("ui.state_line.tasks_both",
-               { agents: tn("ui.count.agents", a), shells: tn("ui.count.shells", m) });
-    }
-    if (a) { return tn("ui.state_line.tasks_agents", a); }
-    if (m) { return tn("ui.state_line.tasks_shells", m); }
-    return t("ui.state_line.tasks_finishing");
+    return tn("ui.state_line.tasks_agents", Number(d.job_agents) || 0);
   }
 
   function isWorking(status) { return status === "busy" || status === "tasks"; }
@@ -519,7 +503,7 @@ APP_JS = r"""
   function updateTile(tile, s) {
     var pct = pctOf(s);
     var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,
-               s.job_agents, s.job_shells].join("|");
+               s.job_agents].join("|");
     if (tile.sig === sig) { return; }
     tile.sig = sig;
     var word = s.status === "tasks" ? tasksWord(s) : stateWord(s.status);
@@ -765,7 +749,7 @@ APP_JS = r"""
   function gridSignature(data) {
     var rows = (data.sessions || []).map(function (s) {
       return [s.label, s.status, s.waiting_kind, s.waiting_summary, s.model,
-              pctOf(s), s.cost_usd, s.project, s.job_agents, s.job_shells].join("|");
+              pctOf(s), s.cost_usd, s.project, s.job_agents].join("|");
     });
     var t = data.totals || {};
     return JSON.stringify([rows, t.cost_usd, data.can_act === false, goneCollapsed]);
@@ -1923,7 +1907,7 @@ APP_JS = r"""
         return;
       }
       // Into or out of Full access: the session restarts.
-      // Waiting for its background work counts too: the restart stops it.
+      // Waiting for its background agents counts too: the restart stops them.
       var busy = isWorking(data.status);
       var session = { session: label };
       openConfirm({

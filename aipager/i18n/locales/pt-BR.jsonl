@@ -216,6 +216,7 @@
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} negou"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Permissão negada no terminal"}
 {"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Encerrada no terminal"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "finalizando"}
 {"k": "card.fold", "src": "2061ab43", "v": {"many": "▸ {n} ferramentas usadas", "one": "▸ {n} ferramenta usada", "other": "▸ {n} ferramentas usadas"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"many": "({n} agentes)", "one": "({n} agente)", "other": "({n} agentes)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"many": "✅ <i>{n} ferramentas usadas antes</i>", "one": "✅ <i>{n} ferramenta usada antes</i>", "other": "✅ <i>{n} ferramentas usadas antes</i>"}}
@@ -238,6 +239,7 @@
 {"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "comando em segundo plano: {label} (ainda rodando)"}
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "comando em segundo plano: {label} - parado ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "iniciando"}
+{"k": "card.shells", "src": "9b747b65", "v": {"many": "{n} comandos em segundo plano", "one": "{n} comando em segundo plano", "other": "{n} comandos em segundo plano"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Interrompida"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} interrompeu"}
@@ -260,6 +262,7 @@
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Esperando sua resposta"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Trabalhando"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} ainda em andamento"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "O Telegram atualizou este grupo. O aipager foi junto; você não precisa fazer nada."}
 {"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "A conversa ainda está trabalhando na tarefa em segundo plano {job} do Claude Code: pare a tarefa com {stop_command} ou abra com {attach_command} e tente de novo."}
 {"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Não foi possível parar a tarefa em segundo plano {job} do Claude Code: {error}"}
@@ -317,9 +320,6 @@
 {"k": "home.tap_session", "src": "f14797d7", "v": "Toque em uma sessão no teclado para falar com ela."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code pelo Telegram"}
 {"k": "jobwait.agents", "src": "cdf8fa99", "v": {"many": "esperando {n} agentes", "one": "esperando {n} agente", "other": "esperando {n} agentes"}}
-{"k": "jobwait.both", "src": "4f90f011", "v": "esperando {agents} e {shells}"}
-{"k": "jobwait.finishing", "src": "1bfd382d", "v": "finalizando"}
-{"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"many": "esperando {n} comandos em segundo plano", "one": "esperando {n} comando em segundo plano", "other": "esperando {n} comandos em segundo plano"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Voltar"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Comandos ›"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "kill"}
@@ -1153,8 +1153,6 @@
 {"k": "ui.conn.reconnecting", "src": "6b160044", "v": "reconectando…"}
 {"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Sua sessão de acesso expirou. Abra a página de novo pelo {command} no Telegram."}
 {"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Não foi possível conectar ao servidor. Verifique o túnel."}
-{"k": "ui.count.agents", "src": "263711d4", "v": {"many": "{n} agentes", "one": "{n} agente", "other": "{n} agentes"}}
-{"k": "ui.count.shells", "src": "9b747b65", "v": {"many": "{n} comandos em segundo plano", "one": "{n} comando em segundo plano", "other": "{n} comandos em segundo plano"}}
 {"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "rodando há {n} min"}
 {"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Última resposta"}
 {"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Configurações da sessão"}
@@ -1391,9 +1389,6 @@
 {"k": "ui.state.gone", "src": "f957097d", "v": "encerrada"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "pronta"}
 {"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"many": "esperando {n} agentes", "one": "esperando {n} agente", "other": "esperando {n} agentes"}}
-{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "esperando {agents} e {shells}"}
-{"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "finalizando"}
-{"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"many": "esperando {n} comandos em segundo plano", "one": "esperando {n} comando em segundo plano", "other": "esperando {n} comandos em segundo plano"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "desconhecido"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "precisa de você"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "No segundo plano do Claude Code"}
@@ -1403,9 +1398,6 @@
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "Pronta"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Pronta, última atividade {age}"}
 {"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"many": "Esperando {n} agentes", "one": "Esperando {n} agente", "other": "Esperando {n} agentes"}}
-{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "Esperando {agents} e {shells}"}
-{"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "Finalizando"}
-{"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"many": "Esperando {n} comandos em segundo plano", "one": "Esperando {n} comando em segundo plano", "other": "Esperando {n} comandos em segundo plano"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Ainda sem informação"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Trabalhando"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Trabalhando ({clock})"}

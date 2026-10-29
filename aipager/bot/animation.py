@@ -60,7 +60,7 @@ from aipager.bot.rich_message import (
 )
 from aipager import policy_snapshot
 from aipager.transcript import read_queue_events, read_turn_blocks, read_turn_stream
-from aipager.state import SHOWN_TASKS, Status, TrackedSession
+from aipager.state import Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -246,9 +246,16 @@ CARD_STATUS = Msg("card.status", "{mark} **{session}** · {verb}",
                   eg={"mark": "⏳", "session": "x1", "verb": "Working"})
 WAITING_STATE = Msg("card.waiting.state", "🔄 **{session}** · {phrase}",
                     note="The busy card's last line while Claude's turn ended but its "
-                         "background agents or shells still run; {phrase} says what it "
-                         "waits for (or that it is finishing up)",
+                         "background agents still run, or while the job finishes; "
+                         "{phrase} says what it waits for, or the finishing words",
                     eg={"session": "x1", "phrase": "waiting for 2 agents"})
+WAITING_WORKING = Msg("card.waiting.working", "🔄 **{session}** · {agents} still working",
+                      note="The busy card's last line while background agents or shells run",
+                      eg={"session": "x1", "agents": "2 agents (Explore), 1 shell"})
+FINISHING = Msg("card.finishing", "finishing up",
+                note="A background job between its last agent and Claude's wake-up")
+SHELLS = Plural("card.shells", one="{n} shell", other="{n} shells",
+                note="How many background shell commands are running")
 FOLD = Plural("card.fold", one="▸ {n} tool call", other="▸ {n} tool calls",
               note="A folded group of tool calls on the busy card; a tap opens it")
 THINKING = Msg("card.thinking", "⚙️ <b>{session}</b> · Thinking…",
@@ -1401,12 +1408,22 @@ def _status_line(
         return tr.clock(time.monotonic() - started, unit)
 
     if waiting and not final:
-        # Roadmap 8.121: the same words and counts as the bar, /status
-        # and the Mini App ("waiting for 2 agents and 1 shell", "finishing
-        # up" while nothing is left running). Each agent's type is on its
-        # own row above.
-        phrase = job_wait.phrase(tr, *sess.job_counts(), kind="md")
-        line = tr.md(WAITING_STATE, session=label, phrase=Safe(phrase))
+        # The card follows the job (agents, job shells, the grace window).
+        # With agents running it says what the bar, /status and the Mini
+        # App say ("waiting for 2 agents", roadmap 8.121; each agent's
+        # type is on its own row above). With only the job's shells, or
+        # nothing left running, it keeps its own words: those states are
+        # idle everywhere else.
+        agents = sess.job_agent_count()
+        shells = len(sess.job_shell_ids())
+        if agents:
+            line = tr.md(WAITING_STATE, session=label,
+                         phrase=Safe(job_wait.phrase(tr, agents, kind="md")))
+        elif shells:
+            line = tr.md(WAITING_WORKING, session=label,
+                         agents=Safe(tr.n(SHELLS, shells, kind="md")))
+        else:
+            line = tr.md(WAITING_STATE, session=label, phrase=Safe(tr.md(FINISHING)))
         if sess.busy_started_at:
             line += f" · {_clock(sess.busy_started_at)}"
         return claude_bidi.row(tr, tr.line(line, kind="md"))
@@ -2855,7 +2872,7 @@ class AnimationMixin:
         session's status, whether it is waiting on a background job, and
         whether a prompt is open. A change here is a STATE change — the
         one kind of event allowed to bypass the age decay (8.30 Q2)."""
-        waiting = sess.shown_state().state == SHOWN_TASKS
+        waiting = sess.status is not Status.BUSY and sess.job_background_open()
         return (sess.status, bool(waiting), bool(sess.pending_permission))
 
     def _card_edit_due(

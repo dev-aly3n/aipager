@@ -206,7 +206,7 @@ _PINNED_GLYPHS = {"working": "⚙️", "tasks": "🔄", "starting": "🔄", "idl
 _PINNED_GLYPH_ORDER = ("working", "tasks", "starting", "idle")
 #: Roadmap 8.121: a state id counted under another on the first line when
 #: several sessions share the chat. A session waiting for its own
-#: background agents or shells counts as working.
+#: background agents counts as working.
 _COUNT_BUCKET = {"tasks": "working"}
 #: The waiting prompt's summary on the first line is cut to this.
 PINNED_SUMMARY_MAX = 40
@@ -427,8 +427,8 @@ STATUS_TALK_DM = Msg("status.talk_dm", "Send a message and it goes to {session}.
 
 def _pinned_word(sess: TrackedSession) -> str:
     """The state id: ``working``, ``needs_you``, ``tasks`` (idle, but its
-    job still runs background agents or shells: roadmap 8.121), ``idle``
-    or ``starting``."""
+    job's background agents still run: roadmap 8.121), ``idle`` or
+    ``starting``."""
     if sess.shown_state().state == SHOWN_TASKS:
         return "tasks"
     return _PINNED_WORDS.get(sess.status, "starting")
@@ -439,14 +439,13 @@ def _state_text(tr, state_id: str, kind: str = "html") -> str:
 
 
 def _shown_state_text(tr, sess: TrackedSession, kind: str = "html") -> str:
-    """*sess*'s state in words: ``waiting for 2 agents`` (or ``finishing
-    up``) while it waits for its job's background work, from the same
-    counts every surface names (``job_wait.phrase``), else the state's own
-    word."""
+    """*sess*'s state in words: ``waiting for 2 agents`` while it waits
+    for its job's background agents, from the same count every surface
+    names (``job_wait.phrase``), else the state's own word."""
     from aipager.bot import job_wait
     shown = sess.shown_state()
     if shown.state == SHOWN_TASKS:
-        return job_wait.phrase(tr, shown.agents, shown.shells, kind=kind)
+        return job_wait.phrase(tr, shown.agents, kind=kind)
     return _state_text(tr, _PINNED_WORDS.get(sess.status, "starting"), kind)
 
 
@@ -473,9 +472,9 @@ def _pinned_state(sess: TrackedSession, tr=None) -> str:
     """``(working)`` / ``(idle, 1 agent running)`` / ``(waiting for 2
     agents)``: a session's state as the bar shows it (HTML). Parentheses,
     never a dash (operator, 2026-09-25). While it waits for its job's
-    agents or shells the state names their counts and nothing else
-    (roadmap 8.121); otherwise background work outside the job follows
-    the state (roadmap 8.41)."""
+    background agents the state names their count and nothing else
+    (roadmap 8.121); otherwise the background work running follows the
+    state (roadmap 8.41)."""
     tr = tr or i18n.for_sess(sess)
     state = Safe(_shown_state_text(tr, sess))
     if _pinned_word(sess) == "tasks":
@@ -1462,14 +1461,14 @@ class DashboardMixin:
                                    queued=Safe(tr.n(STATUS_QUEUED, queued)),
                                    notes=Safe(tr.n(STATUS_NOTES, notes))))
         # Every subagent running now (as the old Agents row counted), and
-        # the shells Claude runs in the background. Not while the session
-        # waits for its job's work: the head names those counts already
+        # the shells Claude runs in the background. The agents not while
+        # the session waits for them: the head names that count already
         # (roadmap 8.121).
-        if state_id != "tasks":
-            for count, plural in ((len(sess.active_subagents), COUNT_AGENTS),
-                                  (len(sess.bg_shells), COUNT_SHELLS)):
-                if count:
-                    details.append(tr.n(plural, count))
+        agents = 0 if state_id == "tasks" else len(sess.active_subagents)
+        for count, plural in ((agents, COUNT_AGENTS),
+                              (len(sess.bg_shells), COUNT_SHELLS)):
+            if count:
+                details.append(tr.n(plural, count))
         return head + ("\n   " + tr.line(" · ".join(details), kind="html") if details else "")
 
     def _status_sessions(self, chat_id) -> tuple[list[TrackedSession], list[TrackedSession]]:

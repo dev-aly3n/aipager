@@ -216,6 +216,7 @@
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} رد کرد"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · در ترمینال رد شد"}
 {"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · در ترمینال تمام شد"}
+{"k": "card.finishing", "src": "1bfd382d", "v": "در حال جمع‌بندی"}
 {"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} ابزار اجرا شد", "other": "▸ {n} ابزار اجرا شد"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ایجنت)", "other": "({n} ایجنت)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>{n} ابزار قبلی اجرا شد</i>", "other": "✅ <i>{n} ابزار قبلی اجرا شد</i>"}}
@@ -238,6 +239,7 @@
 {"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "دستور پس‌زمینه: {label} (هنوز کار می‌کند)"}
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "دستور پس‌زمینه: {label} - متوقف شد ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "در حال شروع"}
+{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} دستور پس‌زمینه", "other": "{n} دستور پس‌زمینه"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · متوقف شد"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} متوقف کرد"}
@@ -260,6 +262,7 @@
 {"k": "card.verb.waiting", "src": "33d30632", "v": "منتظر جواب شما"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "در حال کار"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
+{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} هنوز در حال کار"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram این گروه را آپگرید کرد. aipager هم همراهش آمد؛ لازم نیست کاری بکنید."}
 {"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "گفتگو هنوز در کار پس‌زمینهٔ {job} در Claude Code در حال کار است: با {stop_command} متوقفش کنید یا با {attach_command} بازش کنید و دوباره امتحان کنید."}
 {"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "کار پس‌زمینهٔ {job} در Claude Code متوقف نشد: {error}"}
@@ -317,9 +320,6 @@
 {"k": "home.tap_session", "src": "f14797d7", "v": "برای حرف زدن با یک سشن، روی اسمش در کیبورد بزنید."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code در Telegram"}
 {"k": "jobwait.agents", "src": "cdf8fa99", "v": {"one": "منتظر {n} ایجنت", "other": "منتظر {n} ایجنت"}}
-{"k": "jobwait.both", "src": "4f90f011", "v": "منتظر {agents} و {shells}"}
-{"k": "jobwait.finishing", "src": "1bfd382d", "v": "در حال جمع‌بندی"}
-{"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"one": "منتظر {n} دستور پس‌زمینه", "other": "منتظر {n} دستور پس‌زمینه"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« بازگشت"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "فرمان‌ها"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "بستن"}
@@ -1153,8 +1153,6 @@
 {"k": "ui.conn.reconnecting", "src": "6b160044", "v": "در حال وصل شدن…"}
 {"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "سشن ورود منقضی شد. صفحه را دوباره از {command} در Telegram باز کنید."}
 {"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "به سرور وصل نمی‌شود. تونل را چک کنید."}
-{"k": "ui.count.agents", "src": "263711d4", "v": {"one": "{n} ایجنت", "other": "{n} ایجنت"}}
-{"k": "ui.count.shells", "src": "9b747b65", "v": {"one": "{n} دستور پس‌زمینه", "other": "{n} دستور پس‌زمینه"}}
 {"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "{n} دقیقه روشن"}
 {"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "آخرین جواب"}
 {"k": "ui.detail.session_settings", "src": "ed40d944", "v": "تنظیمات سشن"}
@@ -1391,9 +1389,6 @@
 {"k": "ui.state.gone", "src": "f957097d", "v": "بسته‌شده"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "آماده"}
 {"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"one": "منتظر {n} ایجنت", "other": "منتظر {n} ایجنت"}}
-{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "منتظر {agents} و {shells}"}
-{"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "در حال جمع‌بندی"}
-{"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"one": "منتظر {n} دستور پس‌زمینه", "other": "منتظر {n} دستور پس‌زمینه"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "نامعلوم"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "منتظر شما"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "در پس‌زمینهٔ Claude Code"}
@@ -1403,9 +1398,6 @@
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "آماده"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "آماده، آخرین فعالیت {age}"}
 {"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"one": "منتظر {n} ایجنت", "other": "منتظر {n} ایجنت"}}
-{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "منتظر {agents} و {shells}"}
-{"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "در حال جمع‌بندی"}
-{"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"one": "منتظر {n} دستور پس‌زمینه", "other": "منتظر {n} دستور پس‌زمینه"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "هنوز گزارش نشده"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "در حال کار"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "در حال کار، {clock}"}

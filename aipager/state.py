@@ -432,7 +432,7 @@ class Status(Enum):
 # surface picks its own words from them, never the other way round.
 SHOWN_BUSY = "busy"
 SHOWN_NEEDS_YOU = "needs_you"
-SHOWN_TASKS = "tasks"  # idle, but its job still runs agents or shells
+SHOWN_TASKS = "tasks"  # idle, but its job's background agents still run
 SHOWN_IDLE = "idle"
 SHOWN_GONE = "gone"
 SHOWN_UNKNOWN = "unknown"
@@ -448,11 +448,10 @@ _SHOWN_BY_STATUS: dict[Status, str] = {
 
 class ShownState(NamedTuple):
     """What every surface shows for a session: a ``SHOWN_*`` id and, for
-    ``SHOWN_TASKS`` only, how many of the job's agents and shells still
-    run (both 0 in every other state)."""
+    ``SHOWN_TASKS`` only, how many of the job's background agents still
+    run (0 in every other state)."""
     state: str
     agents: int
-    shells: int
 
 
 # Minimum seconds between IDLE notifications for the same session.
@@ -1901,24 +1900,28 @@ class TrackedSession:
         return (self.status in (Status.BUSY, Status.INTERACTIVE)
                 or self.job_background_open())
 
-    def job_counts(self) -> tuple[int, int]:
-        """The job's running agents and shells: what an idle session whose
-        job is open waits for. The ONE count every surface names (roadmap
-        8.121); ``bg_agents``/``bg_shells`` are the session's whole running
-        set, which also holds work outside the job."""
-        return len(self.active_subagents), len(self.job_shell_ids())
+    def job_agent_count(self) -> int:
+        """The job's running background agents: what an idle session waits
+        for. The ONE count every surface names (roadmap 8.121);
+        ``bg_agents`` is the session's whole running set, which also holds
+        agents outside the job."""
+        return len(self.active_subagents)
 
     def shown_state(self) -> ShownState:
-        """The state the bar, /status, the card, the Mini App and the CLI
-        show (roadmap 8.121). An idle session whose job is still open
-        (``job_background_open()``) is ``SHOWN_TASKS`` with the job's
-        counts, which may both be 0 while the job waits for its
-        continuation (the grace window). Pure: no I/O, no text."""
+        """The state the bar, /status, the Mini App and the CLI show
+        (roadmap 8.121). An idle session whose job still runs background
+        agents is ``SHOWN_TASKS`` with their count. Agents only: a
+        background shell alone never makes it wait (a dev server would
+        keep it "waiting" through every later turn, live F3), and neither
+        does the job's grace window with nothing left running (nothing
+        records whether an agent or a shell armed it). Pure: no I/O, no
+        text, no clock."""
         state = _SHOWN_BY_STATUS.get(self.status, SHOWN_UNKNOWN)
-        if state == SHOWN_IDLE and self.job_background_open():
-            agents, shells = self.job_counts()
-            return ShownState(SHOWN_TASKS, agents, shells)
-        return ShownState(state, 0, 0)
+        if state == SHOWN_IDLE:
+            agents = self.job_agent_count()
+            if agents > 0:
+                return ShownState(SHOWN_TASKS, agents)
+        return ShownState(state, 0)
 
     def job_background_open(self) -> bool:
         """True while a background agent launched by this job is still
@@ -3917,9 +3920,8 @@ class SessionRegistry:
         self.refreshed_live: set[str] | None = None
         self._dirty: bool = False
         # Roadmap 8.121: name -> the shown state the last save wrote, so
-        # save_if_dirty() saves again when it changes (agents and shells
-        # starting or ending, the grace window running out) although no
-        # event marked the registry dirty.
+        # save_if_dirty() saves again when it changes (background agents
+        # starting or ending) although no event marked the registry dirty.
         self._shown_saved: dict[str, ShownState] = {}
         # Claude Code session id -> monotonic time aipager's own /kill
         # ended that process (bot.session_ops._kill_session_core). Its
@@ -4845,13 +4847,12 @@ class SessionRegistry:
                     d["waiting_kind"] = kind
                     d["waiting_summary"] = summary or ""
             # Roadmap 8.121: computed, only while the session waits for its
-            # job's agents or shells, for `aipager status`; every way out
+            # job's background agents, for `aipager status`; every way out
             # drops it from the next save. load() never reads it.
             shown = sess.shown_state()
             shown_saved[name] = shown
             if shown.state == SHOWN_TASKS:
-                d["job_wait"] = {"agents": shown.agents,
-                                 "shells": shown.shells}
+                d["job_wait"] = {"agents": shown.agents}
             # Roadmap 8.101: computed, not a field (see card_started_wall).
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
             if started_wall > 0:
@@ -4950,10 +4951,9 @@ class SessionRegistry:
         self._shown_saved = shown_saved
 
     def _shown_moved(self) -> bool:
-        """True when a session's shown state or its counts differ from
-        what the last save wrote (roadmap 8.121): agents and shells start
-        and end, and the grace window runs out, with no event marking the
-        registry dirty."""
+        """True when a session's shown state or its count differs from
+        what the last save wrote (roadmap 8.121): background agents start
+        and end with no event marking the registry dirty."""
         saved = self._shown_saved
         return any(sess.shown_state() != saved.get(name)
                    for name, sess in self._sessions.items())

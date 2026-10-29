@@ -352,16 +352,14 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
     """Returns (session_dicts, live_names).
 
     Each session_dict has: name, label, status, model, context_pct,
-    cost_usd, queue_depth, waiting_kind, waiting_summary, job_agents,
-    job_shells.
+    cost_usd, queue_depth, waiting_kind, waiting_summary, job_agents.
 
     ``status`` is ``IDLE``, ``BUSY``, ``WAITING`` (a permission or a
     question waits on a person; ``waiting_kind`` is ``permission`` or
     ``question`` and ``waiting_summary`` says which, when known, else both
     are None), ``TASKS`` (roadmap 8.121: Claude's own turn ended, but the
-    background agents or shells its job started still run; counted as
-    working, ``job_agents`` and ``job_shells`` say how many, both 0 while
-    it is finishing up and 0 on every other row) or ``GONE``. Checked in
+    background agents its job started still run; counted as working,
+    ``job_agents`` says how many, 0 on every other row) or ``GONE``. Checked in
     that order after GONE: WAITING, TASKS, BUSY (the waiting card keeps
     its ``busy_msg_id``), IDLE.
     """
@@ -385,8 +383,8 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             # before it did falls back to the card below.
             status = "WAITING"
         elif isinstance(sess.get("job_wait"), dict):
-            # Waiting for its job's background agents or shells (roadmap
-            # 8.121): the daemon saves the record only in that state.
+            # Waiting for its job's background agents (roadmap 8.121): the
+            # daemon saves the record only in that state.
             status = "TASKS"
         elif busy_msg_id:
             status = "BUSY"
@@ -409,7 +407,6 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             "waiting_kind": (sess.get("waiting_kind") or None) if waiting else None,
             "waiting_summary": (sess.get("waiting_summary") or None) if waiting else None,
             "job_agents": _count(job_wait, "agents"),
-            "job_shells": _count(job_wait, "shells"),
         })
         seen_names.add(name)
 
@@ -429,7 +426,6 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             "waiting_kind": None,
             "waiting_summary": None,
             "job_agents": 0,
-            "job_shells": 0,
         })
 
     # Stable order: live first (alphabetical by label), then gone
@@ -466,18 +462,15 @@ def waiting_text(row: dict) -> str:
 
 
 def tasks_text(row: dict) -> str:
-    """What a TASKS row waits for: ``waiting for 2 agents``, ``waiting for
-    1 shell``, ``waiting for 2 agents and 1 shell``, or ``finishing up``
-    while nothing is left running; ``""`` for any other row. The chat's
-    own words (``job_wait.phrase``) in English: the CLI is never
-    translated. Imported here, so a listing with no such row never loads
-    the bot."""
+    """What a TASKS row waits for: ``waiting for 2 agents``; ``""`` for
+    any other row. The chat's own words (``job_wait.phrase``) in English:
+    the CLI is never translated. Imported here, so a listing with no such
+    row never loads the bot."""
     if row.get("status") != "TASKS":
         return ""
     from aipager import i18n
     from aipager.bot import job_wait
-    return job_wait.phrase(i18n.get("en"), _count(row, "job_agents"),
-                           _count(row, "job_shells"), kind="text")
+    return job_wait.phrase(i18n.get("en"), _count(row, "job_agents"), kind="text")
 
 
 def render_sessions_rich(sessions: list[dict]) -> None:
