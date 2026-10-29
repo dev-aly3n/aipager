@@ -244,5 +244,84 @@ def test_listed_ids_are_remembered_newest_last_and_capped():
 def test_none_of_the_new_fields_is_saved():
     from aipager import state
     names = {"wait_from_idle", "kill_expected_until", "agents_killed_seen_wall",
-             "bg_task_ids_seen", "stop_gate"}
+             "bg_task_ids_seen", "stop_gate", "kill_wake_turn"}
     assert not names & set(state.SessionRegistry._PERSIST_FIELDS)
+
+
+
+# ---- a prompt nobody can name after Claude's turn ended (rev-iter6-002) ---------------------
+
+@pytest.mark.parametrize("owners,from_idle,after_stop", [
+    ((None,), True, False), (("a1", None), True, False), ((None,), False, True)],
+    ids=["unknown-from-idle", "agent+unknown-from-idle", "unknown-after-stop"])
+def test_an_unnamed_prompt_after_the_turn_never_takes_the_escapes(owners, from_idle,
+                                                                   after_stop):
+    sess = _interactive(*owners, from_idle=from_idle, after_stop=after_stop)
+    assert sess.unnamed_prompt_after_turn() is True
+    assert sess.no_escape() is True
+    # Routed to the chord's path, whose own checks refuse it with no key.
+    assert sess.stop_mode() == STOP_KILL_AGENTS
+    assert sess.own_turn_over() is False and sess.own_dialog_open() is True
+
+
+@pytest.mark.parametrize("owners,from_idle", [
+    ((None,), False), (("", None), True), (("",), True)],
+    ids=["unknown-in-a-running-turn", "own+unknown-from-idle", "own-from-idle"])
+def test_otherwise_an_unnamed_or_own_prompt_keeps_the_escapes(owners, from_idle):
+    sess = _interactive(*owners, from_idle=from_idle)
+    assert sess.unnamed_prompt_after_turn() is False
+    assert sess.no_escape() is False
+    assert sess.stop_mode() == STOP_KEYS
+
+
+def test_busy_never_counts_as_an_unnamed_wait():
+    sess = _sess(Status.BUSY)
+    sess.wait_from_idle = True
+    sess.pending_permission = _prompt(None)
+    assert sess.unnamed_prompt_after_turn() is False
+    assert sess.stop_mode() == STOP_KEYS
+
+
+# ---- a killed agent's row, and the newest start (rev-iter6-005, tester note) ----------------
+
+def test_a_killed_agents_row_is_marked_stopped_with_the_given_text():
+    from aipager import bg_shells
+    sess = _sess()
+    idx = sess.record_tool("\U0001f916 Explore", False)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": time.monotonic() - 70.0,
+                                   "history_idx": idx}
+    sess.end_killed_agents(time.monotonic(), row=lambda name, secs: f"{name}|{int(secs)}")
+    assert sess.tool_history[idx] == ("Explore|70", bg_shells.STOPPED)
+
+
+def test_a_done_end_leaves_the_row_alone():
+    sess = _sess()
+    idx = sess.record_tool("\U0001f916 Explore", False)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": time.monotonic(),
+                                   "history_idx": idx}
+    sess.end_killed_agents(time.monotonic(), outcome="done", row=lambda n, s: "x")
+    assert sess.tool_history[idx] == ("\U0001f916 Explore", False)
+
+
+def test_the_newest_agent_start_in_wall_time():
+    sess = _sess()
+    now_mono, now_wall = 1000.0, 50_000.0
+    assert sess.newest_agent_start_wall(now_mono, now_wall) == 0.0
+    sess.active_subagents["a1"] = {"started_at": 900.0}
+    sess.bg_agents["a2"] = {"started": 990.0}
+    assert sess.newest_agent_start_wall(now_mono, now_wall) == 49_990.0
+    assert sess.newest_agent_start_wall(now_mono, now_wall, ["a1"]) == 49_900.0
+
+
+def test_a_new_turn_from_idle_clears_the_wake_mark_and_a_prompt_does_not():
+    registry = SessionRegistry()
+    sess = _sess(Status.BUSY)
+    registry._sessions[sess.name] = sess
+    sess.kill_wake_turn = True
+    registry.transition(sess.name, Status.INTERACTIVE)
+    registry.transition(sess.name, Status.BUSY)
+    assert sess.kill_wake_turn is True  # the same turn, answered
+    sess.status = Status.IDLE
+    sess.last_idle_at = 0.0
+    registry.transition(sess.name, Status.BUSY)
+    assert sess.kill_wake_turn is False

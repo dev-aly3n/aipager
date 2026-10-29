@@ -151,12 +151,60 @@ def test_a_waiting_session_reads_tasks_with_its_count(monkeypatch):
     assert status.tasks_text(row) == "waiting for 2 agents"
 
 
-def test_a_job_with_only_shells_reads_as_its_card(monkeypatch):
+@pytest.mark.parametrize("case", ["shell", "grace"])
+def test_a_job_with_only_a_shell_or_the_grace_window_reads_idle(monkeypatch, case):
+    """The CLI agrees with the chat and the Mini App (they show idle): the
+    job's card still lives (``busy_msg_id``), but the saved shown state
+    decides, not the card."""
     sess = _sess("claude-w", busy_msg_id=7)
-    _shell(sess, "s1")
+    if case == "shell":
+        _shell(sess, "s1")
+    else:
+        sess.job_grace_until = time.monotonic() + 60
+    assert sess.job_background_open() and sess.shown_state().state == "idle"
     _registry(sess).save()
     row = _rows(monkeypatch, live={"claude-w"})["claude-w"]
-    assert (row["status"], row["job_agents"]) == ("BUSY", 0)
+    assert (row["status"], row["job_agents"]) == ("IDLE", 0)
+
+
+def test_the_save_carries_every_live_sessions_shown_state():
+    busy = _sess("claude-b", Status.BUSY, busy_msg_id=8)
+    idle = _sess("claude-i", busy_msg_id=9)
+    _shell(idle, "s1")
+    waiting = _sess("claude-w")
+    _agent(waiting, "a1")
+    asking = _sess("claude-a", Status.INTERACTIVE)
+    _registry(busy, idle, waiting, asking).save()
+    saved = _file()
+    assert {name: saved[name]["shown"] for name in saved} == {
+        "claude-b": "busy", "claude-i": "idle", "claude-w": "tasks",
+        "claude-a": "needs_you"}
+
+
+def test_save_if_dirty_follows_the_shown_state():
+    sess = _sess("claude-w", busy_msg_id=7)
+    registry = _registry(sess)
+    registry.save()
+    assert _file()["claude-w"]["shown"] == "idle"
+    _agent(sess, "a1")
+    registry.save_if_dirty()
+    assert _file()["claude-w"]["shown"] == "tasks"
+
+
+@pytest.mark.parametrize("shown, expected", [
+    ("busy", "BUSY"), ("idle", "IDLE"), ("tasks", "TASKS")])
+def test_the_saved_shown_state_decides_over_the_card(monkeypatch, shown, expected):
+    _write_state({"claude-x": {"label": "x", "busy_msg_id": 9, "status": "IDLE",
+                               "pending_queue": [], "shown": shown}})
+    row = _rows(monkeypatch, live={"claude-x"})["claude-x"]
+    assert row["status"] == expected
+
+
+def test_a_busy_session_with_no_card_still_reads_busy(monkeypatch):
+    sess = _sess("claude-b", Status.BUSY)
+    _registry(sess).save()
+    row = _rows(monkeypatch, live={"claude-b"})["claude-b"]
+    assert row["status"] == "BUSY"
 
 
 def test_a_file_without_the_record_reads_as_before(monkeypatch):

@@ -112,3 +112,69 @@ def test_an_unflushed_line_leaves_it_to_the_stop(rig, tmp_path):
     assert sess.shown_state().state == "idle"
     assert sess.bg_agents_recent[BG]["ended_by"] == "killed"
     assert "<b>api</b> · Done" in rig.frames[-1]
+
+
+# ---- a killed agent's card row reads stopped, never done -----------------------------------
+
+def _agent_rows(frame: str) -> list[str]:
+    return [line for line in frame.split("\n") if "🤖" in line]
+
+
+def test_the_jobs_card_says_the_killed_agents_were_stopped(rig, tmp_path):
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    _waiting(rig, transcript)
+    _line(transcript, {"type": "system", "subtype": "agents_killed",
+                       "timestamp": _stamp(time.time())})
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Stopped, as asked.",
+             background_tasks=[], transcript_path=str(transcript))
+    rows = _agent_rows(rig.frames[-1])
+    assert len(rows) == 2, rig.frames[-1]
+    assert all("⏹" in r and "· stopped (" in r for r in rows), rows
+    assert not any("✅" in r for r in rows), rows
+
+
+def test_an_unflushed_line_still_shows_them_stopped(rig, tmp_path):
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    _waiting(rig, transcript)
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    _line(transcript, {"type": "system", "subtype": "agents_killed",
+                       "timestamp": _stamp(time.time())})
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Stopped, as asked.",
+             background_tasks=[], transcript_path=str(transcript))
+    rows = _agent_rows(rig.frames[-1])
+    assert rows and all("· stopped (" in r and "✅" not in r for r in rows), rig.frames[-1]
+
+
+def test_control_an_agent_that_finished_still_reads_done(rig, tmp_path):
+    """A lost SubagentStop (no kill line): the Stop that no longer lists
+    the agent ends it as done, and its row keeps the tick."""
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    _waiting(rig, transcript)
+    rig.hook("UserPromptSubmit", prompt="a person typed this", transcript_path=str(transcript))
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="All done.",
+             background_tasks=[], transcript_path=str(transcript))
+    rows = _agent_rows(rig.frames[-1])
+    assert rows and all("✅" in r and "stopped" not in r for r in rows), rig.frames[-1]
+
+
+def test_after_aipagers_stop_the_wakes_card_lists_no_stopped_agent(rig, tmp_path):
+    """The turn Claude Code starts after aipager's Stop opens a card of its
+    own: the stopped job's agents are not on it (and never as done)."""
+    from aipager.bot import animation
+    from tests.two_prompts_rig import ALY, CARD
+
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    sess = _waiting(rig, transcript)
+    rig.tap(CARD, "stop", uid=ALY)
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    assert sess.status is Status.BUSY
+    assert not any("🤖" in str(summary) for summary, _done in sess.tool_history)
+    assert sess.finished_subagents == [] and sess.active_subagents == {}
+    drawn = "\n".join("\n".join(rows) for _kind, rows, _tools
+                      in animation._build_sections(sess, final=True))
+    assert "🤖" not in drawn and "✅" not in drawn

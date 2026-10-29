@@ -157,7 +157,7 @@ def test_the_session_is_idle_underneath(world, vloop):
 
 def test_last_agent_stopping_reads_idle_and_the_card_finishing_up(world, vloop):
     """design-amend-5 A: the grace window shows idle (live about a
-    second); the CLI reads the card still up, as on main."""
+    second); the CLI shows idle too (the saved shown state)."""
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world, agents=("a1",), shell=False)
@@ -170,7 +170,7 @@ def test_last_agent_stopping_reads_idle_and_the_card_finishing_up(world, vloop):
 
     snap = _run(vloop, scenario())
     assert (snap["shown"], snap["bar"], snap["miniapp"], snap["cli"]) == (
-        ("idle", 0), f"💤 {LABEL} (idle)", ("idle", 0), ("BUSY", 0))
+        ("idle", 0), f"💤 {LABEL} (idle)", ("idle", 0), ("IDLE", 0))
     assert "job_wait" not in kit.saved_sessions()[world.sess.name]
 
 
@@ -285,8 +285,8 @@ def test_a_new_prompt_while_waiting_shows_working(world, vloop):
 def test_a_shell_only_job_reads_as_on_main(world, vloop):
     """design-amend-5 A (live F3): a job shell alone never makes the
     session wait. The bar notes the running shell, the Mini App rests, the
-    CLI reads the card still up (BUSY, as on main), no record is saved,
-    and the card keeps main's words."""
+    CLI agrees with them (IDLE), no record is saved, and the card keeps
+    main's words."""
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world, agents=(), shell=True)
@@ -299,7 +299,7 @@ def test_a_shell_only_job_reads_as_on_main(world, vloop):
     card = snap.pop("card")
     assert snap == {"shown": ("idle", 0),
                     "bar": f"💤 {LABEL} (idle, 1 shell running)",
-                    "miniapp": ("idle", 0), "cli": ("BUSY", 0)}
+                    "miniapp": ("idle", 0), "cli": ("IDLE", 0)}
     assert "job_wait" not in kit.saved_sessions()[world.sess.name]
     assert re.fullmatch(rf"🔄 \*\*{LABEL}\*\* · 1 shell still working · \d+:\d\d",
                         card), card

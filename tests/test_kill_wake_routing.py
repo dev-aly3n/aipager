@@ -30,7 +30,7 @@ import pytest
 from aipager.dtach import hook_receiver as hr
 from aipager.dtach import inject
 from aipager.state import Status
-from tests.two_prompts_rig import BG, OTHER, S, Rig
+from tests.two_prompts_rig import BG, FG, OTHER, S, Rig
 
 WAKE = 'Background agent "Review" was stopped by the user.'
 
@@ -310,3 +310,141 @@ def test_the_monitor_counts_a_kill_no_wake_confirmed(rig, monkeypatch):
     rig.run_async(monitor._scan())
     assert counted.count("kill_agents_unconfirmed") == 1
     assert sess.kill_expected_until == 0.0
+
+
+# ---- the wake is not a person's terminal turn for the daemon's tool denies (rev-iter6-003) ---
+
+def _terminal_snapshot(sess):
+    """What the hook writes for a markerless prompt: a "terminal" turn."""
+    from aipager import policy_snapshot
+    path = policy_snapshot.snapshot_path(sess.name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    policy_snapshot.write_merged_snapshot(sess.name, {"turn_origin": "terminal"})
+
+
+def test_s1_wake_is_not_a_pure_terminal_turn(rig):
+    sess = _waiting(rig)
+    rig.run_async(rig.bot._stop_session_core(sess))
+    _terminal_snapshot(sess)
+    rig.hook("UserPromptSubmit", prompt=WAKE)
+    assert sess.status is Status.BUSY and sess.turn_sender_id is None
+    assert sess.kill_wake_turn is True
+    assert rig.bot._turn_is_pure_terminal(sess) is False
+
+
+def test_s2_wake_is_not_a_pure_terminal_turn(rig, tmp_path):
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    sess = _waiting(rig, transcript=str(transcript))
+    sess.turn_sender_id = None  # not known (a restart)
+    _killed_line(transcript, time.time())
+    _terminal_snapshot(sess)
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    assert sess.job_continuation_active is True
+    assert rig.bot._turn_is_pure_terminal(sess) is False
+
+
+def test_control_a_typed_terminal_turn_is_pure_terminal(rig):
+    sess = _waiting(rig)
+    rig.run_async(rig.bot._stop_session_core(sess))
+    rig.hook("UserPromptSubmit", prompt=WAKE)
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Noted.")
+    assert sess.kill_wake_turn is False  # no turn runs: the mark goes
+    _terminal_snapshot(sess)
+    rig.hook("UserPromptSubmit", prompt="and now the README please")
+    assert sess.status is Status.BUSY
+    assert rig.bot._turn_is_pure_terminal(sess) is True
+
+
+# ---- an agents_killed line counts once, and only for agents it can be about (rev-iter6-005) --
+
+def test_s1_remembers_the_line_it_handled(rig, tmp_path):
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    sess = _waiting(rig, transcript=str(transcript))
+    rig.run_async(rig.bot._stop_session_core(sess))
+    _killed_line(transcript, time.time())
+    from aipager.transcript import agents_killed_since
+    line = agents_killed_since(str(transcript), 0.0)
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    assert sess.agents_killed_seen_wall == line
+
+
+def test_s3_remembers_the_line_it_handled(rig, tmp_path):
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    sess = _waiting(rig, BG, tasks=_tasks(BG), transcript=str(transcript))
+    rig.hook("UserPromptSubmit", prompt="a person typed this",
+             transcript_path=str(transcript))
+    _killed_line(transcript, time.time())
+    from aipager.transcript import agents_killed_since
+    line = agents_killed_since(str(transcript), 0.0)
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Done.",
+             background_tasks=[], transcript_path=str(transcript))
+    assert sess.active_subagents == {}
+    assert sess.agents_killed_seen_wall == line
+
+
+def test_an_older_handled_line_does_not_clear_agents_started_later(rig, tmp_path):
+    """A kill the terminal pressed earlier in the same job, handled at an
+    interim Stop (S3; an agent Claude Code never listed keeps the job
+    open, so no Stop closes a turn), then the job's next agent: the next
+    markerless prompt is a person's turn, and both agents keep running."""
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    sess = _waiting(rig, BG, OTHER, tasks=_tasks(BG), transcript=str(transcript))
+    rig.hook("UserPromptSubmit", prompt="a person typed this",
+             transcript_path=str(transcript))
+    _killed_line(transcript, time.time())
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Done.",
+             background_tasks=[], transcript_path=str(transcript))
+    assert list(sess.active_subagents) == [OTHER]
+    closed = sess.files_turn_closed_wall
+    rig.launch(FG, agent_type="ship-third")
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Started.",
+             background_tasks=_tasks(FG), transcript_path=str(transcript))
+    assert sess.files_turn_closed_wall == closed  # the job is still open
+    rig.hook("UserPromptSubmit", prompt="how is it going?",
+             transcript_path=str(transcript))
+    assert sorted(sess.active_subagents) == sorted([OTHER, FG])
+    assert sess.last_prompt_origin == "terminal"
+
+
+def test_a_line_older_than_the_agents_is_not_their_kill(rig, tmp_path):
+    """Nothing handled the line (a restart forgets which were), and no
+    Stop closed a turn since: still not a kill of agents started after it."""
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    _killed_line(transcript, time.time() - 5)
+    sess = _waiting(rig, transcript=str(transcript))
+    sess.files_turn_closed_wall = 0.0
+    sess.agents_killed_seen_wall = 0.0
+    rig.hook("UserPromptSubmit", prompt="how is it going?",
+             transcript_path=str(transcript))
+    assert list(sess.active_subagents) == [BG]
+    assert sess.last_prompt_origin == "terminal"
+
+
+def test_a_kill_pressed_while_claudes_turn_ran_still_counts(rig, tmp_path):
+    """Probe G4: the kill is pressed while Claude's own turn is open, so
+    its line is written before that turn's Stop; the wake comes after."""
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text("")
+    rig.launch(BG)
+    _killed_line(transcript, time.time())
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Started.",
+             transcript_path=str(transcript))
+    sess = rig.sess
+    assert sess.status is Status.IDLE and list(sess.active_subagents) == [BG]
+    rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
+    assert sess.active_subagents == {} and sess.bg_agents == {}
+    assert sess.last_prompt_origin != "terminal"
+
+
+# ---- the parent's Stop only ---------------------------------------------------------------
+
+def test_s3_ignores_an_agents_own_stop(rig):
+    sess = _waiting(rig, BG, OTHER, tasks=_tasks(BG, OTHER))
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message="Mine.",
+             background_tasks=[], agent_id=OTHER)
+    assert sorted(sess.active_subagents) == sorted([BG, OTHER])

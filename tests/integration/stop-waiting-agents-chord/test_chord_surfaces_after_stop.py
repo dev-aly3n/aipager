@@ -95,3 +95,35 @@ def test_control_the_same_tap_without_the_stop_answers(rig):
     rig.decisions.clear()
     rig.tap(msg["msg_id"], "allow", uid=ALY)
     assert rig.decisions or rig.writes
+
+
+def test_an_answers_agents_block_settles_to_stopped(rig, monkeypatch):
+    """The answer that went out while the agents worked carries their
+    block; after the Stop it settles to "⏹ 2 agents stopped", never
+    "done" (design-6 section 6)."""
+    from aipager.bot import notify
+    from aipager.state import BG_AGENTS_SETTLE_SECONDS
+
+    sess = _waiting_with_a_shell(rig)
+    sess.bg_shells.clear()  # the agents only
+    snap = rig.bot._agents_snapshot(sess)
+    assert snap is not None and "2 agents working" in snap["line"]
+    rig.bot._remember_agents_line(sess, GROUP, 555,
+                                  notify._with_agents_block("Started them.", snap["line"]),
+                                  snap, False)
+    edits: list[str] = []
+
+    async def _rich(chat_id, msg_id, text, **_kw):
+        if msg_id == 555:
+            edits.append(text)
+        return {"ok": True}
+
+    monkeypatch.setattr(notify, "edit_message_text_rich", _rich)
+    rig.tap(CARD, "stop", uid=ALY)
+    assert rig.writes.bytes() == [CHORD, CHORD]
+    later = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 3600.0
+    rig.run_async(rig.bot._tick_agents_lines(sess, later))
+    assert edits, sess.agents_lines
+    block = edits[-1].rsplit("\n", 1)[-1]
+    assert block.startswith("<footer>⏹ 2 agents stopped ("), edits[-1]
+    assert "done" not in edits[-1]

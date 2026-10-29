@@ -21,6 +21,8 @@ def _rows():
     return [
         settled_agent_row("Explore", 3, 65),
         settled_agent_row("general-purpose", 1, 0.4),
+        card_rows.stopped_agent_row("Explore", 70),
+        card_rows.stopped_agent_row("a · b", 3725),
         bg_shells.settled_row("npm test", "completed", 90)[0],
         bg_shells.settled_row("make all", "failed", 5, exit_code=2)[0],
         bg_shells.settled_row("make lint", "failed", 65)[0],
@@ -112,3 +114,14 @@ def test_the_tally_ignores_the_language(qps, mk_bot):
     tally = [p for p in english if "×" in p]
     assert tally and tally == [p for p in marked if "×" in p]
     assert "Bash ×8" in tally and not any(p.startswith("🤖") for p in tally)
+
+
+def test_a_stopped_agents_row_is_its_own_shape():
+    """Roadmap 8.121 F5: a killed agent's stored row is told apart from a
+    finished one's (the turn's end keeps its ⏹ mark) and reads stopped."""
+    row = card_rows.stopped_agent_row("Explore", 70)
+    assert row == "🤖 Explore · stopped (1:10)"
+    assert card_rows.stopped_agent(row) is True
+    assert card_rows.stopped_agent(settled_agent_row("Explore", 3, 70)) is False
+    assert card_rows.stopped_agent("🤖 Explore") is False
+    assert card_rows.render_md(i18n.get("de"), row) == "🤖 `Explore` · gestoppt (1:10)"

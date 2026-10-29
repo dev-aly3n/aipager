@@ -71,6 +71,7 @@ def test_stop_session_discards_pending_queue(mk_bot, run_async, monkeypatch):
 def test_stop_session_via_query_edits_message(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_msg_id = 42
     bot.registry._sessions["claude-jim"] = sess
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
@@ -79,11 +80,38 @@ def test_stop_session_via_query_edits_message(mk_bot, run_async, monkeypatch):
     bot._stop_animation = MagicMock()
     bot._edit_busy_raw = AsyncMock()
     query = MagicMock()
+    query.message.message_id = 42  # the busy card
     query.answer = AsyncMock()
     query.edit_message_text = AsyncMock()
+    query.edit_message_reply_markup = AsyncMock()
     run_async(bot._stop_session(sess, query=query))
     query.answer.assert_awaited_once()
     query.edit_message_text.assert_awaited_once()
+    query.edit_message_reply_markup.assert_not_awaited()
+
+
+def test_stop_on_a_prompt_message_keeps_its_text(mk_bot, run_async, monkeypatch):
+    """Stop tapped on a message that is not the busy card (a prompt's own
+    message): its text stays, only its buttons go (rev-iter6-004)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_msg_id = 42
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.send_keys",
+                        AsyncMock(return_value=True))
+    async def _no_sleep(_): pass
+    monkeypatch.setattr("aipager.bot.session_ops._sleep", _no_sleep)
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_raw = AsyncMock()
+    query = MagicMock()
+    query.message.message_id = 43
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    query.edit_message_reply_markup = AsyncMock()
+    run_async(bot._stop_session(sess, query=query))
+    query.answer.assert_awaited_once()
+    query.edit_message_text.assert_not_awaited()
+    query.edit_message_reply_markup.assert_awaited_once_with(reply_markup=None)
 
 
 def test_stop_session_via_update_reacts_with_emoji(mk_bot, mk_update, run_async, monkeypatch):

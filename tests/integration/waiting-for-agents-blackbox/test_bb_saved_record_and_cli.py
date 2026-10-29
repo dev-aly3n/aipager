@@ -158,13 +158,14 @@ def test_cli_row_carries_the_agent_count(monkeypatch):
     assert "job_shells" not in row
 
 
-def test_cli_row_for_a_job_with_only_a_shell_reads_as_on_main(monkeypatch):
-    """Its card is still up (``busy_msg_id``), so BUSY, as before 8.121."""
+def test_cli_row_for_a_job_with_only_a_shell_reads_idle(monkeypatch):
+    """Its card is still up (``busy_msg_id``), but the CLI shows what the
+    chat and the Mini App show (the saved shown state): IDLE."""
     sess = kit.make_session(job_shells=1)
     sess.busy_msg_id = 42
     _registry(sess).save()
     row = kit.cli_rows(monkeypatch, {NAME})[NAME]
-    assert (row["status"], row["job_agents"]) == ("BUSY", 0)
+    assert (row["status"], row["job_agents"]) == ("IDLE", 0)
 
 
 def test_cli_row_tasks_wins_over_a_kept_busy_card(monkeypatch):

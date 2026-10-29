@@ -115,7 +115,8 @@ def test_a_background_agent_that_outlives_the_turn(bot, run_async, monkeypatch,
     assert tuple(finishing["shown"]) == ("idle", 0)
     assert finishing["bar"] == f"💤 {SESSION} (idle)"
     assert finishing["api"] == ("idle", 0)
-    assert finishing["cli"] == ("BUSY", 0)  # its card is still up, as on main
+    # Its card is still up, but the CLI shows what every surface shows.
+    assert finishing["cli"] == ("IDLE", 0)
     assert finishing["cli_text"] == ""
     assert finishing["card"].startswith(f"🔄 **{SESSION}** · finishing up · ")
 

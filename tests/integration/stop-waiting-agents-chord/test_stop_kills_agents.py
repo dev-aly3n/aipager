@@ -135,12 +135,36 @@ ENTRY = {"card": _card, "status": _status, "picker": _picker, "command": _comman
          "label": _by_label, "miniapp": _miniapp}
 
 
+def _agent_prompt_message(rig) -> dict:
+    """Both agents ask; the second one's prompt is a message of its own
+    (the first sits on the card). Returns that message."""
+    rig.agent_bash(BG, "rm -rf build")
+    rig.agent_bash(OTHER, "rm -rf dist")
+    assert rig.sess.status is Status.INTERACTIVE and rig.sess.wait_from_idle
+    msgs = rig.prompt_messages()
+    assert msgs, rig.sent
+    return msgs[-1]
+
+
+def _on_prompt(rig) -> list[str]:
+    """The ⏹ Stop on an agent's own prompt message (rev-iter6-004)."""
+    msg = _agent_prompt_message(rig)
+    rig.prompt_query = rig.tap(msg["msg_id"], "stop", uid=ALY)
+    rig.prompt_msg = msg
+    return answers(rig.prompt_query)
+
+
+#: Every entry point, the Stop on an agent's prompt message included (that
+#: one needs two agents asking first).
+CHORD_ENTRY = {**ENTRY, "prompt": _on_prompt}
+
+
 # ---- the chord ----------------------------------------------------------------------
 
-@pytest.mark.parametrize("entry", list(ENTRY))
+@pytest.mark.parametrize("entry", list(CHORD_ENTRY))
 def test_idle_with_job_agents_gets_the_chord_twice_and_never_escape(rig, entry):
     sess = waiting(rig, BG, OTHER)
-    shown = ENTRY[entry](rig)
+    shown = CHORD_ENTRY[entry](rig)
     assert rig.writes.bytes() == [CHORD, CHORD]
     assert rig.writes.gaps() == [inject.KILL_AGENTS_PRESS_GAP]
     assert all(ESC not in w for w in rig.writes.bytes())
@@ -327,7 +351,7 @@ def test_a_failed_press_refuses_and_leaves_the_agents(rig, monkeypatch):
 def test_a_turn_that_started_during_the_press_is_interrupted_instead(rig, monkeypatch):
     sess = waiting(rig)
 
-    async def _turn_started(name, may_press):
+    async def _turn_started(name, may_press, before_second_press=None):
         sess.status = Status.BUSY
         return inject.DIALOG_BEFORE_TYPING
 
@@ -386,4 +410,170 @@ def test_the_guard_types_no_escape_into_an_agents_only_wait(rig):
 def test_the_guard_still_types_for_a_running_turn(rig):
     rig.launch(BG)
     rig.run_async(rig.bot._send_stop_keys(rig.sess, [], 0))
+    assert rig.writes.bytes() == [ESC, ESC]
+
+
+# ---- Stop on an agent's own prompt message (rev-iter6-004) ---------------------------------
+
+def test_stop_on_an_agents_prompt_keeps_what_it_asked_and_the_stopped_line(rig):
+    waiting(rig, BG, OTHER)
+    _on_prompt(rig)
+    msg, query = rig.prompt_msg, rig.prompt_query
+    assert rig.writes.bytes() == [CHORD, CHORD]
+    # The tapped message is not turned into a copy of the card.
+    query.edit_message_text.assert_not_awaited()
+    edits = [c.kwargs for c in rig.bot._app.bot.edit_message_text.await_args_list
+             if c.kwargs.get("message_id") == msg["msg_id"]]
+    assert edits
+    assert edits[-1]["text"].startswith(msg["text"].split("\n")[0])
+    assert edits[-1]["text"].endswith(
+        "\n\n⏹ This prompt closed because its background agent was stopped.")
+    assert edits[-1]["reply_markup"] is None
+    # The card itself says how the Stop went.
+    assert rig.card_edits[-1][1] == "⚠️ <b>api</b> · @alice stopped 2 background agents"
+
+
+def test_stop_on_the_card_still_edits_the_card(rig):
+    """Control: the tap on the busy card edits that message, the card."""
+    waiting(rig, BG, OTHER)
+    query = rig.tap(CARD, "stop", uid=ALY)
+    query.edit_message_text.assert_awaited()
+    assert query.edit_message_text.await_args.args[0] == (
+        "⚠️ <b>api</b> · @alice stopped 2 background agents")
+
+
+def test_stop_on_claudes_own_prompt_message_keeps_its_text(rig):
+    """A running turn's prompt message (Escape path): its buttons go, its
+    text stays; the card is not copied onto it."""
+    rig.launch(BG)
+    rig.agent_bash(BG, "make")
+    rig.agent_bash(OTHER, "make all")
+    msgs = rig.prompt_messages()
+    assert msgs
+    query = rig.tap(msgs[-1]["msg_id"], "stop", uid=ALY)
+    assert rig.writes.bytes() == [ESC, ESC]
+    query.edit_message_text.assert_not_awaited()
+    query.edit_message_reply_markup.assert_awaited_with(reply_markup=None)
+
+
+# ---- a prompt nobody can name, after Claude's turn ended: no Escape (rev-iter6-002) --------
+
+def _unnamed(sess) -> None:
+    """The open prompts' tool is not known any more: their owner is not
+    known (``_perm_owner`` None)."""
+    for perm in sess.open_prompts():
+        perm["tool_info"] = None
+
+
+@pytest.mark.parametrize("entry", ["card", "command", "miniapp"])
+def test_an_unnamed_prompt_in_a_wait_from_idle_gets_no_key(rig, entry):
+    sess = waiting(rig)
+    rig.agent_bash(BG, "rm -rf build")
+    _unnamed(sess)
+    assert sess.wait_from_idle and not sess.own_turn_over()
+    shown = ENTRY[entry](rig)
+    assert rig.writes == []
+    assert sess.status is Status.INTERACTIVE and sess.open_prompts()
+    assert list(sess.active_subagents) == [BG]
+    text = "api has a dialog open in the terminal. Answer it there, then try Stop again."
+    assert any(text in s for s in shown), shown
+    if entry == "miniapp":
+        assert rig.miniapp[0] == 409 and rig.miniapp[1]["error"] == "dialog_open"
+
+
+def test_an_unnamed_prompt_carried_over_a_stop_gets_no_key(rig):
+    sess = waiting(rig)
+    rig.agent_bash(BG, "rm -rf build")
+    _unnamed(sess)
+    sess.wait_from_idle, sess.resumed_after_stop = False, True
+    _card(rig)
+    assert rig.writes == []
+    assert sess.open_prompts()
+
+
+def test_the_guard_types_no_escape_for_an_unnamed_prompt_after_the_turn(rig):
+    sess = waiting(rig)
+    rig.agent_bash(BG, "rm -rf build")
+    _unnamed(sess)
+    rig.run_async(rig.bot._send_stop_keys(sess, [], 0))
+    assert rig.writes == []
+
+
+def test_control_an_unnamed_prompt_in_a_running_turn_keeps_two_escapes(rig):
+    rig.launch(BG)
+    rig.agent_bash(BG, "make")
+    _unnamed(rig.sess)
+    assert rig.sess.status is Status.INTERACTIVE and not rig.sess.wait_from_idle
+    _card(rig)
+    assert rig.writes.bytes() == [ESC, ESC]
+
+
+def test_control_claudes_own_prompt_in_a_wait_from_idle_keeps_two_escapes(rig):
+    """Claude's own prompt open beside an agent's: its turn may run, so
+    the Escapes stay (the owner is known, and it is Claude)."""
+    sess = waiting(rig)
+    rig.agent_bash(BG, "rm -rf build")
+    rig.question()
+    assert sess.status is Status.INTERACTIVE
+    _card(rig)
+    assert rig.writes.bytes() == [ESC, ESC]
+
+
+# ---- the fallback after a press that did not go out: Escapes only for BUSY ------------------
+
+def test_a_press_that_failed_on_a_session_not_working_types_no_escape(rig, monkeypatch):
+    sess = waiting(rig)
+
+    async def _waits_on_a_person(name, may_press, before_second_press=None):
+        # A wait no Stop path may type Escape into (no turn of Claude's
+        # running), and the chord did not go out.
+        sess.status = Status.INTERACTIVE
+        return inject.DIALOG_BEFORE_TYPING
+
+    monkeypatch.setattr(inject, "press_kill_agents", _waits_on_a_person)
+    outcome = rig.run_async(rig.bot._stop_session_core(sess))
+    assert not outcome.ok and outcome.reason == "dialog_open"
+    assert rig.writes == []
+
+
+def test_a_session_that_ended_during_the_press_is_not_working(rig, monkeypatch):
+    sess = waiting(rig)
+
+    async def _ended(name, may_press, before_second_press=None):
+        sess.status = Status.GONE
+        return inject.DIALOG_BEFORE_TYPING
+
+    monkeypatch.setattr(inject, "press_kill_agents", _ended)
+    replies = _command(rig)
+    assert rig.writes == []
+    assert replies == ["<b>api</b> is not working."]
+
+
+def test_a_session_parked_during_the_press_could_not_be_stopped(rig, monkeypatch):
+    sess = waiting(rig)
+
+    async def _parked(name, may_press, before_second_press=None):
+        sess.parked_job = {"id": "bg-1"}
+        return inject.DIALOG_BEFORE_TYPING
+
+    monkeypatch.setattr(inject, "press_kill_agents", _parked)
+    replies = _command(rig)
+    assert rig.writes == []
+    assert replies == ["The background agents of api could not be stopped. Try Stop again."]
+
+
+def test_the_keyless_end_rechecks_after_reading_the_queue(rig, monkeypatch):
+    """A turn that starts while the job's end reads Claude's queue is
+    interrupted as a working session, never torn down to idle unseen."""
+    sess = waiting(rig)
+    sess.active_subagents.clear()
+    sess.bg_agents.clear()
+    sess.job_grace_until = time.monotonic() + 30.0
+
+    async def _turn_starts(_sess, **_kw):
+        sess.status = Status.BUSY
+
+    monkeypatch.setattr(rig.bot, "_settle_queued_targets", _turn_starts)
+    outcome = rig.run_async(rig.bot._stop_session_core(sess))
+    assert outcome.ok and outcome.mode == "keys"
     assert rig.writes.bytes() == [ESC, ESC]
