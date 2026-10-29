@@ -81,8 +81,11 @@ _PERM_OPTIONAL = frozenset({"outside_reads_question", "rm_clock"})
 #: The optional ``rm_clock`` of Claude Code's risky-removal prompt
 #: (roadmap 8.128, ``aipager.rm_countdown``): when Claude Code refuses it
 #: by itself (epoch seconds) and the sha256 hex of its command. Exactly
-#: these two keys; anything else invalidates the record.
+#: these two keys, plus ``disproven`` (only True) once the transcript
+#: showed Claude Code put no countdown on it (roadmap 8.152); anything
+#: else invalidates the record.
 _RM_CLOCK_KEYS = frozenset({"refuse_at", "command_sha"})
+_RM_CLOCK_DISPROVEN = "disproven"
 _QUESTION_KEYS = frozenset({"question", "options"})
 _OPTION_KEYS = frozenset({"label", "description"})
 
@@ -296,8 +299,8 @@ def snapshot(sess, now_mono: float, now_wall: float) -> dict | None:
         if _valid_rm_clock(clock):
             # Kept across a restart: its clock line and refused close
             # (roadmap 8.128).
-            record["perm"]["rm_clock"] = {"refuse_at": clock["refuse_at"],
-                                          "command_sha": clock["command_sha"]}
+            # A disproven one stays so: no line, no tap block (8.152).
+            record["perm"]["rm_clock"] = _rm_clock_copy(clock)
     # The record must read back: what would not pass the loader is not
     # written (a suggestion that is not JSON, say).
     return validate(record, busy_msg_id=sess.busy_msg_id, now_wall=now_wall)
@@ -347,10 +350,26 @@ def _valid_json(x, depth: int = 0) -> bool:
 
 def _valid_rm_clock(c) -> bool:
     """A well-formed ``rm_clock``: exactly its two keys, a finite positive
-    ``refuse_at`` and a sha256 hex ``command_sha``."""
-    return (isinstance(c, dict) and set(c) == _RM_CLOCK_KEYS
-            and _is_number(c["refuse_at"]) and c["refuse_at"] > 0
+    ``refuse_at`` and a sha256 hex ``command_sha``, and ``disproven``
+    only as True."""
+    if not isinstance(c, dict):
+        return False
+    keys = set(c)
+    if keys == _RM_CLOCK_KEYS | {_RM_CLOCK_DISPROVEN}:
+        if c[_RM_CLOCK_DISPROVEN] is not True:
+            return False
+    elif keys != _RM_CLOCK_KEYS:
+        return False
+    return (_is_number(c["refuse_at"]) and c["refuse_at"] > 0
             and _is_digest(c["command_sha"]))
+
+
+def _rm_clock_copy(c: dict) -> dict:
+    """A copy of valid ``rm_clock`` *c* with only its known keys."""
+    out = {"refuse_at": c["refuse_at"], "command_sha": c["command_sha"]}
+    if c.get(_RM_CLOCK_DISPROVEN) is True:
+        out[_RM_CLOCK_DISPROVEN] = True
+    return out
 
 
 def _valid_perm(p) -> dict | None:
@@ -399,8 +418,7 @@ def _valid_perm(p) -> dict | None:
     if p.get("outside_reads_question") is True:
         out["outside_reads_question"] = True
     if "rm_clock" in p:
-        out["rm_clock"] = {"refuse_at": p["rm_clock"]["refuse_at"],
-                           "command_sha": p["rm_clock"]["command_sha"]}
+        out["rm_clock"] = _rm_clock_copy(p["rm_clock"])
     return out
 
 

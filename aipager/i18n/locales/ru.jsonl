@@ -217,6 +217,7 @@
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Разрешение отклонено"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} отклонил(а)"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Отклонено в терминале"}
+{"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Завершена в терминале"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "почти готово"}
 {"k": "card.fold", "src": "2061ab43", "v": {"few": "▸ использовано {n} инструмента", "many": "▸ использовано {n} инструментов", "one": "▸ использован {n} инструмент", "other": "▸ использовано {n} инструмента"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} агента)", "many": "({n} агентов)", "one": "({n} агент)", "other": "({n} агента)"}}
@@ -244,6 +245,7 @@
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Остановлена"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} остановил(а)"}
+{"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Команда остановлена в терминале во время выполнения"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Остановлена в терминале"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Думает…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Готово"}

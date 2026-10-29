@@ -217,6 +217,7 @@
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · İzin reddedildi"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} reddetti"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Terminalde reddedildi"}
+{"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Terminalde sonlandırıldı"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "neredeyse bitti"}
 {"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} araç kullanıldı", "other": "▸ {n} araç kullanıldı"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ajan)", "other": "({n} ajan)"}}
@@ -244,6 +245,7 @@
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Durduruldu"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} durdurdu"}
+{"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Komut çalışırken terminalde durduruldu"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Terminalde durduruldu"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Düşünüyor…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Bitti"}

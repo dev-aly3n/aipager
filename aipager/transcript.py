@@ -362,6 +362,9 @@ def turn_appears_complete(transcript_path: str) -> bool:
     return False
 
 
+#: The start of Claude Code's interrupt marker ("[Request interrupted by
+#: user ...]"): Claude Code's own text, compared, never shown.
+_MARKER_HEAD = " ".join(("Request", "interrupted"))
 #: Slack for :func:`turn_tail_since`: its ``since`` is taken before the
 #: keys that answer the dialog are typed, so what Claude writes in reply is
 #: never older; this only absorbs the millisecond timestamps.
@@ -467,7 +470,7 @@ def turn_tail_since(transcript_path: str, since: float) -> str | None:
             return None
         msg = entry.get("message") or {}
         if (entry.get("type") == "user" and isinstance(msg, dict)
-                and "Request interrupted" in _content_text(msg.get("content"))):
+                and _MARKER_HEAD in _content_text(msg.get("content"))):
             return "marker"
         return "other"
     return None
@@ -674,6 +677,110 @@ def interrupted_since(transcript_path: str, since: float) -> bool:
     """True when :func:`turn_tail_since` reads Claude Code's interrupt
     marker written at or after *since*."""
     return turn_tail_since(transcript_path, since) == "marker"
+
+
+#: What :func:`terminal_end_kind` reads from the marker after a terminal
+#: answer ended the turn (roadmap 8.152).
+END_RAN = "ran"
+END_DENIED = "denied"
+END_UNKNOWN = "unknown"
+
+
+def _is_turn_entry(entry) -> bool:
+    """A user or assistant line with a message (what
+    :func:`turn_tail_since` reads; bookkeeping lines are not)."""
+    return (isinstance(entry, dict) and entry.get("type") in ("user", "assistant")
+            and isinstance(entry.get("message"), dict))
+
+
+def _is_marker(entry: dict) -> bool:
+    """Claude Code's interrupt marker, read as :func:`turn_tail_since`
+    reads it."""
+    msg = entry["message"]
+    return (entry.get("type") == "user" and isinstance(msg, dict)
+            and _MARKER_HEAD in _content_text(msg.get("content")))
+
+
+def terminal_end_kind(transcript_path: str, tool_use_id: str = "") -> str:
+    """How the turn that just ended at Claude Code's interrupt marker
+    treated the call its permission dialog asked about (roadmap 8.152),
+    from the two newest turn entries of the transcript: the marker, and
+    right before it the call's result marked ``toolDenialKind``
+    ``"user-rejected"`` (both ends below write that same result):
+
+    - :data:`END_RAN`: the marker names the interrupted message
+      (``interruptedMessageId``), and that assistant message holds the
+      rejected call's ``tool_use``: the call was allowed and ran, and
+      Escape (or ctrl+c) at the terminal stopped it while it ran;
+    - :data:`END_DENIED`: the marker names no message: "No" or Escape in
+      the dialog itself;
+    - :data:`END_UNKNOWN`: anything else (no marker as the newest turn
+      entry, no rejected result right before it, a named message that is
+      not found or holds no such call, an older Claude Code that writes
+      neither field, an unreadable file).
+
+    *tool_use_id*: the prompt's call, when known; the rejected result
+    must then be for it. Pinned Claude Code 2.1.312 behaviour (release
+    harness, 2026-10-28; D3, D5 and Escape in the dialog): every case
+    writes the same result (``toolUseResult`` "User rejected tool use")
+    and marker text and fires no hook; only the marker's
+    ``interruptedMessageId`` differs. Reads ids and field names only,
+    never Claude Code's wording beyond the marker test
+    :func:`turn_tail_since` makes. Reads the file's last
+    :data:`TAIL_READ_BYTES`. Never raises."""
+    if not transcript_path:
+        return END_UNKNOWN
+    try:
+        tail = _tail_lines(transcript_path)
+    except Exception:  # noqa: BLE001 - never raises, by contract
+        return END_UNKNOWN
+    try:
+        return _terminal_end_kind_in(tail, tool_use_id if isinstance(tool_use_id, str)
+                                     else "")
+    except Exception:  # noqa: BLE001 - never raises, by contract
+        return END_UNKNOWN
+
+
+def _terminal_end_kind_in(tail: list[str], tool_use_id: str) -> str:
+    """:func:`terminal_end_kind` over the read *tail*."""
+    entries = []
+    for line in tail:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except (ValueError, RecursionError):
+            continue
+        if _is_turn_entry(entry):
+            entries.append(entry)
+    if len(entries) < 2 or not _is_marker(entries[-1]):
+        return END_UNKNOWN
+    marker, before = entries[-1], entries[-2]
+    content = before["message"].get("content")
+    if (before.get("type") != "user" or before.get("toolDenialKind") != "user-rejected"
+            or not isinstance(content, list)):
+        return END_UNKNOWN
+    ids = {b.get("tool_use_id") for b in content
+           if isinstance(b, dict) and b.get("type") == "tool_result"
+           and isinstance(b.get("tool_use_id"), str) and b.get("tool_use_id")}
+    if not ids or (tool_use_id and tool_use_id not in ids):
+        return END_UNKNOWN
+    if "interruptedMessageId" not in marker:
+        return END_DENIED
+    named = marker["interruptedMessageId"]
+    if not (isinstance(named, str) and named):
+        return END_UNKNOWN
+    for entry in entries[:-2]:
+        msg = entry["message"]
+        if entry.get("type") != "assistant" or msg.get("id") != named:
+            continue
+        blocks = msg.get("content")
+        if isinstance(blocks, list) and any(
+                isinstance(b, dict) and b.get("type") == "tool_use" and b.get("id") in ids
+                for b in blocks):
+            return END_RAN
+    return END_UNKNOWN
 
 
 def read_turn_stream(

@@ -39,6 +39,7 @@ from tests.i18n_ml2_bb import (
     message,
     strip_marks,
 )
+from tests import terminal_end_tx
 from tests.test_separate_permission_prompt import BOB as W_BOB
 from tests.test_separate_permission_prompt import GROUP as W_GROUP
 from tests.test_separate_permission_prompt import _World
@@ -60,6 +61,8 @@ def _terminal_end(mk_bot, run_async, tmp_path, code, *, question):
     s.pending_permission = ({"ask_question": True, "question": "Which one?"} if question
                             else {"tool_summary": "Bash: ls"})
     s.transcript_path = str(tmp_path / "t.jsonl")
+    # What a terminal "No" leaves (live, roadmap 8.152).
+    terminal_end_tx.terminal_no(s.transcript_path)
     policy_snapshot.mark_turn_open(s.name)
     run_async(bot.notify(s, "dialog_ended_in_terminal",
                          {"entered_at": s.interactive_entered_at}))

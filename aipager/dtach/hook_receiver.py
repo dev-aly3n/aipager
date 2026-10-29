@@ -56,6 +56,7 @@ from aipager.transcript import (
     extract_last_response_entry,
     extract_last_response_flagged,
     NO_RESPONSE_TEXT,
+    tool_call_result,
 )
 
 log = logging.getLogger(__name__)
@@ -353,6 +354,24 @@ def _drop_rm_clock(perm) -> bool:
     True when it had one."""
     info = perm.get("tool_info") if isinstance(perm, dict) else None
     return isinstance(info, dict) and info.pop("rm_clock", None) is not None
+
+
+def _refused_in_transcript(sess, perm, now: float) -> bool:
+    """Whether risky-removal prompt *perm* was refused by Claude Code
+    after all, read from the transcript (roadmap 8.152: the closers' only
+    way to see a refusal that came after its clock was disproven): its
+    result window is open and the transcript holds its call's error
+    result. False for a prompt with no clock and when the transcript does
+    not say so."""
+    if not rm_countdown.result_check_open(perm, now):
+        return False
+    info = perm.get("tool_info") or {}
+    clock = rm_countdown.clock_of(info)
+    tuid = info.get("tool_use_id")
+    if clock is None or not isinstance(tuid, str) or not tuid:
+        return False
+    return tool_call_result(sess.transcript_path or "", tuid,
+                            str(info.get("name") or ""), clock["command_sha"]) == "error"
 
 
 def _clock_records(sess, perms) -> list[dict]:
@@ -1047,13 +1066,19 @@ class HookReceiver:
         refused by itself (roadmap 8.128: a risky-removal prompt whose
         refusal window is open), with where each is shown, read before a
         closer closes them; None when there is none. Claude Code fires no
-        hook at that refusal, so the next closer says it."""
+        hook at that refusal, so the next closer says it. A prompt whose
+        clock was disproven (roadmap 8.152) counts only when the transcript
+        holds the error result of its call: a refusal after a longer
+        server-set countdown, not yet read by the monitor's scan."""
         if sess is None:
             return None
         now = rm_countdown._now_wall()
         perms, records = [], []
         for where, perm, rec in sess.open_prompt_records():
-            if _perm_owner(perm) == "" and rm_countdown.refusal_window_open(perm, now):
+            if _perm_owner(perm) != "":
+                continue
+            if rm_countdown.refusal_window_open(perm, now) or _refused_in_transcript(
+                    sess, perm, now):
                 perms.append(perm)
                 records.append((where, rec))
         if not perms:

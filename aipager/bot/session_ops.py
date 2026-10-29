@@ -259,17 +259,41 @@ CARD_STOPPED_TERMINAL = Msg(
     "card.stopped_terminal", "⚠️ <b>{session}</b> · Stopped in the terminal",
     note="The busy card after a question was dismissed at the computer's own terminal",
     eg={"session": "x1"})
+CARD_STOPPED_RUNNING_TERMINAL = Msg(
+    "card.stopped_running_terminal",
+    "⚠️ <b>{session}</b> · Stopped in the terminal while it ran",
+    note="The busy card after a command was allowed at the computer's own terminal "
+         "and then stopped there while it was running",
+    eg={"session": "x1"})
+CARD_ENDED_TERMINAL = Msg(
+    "card.ended_terminal", "⚠️ <b>{session}</b> · Ended in the terminal",
+    note="The busy card after the person at the computer's own terminal ended the "
+         "turn at a permission prompt, when it is not known whether the command was "
+         "refused there or stopped while it ran",
+    eg={"session": "x1"})
 
 
-def _terminal_card_text(label: str, *, refused: bool, tr=None) -> str:
+def _terminal_card_text(label: str, *, refused: bool, how: str = "denied",
+                        tr=None) -> str:
     """The busy card after Claude Code's own dialog was answered at the
-    terminal in a way that ended the turn (roadmap 8.113): `🚫 x1 · Denied
-    in the terminal` for a permission, `⚠️ x1 · Stopped in the terminal`
+    terminal in a way that ended the turn (roadmap 8.113): for a
+    permission, by *how* (:func:`aipager.transcript.terminal_end_kind`,
+    roadmap 8.152), `🚫 x1 · Denied in the terminal` ("denied": "No" or
+    Escape in the dialog), `⚠️ x1 · Stopped in the terminal while it ran`
+    ("ran": allowed there, then stopped while it ran) or `⚠️ x1 · Ended
+    in the terminal` (not known which); `⚠️ x1 · Stopped in the terminal`
     for a question left with Escape. In *tr*'s language (English when
     None)."""
     tr = tr or i18n.get("en")
-    return tr.html(CARD_DENIED_TERMINAL if refused else CARD_STOPPED_TERMINAL,
-                   session=label)
+    if not refused:
+        msg = CARD_STOPPED_TERMINAL
+    elif how == "ran":
+        msg = CARD_STOPPED_RUNNING_TERMINAL
+    elif how == "denied":
+        msg = CARD_DENIED_TERMINAL
+    else:
+        msg = CARD_ENDED_TERMINAL
+    return tr.html(msg, session=label)
 
 
 #: How long, after an answer was TYPED into Claude Code's permission dialog

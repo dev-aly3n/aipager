@@ -217,6 +217,7 @@
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Permissão negada"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} negou"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Permissão negada no terminal"}
+{"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Encerrada no terminal"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "finalizando"}
 {"k": "card.fold", "src": "2061ab43", "v": {"many": "▸ {n} ferramentas usadas", "one": "▸ {n} ferramenta usada", "other": "▸ {n} ferramentas usadas"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"many": "({n} agentes)", "one": "({n} agente)", "other": "({n} agentes)"}}
@@ -244,6 +245,7 @@
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Interrompida"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} interrompeu"}
+{"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Comando interrompido no terminal enquanto rodava"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Interrompida no terminal"}
 {"k": "card.thinking", "src": "9c654056", "v": "⚙️ <b>{session}</b> · Pensando…"}
 {"k": "card.verb.done", "src": "e9b450d1", "v": "Concluído"}

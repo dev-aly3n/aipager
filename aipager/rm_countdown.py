@@ -18,6 +18,15 @@ This module holds the facts and the rules, nothing else:
   prompt's ``tool_info`` (when Claude Code refuses it, and which command).
 - :func:`refusal_window_open` / :func:`next_check_at`: when a tap, a closer
   or the monitor treats the prompt as refused or about to be.
+- :func:`disproof_due` / :func:`disprove`: a clock the transcript proved
+  wrong (roadmap 8.152). Some prompts read as risky removals carry no
+  countdown at all: an ask rule matching part of the command (say
+  ``Bash(sleep:*)`` on a ``$(sleep ...)`` inside the ``rm``) turns
+  Claude Code's dialog into its plain ask, and a server may set a longer
+  countdown. Once the shown time plus :data:`DISPROVE_AFTER_SECONDS` has
+  passed with no result for the call, the clock is marked disproven: no
+  clock line and no tap block any more, while the monitor still closes
+  the prompt as refused if the refusal does come later.
 
 Stdlib only, no aipager imports (it is never in the hook's import closure,
 and must not grow one), and no function raises: a bad input means "no
@@ -41,6 +50,12 @@ REFUSE_AFTER_SECONDS = 120.0
 WINDOW_LEAD_SECONDS = 15.0
 #: The deadline timer looks this long after the shown time.
 CHECK_GRACE_SECONDS = 3.0
+#: A clock is disproven when the call has no result in the transcript this
+#: long after the shown time. The shown time is already later than Claude
+#: Code's own (aipager's handling lags the dialog), and its refusal is in
+#: the transcript within a second (live: 0.4-0.5 s after it), so 20 s
+#: leaves a wide margin before the tap block lifts.
+DISPROVE_AFTER_SECONDS = 20.0
 #: The permission modes in which Claude Code puts the countdown on it.
 COUNTDOWN_MODES = frozenset({"bypassPermissions", "auto"})
 
@@ -70,6 +85,8 @@ _REDIRECT = re.compile(r"[0-9&]*[<>]")
 _DASH_C = re.compile(r"-[A-Za-z]*c[A-Za-z]*")
 _SHA_RE = re.compile(r"[0-9a-f]{64}")
 _CLOCK_KEYS = frozenset({"refuse_at", "command_sha"})
+#: Set (to True) once the clock was disproven; never another value.
+DISPROVEN = "disproven"
 
 
 # ── reading a command ─────────────────────────────────────────────────
@@ -425,9 +442,16 @@ def make_clock(command: object, arrived_wall: object) -> dict | None:
 def valid_clock(clock: object) -> bool:
     """Whether *clock* is a well-formed ``rm_clock``: exactly its two
     keys, a finite positive ``refuse_at`` (not a bool) and a 64-character
-    lowercase hex ``command_sha``. Never raises."""
+    lowercase hex ``command_sha``, plus :data:`DISPROVEN` only as True.
+    Never raises."""
     try:
-        if not (isinstance(clock, dict) and set(clock) == _CLOCK_KEYS):
+        if not isinstance(clock, dict):
+            return False
+        keys = set(clock)
+        if keys == _CLOCK_KEYS | {DISPROVEN}:
+            if clock[DISPROVEN] is not True:
+                return False
+        elif keys != _CLOCK_KEYS:
             return False
         at = clock["refuse_at"]
         sha = clock["command_sha"]
@@ -452,18 +476,73 @@ def clock_of(holder: object) -> dict | None:
         return None
 
 
-def refusal_window_open(perm: object, now_wall: object) -> bool:
-    """Whether Claude Code may have refused open prompt *perm* by itself
-    by *now_wall*: it carries a clock and the time is at least
-    :data:`WINDOW_LEAD_SECONDS` before the shown one. False for a prompt
-    with no clock. Never raises."""
+def clock_disproven(holder: object) -> bool:
+    """Whether the valid ``rm_clock`` of *holder* (a prompt or its
+    ``tool_info``) was disproven (:func:`disprove`). Never raises."""
+    clock = clock_of(holder)
+    return clock is not None and clock.get(DISPROVEN) is True
+
+
+def shown_clock(holder: object) -> dict | None:
+    """The ``rm_clock`` the chat shows for *holder*: its valid clock
+    unless disproven, else None. Never raises."""
+    clock = clock_of(holder)
+    if clock is None or clock.get(DISPROVEN) is True:
+        return None
+    return clock
+
+
+def _past(perm: object, now_wall: object, offset: float) -> bool:
+    """Whether *perm* has a valid clock and *now_wall* is at or after its
+    shown time plus *offset*. Never raises."""
     try:
         clock = clock_of(perm)
         if clock is None:
             return False
         if isinstance(now_wall, bool) or not isinstance(now_wall, (int, float)):
             return False
-        return now_wall >= clock["refuse_at"] - WINDOW_LEAD_SECONDS
+        return now_wall >= clock["refuse_at"] + offset
+    except Exception:  # noqa: BLE001 - never raises
+        return False
+
+
+def refusal_window_open(perm: object, now_wall: object) -> bool:
+    """Whether Claude Code may have refused open prompt *perm* by itself
+    by *now_wall*: it carries a clock that was not disproven and the time
+    is at least :data:`WINDOW_LEAD_SECONDS` before the shown one. False
+    for a prompt with no clock or a disproven one: taps, auto-denies and
+    the hook closers then treat it as any other prompt. Never raises."""
+    return (not clock_disproven(perm)
+            and _past(perm, now_wall, -WINDOW_LEAD_SECONDS))
+
+
+def result_check_open(perm: object, now_wall: object) -> bool:
+    """Whether the monitor looks for *perm*'s call result in the
+    transcript: from :data:`WINDOW_LEAD_SECONDS` before the shown time,
+    a disproven clock too (a refusal that does come later, after a longer
+    server-set countdown, still closes it as refused). Never raises."""
+    return _past(perm, now_wall, -WINDOW_LEAD_SECONDS)
+
+
+def disproof_due(perm: object, now_wall: object) -> bool:
+    """Whether *perm*'s clock may be disproven at *now_wall*: it is valid,
+    not disproven yet, and the shown time plus
+    :data:`DISPROVE_AFTER_SECONDS` has passed. The caller still needs the
+    transcript's evidence (no result for the call). Never raises."""
+    return (not clock_disproven(perm)
+            and _past(perm, now_wall, DISPROVE_AFTER_SECONDS))
+
+
+def disprove(holder: object) -> bool:
+    """Mark the valid ``rm_clock`` of *holder* (a prompt or its
+    ``tool_info``) disproven, in place, so every holder of the same
+    ``tool_info`` sees it. True when it changed. Never raises."""
+    try:
+        clock = clock_of(holder)
+        if clock is None or clock.get(DISPROVEN) is True:
+            return False
+        clock[DISPROVEN] = True
+        return True
     except Exception:  # noqa: BLE001 - never raises
         return False
 
