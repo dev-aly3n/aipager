@@ -2,7 +2,7 @@
 
 # رفع مشکل
 
-<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
+<!-- i18n-source: docs/troubleshooting.md @ f3d5b335 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../troubleshooting.md))
 

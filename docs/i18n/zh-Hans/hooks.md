@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ 932dbe80 -->
+<!-- i18n-source: docs/hooks.md @ 92c37755 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -16,9 +16,11 @@ Claude Code 会在一个任务的固定时刻运行 hook 命令：提交了一�
 
 `aipager uninstall` 会再把这些条目移除（见[命令](commands.md#command-line-aipager-uninstall)）。
 
-Claude Code 为每个事件启动一个新的 `aipager-hook` 进程（`aipager.dtach.notify_hook:main`）。它从 stdin 读取事件的 JSON，加上两个字段（见下文），然后通过 Unix 套接字以一个 datagram 发给 aipager。套接字按以下顺序选取：隔离测试实例的 `$AIPAGER_INSTANCE_DIR/aipager.sock`、`$AIPAGER_SOCKET_PATH`、`$XDG_RUNTIME_DIR/aipager.sock`，或 `/tmp/aipager.sock`。发送从不等待：如果没有 aipager 在监听，事件就被丢掉，会话监视器会从会话的文件里补上。
+Claude Code 为每个事件启动一个新的 `aipager-hook` 进程（`aipager.dtach.notify_hook:main`）。它从 stdin 读取事件的 JSON，加上两个字段（见下文），然后通过 Unix 套接字以一个 datagram 发给 aipager。套接字按以下顺序选取：隔离测试实例的 `$AIPAGER_INSTANCE_DIR/aipager.sock`、`$AIPAGER_SOCKET_PATH`、`$XDG_RUNTIME_DIR/aipager.sock`，或 `/tmp/aipager.sock`。如果没有 aipager 在监听，事件就被丢掉，会话监视器会从会话的文件里补上。只有当 aipager 积压了一长串未读事件时，发送才会等待（在 Linux 上）。
 
-大多数事件让 Claude Code 花大约 20 到 25 毫秒启动进程。有几个还会加载 aipager 的规则代码：工具调用之前（安全检查，见 [PreToolUse](#pretooluse)）约 70 毫秒，任务结束时（清除任务的打开标记）约 55 毫秒，以及 `UserPromptSubmit`（写入任务的规则）。`PermissionRequest` 会故意等你点按，最多 20 秒。
+一个 datagram 装不下的大事件（超过 240 KiB，或超过系统自己的上限：Linux 上约 208 KiB，macOS 上默认 2 KiB）改用文件传递。hook 把它写进套接字旁边的 `aipager-spill-<uid>` 文件夹，只有自己的用户能访问，然后发一个写明文件名的短 datagram；aipager 立刻读取并删除这个文件，并按同样的顺序处理该事件，就像它是完整到达的一样。超过 4 MiB 的事件仍会被丢掉。这个文件夹上的检查见 [安全](security.md)。
+
+大多数事件让 Claude Code 花大约 20 到 25 毫秒启动进程。有几个还会加载 aipager 的规则代码：工具调用之前（安全检查，见 [PreToolUse](#pretooluse)）约 70 毫秒，任务结束时（清除任务的打开标记）约 55 毫秒，以及 `UserPromptSubmit`（写入任务的规则）。`PermissionRequest` 会故意等你点按，最多 20 秒；aipager 往会话里输入消息时，工具调用也会等待（最多 5 秒，见 [PreToolUse](#pretooluse)）。
 
 hook 把自己的内存限制在 1 GB。触到这个上限的 hook 会以错误退出（对 `PreToolUse` 来说，是 Claude Code 当作拒绝的退出码），并给 aipager 发一个 `hook_memory_cap_hit` datagram，这会变成聊天里的一条通知，并为安装的所有者带一个“🐞 报告这个问题”按钮（见[问题报告](problem-reports.md)）。在会话的环境里设置 `AIPAGER_DEBUG=1`，hook 和状态行就会把诊断信息打印到 stderr。
 
@@ -67,6 +69,7 @@ aipager 把会话标记为工作中，如果还没有工作卡片就打开一张
 - 当某条规则拒绝了这次调用时，hook 打印 `deny` 决定，Claude Code 不经询问就拒绝该工具，并通知 aipager（`safety_blocked`）：任务以 `🛑 x1 · 被安全规则阻止：...（已停止）` 停止，该任务之后的每一次工具调用也都会被拒绝。
 - `SendUserFile` 调用（Claude 往聊天里发文件）对每个任务都会检查，owner 的任务和在终端输入的消息也包括在内：发送底线、文件检查和任务自己的规则（[安全](security.md#files-claude-sends)）。被拒绝的调用会得到一个不带 "aipager safety policy" 标记的 `deny`：Claude 读到原因并告诉你，任务继续，钩子会把列出每个文件的 `send_files_refused` 发给 aipager，用于审计日志。
 - 检查本身出错时会拒绝，除非会话的规则能读取并授予所有者绕过权限。
+- 最后，对于放行的调用，hook 会在 aipager 套接字旁边的一个文件夹里留下一个短期标记；如果 aipager 正在往这个会话里输入消息，它会等输入结束（最多 5 秒）。这个 hook 一返回，Claude Code 就会显示权限请求，这时输入的按键会回答这个请求：消息末尾的 Enter 会选中“Yes”。aipager 这边也会等开始输入前刚放行的调用结束；仍然碰上请求的消息不会被输入：它会等待（👀），请求有了回答后再交给 Claude。
 
 在 aipager 这一边，这次调用会成为工作卡片上的一行（子代理的调用会放到该代理的那一行上），当 `/settings` → 改动预览（diff）打开时（默认关闭），`Write` 或 `Edit` 会显示改动预览。`AskUserQuestion` 调用会变成问题，每个选项一个按钮；在没有任务运行时由 Claude Code 的辅助代理提出的问题不会显示（那不是 Claude 在问你）。Claude 自己的 `Agent` 调用会为它启动的代理留下 `subagent_type` 和 `description`，而子代理的调用就是该代理最新的动态：在代理于后台运行期间，两者都会显示在回答下方的状态里。
 
@@ -74,7 +77,7 @@ aipager 把会话标记为工作中，如果还没有工作卡片就打开一张
 
 Claude Code 即将请求权限。工作卡片变成这个请求，在 Claude 对它的描述下方显示真实的命令或路径（见[命令 → 权限请求](commands.md#permission-prompts)）：允许、拒绝、停止，以及只有在 Claude Code 提供了一条真正可以记住的规则时才出现的始终允许。
 
-hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），这样 Claude Code 就不会显示它自己的对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。这时 Claude Code 会在终端里显示它自己的对话框，之后的点按会通过输入按键来回答它。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
+hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。Claude Code 同时会在终端里显示它自己的对话框（子代理的调用要等 hook 结束后才显示）。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），并关闭这个对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。这时对话框会在终端里等着，之后的点按会通过输入按键来回答它。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
 
 在另一个请求开着时到达的 `PermissionRequest` 也会显示，作为单独的消息放在工作卡片下面。同一个对话框再次到达（同一个提问者、同一个工具和同一次调用，或者同样的输入）只显示一次。Claude Code 也会为 `AskUserQuestion` 运行这个 hook；这个问题已经通过它的 `PreToolUse` 显示了，所以永远不会显示第二次。后台代理的对话框只有在它的 hook 不再等待之后才会出现在终端里，排在那里已经打开的所有对话框下面；所以点按只会把按键输入到 Claude Code 最先显示的那个请求里（见[命令 → 权限请求](commands.md#permission-prompts)）。
 

@@ -1,6 +1,6 @@
 # Sicherheitsmodell
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager hört auf **keinem TCP-Port außer der Loopback-Adresse**. Der Server de
 Eingehend:
 
 - Ein Unix-Datagram-Socket unter `$XDG_RUNTIME_DIR/aipager.sock` (mit `/tmp/aipager.sock` als Ausweichstelle, wenn `$XDG_RUNTIME_DIR` nicht gesetzt ist). Beim Start von aipager gebunden und mit `chmod` eingestellt (`aipager/dtach/hook_receiver.py`). Rechte `0o666`, damit jeder lokale Prozess ihm Hook-Ereignisse schicken kann: dasselbe Vertrauen wie `~/.claude/settings.json`, das ohnehin bestimmt, was Hooks ausführt.
+- Der Überlauf-Ordner der Hooks, `aipager-spill-<uid>` neben diesem Socket. Ein Hook-Ereignis, das für ein Datagramm zu groß ist, wird dort als Datei geschrieben, und das Datagramm nennt nur sie (siehe [Hooks](hooks.md)). aipager legt den Ordner mit den Rechten `0700` an und nutzt ihn nicht, wenn er nicht ihm gehört. Der Hook schreibt nur in diesen Ordner und nur, wenn er demselben Benutzer gehört und weder die Gruppe noch andere Zugriff haben; jede Datei wird mit `0600` und einem zufälligen Namen angelegt. Ein Datagramm trägt einen Namen, nie einen Pfad: aipager akzeptiert nur sein eigenes Namensmuster, öffnet die Datei im Ordner, ohne Links zu folgen, akzeptiert nur eine normale Datei des eigenen Benutzers bis 4 MiB und löscht jede Datei, die es liest oder ablehnt. Dateien, die ein beendetes aipager zurückgelassen hat, werden beim nächsten Start gelöscht, sobald sie älter als 5 Minuten sind. Die Datei-Tools eingeschränkter Aufgaben werden von dem Ordner ferngehalten, so wie von den Steuerdateien `/tmp/claude-*`.
 
 Das heißt: aipager ist keine Angriffsfläche aus der Ferne. Ein Angreifer im Netzwerk kann es ohne einen Zugang zum Computer nicht erreichen.
 

@@ -2,7 +2,7 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 
@@ -103,6 +103,7 @@ flowchart LR
 | &lrm;`$XDG_RUNTIME_DIR/aipager.sock` | مقبس datagram من نوع Unix لأحداث الهوك (&lrm;`/tmp/aipager.sock` عند غياب &lrm;`$XDG_RUNTIME_DIR`؛ و&lrm;`$AIPAGER_SOCKET_PATH` مقدَّم على كليهما) | aipager (bind) |
 | `aipager-reply-<id>.sock` (بجانب مقبس التحكم) | مقبس رد قصير العمر لكل طلب إذن ينتظره الهوك | `aipager-hook` |
 | `aipager-flood-mute.json`،&rlm; `aipager-flood-backoff.json` (بجانب مقبس التحكم) | حالة حدود السرعة الحالية في Telegram، من أجل `aipager status` و`aipager doctor` | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (بجانب مقبس التحكم) | حدث هوك أكبر من أن يتسع له datagram واحد، يقرأه aipager ويحذفه حين يصل الـ datagram الذي يشير إليه؛ وتُزال الملفات الأقدم من ٥ دقائق عند البدء ([الهوكات](hooks.md)) | `aipager-hook` (يكتب)، aipager (ينشئ المجلد، ويقرأ الملفات ويحذفها) |
 | `aipager-modelswitch-<name>.json` (بجانب مقبس التحكم) | يعلّم تبديل نموذج كتبه aipager، لمدة ٣٠ ثانية ([الهوكات](hooks.md#premodelswitch)) | aipager (يكتب)، `aipager-hook` (يأخذه) |
 | &lrm;`/tmp/claude-dtach-<name>.sock` | مقبس التحكم الخاص بـ dtach لكل جلسة | dtach |
 | &lrm;`/tmp/claude-status-<name>.json` | بيانات سطر الحالة لكل جلسة | `aipager-statusline` |
@@ -121,7 +122,7 @@ flowchart LR
 | &lrm;`~/.claude/aipager-tunnel.json`،&rlm; `aipager-cloudflared.log` و`aipager-cloudflared.err` | نفق Mini App الذي يحتفظ به aipager: عمليته ومنافذه المحلية وبصمة عنوانه (لا العنوان نفسه أبدًا)، حتى يتولاه aipager التالي بعد إعادة تشغيل مخطط لها (الصلاحية 600)؛ وتحذيرات cloudflared؛ وآخر مخرجات أخطاء cloudflared (الصلاحية 600)، التي تقول لماذا لم يبدأ النفق ([حل المشكلات](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager؛ ويحذف هذا السجل أيضًا حارس النفق المحفوظ والأمر `aipager uninstall` |
 | &lrm;`~/.claude/aipager-pending-users.json` | الأشخاص الذين خاطبوا البوت في مجموعة لا يخدمها، أو ليسوا أعضاء في مجموعة يخدمها، لكي يضيفهم `aipager config` (الصلاحية 0600، يُستبدل كاملًا عند كل كتابة، أحدث ٢٠٠ شخص ظهروا خلال آخر ٣٠ يومًا) | aipager (يكتب)، `aipager config` (يقرأ) |
 | &lrm;`~/aipager-users/<label>/`&lrm; | [المجلدات الجذرية](groups.md#root-folders) الافتراضية للأعضاء (الصلاحية 0700)، حيث يبدأ أعضاء `user` و`read_only` جلساتهم؛ ويحتفظ بها `aipager uninstall` | aipager (يُنشئها عند أول &lrm;`/new` أو أول «جلسة جديدة» في Mini App لعضو) |
-| &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`) | إعداد الهوكات في Claude Code؛ وهو الملف الذي تقرؤه جلسات aipager، من مجلد إعدادات Claude Code للبيئة التي تحصل عليها ([استكشاف الأخطاء](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` /&rlm; `aipager setup`؛ وعند كل بدء يضيف aipager أي هوك أو سطر حالة لـ aipager ينقص ويضبط `skipDangerousModePermissionPrompt` ([الأمان](security.md#who-decides-whether-a-tool-call-runs))، ومرة أخرى قبل بدء جلسة عندما يكون ذلك الملف جديدًا |
+| &lrm;`~/.claude/settings.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/settings.json`) | إعداد الهوكات في Claude Code؛ وهو الملف الذي تقرؤه جلسات aipager، من مجلد إعدادات Claude Code للبيئة التي تحصل عليها (`CLAUDE_CONFIG_DIR` من بيئة aipager أو من `daemon.env`، أو `CLAUDE_CONFIG_DIR` في كتلة `env` الخاصة بهذا الملف نفسه، وهو ما ينقل الملف إلى مكان آخر؛ [استكشاف الأخطاء](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` /&rlm; `aipager setup`؛ وعند كل بدء يضيف aipager أي هوك أو سطر حالة لـ aipager ينقص ويضبط `skipDangerousModePermissionPrompt` ([الأمان](security.md#who-decides-whether-a-tool-call-runs))، ومرة أخرى قبل بدء جلسة عندما يكون ذلك الملف جديدًا |
 | &lrm;`settings.json.bak.*`&lrm; (بجانبه)&lrm; | نسخ احتياطية قبل كل إعادة كتابة | `aipager config`،&rlm; `aipager setup`،&rlm; `aipager uninstall` |
 | &lrm;`~/.claude.json` (أو &lrm;`$CLAUDE_CONFIG_DIR/.claude.json`، أو &lrm;`.claude-custom-oauth.json` مع `CLAUDE_CODE_CUSTOM_OAUTH_URL`، أو &lrm;`.config.json` القديم في مجلد الإعدادات عندما يستخدمه Claude Code) | ملف Claude Code نفسه: يعلّم aipager المجلد الذي تبدأ فيه الجلسة بأنه موثوق قبل بدئها مباشرة (بما في ذلك المجلد الرئيسي، وليس `/` أو مجلدًا أعلى من المجلد الرئيسي أبدًا)، حتى لا يوقف سؤال الثقة في Claude Code جلسة بدأت من Telegram. لا يُعلَّم أي شيء عند بدء aipager. ولا تُعاد كتابته أبدًا إذا تعذّرت قراءته كاملًا أو غيّره Claude يعمل في الأثناء. وبالطريقة نفسها يجيب عن سؤال «use this API key?» بشأن `ANTHROPIC_API_KEY` الخاص بالجلسة (`customApiKeyResponses`، آخر ٢٠ حرفًا من المفتاح)، ويعلّم التشغيل الأول لـ Claude Code مكتملًا إذا كان لدى الجلسة ما تسجّل به الدخول (`hasCompletedOnboarding`)، حتى لا توقف هذه الأسئلة أيضًا جلسة بدأت من Telegram ([المزوّدون](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | &lrm;`~/.claude/.credentials.json` (أو الملف نفسه في مجلد الإعدادات) ← &lrm;`.credentials.json.stale` | ملف تسجيل الدخول في Claude Code، يُنقل جانبًا عندما تبدأ جلسة مع ضبط `CLAUDE_CODE_OAUTH_TOKEN` والملف لا يحتوي إلا على تسجيل دخول منتهٍ أو فارغ (وإلا لتقدّم على التوكن)؛ وللتراجع يُعاد إلى مكانه | aipager |
@@ -146,7 +147,7 @@ flowchart LR
 
 ### <a id="isolated-instance-for-testing"></a>نسخة معزولة (للاختبار)
 
-عند ضبط `AIPAGER_INSTANCE_DIR` على مجلد مطلق مملوك لك، تنتقل إليه كل الملفات المشتركة المذكورة أعلاه: مقبس التحكم (ومقابس الرد وملفات إشارات حدود السرعة وعلامة تبديل النموذج التي بجانبه)، ومقابس `claude-dtach-*`&lrm;، وملفات `claude-policy-*`&lrm; و`claude-notes-*`&lrm; و`claude-status-*`&lrm; و`claude-reply-*`&lrm; و`claude-bgjob-*`&lrm; و`claude-exit-*`&lrm;، وملف الحد الأدنى، ومجلد التنزيلات `aipager-files`، وسجل إعادة التشغيل الذاتية. الجلسات التي تبدؤها هذه النسخة ترث الإعداد، فلا تتحدث هوكاتها إلا مع تلك النسخة، وتحمي قواعد الأمان الملفات المنقولة بالطريقة نفسها. لا تقرأ هذه النسخة ملف &lrm;`.env` من نسخة الشيفرة.
+عند ضبط `AIPAGER_INSTANCE_DIR` على مجلد مطلق مملوك لك، تنتقل إليه كل الملفات المشتركة المذكورة أعلاه: مقبس التحكم (ومقابس الرد وملفات إشارات حدود السرعة وعلامة تبديل النموذج ومجلد الفائض للهوك التي بجانبه)، ومقابس `claude-dtach-*`&lrm;، وملفات `claude-policy-*`&lrm; و`claude-notes-*`&lrm; و`claude-status-*`&lrm; و`claude-reply-*`&lrm; و`claude-bgjob-*`&lrm; و`claude-exit-*`&lrm;، وملف الحد الأدنى، ومجلد التنزيلات `aipager-files`، وسجل إعادة التشغيل الذاتية. الجلسات التي تبدؤها هذه النسخة ترث الإعداد، فلا تتحدث هوكاتها إلا مع تلك النسخة، وتحمي قواعد الأمان الملفات المنقولة بالطريقة نفسها. لا تقرأ هذه النسخة ملف &lrm;`.env` من نسخة الشيفرة.
 
 الملفات الموجودة في مجلدك الرئيسي لا تنتقل، لذا يلزم توجيه `HOME` أيضًا إلى مجلد منفصل. يرفض `aipager start` العمل عندما يكون مجلد النسخة مضبوطًا و`HOME` هو مجلدك الرئيسي الحقيقي، أو عندما لا يكون المجلد مسارًا مطلقًا إلى مجلد مملوك لك، أو عندما يكون أطول من أن يصلح مسارًا لمقبس.
 

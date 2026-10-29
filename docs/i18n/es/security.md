@@ -1,6 +1,6 @@
 # Modelo de seguridad
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../security.md))
 
@@ -194,6 +194,7 @@ aipager **no escucha en ningún puerto TCP que no sea loopback**. El servidor de
 Conexiones de entrada:
 
 - Socket datagram de Unix en `$XDG_RUNTIME_DIR/aipager.sock` (o `/tmp/aipager.sock` cuando `$XDG_RUNTIME_DIR` no está puesto). aipager lo abre y le pone permisos al arrancar (`aipager/dtach/hook_receiver.py`). Permisos `0o666` para que cualquier proceso local pueda enviarle eventos de hook: la misma confianza que `~/.claude/settings.json`, que ya decide qué ejecuta los hooks.
+- La carpeta de desbordamiento de los hooks, `aipager-spill-<uid>` junto a ese socket. Un evento de hook demasiado grande para un datagrama se escribe ahí como archivo, y el datagrama solo lo nombra (mira [hooks](hooks.md)). aipager crea la carpeta con permisos `0700` y no la usa si no es suya. El hook solo escribe en esa carpeta, y solo cuando es del mismo usuario y ni el grupo ni otros tienen acceso; cada archivo se crea con `0600` y un nombre aleatorio. Un datagrama lleva un nombre, nunca una ruta: aipager solo acepta su propio patrón de nombres, abre el archivo dentro de la carpeta sin seguir enlaces, solo acepta un archivo normal de su propio usuario de hasta 4 MiB, y borra todo archivo que lee o rechaza. Los archivos que dejó un aipager que se detuvo se borran en el siguiente arranque cuando tienen más de 5 minutos. Las herramientas de archivos de las tareas restringidas no pueden tocar la carpeta, igual que los archivos de control `/tmp/claude-*`.
 
 Esto significa que aipager no se puede atacar a distancia. Un atacante en la red no puede llegar a él sin tener ya un pie en la computadora.
 

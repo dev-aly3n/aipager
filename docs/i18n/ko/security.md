@@ -1,6 +1,6 @@
 # 보안 모델
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager는 **루프백 밖의 TCP 포트를 하나도 듣지 않아요**. Mini A
 안으로 들어오는 연결:
 
 - `$XDG_RUNTIME_DIR/aipager.sock`의 Unix datagram 소켓(`$XDG_RUNTIME_DIR`이 설정되지 않으면 `/tmp/aipager.sock`으로 돌아가요). aipager가 시작할 때 bind하고 `chmod`로 권한을 정해요(`aipager/dtach/hook_receiver.py`). 권한 `0o666`이라서 이 컴퓨터의 어떤 프로세스든 hook 이벤트를 보낼 수 있어요. 무엇이 hook을 실행할지 이미 정하는 `~/.claude/settings.json`과 같은 신뢰 수준이에요.
+- hook 넘침 폴더, 그 소켓 옆의 `aipager-spill-<uid>`. datagram 하나에 담기에 너무 큰 hook 이벤트는 여기에 파일로 쓰이고, datagram은 그 이름만 알려 줘요([hook](hooks.md) 참고). aipager는 이 폴더를 권한 `0700`으로 만들고, 자기 것이 아니면 쓰지 않아요. hook은 이 폴더에만 쓰고, 그것도 폴더가 같은 사용자 소유이고 그룹이나 다른 사용자의 접근이 없을 때만 써요. 파일은 하나하나 `0600`과 무작위 이름으로 만들어져요. datagram에는 이름만 담기고 경로는 절대 담기지 않아요. aipager는 자기 이름 패턴만 받아들이고, 링크를 따라가지 않고 폴더 안의 파일을 열고, 자기 사용자의 일반 파일을 4 MiB까지만 받아들이며, 읽거나 거부한 파일은 모두 지워요. 멈춘 aipager가 남긴 파일은 다음 시작 때 5분이 지났으면 지워져요. 제한된 작업의 파일 도구는 `/tmp/claude-*` 제어 파일처럼 이 폴더에도 손대지 못해요.
 
 즉 aipager는 원격 공격 표면이 아니에요. 네트워크의 공격자는 먼저 이 컴퓨터에 발판을 마련하지 않으면 닿을 수 없어요.
 

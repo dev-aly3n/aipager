@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -97,6 +97,7 @@ flowchart LR
 | `$XDG_RUNTIME_DIR/aipager.sock` | 用于 hook 事件的 Unix datagram 套接字（没有 `$XDG_RUNTIME_DIR` 时为 `/tmp/aipager.sock`；`$AIPAGER_SOCKET_PATH` 优先于两者） | aipager（bind） |
 | `aipager-reply-<id>.sock`（在控制套接字旁边） | hook 等待的每个权限请求各有一个短期的回复套接字 | `aipager-hook` |
 | `aipager-flood-mute.json`、`aipager-flood-backoff.json`（在控制套接字旁边） | 当前的 Telegram 限流状态，供 `aipager status` 和 doctor 使用 | aipager |
+| `aipager-spill-<uid>/ev-<id>.json`（在控制套接字旁边） | 一个 datagram 装不下的 hook 事件，指向它的 datagram 到达时由 aipager 读取并删除；超过 5 分钟的文件在启动时清理（[hook](hooks.md)） | `aipager-hook`（写入）、aipager（创建文件夹，读取并删除文件） |
 | `aipager-modelswitch-<name>.json`（在控制套接字旁边） | 标记 aipager 输入的一次模型切换，有效 30 秒（[hook](hooks.md#premodelswitch)） | aipager（写入）、`aipager-hook`（领取） |
 | `/tmp/claude-dtach-<name>.sock` | 每个会话的 dtach 控制套接字 | dtach |
 | `/tmp/claude-status-<name>.json` | 每个会话的状态行数据 | `aipager-statusline` |
@@ -115,7 +116,7 @@ flowchart LR
 | `~/.claude/aipager-tunnel.json`、`aipager-cloudflared.log`、`aipager-cloudflared.err` | aipager 持有的 Mini App 隧道：它的进程、本地端口和地址的哈希（从不保存地址本身），以便计划内重启后下一个 aipager 接管它（权限 600）；cloudflared 的警告；cloudflared 最后的错误输出（权限 600），说明隧道为什么没能启动（[故障排除](troubleshooting.md#the-mini-app-link-isnt-working)） | aipager；保留下来的隧道的看守进程和 `aipager uninstall` 也会删除这条记录 |
 | `~/.claude/aipager-pending-users.json` | 在机器人不服务的群组里找过它的人，或在它服务的群组里但不是成员的人，供 `aipager config` 添加（权限 0600，每次写入都整个替换，保留最近 30 天里出现过的最新 200 人） | aipager（写入）、`aipager config`（读取） |
 | `~/aipager-users/<label>/` | 成员的默认[根文件夹](groups.md#root-folders)（权限 0700），`user` 和 `read_only` 成员在这里启动会话；`aipager uninstall` 会保留它们 | aipager（在成员第一次 `/new` 或第一次在 Mini App 里“启动会话”时创建） |
-| `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`） | Claude Code 的 hook 配置：守护进程的会话读取的那个文件，位于会话所得环境对应的 Claude Code 配置文件夹中（[故障排查](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)） | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)），当该文件是新文件时，在会话启动前还会再做一次 |
+| `~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`） | Claude Code 的 hook 配置：守护进程的会话读取的那个文件，位于会话所得环境对应的 Claude Code 配置文件夹中（由守护进程环境或 `daemon.env` 中的 `CLAUDE_CONFIG_DIR` 决定，也可以是该文件自己的 `env` 块里的 `CLAUDE_CONFIG_DIR`，它会把文件移到别处；[故障排查](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)） | `aipager config` / `aipager setup`；每次启动时 aipager 会补上缺少的 aipager hook 或状态行，并设置 `skipDangerousModePermissionPrompt`（[安全](security.md#who-decides-whether-a-tool-call-runs)），当该文件是新文件时，在会话启动前还会再做一次 |
 | `settings.json.bak.*`（在它旁边） | 每次改写前的备份 | `aipager config`、`aipager setup`、`aipager uninstall` |
 | `~/.claude.json`（或 `$CLAUDE_CONFIG_DIR/.claude.json`、设置了 `CLAUDE_CODE_CUSTOM_OAUTH_URL` 时的 `.claude-custom-oauth.json`，或 Claude Code 使用的配置文件夹中的旧版 `.config.json`） | Claude Code 自己的文件：aipager 在会话启动前一刻，把会话所在的文件夹标记为受信任（包括主文件夹，但绝不会是 `/` 或主文件夹的上级文件夹），这样 Claude Code 的信任问题不会挡住从 Telegram 启动的会话。aipager 启动时不标记任何文件夹。无法完整读取，或运行中的 Claude 在此期间改动过时，绝不重写。同样，它会为会话的 `ANTHROPIC_API_KEY` 回答“use this API key?”（`customApiKeyResponses`，密钥的最后 20 个字符），并在会话有登录凭据时把 Claude Code 的首次运行标记为已完成（`hasCompletedOnboarding`），让这些问题也不会挡住从 Telegram 启动的会话（[服务商](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)）。 | aipager |
 | `~/.claude/.credentials.json`（或配置文件夹中的那个） → `.credentials.json.stale` | Claude Code 的登录文件，在会话以设置了 `CLAUDE_CODE_OAUTH_TOKEN` 的方式启动、而该文件只有过期或空的登录时被移到一边（否则它会优先于 token）；要撤销，把它移回来 | aipager |
@@ -140,7 +141,7 @@ flowchart LR
 
 ### <a id="isolated-instance-for-testing"></a>隔离实例（用于测试）
 
-把 `AIPAGER_INSTANCE_DIR` 设为一个属于你的绝对路径文件夹，上面每个共享的运行时文件都会移到那里：控制套接字（以及它旁边的回复套接字、限流信号文件和模型切换标记）、`claude-dtach-*` 套接字、`claude-policy-*`、`claude-notes-*`、`claude-status-*`、`claude-reply-*`、`claude-bgjob-*` 和 `claude-exit-*` 文件、安全底线文件、`aipager-files` 下载文件夹和自我重启日志。这个实例启动的会话会继承该设置，所以它们的 hook 只与这个实例通信，安全规则也以同样的方式保护被移动的文件。这个实例不会读取源码副本里的 `.env`。
+把 `AIPAGER_INSTANCE_DIR` 设为一个属于你的绝对路径文件夹，上面每个共享的运行时文件都会移到那里：控制套接字（以及它旁边的回复套接字、限流信号文件、模型切换标记和 hook 溢出文件夹）、`claude-dtach-*` 套接字、`claude-policy-*`、`claude-notes-*`、`claude-status-*`、`claude-reply-*`、`claude-bgjob-*` 和 `claude-exit-*` 文件、安全底线文件、`aipager-files` 下载文件夹和自我重启日志。这个实例启动的会话会继承该设置，所以它们的 hook 只与这个实例通信，安全规则也以同样的方式保护被移动的文件。这个实例不会读取源码副本里的 `.env`。
 
 主文件夹下的文件不会移动，所以也要把 `HOME` 指向一个单独的文件夹。当设置了实例文件夹而 `HOME` 却是你真实的主文件夹时、当这个文件夹不是指向你自己文件夹的绝对路径时，或当它太长不能作为套接字路径时，`aipager start` 会拒绝运行。
 

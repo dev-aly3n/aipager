@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `$XDG_RUNTIME_DIR/aipager.sock` | hook 이벤트용 Unix datagram 소켓(`$XDG_RUNTIME_DIR`이 없으면 `/tmp/aipager.sock`, `$AIPAGER_SOCKET_PATH`가 둘보다 우선) | aipager (bind) |
 | `aipager-reply-<id>.sock` (제어 소켓 옆) | hook이 기다리는 권한 요청마다 하나씩 있는 짧게 쓰는 응답 소켓 | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (제어 소켓 옆) | 현재 Telegram 속도 제한 상태, `aipager status`와 doctor가 읽어요 | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (제어 소켓 옆) | datagram 하나에 담기에 너무 큰 hook 이벤트, 이를 가리키는 datagram이 도착하면 aipager가 읽고 지워요. 5분이 지난 파일은 시작할 때 치워요([hook](hooks.md)) | `aipager-hook` (씀), aipager (폴더를 만들고, 파일을 읽고 지움) |
 | `aipager-modelswitch-<name>.json` (제어 소켓 옆) | aipager가 입력한 모델 변경 한 번을 표시해요, 30초 동안 유효([hook](hooks.md#premodelswitch)) | aipager (씀), `aipager-hook` (가져감) |
 | `/tmp/claude-dtach-<name>.sock` | 세션마다 있는 dtach 제어 소켓 | dtach |
 | `/tmp/claude-status-<name>.json` | 세션마다 있는 상태 줄 데이터 | `aipager-statusline` |
@@ -115,7 +116,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `~/.claude/aipager-tunnel.json`, `aipager-cloudflared.log`, `aipager-cloudflared.err` | aipager가 붙잡고 있는 Mini App 터널: 프로세스, 로컬 포트, 주소의 해시(주소 자체는 절대 아님)를 적어 두어서 계획된 재시작 뒤 다음 aipager가 이어받을 수 있게 해요(권한 600). cloudflared의 경고도 있어요. 터널이 시작되지 못한 이유를 알려 주는 cloudflared의 마지막 오류 출력도 있어요(권한 600, [문제 해결](troubleshooting.md#the-mini-app-link-isnt-working)) | aipager. 유지된 터널의 감시 프로세스와 `aipager uninstall`도 이 기록을 지워요 |
 | `~/.claude/aipager-pending-users.json` | 봇이 서비스하지 않는 그룹에서 봇을 부른 사람, 또는 서비스하는 그룹에 있지만 멤버가 아닌 사람, `aipager config`로 추가할 수 있게(권한 0600, 쓸 때마다 통째로 바꿈, 최근 30일 동안 나타난 최신 200명 보관) | aipager (씀), `aipager config` (읽음) |
 | `~/aipager-users/<label>/` | 멤버의 기본 [루트 폴더](groups.md#root-folders)(권한 0700), `user`와 `read_only` 멤버가 여기서 세션을 시작해요. `aipager uninstall`은 이것을 남겨 둬요 | aipager (멤버가 처음 `/new`를 쓰거나 Mini App에서 처음 “새 세션”을 누를 때 만들어요) |
-| `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`) | Claude Code의 hook 설정: 데몬의 세션이 읽는 파일이며, 세션이 받는 환경에 맞는 Claude Code 설정 폴더에 있어요 ([문제 해결](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`. 시작할 때마다 aipager가 빠진 aipager hook이나 상태 줄을 채우고 `skipDangerousModePermissionPrompt`를 설정해요([보안](security.md#who-decides-whether-a-tool-call-runs)), 그리고 그 파일이 새것이면 세션이 시작되기 전에 다시 |
+| `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`) | Claude Code의 hook 설정: 데몬의 세션이 읽는 파일이며, 세션이 받는 환경에 맞는 Claude Code 설정 폴더에 있어요 (데몬의 환경이나 `daemon.env`의 `CLAUDE_CONFIG_DIR`, 또는 이 파일 자체의 `env` 블록에 있는 `CLAUDE_CONFIG_DIR`로 정해지고, 마지막 경우에는 파일 위치가 옮겨져요. [문제 해결](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)) | `aipager config` / `aipager setup`. 시작할 때마다 aipager가 빠진 aipager hook이나 상태 줄을 채우고 `skipDangerousModePermissionPrompt`를 설정해요([보안](security.md#who-decides-whether-a-tool-call-runs)), 그리고 그 파일이 새것이면 세션이 시작되기 전에 다시 |
 | `settings.json.bak.*` (같은 폴더) | 다시 쓰기 전마다 만드는 백업 | `aipager config`, `aipager setup`, `aipager uninstall` |
 | `~/.claude.json` (또는 `$CLAUDE_CONFIG_DIR/.claude.json`, `CLAUDE_CODE_CUSTOM_OAUTH_URL`이 있을 때의 `.claude-custom-oauth.json`, 또는 Claude Code가 쓸 때 설정 폴더의 예전 `.config.json`) | Claude Code 자체 파일: aipager가 세션이 시작될 폴더를 시작 직전에 신뢰하는 폴더로 표시해서(홈 폴더도 포함, `/`나 홈 폴더 위의 폴더는 절대 아님), Claude Code의 신뢰 질문이 Telegram에서 시작한 세션을 막지 않게 해요. aipager가 시작할 때는 아무것도 표시하지 않아요. 전체를 읽을 수 없거나 실행 중인 Claude가 그사이 바꿨다면 절대 다시 쓰지 않아요. 같은 방식으로 세션의 `ANTHROPIC_API_KEY`에 대한 “use this API key?” 질문에 답하고(`customApiKeyResponses`, 키의 마지막 20자), 세션에 로그인 정보가 있으면 Claude Code의 첫 실행을 끝난 것으로 표시해서(`hasCompletedOnboarding`) 이 질문들도 Telegram에서 시작한 세션을 막지 않게 해요([제공자](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)). | aipager |
 | `~/.claude/.credentials.json` (또는 설정 폴더의 파일) → `.credentials.json.stale` | Claude Code의 로그인 파일, `CLAUDE_CODE_OAUTH_TOKEN`을 설정한 채 세션을 시작하는데 이 파일에 만료됐거나 빈 로그인만 있을 때 옆으로 치워 둬요(그렇지 않으면 token보다 우선해요). 되돌리려면 다시 옮겨 놓으세요 | aipager |
@@ -140,7 +141,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 
 ### <a id="isolated-instance-for-testing"></a>격리된 인스턴스 (테스트용)
 
-`AIPAGER_INSTANCE_DIR`을 내 소유의 절대 경로 폴더로 설정하면, 위에 나온 공유 런타임 파일이 모두 그리로 옮겨 가요. 제어 소켓(그리고 그 옆의 응답 소켓, 속도 제한 신호 파일, 모델 변경 표시), `claude-dtach-*` 소켓, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, `claude-exit-*` 파일, 안전 기준선 파일, `aipager-files` 다운로드 폴더, 자체 재시작 로그예요. 이 인스턴스가 시작한 세션은 이 설정을 물려받아서, 그 hook은 이 인스턴스하고만 통신하고, 안전 규칙도 옮겨진 파일을 같은 방식으로 지켜요. 이 인스턴스는 소스 복사본의 `.env`를 읽지 않아요.
+`AIPAGER_INSTANCE_DIR`을 내 소유의 절대 경로 폴더로 설정하면, 위에 나온 공유 런타임 파일이 모두 그리로 옮겨 가요. 제어 소켓(그리고 그 옆의 응답 소켓, 속도 제한 신호 파일, 모델 변경 표시, hook 넘침 폴더), `claude-dtach-*` 소켓, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, `claude-exit-*` 파일, 안전 기준선 파일, `aipager-files` 다운로드 폴더, 자체 재시작 로그예요. 이 인스턴스가 시작한 세션은 이 설정을 물려받아서, 그 hook은 이 인스턴스하고만 통신하고, 안전 규칙도 옮겨진 파일을 같은 방식으로 지켜요. 이 인스턴스는 소스 복사본의 `.env`를 읽지 않아요.
 
 홈 폴더 아래의 파일은 옮겨지지 않으니 `HOME`도 별도 폴더로 지정하세요. 인스턴스 폴더를 설정했는데 `HOME`이 내 실제 홈 폴더일 때, 이 폴더가 내 폴더를 가리키는 절대 경로가 아닐 때, 또는 소켓 경로로 쓰기에 너무 길 때 `aipager start`는 실행을 거부해요.
 

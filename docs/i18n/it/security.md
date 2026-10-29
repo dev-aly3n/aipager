@@ -1,6 +1,6 @@
 # Modello di sicurezza
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager **non ascolta su nessuna porta TCP fuori dal loopback**. Il server della
 Connessioni in entrata:
 
 - Socket Unix datagram in `$XDG_RUNTIME_DIR/aipager.sock` (che torna a `/tmp/aipager.sock` quando `$XDG_RUNTIME_DIR` non è impostato). aipager ne fa il bind e ne imposta i permessi con `chmod` all'avvio (`aipager/dtach/hook_receiver.py`). Permessi `0o666`, così qualsiasi processo del computer può inviargli eventi hook: lo stesso livello di fiducia di `~/.claude/settings.json`, che già decide cosa esegue gli hook.
+- La cartella di appoggio degli hook, `aipager-spill-<uid>` accanto a quel socket. Un evento hook troppo grande per un solo datagram viene scritto lì come file, e il datagram indica solo il suo nome (vedi [hook](hooks.md)). aipager crea la cartella con permessi `0700` e non la usa se non è sua. L'hook scrive solo in quella cartella, e solo quando appartiene allo stesso utente senza accesso per il gruppo o per gli altri; ogni file viene creato `0600` con un nome casuale. Un datagram porta un nome, mai un percorso: aipager accetta solo il proprio schema di nomi, apre il file dentro la cartella senza seguire i link, accetta solo un file normale del proprio utente fino a 4 MiB e cancella ogni file che legge o rifiuta. I file lasciati da un aipager che si è fermato vengono cancellati all'avvio successivo, se hanno più di 5 minuti. Gli strumenti per i file delle attività con restrizioni restano fuori da quella cartella, come dai file di controllo `/tmp/claude-*`.
 
 Vuol dire che aipager non è una superficie di attacco remota. Un attaccante in rete non lo raggiunge senza prima avere un appiglio sul computer stesso.
 

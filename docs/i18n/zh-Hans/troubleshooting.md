@@ -1,6 +1,6 @@
 # 故障排除
 
-<!-- i18n-source: docs/troubleshooting.md @ d4381f41 -->
+<!-- i18n-source: docs/troubleshooting.md @ f3d5b335 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../troubleshooting.md)）
 
