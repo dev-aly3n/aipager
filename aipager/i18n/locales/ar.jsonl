@@ -317,7 +317,7 @@
 {"k": "home.tap_session", "src": "f14797d7", "v": "للتحدث مع جلسة: الضغط على اسمها في لوحة المفاتيح."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code من Telegram"}
 {"k": "jobwait.agents", "src": "cdf8fa99", "v": {"few": "بانتظار {n} وكلاء", "many": "بانتظار {n} وكيلًا", "one": "بانتظار وكيل واحد", "other": "بانتظار {n} وكيل", "two": "بانتظار وكيلين", "zero": "بانتظار {n} وكيل"}}
-{"k": "jobwait.both", "src": "4f90f011", "v": "بانتظار: {agents}، {shells}"}
+{"k": "jobwait.both", "src": "4f90f011", "v": "بانتظار: {agents} و{shells}"}
 {"k": "jobwait.finishing", "src": "1bfd382d", "v": "على وشك الانتهاء"}
 {"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"few": "بانتظار {n} أوامر في الخلفية", "many": "بانتظار {n} أمرًا في الخلفية", "one": "بانتظار أمر واحد في الخلفية", "other": "بانتظار {n} أمر في الخلفية", "two": "بانتظار أمرين في الخلفية", "zero": "بانتظار {n} أمر في الخلفية"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« رجوع"}
@@ -1391,7 +1391,7 @@
 {"k": "ui.state.gone", "src": "f957097d", "v": "انتهت"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "جاهزة"}
 {"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"few": "بانتظار {n} وكلاء", "many": "بانتظار {n} وكيلًا", "one": "بانتظار وكيل واحد", "other": "بانتظار {n} وكيل", "two": "بانتظار وكيلين", "zero": "بانتظار {n} وكيل"}}
-{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "بانتظار: {agents}، {shells}"}
+{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "بانتظار: {agents} و{shells}"}
 {"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "على وشك الانتهاء"}
 {"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"few": "بانتظار {n} أوامر في الخلفية", "many": "بانتظار {n} أمرًا في الخلفية", "one": "بانتظار أمر واحد في الخلفية", "other": "بانتظار {n} أمر في الخلفية", "two": "بانتظار أمرين في الخلفية", "zero": "بانتظار {n} أمر في الخلفية"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "غير معروفة"}
@@ -1403,7 +1403,7 @@
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "جاهزة"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "جاهزة، آخر نشاط {age}"}
 {"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"few": "بانتظار {n} وكلاء", "many": "بانتظار {n} وكيلًا", "one": "بانتظار وكيل واحد", "other": "بانتظار {n} وكيل", "two": "بانتظار وكيلين", "zero": "بانتظار {n} وكيل"}}
-{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "بانتظار: {agents}، {shells}"}
+{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "بانتظار: {agents} و{shells}"}
 {"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "على وشك الانتهاء"}
 {"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"few": "بانتظار {n} أوامر في الخلفية", "many": "بانتظار {n} أمرًا في الخلفية", "one": "بانتظار أمر واحد في الخلفية", "other": "بانتظار {n} أمر في الخلفية", "two": "بانتظار أمرين في الخلفية", "zero": "بانتظار {n} أمر في الخلفية"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "لا معلومات بعد"}
