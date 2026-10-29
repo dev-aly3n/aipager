@@ -2572,7 +2572,11 @@ class SessionOpsMixin:
         else:
             outcome = await self._stop_session_core(sess, by=by)
         if not outcome.ok:
-            if outcome.reason in BG_FAILURES or outcome.reason in stop_text.STOP_REFUSALS:
+            # A toasted Stop that found nothing to stop (the session went
+            # away meanwhile) is told so too: the caller's answer would be
+            # the tap's second one, and dropped.
+            if (outcome.reason in BG_FAILURES or outcome.reason in stop_text.STOP_REFUSALS
+                    or (toasted and outcome.reason == "")):
                 await self._say_stop_refused(sess, outcome, update, query,
                                              toasted=toasted)
             return outcome
@@ -2675,10 +2679,13 @@ class SessionOpsMixin:
             if toasted and message is not None:
                 tr = i18n.for_chat(calling_chat_id(update if update is not None
                                                    else query))
-                await reply_text(message,
-                                 stop_text.refusal(tr, outcome, html=True)
-                                 or stop_refused_html(tr, outcome),
-                                 parse_mode="HTML")
+                if outcome.reason == "":
+                    # Nothing left to stop (the session went away meanwhile).
+                    text = tr.html(NOT_WORKING, session=sess.label)
+                else:
+                    text = (stop_text.refusal(tr, outcome, html=True)
+                            or stop_refused_html(tr, outcome))
+                await reply_text(message, text, parse_mode="HTML")
             elif query is not None:
                 tr = i18n.for_person(update if update is not None
                                      else SimpleNamespace(callback_query=query))

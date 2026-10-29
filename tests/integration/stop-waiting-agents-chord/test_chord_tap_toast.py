@@ -221,3 +221,41 @@ def test_the_toast_wait_counts_from_the_tap_not_from_the_stop(rig, monkeypatch):
     assert _answers(q) == [STOPPING]
     assert rig.sess.status is Status.IDLE
 
+
+def _gone_late(rig, monkeypatch):
+    """The session went away during the Stop: nothing was stopped, and
+    there is no refusal to tell (``ok=False``, no reason)."""
+    async def _core(sess, *, by=""):
+        await asyncio.sleep(SLOW)
+        return StopOutcome(ok=False, label=sess.label)
+
+    monkeypatch.setattr(rig.bot, "_stop_session_core", _core)
+
+
+@pytest.mark.parametrize("where", ["card", "status"])
+def test_a_toasted_stop_that_found_nothing_says_so_in_a_reply(
+        rig, monkeypatch, where):
+    """The tap's one answer went to "Stopping": that it found nothing to
+    stop is a reply, not an answer Telegram would drop."""
+    sess = _waiting(rig)
+    _gone_late(rig, monkeypatch)
+    q = (_tap(rig, CARD, "stop") if where == "card"
+         else _tap(rig, 77, f"ststop{sess.turn_key}"))
+    assert _answers(q) == [STOPPING]
+    q.message.reply_text.assert_awaited_once()
+    reply = q.message.reply_text.await_args
+    assert reply.args[0] == "<b>api</b> is not working."
+    assert reply.kwargs.get("parse_mode") == "HTML"
+
+
+def test_a_stop_that_found_nothing_in_time_is_the_toast(rig, monkeypatch):
+    """Control: done before the toast wait, it is the tap's own answer."""
+    _waiting(rig)
+
+    async def _core(sess, *, by=""):
+        return StopOutcome(ok=False, label=sess.label)
+
+    monkeypatch.setattr(rig.bot, "_stop_session_core", _core)
+    q = _tap(rig, CARD, "stop")
+    assert _answers(q) == ["api is not working"]
+    q.message.reply_text.assert_not_awaited()

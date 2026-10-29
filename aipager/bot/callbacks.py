@@ -920,8 +920,11 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, person.text(again, session=sess.label))
             return True, None
         if toasted:
+            # A refusal, or nothing left to stop (the session went away
+            # meanwhile): a reply, since the tap's one answer is spent.
             if (outcome.reason in bg_text.BG_FAILURES
-                    or outcome.reason in stop_text.STOP_REFUSALS):
+                    or outcome.reason in stop_text.STOP_REFUSALS
+                    or (not outcome.ok and outcome.reason == "")):
                 await self._say_stop_refused(sess, outcome, update, query,
                                              toasted=True)
             return True, outcome
