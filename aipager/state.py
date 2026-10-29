@@ -25,7 +25,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from aipager import agent_tree as _agent_tree
 from aipager import bg_shells as _bg_shells
@@ -425,6 +425,34 @@ class Status(Enum):
     IDLE = auto()
     INTERACTIVE = auto()
     GONE = auto()
+
+
+# Roadmap 8.121: the state a surface shows for a session, derived from its
+# Status and its job (``TrackedSession.shown_state()``). Ids only: each
+# surface picks its own words from them, never the other way round.
+SHOWN_BUSY = "busy"
+SHOWN_NEEDS_YOU = "needs_you"
+SHOWN_TASKS = "tasks"  # idle, but its job still runs agents or shells
+SHOWN_IDLE = "idle"
+SHOWN_GONE = "gone"
+SHOWN_UNKNOWN = "unknown"
+
+_SHOWN_BY_STATUS: dict[Status, str] = {
+    Status.BUSY: SHOWN_BUSY,
+    Status.INTERACTIVE: SHOWN_NEEDS_YOU,
+    Status.IDLE: SHOWN_IDLE,
+    Status.GONE: SHOWN_GONE,
+    Status.UNKNOWN: SHOWN_UNKNOWN,
+}
+
+
+class ShownState(NamedTuple):
+    """What every surface shows for a session: a ``SHOWN_*`` id and, for
+    ``SHOWN_TASKS`` only, how many of the job's agents and shells still
+    run (both 0 in every other state)."""
+    state: str
+    agents: int
+    shells: int
 
 
 # Minimum seconds between IDLE notifications for the same session.
@@ -1872,6 +1900,25 @@ class TrackedSession:
         the stop core, /stop and /status's Stop share."""
         return (self.status in (Status.BUSY, Status.INTERACTIVE)
                 or self.job_background_open())
+
+    def job_counts(self) -> tuple[int, int]:
+        """The job's running agents and shells: what an idle session whose
+        job is open waits for. The ONE count every surface names (roadmap
+        8.121); ``bg_agents``/``bg_shells`` are the session's whole running
+        set, which also holds work outside the job."""
+        return len(self.active_subagents), len(self.job_shell_ids())
+
+    def shown_state(self) -> ShownState:
+        """The state the bar, /status, the card, the Mini App and the CLI
+        show (roadmap 8.121). An idle session whose job is still open
+        (``job_background_open()``) is ``SHOWN_TASKS`` with the job's
+        counts, which may both be 0 while the job waits for its
+        continuation (the grace window). Pure: no I/O, no text."""
+        state = _SHOWN_BY_STATUS.get(self.status, SHOWN_UNKNOWN)
+        if state == SHOWN_IDLE and self.job_background_open():
+            agents, shells = self.job_counts()
+            return ShownState(SHOWN_TASKS, agents, shells)
+        return ShownState(state, 0, 0)
 
     def job_background_open(self) -> bool:
         """True while a background agent launched by this job is still
@@ -3869,6 +3916,11 @@ class SessionRegistry:
         # until the first refresh. Transient.
         self.refreshed_live: set[str] | None = None
         self._dirty: bool = False
+        # Roadmap 8.121: name -> the shown state the last save wrote, so
+        # save_if_dirty() saves again when it changes (agents and shells
+        # starting or ending, the grace window running out) although no
+        # event marked the registry dirty.
+        self._shown_saved: dict[str, ShownState] = {}
         # Claude Code session id -> monotonic time aipager's own /kill
         # ended that process (bot.session_ops._kill_session_core). Its
         # SessionEnd is not announced; a new process under the same name
@@ -4733,6 +4785,7 @@ class SessionRegistry:
     def save(self) -> None:
         """Serialize persistable state to JSON (atomic write)."""
         sessions = {}
+        shown_saved: dict[str, ShownState] = {}
         for name, sess in self._sessions.items():
             d: dict = {}
             for f in self._PERSIST_FIELDS:
@@ -4791,6 +4844,14 @@ class SessionRegistry:
                 if kind:
                     d["waiting_kind"] = kind
                     d["waiting_summary"] = summary or ""
+            # Roadmap 8.121: computed, only while the session waits for its
+            # job's agents or shells, for `aipager status`; every way out
+            # drops it from the next save. load() never reads it.
+            shown = sess.shown_state()
+            shown_saved[name] = shown
+            if shown.state == SHOWN_TASKS:
+                d["job_wait"] = {"agents": shown.agents,
+                                 "shells": shown.shells}
             # Roadmap 8.101: computed, not a field (see card_started_wall).
             started_wall = sess.card_started_wall(time.monotonic(), time.time())
             if started_wall > 0:
@@ -4886,6 +4947,16 @@ class SessionRegistry:
         except OSError:
             log.exception("Failed to save session state")
             tmp.unlink(missing_ok=True)
+        self._shown_saved = shown_saved
+
+    def _shown_moved(self) -> bool:
+        """True when a session's shown state or its counts differ from
+        what the last save wrote (roadmap 8.121): agents and shells start
+        and end, and the grace window runs out, with no event marking the
+        registry dirty."""
+        saved = self._shown_saved
+        return any(sess.shown_state() != saved.get(name)
+                   for name, sess in self._sessions.items())
 
     def load(self) -> None:
         """Load persisted state from JSON. Missing or corrupt file → start fresh."""
@@ -5332,7 +5403,10 @@ class SessionRegistry:
             [self._target_seq] + [o for _n, o in self._user_targets.values()])
 
     def save_if_dirty(self) -> None:
-        """Save state if it has been modified since last save."""
+        """Save state if it has been modified since last save, or when a
+        session's shown state moved since the last save wrote it."""
+        if not self._dirty and self._shown_moved():
+            self._dirty = True
         if self._dirty:
             self.save()
             self._dirty = False
