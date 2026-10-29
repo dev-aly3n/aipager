@@ -264,23 +264,23 @@ def test_card_row_with_a_persian_file_name_keeps_the_check_first():
 @PARAS
 def test_card_waiting_line_reads_in_order(para):
     _in_order(kit.line_with(_card("safar", waiting=True, waiting_agents=3),
-                            "still working"), para)
+                            "waiting for"), para)
 
 
 def test_card_waiting_line_shows_the_arrows_first_and_the_clock_last():
-    line = kit.line_with(_card("safar", waiting=True, waiting_agents=3), "still working")
+    line = kit.line_with(_card("safar", waiting=True, waiting_agents=3), "waiting for")
     shown = kit.visual_text(line, 1)
-    assert shown == "\U0001f504safar·5agents(general-purpose)stillworking·2:05", shown
+    assert shown == "\U0001f504safar·waitingfor5agents·2:05", shown
 
 
 def test_card_waiting_line_with_a_persian_name_keeps_the_name_after_the_arrows():
-    line = kit.line_with(_card(kit.FA_NAME, waiting=True, waiting_agents=3), "still working")
+    line = kit.line_with(_card(kit.FA_NAME, waiting=True, waiting_agents=3), "waiting for")
     assert kit.visual_text(line, 1).startswith("\U0001f504" + kit.FA_NAME[::-1] + "·")
 
 
 @PARAS
 def test_card_waiting_line_with_a_persian_name_reads_in_order(para):
-    line = kit.line_with(_card(kit.FA_NAME, waiting=True, waiting_agents=3), "still working")
+    line = kit.line_with(_card(kit.FA_NAME, waiting=True, waiting_agents=3), "waiting for")
     _in_order(line, para)
 
 

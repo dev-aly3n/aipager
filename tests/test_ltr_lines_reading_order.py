@@ -288,7 +288,7 @@ def test_the_waiting_line_reads_in_order(frozen):
     status = status_md(card)
     assert "**" in status and "safar" in status
     seen = _judge(status)
-    assert seen == "\U0001f504safar·5agents(general-purpose)stillworking·39:30"
+    assert seen == "\U0001f504safar·waitingfor5agents·39:30"
 
 
 def test_the_waiting_line_with_a_persian_name_keeps_the_mark_first(frozen):

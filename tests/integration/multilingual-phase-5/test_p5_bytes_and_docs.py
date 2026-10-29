@@ -27,6 +27,8 @@ import pytest
 from aipager.i18n import locales
 from tests.i18n_surfaces import (
     AGENTS_TREE_CARD_SURFACES,
+    JOB_WAIT_SURFACES,
+    without_job_wait,
     AGENTS_TREE_NEW_SURFACES,
     APPEARANCE_NEW_SURFACES,
     BG_JOBS_PAGE_SCREENS,
@@ -145,7 +147,8 @@ def test_every_english_surface_of_the_base_is_unchanged():
     base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
     kept = {k: v for k, v in base.items()
             if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES
-            | NO_KEYBOARD_APP_SURFACES | AGENTS_TREE_CARD_SURFACES | APPEARANCE_SURFACES}
+            | NO_KEYBOARD_APP_SURFACES | AGENTS_TREE_CARD_SURFACES | APPEARANCE_SURFACES
+            | JOB_WAIT_SURFACES}
     assert {k: cur.get(k) for k in kept} == kept
     # The main keyboard lost its App button (2026-10-12), and only that.
     for k in NO_KEYBOARD_APP_SURFACES:
@@ -157,7 +160,14 @@ def test_every_english_surface_of_the_base_is_unchanged():
         # were folded, so the card never ends with a fold; only that.
         got = (with_agent_calls_folded(cur[k]) if k in CARD_FOLD_TAIL_SURFACES
                else cur[k])
+        # ...and (roadmap 8.121) the waiting line's new words, only that.
+        got = without_job_wait(k, got)
         assert without_card_divider(got) == base[k], k
+    # A session waiting for its agents (roadmap 8.121) changed these by
+    # its new words and renders only.
+    for k in JOB_WAIT_SURFACES - AGENTS_TREE_CARD_SURFACES - MODE_LABEL_SURFACES:
+        assert cur[k] != base[k], k
+        assert without_job_wait(k, cur[k]) == base[k], k
     # The settings menus got a "🎨 Appearance" row (2026-10-15), and only
     # that.
     for k in APPEARANCE_SURFACES:
@@ -169,7 +179,8 @@ def test_every_english_surface_of_the_base_is_unchanged():
     # by nothing else.
     for k in MODE_LABEL_SURFACES - THREE_MODES_SURFACES:
         assert cur[k] != base[k], k
-        assert without_mode_labels(cur[k]) == without_mode_labels(base[k]), k
+        assert (without_mode_labels(without_job_wait(k, cur[k]))
+                == without_mode_labels(base[k])), k
 
 
 def test_the_english_surfaces_only_gain_the_three_new_ones():

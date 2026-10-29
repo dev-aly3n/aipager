@@ -74,13 +74,22 @@ NAME_LEADS_LTR = frozenset(
     f"{code}/{card}/{c}/True/{w}" for code in LTR_LANGS for card in ("card", "card-ltr")
     for c in ("none", "en") for w in ("busy", "waiting"))
 STATUS_OPEN = "<footer>"
+#: Changed on purpose (roadmap 8.121): the waiting card's status line says
+#: what the session waits for ("waiting for 5 agents"), the words the bar,
+#: /status and the Mini App use; nothing above that line changes.
+JOB_WAIT_LINE = frozenset(k for k in MAIN if k.endswith("/waiting")) - CARD_FOLLOWS_CHAT
+_MARKS = re.compile("[\u200e\u200f\u2066-\u2069]")
+
+
+def _head(text: str) -> str:
+    return text.rpartition(STATUS_OPEN)[0]
 
 
 @pytest.mark.parametrize("code", sorted(locales.LOCALES))
 def test_what_must_not_change_renders_as_on_main(code):
     now = _now_renders()
     keys = [k for k in MAIN if k.split("/", 1)[0] == code
-            and k not in CARD_FOLLOWS_CHAT | NAME_LEADS_LTR]
+            and k not in CARD_FOLLOWS_CHAT | NAME_LEADS_LTR | JOB_WAIT_LINE]
     assert keys
     changed = [k for k in keys if now.get(k) != MAIN[k]]
     assert changed == [], changed[:5]
@@ -92,7 +101,22 @@ def test_a_persian_name_adds_one_mark_to_the_status_line(key):
     assert key in MAIN
     head, sep, status = now[key].rpartition(STATUS_OPEN)
     assert sep and status.startswith(kit.LRM) and status.count(kit.LRM) == 1
-    assert head + sep + status[1:] == MAIN[key]
+    if key in JOB_WAIT_LINE:
+        assert head == _head(MAIN[key])
+    else:
+        assert head + sep + status[1:] == MAIN[key]
+
+
+@pytest.mark.parametrize("key", sorted(JOB_WAIT_LINE))
+def test_the_waiting_line_says_what_it_waits_for_and_nothing_else_moved(key):
+    from aipager.bot import job_wait
+    now = _now_renders()
+    code = key.split("/", 1)[0]
+    assert _head(now[key]) == _head(MAIN[key])
+    status = now[key].rpartition(STATUS_OPEN)[2]
+    phrase = job_wait.phrase(i18n.get(code), 5, 0, kind="html")
+    assert _MARKS.sub("", str(phrase)) in _MARKS.sub("", status)
+    assert status != MAIN[key].rpartition(STATUS_OPEN)[2]
 
 
 @pytest.mark.parametrize("key", sorted(CARD_FOLLOWS_CHAT))

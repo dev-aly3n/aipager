@@ -99,7 +99,7 @@ def test_the_answer_stop_keeps_the_card_waiting_on_the_ping(rp, vloop):
     assert len(live_after_answer) == 1, (
         "the job's card should stay up, waiting on the backgrounded ping")
     waiting = rp.chat.cards[live_after_answer[0]]["texts"]
-    assert any("1 shell still working" in (t or "") for t in waiting)
+    assert any("waiting for 1 shell" in (t or "") for t in waiting)
 
 
 def test_the_wake_up_continues_on_the_same_card(rp, vloop):
