@@ -22,7 +22,7 @@ from aipager import state
 from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 TUID = "toolu_01Restored"
 CHAT = 256113222
 

@@ -2,7 +2,7 @@
 R1/R2, rulings Q1/Q5): the "typing…" bubble is back inside the budget, as
 the chat's LOWEST ornament, sent by ONE loop per chat.
 
-vm3, 2026-09-23: one typing loop per busy SESSION, exempt from every
+testbox, 2026-09-23: one typing loop per busy SESSION, exempt from every
 budget, sent the bubble twice every 4.5 s into one DM for 3 h 23 min —
 ~5,400 calls nobody counted — until a 429 on the bubble itself, and a
 straight 7-hour ban 3 h 23 min after that.
@@ -145,7 +145,7 @@ def test_the_bubble_that_lights_a_dark_chat_goes_at_a_cards_reserve(
     """Operator ruling 2026-09-23: the bubble shows from the first second
     of every turn. At a turn's start the card message takes a token (3 →
     2), so at the refresh reserve the first bubble would wait for it to
-    refill — 4 s into every turn on the vm3 replay. A bubble into a DARK
+    refill — 4 s into every turn on the testbox replay. A bubble into a DARK
     chat (none admitted in Telegram's 5 s) goes at a card's reserve and
     leaves the card its own; the refresh 4.5 s later needs the extra
     token again, and once the chat has been dark for 5 s the next bubble
@@ -556,7 +556,7 @@ def test_g_a_ban_on_the_bubble_mutes_the_chat_and_holds_the_answer(
     messages, so a ban Telegram answers to ``sendChatAction`` is a ban on
     the chat — and nothing may go into it. Through the REAL typing send
     path (``_send_typing`` → the gated bot → the limiter), a
-    ``retry_after`` of 25,429 s (vm3's) must arm the mute exactly as
+    ``retry_after`` of 25,429 s (testbox's) must arm the mute exactly as
     ``transport._send_with_retry`` and ``rich_message._ban_if_excessive``
     do: the very next ``sendMessage`` is refused at the gate with zero
     requests, the turn's answer — on the real ``notify`` path, over the
@@ -576,7 +576,7 @@ def test_g_a_ban_on_the_bubble_mutes_the_chat_and_holds_the_answer(
     from aipager.bot.held import HELD
 
     bot = _typing_bot(mk_bot, vbot)
-    sess = _session(bot, vloop, "vm3")
+    sess = _session(bot, vloop, "testbox")
     vbot.fail["sendChatAction"] = lambda: RetryAfter(25429)
     out: dict = {}
 
@@ -614,7 +614,7 @@ def test_g_a_ban_on_the_bubble_refuses_the_calls_already_queued(
 ):
     """Review rev-iter2-001. Row G's answer arrives AFTER the ban; this
     one is already WAITING in the limiter when it lands. A bubble is in
-    flight for a second and Telegram answers it with vm3's 25,429 s ban.
+    flight for a second and Telegram answers it with testbox's 25,429 s ban.
     Meanwhile two ``sendMessage``s have drained the bucket and gone out
     (they were on the wire before the ban was known — unavoidable), and
     a third ``sendMessage`` plus the turn's answer — the real ``notify``
@@ -635,7 +635,7 @@ def test_g_a_ban_on_the_bubble_refuses_the_calls_already_queued(
     from aipager.bot.held import HELD
 
     bot = _typing_bot(mk_bot, vbot)
-    sess = _session(bot, vloop, "vm3")
+    sess = _session(bot, vloop, "testbox")
     limiter = vbot._limiter
     out: dict = {"refused": 0, "sent": 0}
 

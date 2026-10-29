@@ -40,7 +40,7 @@ GROUP = -1001
 NEW_GROUP = -1005
 OTHER_GROUP = -1007
 DM = 555
-ALY, BOB, EVE, CAROL, STRANGER = 1, 2, 5, 3, 9
+ALICE, BOB, EVE, CAROL, STRANGER = 1, 2, 5, 3, 9
 TOKEN = "123456:FAKE"
 
 POLICY = load_policy(Path("/nonexistent/aipager-policy.yaml"),
@@ -51,14 +51,14 @@ POLICY = load_policy(Path("/nonexistent/aipager-policy.yaml"),
 
 def _group(chat_id=GROUP, label="team", deny=()):
     return Scope(chat_id=chat_id, kind="group", label=label,
-                 members=(Member(id=ALY, label="aly", role="owner"),
+                 members=(Member(id=ALICE, label="alice", role="owner"),
                           Member(id=BOB, label="bob", role="user")),
                  deny_tools=tuple(deny))
 
 
 def _dm():
     return Scope(chat_id=DM, kind="dm", label="owner DM",
-                 members=(Member(id=ALY, label="owner", role="owner"),))
+                 members=(Member(id=ALICE, label="owner", role="owner"),))
 
 
 def _cfg() -> Path:
@@ -143,8 +143,8 @@ def _fresh_unauthorized():
 
 def test_get_updates_is_read_newest_first(monkeypatch):
     _serve_updates(monkeypatch, _updates(
-        _msg(ALY, "aly", ALY, "private", "/start"),
-        _msg(ALY, "aly", OTHER_GROUP, "supergroup", "/start", title="old"),
+        _msg(ALICE, "alice", ALICE, "private", "/start"),
+        _msg(ALICE, "alice", OTHER_GROUP, "supergroup", "/start", title="old"),
         _msg(BOB, "bob", GROUP, "supergroup", title="team"),
         _msg(EVE, "eve", EVE, "private", "/start"),
     ))
@@ -158,12 +158,12 @@ def test_get_updates_is_read_newest_first(monkeypatch):
 def test_get_updates_skips_the_ids_already_captured(monkeypatch):
     _serve_updates(monkeypatch, _updates(
         _msg(BOB, "bob", GROUP, "supergroup"),
-        _msg(ALY, "aly", GROUP, "supergroup", "/start"),
+        _msg(ALICE, "alice", GROUP, "supergroup", "/start"),
     ))
     assert telegram_api._fetch_id_from_updates(
-        TOKEN, want="user", exclude={ALY})[:2] == (BOB, "bob")
+        TOKEN, want="user", exclude={ALICE})[:2] == (BOB, "bob")
     assert telegram_api._fetch_id_from_updates(
-        TOKEN, want="user", exclude={ALY, BOB}) == (
+        TOKEN, want="user", exclude={ALICE, BOB}) == (
         None, None, telegram_api.ONLY_KNOWN_SENDERS_ADVISORY)
     assert telegram_api._fetch_id_from_updates(
         TOKEN, want="group", exclude={GROUP})[0] is None
@@ -257,10 +257,10 @@ def test_member_two_is_found_after_member_one(monkeypatch):
     /start, then bob's mention. Member #1 (alice) is captured; member #2
     used to come back as alice on every attempt."""
     _serve_updates(monkeypatch, _updates(
-        _msg(ALY, "aly", ALY, "private", "/start"),
-        _msg(ALY, "aly", GROUP, "supergroup", "/start"),
+        _msg(ALICE, "alice", ALICE, "private", "/start"),
+        _msg(ALICE, "alice", GROUP, "supergroup", "/start"),
         _msg(BOB, "bob", GROUP, "supergroup"),
-        _msg(ALY, "aly", GROUP, "supergroup", "thanks"),   # newest: alice again
+        _msg(ALICE, "alice", GROUP, "supergroup", "thanks"),   # newest: alice again
     ))
     _quiet(monkeypatch, team_setup)
     _answers(monkeypatch, team_setup, [
@@ -269,7 +269,7 @@ def test_member_two_is_found_after_member_one(monkeypatch):
         "",                 # label: the suggestion
     ])
     out = team_setup._capture_user_identity(
-        2, existing_ids={ALY}, existing_labels={"aly"}, token=TOKEN)
+        2, existing_ids={ALICE}, existing_labels={"alice"}, token=TOKEN)
     assert out == {"id": BOB, "label": "bob"}
 
 
@@ -290,7 +290,7 @@ def test_the_found_person_is_confirmed_before_use(monkeypatch):
     monkeypatch.setattr(team_setup, "_ask", lambda q: {
         "select": "auto", "confirm": True, "text": ""}[q])
     out = team_setup._capture_user_identity(
-        2, existing_ids={ALY}, existing_labels={"aly"}, token=TOKEN)
+        2, existing_ids={ALICE}, existing_labels={"alice"}, token=TOKEN)
     assert out == {"id": BOB, "label": "bob"}
     assert ("confirm", "Found @bob (id 2). Is this the person to add?") in asked
 
@@ -318,7 +318,7 @@ def test_a_name_without_a_username_is_never_shown_as_a_handle(
     monkeypatch.setattr(team_setup, "_ask", lambda q: {
         "select": "auto", "confirm": True, "text": ""}[q])
     out = team_setup._capture_user_identity(
-        2, existing_ids={ALY}, existing_labels={"aly"}, token=TOKEN)
+        2, existing_ids={ALICE}, existing_labels={"alice"}, token=TOKEN)
     assert out == {"id": STRANGER, "label": "bob"}
     assert "Found bob (no username) (id 9). Is this the person to add?" in asked
     assert not any("@bob" in a for a in asked)
@@ -368,21 +368,21 @@ def test_a_person_turned_down_is_looked_past(monkeypatch):
         "",
     ])
     out = team_setup._capture_user_identity(
-        2, existing_ids={ALY}, existing_labels={"aly"}, token=TOKEN)
+        2, existing_ids={ALICE}, existing_labels={"alice"}, token=TOKEN)
     assert out == {"id": BOB, "label": "bob"}
-    assert seen_excludes == [{ALY}, {ALY, STRANGER}]
+    assert seen_excludes == [{ALICE}, {ALICE, STRANGER}]
 
 
 def test_member_capture_reads_the_daemons_records_while_it_runs(monkeypatch):
     _daemon(monkeypatch, 4242)
     _no_telegram(monkeypatch)
-    _pending((ALY, "aly", "", NEW_GROUP, _group_note("new team")),
+    _pending((ALICE, "alice", "", NEW_GROUP, _group_note("new team")),
              (BOB, "bob", "Bob", NEW_GROUP, _group_note("new team")),
-             (ALY, "aly", "", NEW_GROUP, _group_note("new team")))
+             (ALICE, "alice", "", NEW_GROUP, _group_note("new team")))
     lines = _quiet(monkeypatch, team_setup)
     _answers(monkeypatch, team_setup, ["auto", True, True, ""])
     out = team_setup._capture_user_identity(
-        2, existing_ids={ALY}, existing_labels={"aly"}, token=TOKEN)
+        2, existing_ids={ALICE}, existing_labels={"alice"}, token=TOKEN)
     assert out == {"id": BOB, "label": "bob"}
     assert telegram_api.WATCH_SOURCE_LINES["daemon"] in lines
     assert telegram_api.WATCH_SOURCE_LINES["telegram"] not in lines
@@ -417,7 +417,7 @@ def _stub_test_send(monkeypatch, sent):
 def test_group_detect_reads_the_daemons_records_while_it_runs(monkeypatch):
     _daemon(monkeypatch, 4242)
     _no_telegram(monkeypatch)
-    _pending((ALY, "aly", "", OTHER_GROUP, _group_note("old group")),
+    _pending((ALICE, "alice", "", OTHER_GROUP, _group_note("old group")),
              (BOB, "bob", "", NEW_GROUP, _group_note("new team")))
     lines = _quiet(monkeypatch, first_run)
     sent = []
@@ -431,8 +431,8 @@ def test_group_detect_reads_the_daemons_records_while_it_runs(monkeypatch):
 def test_a_group_whose_test_did_not_arrive_is_looked_past(monkeypatch):
     _daemon(monkeypatch, None)
     _serve_updates(monkeypatch, _updates(
-        _msg(ALY, "aly", NEW_GROUP, "supergroup", "/start"),
-        _msg(ALY, "aly", OTHER_GROUP, "supergroup", "/start"),
+        _msg(ALICE, "alice", NEW_GROUP, "supergroup", "/start"),
+        _msg(ALICE, "alice", OTHER_GROUP, "supergroup", "/start"),
     ))
     lines = _quiet(monkeypatch, first_run)
     sent = []
@@ -453,7 +453,7 @@ def test_group_detect_looks_past_groups_already_set_up(monkeypatch):
     _daemon(monkeypatch, 4242)
     _no_telegram(monkeypatch)
     _pending((BOB, "bob", "", NEW_GROUP, _group_note("new team")),
-             (ALY, "aly", "", GROUP, _group_note("team")))
+             (ALICE, "alice", "", GROUP, _group_note("team")))
     _quiet(monkeypatch, first_run)
     sent = []
     _stub_test_send(monkeypatch, sent)
@@ -469,8 +469,8 @@ def test_group_detect_says_when_only_groups_already_set_up_were_seen(
         f.write(f"chat_migrations:\n  {GROUP}: {NEW_GROUP}\n")
     _daemon(monkeypatch, None)
     _serve_updates(monkeypatch, _updates(
-        _msg(ALY, "aly", GROUP, "group", "/start"),          # its old id
-        _msg(ALY, "aly", NEW_GROUP, "supergroup", "/start"),
+        _msg(ALICE, "alice", GROUP, "group", "/start"),          # its old id
+        _msg(ALICE, "alice", NEW_GROUP, "supergroup", "/start"),
     ))
     _quiet(monkeypatch, first_run)
     printed = []
@@ -501,13 +501,13 @@ def test_dm_parity_first_run_dm_detect_reads_telegram_and_says_nothing_new(
     never the daemon's records (even if a daemon answers the probe)."""
     _daemon(monkeypatch, 4242)
     calls = _serve_updates(monkeypatch, _updates(
-        _msg(ALY, "aly", ALY, "private", "/start")))
+        _msg(ALICE, "alice", ALICE, "private", "/start")))
     lines = _quiet(monkeypatch, first_run)
     sent = []
     _stub_test_send(monkeypatch, sent)
     _answers(monkeypatch, first_run, ["auto", True, True])
-    assert first_run._step_chat_id(TOKEN, "aipagerbot", mode="personal") == ALY
-    assert len(calls) == 1 and sent == [ALY]
+    assert first_run._step_chat_id(TOKEN, "aipagerbot", mode="personal") == ALICE
+    assert len(calls) == 1 and sent == [ALICE]
     assert not any(line.startswith("Watching") for line in lines)
 
 
@@ -739,8 +739,8 @@ def test_add_a_member_appends_and_reloads_live(monkeypatch):
                         lambda pid, sig: signals.append((pid, sig)))
 
     assert edit_menu._edit_flow() == 0
-    assert captured == [(3, {ALY, BOB}, {"aly", "bob"})]
-    assert _members() == [(ALY, "aly", "owner"), (BOB, "bob", "user"),
+    assert captured == [(3, {ALICE, BOB}, {"alice", "bob"})]
+    assert _members() == [(ALICE, "alice", "owner"), (BOB, "bob", "user"),
                           (EVE, "eve", "user")]
     scopes, token = scope_io.read_config()
     assert token == TOKEN
@@ -768,7 +768,7 @@ def test_add_a_member_reads_the_group_as_it_is_now(monkeypatch):
                         lambda *a, **k: {"id": EVE, "label": "eve"})
     monkeypatch.setattr(edit_menu, "_pick_role", lambda *a, **k: "admin")
     assert edit_menu._add_member(stale, TOKEN) is True
-    assert _members() == [(ALY, "aly", "owner"), (BOB, "bob", "user"),
+    assert _members() == [(ALICE, "alice", "owner"), (BOB, "bob", "user"),
                           (CAROL, "carol", "read_only"), (EVE, "eve", "admin")]
 
 
@@ -798,8 +798,8 @@ def test_add_new_scope_never_replaces_a_scope():
         TOKEN) is False
     assert _cfg().read_bytes() == before
     assert scope_io.add_new_scope(_group(chat_id=NEW_GROUP), TOKEN) is True
-    assert _members(GROUP) == [(ALY, "aly", "owner"), (BOB, "bob", "user")]
-    assert _members(NEW_GROUP) == [(ALY, "aly", "owner"), (BOB, "bob", "user")]
+    assert _members(GROUP) == [(ALICE, "alice", "owner"), (BOB, "bob", "user")]
+    assert _members(NEW_GROUP) == [(ALICE, "alice", "owner"), (BOB, "bob", "user")]
 
 
 def test_add_a_member_is_not_offered_for_a_dm(monkeypatch):
@@ -903,7 +903,7 @@ def test_a_group_set_up_meanwhile_is_not_replaced_at_commit(monkeypatch):
     monkeypatch.setattr(scope_flows, "_pick_role", lambda *a, **k: "user")
     monkeypatch.setattr(team_setup, "_collect_deny_tools", lambda: [])
     assert scope_flows.add_group_scope(TOKEN, "aipagerbot") is False
-    assert _members() == [(ALY, "aly", "owner"), (BOB, "bob", "user")]
+    assert _members() == [(ALICE, "alice", "owner"), (BOB, "bob", "user")]
 
 
 def test_add_a_group_scope_for_a_new_group_still_adds_it(monkeypatch):
@@ -919,7 +919,7 @@ def test_add_a_group_scope_for_a_new_group_still_adds_it(monkeypatch):
     monkeypatch.setattr(team_setup, "_collect_deny_tools", lambda: [])
     assert scope_flows.add_group_scope(TOKEN, "aipagerbot") is True
     assert _members(NEW_GROUP) == [(EVE, "eve", "user")]
-    assert _members(GROUP) == [(ALY, "aly", "owner"), (BOB, "bob", "user")]
+    assert _members(GROUP) == [(ALICE, "alice", "owner"), (BOB, "bob", "user")]
 
 
 # =============================================================================
@@ -1046,11 +1046,11 @@ def test_the_new_sessions_line_tells_the_truth(mk_bot):
     raw["default_mode"] = "ask"
     _cfg().write_text(yaml.safe_dump(raw))
     group = Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=EVE, label="eve", role="admin")))
     bot = _gbot(mk_bot, scopes=[group, _dm()])
-    for uid, chat, may_full in [(ALY, DM, True), (ALY, GROUP, True),
+    for uid, chat, may_full in [(ALICE, DM, True), (ALICE, GROUP, True),
                                 (EVE, GROUP, True), (BOB, GROUP, False)]:
         st = new_flow.resolve_new_session_settings(bot, chat, uid)
         assert (st["mode"], st["can_full"]) == ("auto", may_full), (uid, chat)

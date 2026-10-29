@@ -73,9 +73,9 @@ def _line_level(line: str, para: int | None) -> int:
     return min(lv for lv in levels(line, para) if lv is not None)
 
 
-def _session(*, chat: int = 0, label: str = "safar"):
+def _session(*, chat: int = 0, label: str = "docs"):
     reg = SessionRegistry()
-    s = reg.get_or_create("claude-safar")
+    s = reg.get_or_create("claude-docs")
     s.label = label
     s.status = Status.BUSY
     if chat:
@@ -133,7 +133,7 @@ def test_the_screenshots_card_is_left_to_right_in_an_english_chat(mk_bot, run_as
     status = card.rsplit("\n", 1)[-1]
     # aipager's own lines carry no mark in an English chat.
     assert not INVISIBLE.search(status)
-    assert status.startswith("⏳ **safar** · Noodling · 0:27 · $0.10")
+    assert status.startswith("⏳ **docs** · Noodling · 0:27 · $0.10")
     rows = _rows(card.rsplit("\n", 1)[0])
     assert len(rows) == 5
     assert rows[0] == "✅ `Bash: Look for earlier taxi and price research notes`"
@@ -446,7 +446,7 @@ def test_a_persian_session_name_keeps_aipagers_lines_left_to_right(code, mk_bot,
         assert _line_level(line, para) == 0, (para, visual(line, para))
         assert visual(line, para).startswith("\u23f3"), (para, visual(line, para))
     # An ASCII name gets nothing.
-    _s, plain = _status(code, "safar")
+    _s, plain = _status(code, "docs")
     assert not INVISIBLE.search(plain)
     # The waiting frame's status line (a background job finishing).
     s.status = Status.IDLE
@@ -470,7 +470,7 @@ def test_a_persian_session_name_keeps_aipagers_lines_left_to_right(code, mk_bot,
 @pytest.mark.parametrize("code", ["ko", "tr"])
 def test_a_persian_peer_name_keeps_the_peer_line_left_to_right(code):
     # ko and tr name the sending session first.
-    s = _session(label="safar")
+    s = _session(label="docs")
     s.peer_from = {"status": "verified", "sender_session": "claude-" + FA2.replace(" ", "")}
     card = animation.build_stream_card(s, "Working", tr=i18n.get(code))
     peer = card.split("\n", 1)[0]

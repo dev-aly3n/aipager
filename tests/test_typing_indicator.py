@@ -234,7 +234,7 @@ def test_the_typing_action_is_refused_while_the_chat_budget_is_empty(run_async):
     ``test_the_typing_action_goes_out_while_the_chat_budget_is_empty``).
     The chat has no token left: the action is REFUSED, at once, and never
     reaches Telegram. 8.24 sent it anyway, off-budget; on 2026-09-23 the
-    uncounted bubble earned the vm3 DM a 429 of its own before a straight
+    uncounted bubble earned the testbox DM a 429 of its own before a straight
     7-hour ban.
 
     Mutation: put ``sendChatAction`` back in ``_CHAT_BUDGET_EXEMPT`` and it
@@ -324,7 +324,7 @@ def test_the_typing_action_is_refused_while_the_chat_is_deferred_by_a_429(
     The chat is inside a ``retry_after`` window and every budgeted call is
     barred — the bubble now included, refused at once and never waiting.
     The probe proved typing is not blocked BY an edit 429; it did not
-    prove typing is free, and on vm3 it was not.
+    prove typing is free, and on testbox it was not.
 
     Mutation: exempt the action from ``retry_until`` again and it goes out
     here.

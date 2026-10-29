@@ -1,4 +1,4 @@
-"""The Send now live test of 2026-09-28 12:44-12:46 (aipager_boss, Claude
+"""The Send now live test of 2026-09-28 12:44-12:46 (shop_api, Claude
 Code 2.1.283), replayed, plus the rows around each fix.
 
 Live: three messages queued behind a running step, Send now tapped on the

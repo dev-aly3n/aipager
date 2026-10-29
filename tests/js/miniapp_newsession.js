@@ -131,19 +131,19 @@ global.Telegram = undefined;
 // roots exist but whose daemon directory is not among them.
 const SCENARIO = process.argv[3] || "full";
 const SCENARIOS = {
-  full:     { directories: ["/home/aly/proj", "/home/aly/daemon-dir"],
-              default_directory: "/home/aly/daemon-dir" },
+  full:     { directories: ["/home/alice/proj", "/home/alice/daemon-dir"],
+              default_directory: "/home/alice/daemon-dir" },
   empty:    { directories: [], default_directory: "" },
-  noparent: { directories: ["/home/aly/proj"], default_directory: "" },
-  mainbutton: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
-  chips:    { directories: ["/home/aly/proj", "/home/aly/daemon-dir", "/home/aly/other"],
-              default_directory: "/home/aly/daemon-dir" },  // Schema from pytest (AIPAGER_TEST_SCHEMA): the real settings_schema().
-  schema_plain: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
+  noparent: { directories: ["/home/alice/proj"], default_directory: "" },
+  mainbutton: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj" },
+  chips:    { directories: ["/home/alice/proj", "/home/alice/daemon-dir", "/home/alice/other"],
+              default_directory: "/home/alice/daemon-dir" },  // Schema from pytest (AIPAGER_TEST_SCHEMA): the real settings_schema().
+  schema_plain: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj" },
   // The permission mode (2026-10-11): three options, Auto by default.
-  modes: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
-  modes_member: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj",
+  modes: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj" },
+  modes_member: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj",
                   can_use_full: false },
-  modes_default_ask: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj",
+  modes_default_ask: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj",
                        default_mode: "ask" },
   // Create folder (2026-10-12): a text button, one request at a time.
   folder: { directories: ["/home/alice/proj"], default_directory: "/home/alice/proj" },
@@ -177,7 +177,7 @@ const FIXTURES = {
     { label: "old", status: "idle", project: "daemon-dir", last_active_seconds_ago: 900 },
     { label: "new", status: "busy", project: "proj", last_active_seconds_ago: 5 },
   ] },
-  "/api/directories": { path: "/home/aly/proj/sub", existed: false },
+  "/api/directories": { path: "/home/alice/proj/sub", existed: false },
   "/api/sessions/made/preferences/answer_length": {
     values: { answer_length: { effective: "short", scope_default: "none",
                                override_value: "short", overridden: true } },
@@ -332,7 +332,7 @@ function driveFull() {
   if (headValue("new-cwd") !== "daemon-dir")
     fail("no directory was selected by default: " + headValue("new-cwd"));
 
-  dirRows[0].click();                             // pick /home/aly/proj
+  dirRows[0].click();                             // pick /home/alice/proj
   const dirBody2 = expand("new-cwd");             // (re-expand: it re-rendered)
   const dirRows2 = rows(dirBody2);
   const newFolder = dirRows2[dirRows2.length - 1];
@@ -350,7 +350,7 @@ function driveFull() {
   if (headValue("new-cwd") !== "proj")
     fail("opening New folder changed the selected directory to " +
          headValue("new-cwd"));
-  if (byId["new-folder-prefix"].textContent !== "…/aly/proj/")
+  if (byId["new-folder-prefix"].textContent !== "…/alice/proj/")
     fail("the parent is not shown as the field's prefix: " +
          JSON.stringify(byId["new-folder-prefix"].textContent));
 
@@ -366,12 +366,12 @@ function driveFull() {
     const mk = fetchCalls.slice(beforeMkdir).find(
       f => f.method === "POST" && /\/api\/directories$/.test(f.url));
     if (!mk) fail("Enter in the folder field sent no POST /api/directories");
-    if (!mk.body || mk.body.parent !== "/home/aly/proj" || mk.body.name !== "sub")
+    if (!mk.body || mk.body.parent !== "/home/alice/proj" || mk.body.name !== "sub")
       fail("mkdir request carried the wrong parent/name: " + JSON.stringify(mk.body));
     if (headValue("new-cwd") !== "sub")
       fail("the new folder was not selected after being created: " +
            headValue("new-cwd"));
-    if (byId["new-summary"].textContent.indexOf("/home/aly/proj/sub") === -1)
+    if (byId["new-summary"].textContent.indexOf("/home/alice/proj/sub") === -1)
       fail("the new folder is not in the summary: " + byId["new-summary"].textContent);
 
     // The operator has to be TOLD the folder was made, not just shown a
@@ -400,7 +400,7 @@ function driveFull() {
       if (post.body.model !== "claude-opus-5")
         fail("the typed model did not reach the create request: " +
              JSON.stringify(post.body));
-      if (post.body.cwd !== "/home/aly/proj/sub")
+      if (post.body.cwd !== "/home/alice/proj/sub")
         fail("the created folder did not reach the create request: " +
              JSON.stringify(post.body));
       const put = sent.find(f => f.method === "PUT" && /preferences\/answer_length$/.test(f.url));
@@ -518,7 +518,7 @@ function driveChips() {
     setTimeoutReal(() => {
       const post = fetchCalls.slice(before).find(f => f.method === "POST" && /\/api\/sessions$/.test(f.url));
       if (!post) fail("no POST /api/sessions");
-      if (post.body.cwd !== "/home/aly/proj" || post.body.model !== "Opus")
+      if (post.body.cwd !== "/home/alice/proj" || post.body.model !== "Opus")
         fail("the chips did not reach the create request: " + JSON.stringify(post.body));
       console.log("ok: Recent chip -> proj, Suggested chip -> Opus, POST carries both");
       process.exit(0);

@@ -174,7 +174,7 @@ def test_receipt_bad_root_rejected():
 
 def _scopes(root):
     return [Scope(chat_id=GROUP, kind="group", label="team", root=root, members=(
-        Member(id=1, label="aly", role="owner"),
+        Member(id=1, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user")))]
 
 

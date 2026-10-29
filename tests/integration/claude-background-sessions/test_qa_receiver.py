@@ -51,7 +51,7 @@ def test_a_spares_start_for_an_unknown_name_creates_no_session(stack):
 
 def test_a_spares_start_leaves_a_busy_session_untouched(stack):
     """Not parked at all: a spare under the inherited tag must not end the
-    turn or move the id (vm3's false turn loss)."""
+    turn or move the id (testbox's false turn loss)."""
     before = _state(stack.sess)
     stack.hook(hook_event_name="SessionStart", source="startup",
                bg_job=stack.ids.SPARE_JOB, session_id=stack.ids.SPARE_ID,

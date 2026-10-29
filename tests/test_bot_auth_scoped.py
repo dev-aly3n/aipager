@@ -12,11 +12,11 @@ from aipager.state import Status, TrackedSession
 def _scopes():
     return [
         Scope(chat_id=-100, kind="group", label="dev",
-              members=(Member(id=1, label="aly", role="owner"),
+              members=(Member(id=1, label="alice", role="owner"),
                        Member(id=2, label="bob", role="user"),
                        Member(id=3, label="ro", role="read_only"))),
-        Scope(chat_id=555, kind="dm", label="aly DM",
-              members=(Member(id=1, label="aly", role="owner"),)),
+        Scope(chat_id=555, kind="dm", label="alice DM",
+              members=(Member(id=1, label="alice", role="owner"),)),
     ]
 
 

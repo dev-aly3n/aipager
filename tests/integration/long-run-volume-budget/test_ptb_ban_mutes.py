@@ -89,7 +89,7 @@ def test_a_ban_on_a_plain_ptb_call_mutes_the_chat_and_refuses_the_queue(
 ):
     """A plain PTB ``editMessageText`` (through ``transport.edit_text_at``)
     or a ``pinChatMessage`` is in flight for a second and Telegram answers
-    it with vm3's 25,429 s ban. Meanwhile two ``sendMessage`` calls have
+    it with testbox's 25,429 s ban. Meanwhile two ``sendMessage`` calls have
     drained the bucket and gone out (they were on the wire before the ban
     was known), and a third ``sendMessage`` plus the turn's answer (the
     real ``notify`` over the real ``rich_message._post``) are queued in the
@@ -104,7 +104,7 @@ def test_a_ban_on_a_plain_ptb_call_mutes_the_chat_and_refuses_the_queue(
     attr, carrier = CARRIERS[endpoint]
     bot = mk_bot()
     bot._app.bot = vbot
-    sess = _session(bot, vloop, "vm3")
+    sess = _session(bot, vloop, "testbox")
     limiter = vbot._limiter
     setattr(vbot, attr, _slow_ban(vbot, vloop, endpoint))
     out: dict = {"refused": 0, "sent": 0}
@@ -175,7 +175,7 @@ def test_a_bubble_ban_armed_by_the_limiter_and_the_caller_is_one_mute(
     """
     bot = mk_bot()
     bot._app.bot = vbot
-    sess = _session(bot, vloop, "vm3")
+    sess = _session(bot, vloop, "testbox")
     vbot.fail["sendChatAction"] = lambda: RetryAfter(BAN)
     caplog.set_level(logging.DEBUG, logger="aipager.bot.flood")
 

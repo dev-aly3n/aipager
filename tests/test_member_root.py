@@ -33,7 +33,7 @@ def _dm(chat_id, label, role="user", root=None):
 
 def _group(label="team", root=None, chat_id=GROUP):
     return Scope(chat_id=chat_id, kind="group", label=label, members=(
-        Member(id=DM_OWNER, label="aly", role="owner"),
+        Member(id=DM_OWNER, label="alice", role="owner"),
         Member(id=7, label="ada", role="admin"),
         Member(id=DM_SARA, label="sara", role="user"),
         Member(id=9, label="ro", role="read_only"),
@@ -79,12 +79,12 @@ def test_defaults_for_a_dm_and_a_group(home):
 def test_two_scopes_never_share_default(home):
     """Labels that sanitise to the same name (case too) each get their
     chat id; a third one stays plain."""
-    scopes = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "aly", "owner"),
+    scopes = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "alice", "owner"),
               _group("x", chat_id=-5), _group("X", chat_id=-6)]
     roots = member_root.default_roots(scopes)
     assert roots[DM_SARA].endswith("/sara-101")
     assert roots[DM_SARA2].endswith("/sara-102")
-    assert roots[DM_OWNER].endswith("/aly")
+    assert roots[DM_OWNER].endswith("/alice")
     assert roots[-5].endswith("/group-x-n5") and roots[-6].endswith("/group-x-n6")
     assert len(set(roots.values())) == len(roots)
 
@@ -251,13 +251,13 @@ def test_relaunch_refusal(home, monkeypatch):
     from aipager.dtach import inject
     bot = _bot([_group(root="/srv/team")])
     assert member_root.relaunch_refusal(bot, DM_SARA, GROUP, "/srv/team/a") == ""
-    out = member_root.relaunch_refusal(bot, DM_SARA, GROUP, "/home/aly/aipager")
+    out = member_root.relaunch_refusal(bot, DM_SARA, GROUP, "/home/alice/aipager")
     assert out.startswith("This session works outside your folder /srv/team")
     # No folder known: the daemon's own.
     monkeypatch.setattr(inject, "_PROJECT_DIR", "/srv/team")
     assert member_root.relaunch_refusal(bot, DM_SARA, GROUP, "") == ""
     for uid in (DM_OWNER, 7):
-        assert member_root.relaunch_refusal(bot, uid, GROUP, "/home/aly/aipager") == ""
+        assert member_root.relaunch_refusal(bot, uid, GROUP, "/home/alice/aipager") == ""
 
 
 # ---- the hook's bound -----------------------------------------------------------
@@ -288,7 +288,7 @@ def test_snapshot_bound_never_denies_its_own_or_a_nested_root(home):
     mine = _group(root="/srv/team")
     nested = _dm(DM_SARA, "sara", root="/srv/team/sara")
     same = _dm(DM_SARA2, "lee", root="/srv/team")
-    other = _dm(DM_OWNER, "aly", root="/srv/other")
+    other = _dm(DM_OWNER, "alice", root="/srv/other")
     bound = member_root.snapshot_bound(_pol().get_role("user"), mine,
                                        [mine, nested, same, other])
     assert _root_denies(bound) == ("/srv/other",)
@@ -379,7 +379,7 @@ def test_pin_moved_defaults_skips_a_folder_that_cannot_be_a_root(home, monkeypat
     globby = home.parent / "op[1]"
     globby.mkdir()
     monkeypatch.setenv("HOME", str(globby))
-    before = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "aly", "owner")]
+    before = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "alice", "owner")]
     assert member_root.root_problem(member_root.effective_root(before[1], before))
     after = member_root.pin_moved_defaults(before, before[:1] + before[2:])
     assert [s.root for s in after] == [None, None]
@@ -387,16 +387,16 @@ def test_pin_moved_defaults_skips_a_folder_that_cannot_be_a_root(home, monkeypat
 
 def test_pin_moved_defaults(home):
     users = home / "aipager-users"
-    before = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "aly", "owner")]
+    before = [_dm(DM_SARA, "Sara"), _dm(DM_SARA2, "sara!"), _dm(DM_OWNER, "alice", "owner")]
     after = member_root.pin_moved_defaults(before, before[:1] + before[2:])
     assert [s.root for s in after] == [str(users / "sara-101"), None]
     # Nothing moves: the list comes back as it was.
     assert member_root.pin_moved_defaults(before, before) == before
     # A new scope is never pinned; a set root is never changed.
-    new = _dm(5, "aly")
+    new = _dm(5, "alice")
     after = member_root.pin_moved_defaults(before, [*before, new])
     assert after[-1].root is None
-    assert after[2].root == str(users / "aly")
+    assert after[2].root == str(users / "alice")
     set_ = [replace_root(before[0], "/srv/s"), *before[1:]]
     assert member_root.pin_moved_defaults(before, set_)[0].root == "/srv/s"
 

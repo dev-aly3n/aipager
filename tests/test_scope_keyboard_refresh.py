@@ -25,9 +25,9 @@ from aipager.state import SessionRegistry, Status
 
 DM, OTHER_DM, GROUP = 555, 777, -1001
 KB = "⌨️"
-OWNER = Member(id=DM, label="aly", role="owner")
+OWNER = Member(id=DM, label="alice", role="owner")
 SCOPES = [
-    Scope(chat_id=DM, kind="dm", label="aly", members=(OWNER,)),
+    Scope(chat_id=DM, kind="dm", label="alice", members=(OWNER,)),
     Scope(chat_id=OTHER_DM, kind="dm", label="bo",
           members=(Member(id=OTHER_DM, label="bo", role="owner"),)),
     Scope(chat_id=GROUP, kind="group", label="g", members=(OWNER,)),

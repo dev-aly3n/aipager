@@ -328,10 +328,10 @@ def vbot(vloop, vlimiter):
     return _GatedBot(vlimiter, vloop.time)
 
 
-# ── the vm3 replay: a Telegram that meters VOLUME ───────────────────────────
+# ── the testbox replay: a Telegram that meters VOLUME ───────────────────────────
 
 class _VolumeTelegram:
-    """Telegram as vm3 met it on 2026-09-23 (8.30 §8 Harness).
+    """Telegram as testbox met it on 2026-09-23 (8.30 §8 Harness).
 
     Two rules, and it records every call either way:
 
@@ -340,8 +340,8 @@ class _VolumeTelegram:
     * a LONG-WINDOW rule, which no fake before this one had: more than
       :attr:`LONG_MAX` calls into a chat in any rolling
       :attr:`LONG_WINDOW` seconds is answered with a straight ban
-      (``retry_after`` 25429 s, vm3's own), no warning first — the shape
-      that ended vm3's 3 h 23 min.
+      (``retry_after`` 25429 s, testbox's own), no warning first — the shape
+      that ended testbox's 3 h 23 min.
 
     ``sendChatAction`` is metered like everything else: whether Telegram
     counts it with messages is unproven, and the design bounds it anyway.

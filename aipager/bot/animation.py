@@ -344,7 +344,7 @@ CARD_REFRESH_TIMEOUT = 20.0
 #
 # Since 8.30 it is sent by ONE loop per CHAT, not one per busy session
 # (the bubble is chat-level in every client: two sessions in one DM sent
-# it twice for one bubble, ~5,400 uncounted calls on vm3), and it is
+# it twice for one bubble, ~5,400 uncounted calls on testbox), and it is
 # BUDGETED as the lowest ornament — see `flood_budget.CHAT_ACTION_ENDPOINT`.
 TYPING_ACTION = "typing"
 # A 429 on the chat action gets ONE INFO line per chat per hour (R4) here;
@@ -1814,7 +1814,7 @@ class AnimationMixin:
         while the rolling hour has shed it or a 429 on it is still
         running, and suspends it in minimal mode — every one of those a
         ``FloodSkipped``, which is "nothing sent, try next refresh". It
-        was exempt from 8.24 to 8.30, and on 2026-09-23 it earned the vm3
+        was exempt from 8.24 to 8.30, and on 2026-09-23 it earned the testbox
         DM a 429 of its own.
 
         The BUSY status and the mute are re-checked HERE, at send time, and
@@ -1965,7 +1965,7 @@ class AnimationMixin:
 
         ONE LOOP PER CHAT (8.30 R2). The bubble is chat-level in every
         Telegram client, and one loop per busy SESSION sent it twice for
-        one bubble whenever two sessions shared a DM — on vm3, for three
+        one bubble whenever two sessions shared a DM — on testbox, for three
         hours. So the first call for a chat registers itself as that
         chat's loop, and a call for a chat whose loop is already live
         returns at once: calling this once per session yields one loop per
@@ -2896,7 +2896,7 @@ class AnimationMixin:
         ``CARD_STATE_BYPASS_MIN_GAP``, and never faster than
         ``base_gap``. A new tool row, prose or a subagent event is NOT a
         state change: it marks the card dirty and rides the next due
-        edit. On vm3 676 phantom SubagentStops reached this path in three
+        edit. On testbox 676 phantom SubagentStops reached this path in three
         hours; a bypass for events would have kept a four-hour card at a
         10 s cadence for its whole life.
 
@@ -3391,7 +3391,7 @@ class AnimationMixin:
         # brought it back EXEMPT from the per-chat budget on the evidence
         # of a live probe (chat actions answered 200 through an edit 429
         # window) — and on 2026-09-23 the uncounted bubble, one loop per
-        # busy SESSION, earned the vm3 DM a 429 of its own before a
+        # busy SESSION, earned the testbox DM a 429 of its own before a
         # 7-hour ban. Since 8.30 it is budgeted again as the chat's LOWEST
         # ornament, from ONE loop per chat, and shows from the first
         # second of every turn (operator ruling 2026-09-23): the card's

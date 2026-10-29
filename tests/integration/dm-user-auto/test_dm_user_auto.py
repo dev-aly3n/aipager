@@ -53,11 +53,11 @@ from aipager.scope import Member, Scope
 from aipager.state import Status
 
 GROUP = -1001
-ALY, BOB, RO, CARA = 1, 2, 3, 5      # owner; user; read_only; user (no DM)
-ALY_DM, BOB_DM, RO_DM = ALY, BOB, RO
+ALICE, BOB, RO, CARA = 1, 2, 3, 5      # owner; user; read_only; user (no DM)
+ALICE_DM, BOB_DM, RO_DM = ALICE, BOB, RO
 G_S = "claude-api__g1001"
 BOB_S = "claude-mine__d2"
-ALY_S = "claude-ops__d1"
+ALICE_S = "claude-ops__d1"
 
 NEEDS_ADMIN = "Full access mode needs an admin."
 APP_NEEDS_ADMIN = "Full access mode requires admin."     # the Mini App's wording
@@ -88,17 +88,17 @@ ROOTS = {}
 
 def _scopes():
     base = Path.home() / "work"  # the conftest's throwaway home
-    ROOTS.update({GROUP: str(base / "team"), ALY_DM: str(base / "aly"),
+    ROOTS.update({GROUP: str(base / "team"), ALICE_DM: str(base / "alice"),
                   BOB_DM: str(base / "bob"), RO_DM: str(base / "ro")})
     return [
         Scope(chat_id=GROUP, kind="group", label="team", root=ROOTS[GROUP], members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"),
             Member(id=RO, label="ro", role="read_only"),
             Member(id=CARA, label="cara", role="user"),
         )),
-        Scope(chat_id=ALY_DM, kind="dm", label="aly DM", root=ROOTS[ALY_DM],
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=ALICE_DM, kind="dm", label="alice DM", root=ROOTS[ALICE_DM],
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
         Scope(chat_id=BOB_DM, kind="dm", label="bob DM", root=ROOTS[BOB_DM],
               members=(Member(id=BOB, label="bob", role="user"),)),
         Scope(chat_id=RO_DM, kind="dm", label="ro DM", root=ROOTS[RO_DM],
@@ -238,13 +238,13 @@ G_IDS = ["group-user", "group-read_only"]
 
 @pytest.mark.parametrize("uid,chat,want", [
     (BOB, BOB_DM, True),        # a user, their own DM
-    (ALY, ALY_DM, True),        # the owner (admin anyway)
-    (ALY, GROUP, True),         # an admin in the group
+    (ALICE, ALICE_DM, True),        # the owner (admin anyway)
+    (ALICE, GROUP, True),         # an admin in the group
     (BOB, GROUP, False),        # a user in a group
     (RO, GROUP, False),         # read_only in a group
     (RO, RO_DM, False),         # read_only sends no prompts, even at home
-    (BOB, ALY_DM, False),       # someone else's DM
-    (ALY, BOB_DM, False),       # the owner is no one in bob's DM
+    (BOB, ALICE_DM, False),       # someone else's DM
+    (ALICE, BOB_DM, False),       # the owner is no one in bob's DM
     (CARA, BOB_DM, False),      # not that DM's member
     (BOB, None, False),         # an unknown chat
     (None, BOB_DM, False),      # an unknown person
@@ -486,14 +486,14 @@ def test_yes_and_stop_and_switch_in_a_group_are_refused(
 
 
 def test_another_persons_dm_card_is_not_theirs(bot, run_async):
-    """bob taps a Yes that names aly's DM session, from aly's DM: he is
+    """bob taps a Yes that names alice's DM session, from alice's DM: he is
     no member there, so nothing switches."""
-    sess = _session(bot, ALY_S, ALY_DM)
-    bot._perms_pending[ALY_S] = {"target_mode": "full", "msg_id": 90,
+    sess = _session(bot, ALICE_S, ALICE_DM)
+    bot._perms_pending[ALICE_S] = {"target_mode": "full", "msg_id": 90,
                                  "label": sess.label, "turn": sess.turn_key}
     bot._do_perms_switch_via_fn = AsyncMock()
     for uid in (BOB, CARA):
-        u, q = _tap(ALY_DM, uid, f"{ALY_S}:perms_confirm", msg_id=90)
+        u, q = _tap(ALICE_DM, uid, f"{ALICE_S}:perms_confirm", msg_id=90)
         run_async(bot._handle_callback(u, MagicMock()))
     bot._do_perms_switch_via_fn.assert_not_called()
     assert sess.perm_mode == "ask"
@@ -945,7 +945,7 @@ def _http(bot, run_async, fn):
 
 @pytest.mark.parametrize("uid,chat,want", [
     (BOB, BOB_DM, True), (BOB, GROUP, False), (RO, GROUP, False), (RO, RO_DM, False),
-    (ALY, GROUP, True)], ids=["user-own-dm", "user-group", "ro-group", "ro-own-dm",
+    (ALICE, GROUP, True)], ids=["user-own-dm", "user-group", "ro-group", "ro-own-dm",
                               "owner-group"])
 def test_miniapp_create_form_says_who_may_use_full_access(bot, run_async, uid, chat, want):
     async def _fn(client):
@@ -993,17 +993,17 @@ def test_miniapp_create_in_auto_is_a_users(bot, run_async, launched, uid, chat):
 
 
 def test_miniapp_other_persons_dm_is_out_of_reach(bot, run_async):
-    _session(bot, ALY_S, ALY_DM)
+    _session(bot, ALICE_S, ALICE_DM)
 
     async def _fn(client):
-        r1 = await client.post("/api/sessions/ops/perms", headers=_hdr(BOB, ALY_DM),
+        r1 = await client.post("/api/sessions/ops/perms", headers=_hdr(BOB, ALICE_DM),
                                json={"mode": "full"})
-        r2 = await client.put("/api/preferences/layout", headers=_hdr(BOB, ALY_DM),
+        r2 = await client.put("/api/preferences/layout", headers=_hdr(BOB, ALICE_DM),
                               json={"value": "merged"})
         return r1.status, r2.status
     assert _http(bot, run_async, _fn) == (403, 403)
-    assert bot.registry.get(ALY_S).perm_mode == "ask"
-    assert preferences.get_preferences(ALY_DM).layout != "merged"
+    assert bot.registry.get(ALICE_S).perm_mode == "ask"
+    assert preferences.get_preferences(ALICE_DM).layout != "merged"
 
 
 # ===========================================================================
@@ -1072,9 +1072,9 @@ def test_miniapp_mode_switch_outside_the_root_is_refused(bot, run_async, target)
 
 def test_an_admin_switches_a_session_outside_the_root(bot, run_async):
     """The root rule holds members without can_manage only."""
-    sess = _session(bot, ALY_S, ALY_DM, cwd=_outside(ALY_DM))
+    sess = _session(bot, ALICE_S, ALICE_DM, cwd=_outside(ALICE_DM))
     bot._mode_switch_core = AsyncMock(return_value=MagicMock(ok=True, reason="sent", label=sess.label))
-    u = _cmd("/mode ops auto", user_id=ALY, chat_id=ALY_DM)
+    u = _cmd("/mode ops auto", user_id=ALICE, chat_id=ALICE_DM)
     run_async(bot._handle_mode_cmd(u, MagicMock()))
     bot._mode_switch_core.assert_awaited_once_with(sess, "auto")
 
@@ -1147,9 +1147,9 @@ def test_the_hook_still_denies_a_users_bash_in_every_mode(tmp_path, monkeypatch,
 # ===========================================================================
 
 @pytest.mark.parametrize("uid,chat,want", [
-    (BOB, BOB_DM, True), (RO, RO_DM, True), (ALY, ALY_DM, True),
-    (ALY, GROUP, True), (BOB, GROUP, False), (RO, GROUP, False),
-    (BOB, ALY_DM, False), (CARA, BOB_DM, False), (BOB, None, False),
+    (BOB, BOB_DM, True), (RO, RO_DM, True), (ALICE, ALICE_DM, True),
+    (ALICE, GROUP, True), (BOB, GROUP, False), (RO, GROUP, False),
+    (BOB, ALICE_DM, False), (CARA, BOB_DM, False), (BOB, None, False),
     (BOB, 4242, False)],
     ids=["user-own-dm", "ro-own-dm", "owner-own-dm", "owner-group",
          "user-group", "ro-group", "user-other-dm", "stranger-dm",

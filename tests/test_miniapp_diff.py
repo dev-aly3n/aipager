@@ -1,7 +1,7 @@
 """Tests for aipager.miniapp.diff.collect_diff.
 
 Every repo here is a throwaway git repo built inside `tmp_path` — never
-the real project repo, never `/home/aly/aipager` (or wherever this
+the real project repo, never `/home/alice/aipager` (or wherever this
 worktree happens to live). `run_async` (no pytest-asyncio) drives the
 coroutines under test, matching the rest of this project's async tests.
 """

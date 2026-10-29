@@ -32,19 +32,19 @@ from aipager.scope import Member, Scope, chat_from_suffix, home_scope
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 GROUP = -1001
-DM = 555           # the owner's (aly's) DM
+DM = 555           # the owner's (alice's) DM
 OTHER_DM = 777     # carl's DM (role user)
-ALY, BOB, CARL = 1, 2, 7
+ALICE, BOB, CARL = 1, 2, 7
 
 
 def _group(chat=GROUP):
     return Scope(chat_id=chat, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
     ))
 
 
-def _dm(chat=DM, uid=ALY, role="owner"):
+def _dm(chat=DM, uid=ALICE, role="owner"):
     return Scope(chat_id=chat, kind="dm", label=f"dm {chat}",
                  members=(Member(id=uid, label=f"u{uid}", role=role),))
 
@@ -295,7 +295,7 @@ def _dm_session(bot, name="claude-api__d555", chat=DM, kind="dm"):
     s.label = "api"
     s.scope_chat_id, s.scope_kind = chat, kind
     s.status = Status.IDLE
-    s.last_driver_user_id = ALY
+    s.last_driver_user_id = ALICE
     return s
 
 
@@ -385,7 +385,7 @@ def test_known_session_stamped_with_another_chat_is_refused(gbot, typed, run_asy
     bot = gbot()
     s = _dm_session(bot, name="claude-legacy", chat=GROUP, kind="group")
     s.label = "renamed"
-    u = _update("/legacy hi", user_id=ALY, chat_id=DM)
+    u = _update("/legacy hi", user_id=ALICE, chat_id=DM)
     run_async(bot._handle_message(u, None))
     assert typed == []
     assert _replies(u) == ["⚠️ Unknown session: legacy"]
@@ -402,7 +402,7 @@ def test_unscoped_socket_is_unknown_outside_its_home_chat(gbot, typed, run_async
     assert bot.registry.get("claude-scratch") is None
     assert _replies(u) == ["⚠️ Unknown session: scratch"]
 
-    u = _update("/scratch hi", user_id=ALY, chat_id=DM)
+    u = _update("/scratch hi", user_id=ALICE, chat_id=DM)
     run_async(bot._handle_message(u, None))
     assert [n for n, _ in typed] == ["claude-scratch"]
     s = bot.registry.get("claude-scratch")
@@ -421,20 +421,20 @@ def test_unstamped_known_session_is_unknown_outside_its_home_chat(gbot, typed):
 def test_the_same_name_works_from_its_own_chat(gbot, typed, tmp_path, run_async):
     bot = gbot()
     s = _dm_session(bot)
-    u = _update("/api__d555 hello", user_id=ALY, chat_id=DM)
+    u = _update("/api__d555 hello", user_id=ALICE, chat_id=DM)
     run_async(bot._handle_message(u, None))
     assert typed and typed[-1][0] == "claude-api__d555"
     assert "hello" in typed[-1][1]
 
     s.status = Status.IDLE
-    u = _update("/api__d555", user_id=ALY, chat_id=DM, message_id=401)
+    u = _update("/api__d555", user_id=ALICE, chat_id=DM, message_id=401)
     run_async(bot._handle_message(u, None))
     assert "Unknown session" not in " ".join(map(str, _replies(u)))
     assert bot.registry.target_for(DM) is s
 
     s.status = Status.IDLE
     assert run_async(bot._session_for_typed_label(
-        _update(None, user_id=ALY, chat_id=DM), "api__d555")) is s
+        _update(None, user_id=ALICE, chat_id=DM), "api__d555")) is s
 
 
 def test_group_session_name_works_in_the_group(gbot, typed, run_async):

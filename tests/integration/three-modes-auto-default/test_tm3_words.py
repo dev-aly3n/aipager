@@ -17,6 +17,7 @@ from aipager import i18n
 from aipager.bot import mode_labels
 from aipager.i18n.locales import enabled_codes
 from aipager.state import SessionRegistry, Status
+from tests.neutral_names import as_renamed
 
 from _tm3 import (DM_CHAT, OWNER, dm_bot, reply_buttons, reply_texts, settle_tasks, typed)
 
@@ -274,9 +275,12 @@ JUSTIFIED = {
 
 
 def _at_base(rel):
+    """*rel* at the base commit, with the example owner's handle renamed as
+    the tree's was after it (:func:`as_renamed`)."""
     try:
-        return subprocess.run(["git", "show", f"{BASE}:{rel}"], cwd=str(ROOT),
-                              capture_output=True, timeout=30, check=True).stdout
+        return as_renamed(subprocess.run(
+            ["git", "show", f"{BASE}:{rel}"], cwd=str(ROOT),
+            capture_output=True, timeout=30, check=True).stdout)
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         pytest.skip(f"base commit {BASE} not available")
 

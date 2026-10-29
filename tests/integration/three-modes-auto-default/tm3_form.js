@@ -86,8 +86,8 @@ const OPTIONS = Object.assign({
   schema: [],
   scope_defaults: {},
   can_create: true,
-  directories: ["/home/aly/proj"],
-  default_directory: "/home/aly/proj",
+  directories: ["/home/alice/proj"],
+  default_directory: "/home/alice/proj",
 }, overrides);
 const calls = [];
 global.fetch = (url, opts) => {

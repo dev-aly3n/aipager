@@ -82,7 +82,7 @@ def test_finished_session_shows_no_zero_noise():
 def test_live_session_shows_every_populated_fact():
     facts = display_facts({
         "model": "Opus 4.6", "context_pct": 34, "cost_usd": 1.5,
-        "last_active_seconds_ago": 125, "cwd": "/home/aly/aipager",
+        "last_active_seconds_ago": 125, "cwd": "/home/alice/aipager",
         "busy_elapsed_seconds": 90,
     })
     labels = [f["label"] for f in facts]
@@ -92,7 +92,7 @@ def test_live_session_shows_every_populated_fact():
     assert by_label["Cost"] == "$1.50"
     assert by_label["Working for"] == "1:30"
     assert by_label["Last active"] == "2m ago"
-    assert by_label["Directory"] == "/home/aly/aipager"
+    assert by_label["Directory"] == "/home/alice/aipager"
 
 
 def test_zero_seconds_ago_is_shown_but_null_is_omitted():
@@ -135,7 +135,7 @@ def test_detail_payload_carries_preview_and_facts():
         status=Status.GONE,
         model_name="Opus 4.6",
         last_assistant_preview="Done — the tests pass.",
-        cwd="/home/aly/aipager",
+        cwd="/home/alice/aipager",
     )
     detail = session_detail(sess, 1000.0)
     assert detail["last_message"] == "Done — the tests pass."

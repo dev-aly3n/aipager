@@ -262,7 +262,7 @@ def test_a_ban_today_halves_the_ceiling_until_tomorrow(
     old is it an ordinary chat again.
 
     As written for 0.7.13 this row asserted the full ceiling a day after
-    the ban. vm3's 2026-09-19 ban was four days old on 2026-09-23 and no
+    the ban. testbox's 2026-09-19 ban was four days old on 2026-09-23 and no
     longer counted, and the chat ran at the full ceiling into a straight
     7-hour ban — the 24-hour lapse is what R6 reverses.
 

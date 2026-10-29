@@ -24,7 +24,7 @@ from aipager.bot import callbacks, session_ops
 from aipager.bot.session_ops import StopOutcome
 from aipager.dtach import inject
 from aipager.state import Status
-from tests.two_prompts_rig import ALY, CARD, GROUP, OTHER, S, BG
+from tests.two_prompts_rig import ALICE, CARD, GROUP, OTHER, S, BG
 
 CHORD = b"\x18\x0b"
 STOPPING = "⏹ Stopping api…"
@@ -53,7 +53,7 @@ def _waiting(rig):
     return rig.sess
 
 
-def _tap(rig, msg_id, data, uid=ALY):
+def _tap(rig, msg_id, data, uid=ALICE):
     """``Rig.tap`` with a message that can be replied to."""
     q = MagicMock()
     q.data = f"{S}:{data}"
@@ -180,7 +180,7 @@ def test_the_stop_survives_the_taps_handler_being_cancelled(rig, monkeypatch):
     sess = _waiting(rig)
     _slow_chord(rig, monkeypatch)
     q = MagicMock()
-    q.from_user = MagicMock(id=ALY)
+    q.from_user = MagicMock(id=ALICE)
     q.message = MagicMock(message_id=CARD)
     q.answer = AsyncMock()
 

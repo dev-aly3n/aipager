@@ -54,9 +54,9 @@ GROUP = -1001
 DM = 555
 S = "claude-api__g1001"
 
-ALY, BOB, RO, ADA = 1, 2, 3, 4      # owner, user, read_only, admin
-ROLE_OF = {ALY: "owner", BOB: "user", RO: "read_only", ADA: "admin"}
-MANAGERS = {ALY, ADA}
+ALICE, BOB, RO, ADA = 1, 2, 3, 4      # owner, user, read_only, admin
+ROLE_OF = {ALICE: "owner", BOB: "user", RO: "read_only", ADA: "admin"}
+MANAGERS = {ALICE, ADA}
 
 AUTO_NOTE = f"in Auto mode: {RESUME_FULL_NEEDS_ADMIN}"
 
@@ -67,7 +67,7 @@ def _builtin_policy():
 
 def _group_scope():
     return Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
@@ -75,8 +75,8 @@ def _group_scope():
 
 
 def _dm_scope():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 @pytest.fixture
@@ -278,7 +278,7 @@ def test_custom_roles_follow_can_manage(gbot, tmp_path):
 # The gate matrix (real policy)
 # ===========================================================================
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
 def test_admin_rules_in_a_group(gbot, uid):
     bot = gbot()
     assert bot._is_admin_user(uid, GROUP) is (uid in MANAGERS)
@@ -313,7 +313,7 @@ def test_new_defaults_auto_without_full_access_for_others(gbot, uid):
     assert st["can_full"] is False and st["mode"] == "auto"
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_mode_full_typed(gbot, run_async, uid):
     bot = gbot()
     sess = _session(bot)
@@ -330,7 +330,7 @@ def test_mode_full_typed(gbot, run_async, uid):
     assert sess.perm_mode == "ask"      # nothing switched without a confirm
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
 def test_update_typed(gbot, run_async, uid):
     bot = gbot()
     u = _cmd("/update", user_id=uid, chat_id=GROUP)
@@ -346,7 +346,7 @@ def test_update_typed(gbot, run_async, uid):
         assert update_flow.DENIED_TEXT == "🚫 Only an admin can update aipager."
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_group_settings_write(gbot, run_async, uid):
     from aipager import preferences
     bot = gbot()
@@ -360,7 +360,7 @@ def test_group_settings_write(gbot, run_async, uid):
     assert before != "merged"
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_whoami_shows_can_manage(gbot, run_async, uid):
     bot = gbot()
     u = _cmd("/whoami", user_id=uid, chat_id=GROUP)
@@ -368,16 +368,16 @@ def test_whoami_shows_can_manage(gbot, run_async, uid):
     text = "\n".join(_replies(u))
     want = "yes" if uid in MANAGERS else "no"
     assert f"can_manage: {want}" in text
-    assert f"bypass_safety: {'yes' if uid == ALY else 'no'}" in text
+    assert f"bypass_safety: {'yes' if uid == ALICE else 'no'}" in text
 
 
 # ---- DM parity: the operator's own install ------------------------------
 
 def test_dm_owner_is_unchanged(gbot):
     bot = gbot(scopes="dm")
-    assert bot._is_admin_user(ALY, DM) is True
-    assert bot._is_update_admin(ALY, DM) is True
-    st = new_flow.resolve_new_session_settings(bot, DM, ALY)
+    assert bot._is_admin_user(ALICE, DM) is True
+    assert bot._is_update_admin(ALICE, DM) is True
+    st = new_flow.resolve_new_session_settings(bot, DM, ALICE)
     assert st["can_full"] is True
 
 
@@ -445,7 +445,7 @@ def _gone_auto(bot, name=S, chat=GROUP, kind="group"):
     return s
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_typed_resume_of_a_full_access_session(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
@@ -484,13 +484,13 @@ def test_typed_resume_of_an_ask_session_says_nothing_extra(
 def test_dm_owner_typed_resume_is_unchanged(gbot, run_async, launched):
     bot = gbot(scopes="dm")
     sess = _gone_auto(bot, "claude-api__d555", DM, "dm")
-    u = _cmd("/resume api", user_id=ALY, chat_id=DM)
+    u = _cmd("/resume api", user_id=ALICE, chat_id=DM)
     run_async(bot._handle_resume_cmd(u, MagicMock()))
     assert launched[0][1]["mode"] == "full" and sess.perm_mode == "full"
     assert AUTO_NOTE not in "\n".join(_replies(u))
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_picker_shows_the_default_this_person_gets(gbot, run_async, uid):
     bot = gbot()
     sess = _gone_auto(bot)
@@ -507,7 +507,7 @@ def test_picker_shows_the_default_this_person_gets(gbot, run_async, uid):
         assert not any("Full access" in label for label in labels)
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_picker_ask_resumes_in_ask_for_anyone(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
@@ -518,7 +518,7 @@ def test_picker_ask_resumes_in_ask_for_anyone(gbot, run_async, launched, uid):
     assert not any(AUTO_NOTE in t for t in _edited(q))
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_picker_auto_resumes_in_auto_for_anyone(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
@@ -529,7 +529,7 @@ def test_picker_auto_resumes_in_auto_for_anyone(gbot, run_async, launched, uid):
     assert launched[0][1]["mode"] == "auto"
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_picker_full(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
@@ -543,7 +543,7 @@ def test_picker_full(gbot, run_async, launched, uid):
         assert launched == []           # refused at the tap gate
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_legacy_resume_mode_auto_is_auto(gbot, run_async, launched, uid):
     """A picker from before Full access: its Auto is Auto now, for anyone."""
     bot = gbot()
@@ -593,7 +593,7 @@ def _conflict(bot, author, mode="ask"):
                                     "mode": mode, "msg_id": 0}
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_conflict_card_resume_of_a_full_access_session(gbot, run_async, launched, uid):
     bot = gbot()
     sess = _gone_auto(bot)
@@ -610,7 +610,7 @@ def test_conflict_card_resume_of_a_full_access_session(gbot, run_async, launched
 
 # ---- the Mini App's resume ----------------------------------------------
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_miniapp_resume_of_a_full_access_session(gbot, run_async, launched, uid):
     from aipager.miniapp.server import MiniAppServer
     bot = gbot()
@@ -788,8 +788,8 @@ def test_wizard_add_group_member_picker_is_asked_with_owner(
 def _seed_owner_dm():
     from aipager import scope as _scope
     _scope.dump_scopes(
-        [Scope(chat_id=1, kind="dm", label="aly DM",
-               members=(Member(id=1, label="aly", role="owner"),))],
+        [Scope(chat_id=1, kind="dm", label="alice DM",
+               members=(Member(id=1, label="alice", role="owner"),))],
         "TOK", _scope.CONFIG_PATH)
 
 
@@ -806,7 +806,7 @@ def test_wizard_suggests_the_operator_first_as_owner(wizard_env, monkeypatch):
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     grp = next(s for s in scopes if s.chat_id == -100)
     assert [(m.id, m.label, m.role) for m in grp.members] == [
-        (1, "aly", "owner"), (11, "ann", "user")]
+        (1, "alice", "owner"), (11, "ann", "user")]
 
 
 def test_wizard_operator_suggestion_is_skippable(wizard_env, monkeypatch):
@@ -830,7 +830,7 @@ def test_wizard_operator_alone_is_enough(wizard_env, monkeypatch):
     assert scope_flows.add_group_scope("TOK", "bot") is True
     scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
     grp = next(s for s in scopes if s.chat_id == -100)
-    assert [(m.label, m.role) for m in grp.members] == [("aly", "owner")]
+    assert [(m.label, m.role) for m in grp.members] == [("alice", "owner")]
 
 
 def test_wizard_operator_is_the_owner_dms_member_only(wizard_env, monkeypatch):

@@ -16,14 +16,14 @@ import pytest
 import tests.two_prompts_rig as rigmod
 from aipager.scope import Member, Scope
 from aipager.state import Status
-from tests.two_prompts_rig import ALY, BG, BOB, CARD, GROUP, Rig
+from tests.two_prompts_rig import ALICE, BG, BOB, CARD, GROUP, Rig
 
 WRITE = {"file_path": "/src/a.py", "content": "x"}
 
 
 def deny_write_scopes():
     return [Scope(chat_id=GROUP, kind="group", label="team", deny_tools=("Write",),
-                  members=(Member(id=ALY, label="alice", role="owner"),
+                  members=(Member(id=ALICE, label="alice", role="owner"),
                            Member(id=BOB, label="bob", role="user")))]
 
 
@@ -40,7 +40,7 @@ def deny_tap_keys(r) -> list[str]:
     r.hook("PermissionRequest", tool_name="Edit",
            tool_input={"file_path": "/src/b.py", "old_string": "a", "new_string": "b"},
            tool_use_id="toolu_e1")
-    r.tap(CARD, "deny", uid=ALY)
+    r.tap(CARD, "deny", uid=ALICE)
     keys = list(r.keys)
     r.keys.clear()
     return keys
@@ -100,7 +100,7 @@ def test_auto_deny_with_a_waiting_hook_denies_by_hook_and_types_nothing(drig):
 
 def test_owners_turn_is_not_auto_denied(drig):
     """Control: the rule is the user's; the owner's turn types nothing."""
-    drig.sess.last_driver_user_id = ALY
+    drig.sess.last_driver_user_id = ALICE
     write_request(drig)
     assert drig.keys == []
 
@@ -147,7 +147,7 @@ def test_deferred_auto_deny_types_the_deny_keys_once_on_top(drig):
     users_turn(drig)
     drig.question()
     write_request(drig)
-    drig.tap(CARD, "opt0", uid=ALY)
+    drig.tap(CARD, "opt0", uid=ALICE)
     assert drig.keys[-len(tap):] == tap
 
 
@@ -155,7 +155,7 @@ def test_deferred_auto_deny_leaves_nothing_open(drig):
     users_turn(drig)
     drig.question()
     write_request(drig)
-    drig.tap(CARD, "opt0", uid=ALY)
+    drig.tap(CARD, "opt0", uid=ALICE)
     assert drig.sess.open_prompts() == []
 
 

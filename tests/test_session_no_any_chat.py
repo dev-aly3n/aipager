@@ -47,25 +47,25 @@ DM = 555
 OTHER = 999                     # a chat that is no scope
 CHAT = 256113222                # conftest's pinned single chat
 TEAM_CHAT = -100                # a legacy team.yaml group
-ALY, BOB = 1, 2                 # owner, user
+ALICE, BOB = 1, 2                 # owner, user
 OLD = "claude-old"              # the session that missed its stamp
 
 
 def _group():
     return Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
     ))
 
 
 def _dm():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 def _team():
     return Team(group_id=TEAM_CHAT, users={
-        ALY: TeamUser(id=ALY, label="aly", role=TeamRole.ADMIN),
+        ALICE: TeamUser(id=ALICE, label="alice", role=TeamRole.ADMIN),
         BOB: TeamUser(id=BOB, label="bob", role=TeamRole.DEVELOPER),
     }, rules=Rules(deny_tools=[]))
 
@@ -267,7 +267,7 @@ def reached(monkeypatch):
     return seen
 
 
-@pytest.mark.parametrize("chat,uid", [(DM, ALY), (GROUP, BOB), (GROUP, ALY)])
+@pytest.mark.parametrize("chat,uid", [(DM, ALICE), (GROUP, BOB), (GROUP, ALICE)])
 @pytest.mark.parametrize("verb", ["stop", "menu", "talk", "resume-ask"])
 def test_scope_mode_tap_naming_an_unstamped_session_is_refused(
         mkbot, reached, run_async, chat, uid, verb):
@@ -293,7 +293,7 @@ NOT_HERE = "That session isn't running here."
 
 @pytest.mark.parametrize("action", [
     "talk", "endok1", "mode_show", "modeauto1", "restartok1"])
-@pytest.mark.parametrize("chat,uid", [(DM, ALY), (GROUP, BOB)])
+@pytest.mark.parametrize("chat,uid", [(DM, ALICE), (GROUP, BOB)])
 def test_scope_mode_session_actions_refuse_an_unstamped_session(
         mkbot, run_async, action, chat, uid):
     """Each per-session "isn't running here" check, past the gate."""
@@ -306,7 +306,7 @@ def test_scope_mode_session_actions_refuse_an_unstamped_session(
     assert old.status is Status.IDLE
 
 
-@pytest.mark.parametrize("chat,uid", [(DM, ALY), (GROUP, BOB)])
+@pytest.mark.parametrize("chat,uid", [(DM, ALICE), (GROUP, BOB)])
 def test_scope_mode_stop_button_refuses_an_unstamped_session(
         mkbot, run_async, chat, uid):
     bot = mkbot()
@@ -320,7 +320,7 @@ def test_scope_mode_stop_button_refuses_an_unstamped_session(
     bot._stop_session_core.assert_not_called()
 
 
-@pytest.mark.parametrize("chat,uid", [(DM, ALY), (GROUP, BOB)])
+@pytest.mark.parametrize("chat,uid", [(DM, ALICE), (GROUP, BOB)])
 def test_scope_mode_send_now_refuses_an_unstamped_session(
         mkbot, run_async, chat, uid):
     from aipager.bot.send_now import TOAST_UNAVAILABLE
@@ -527,10 +527,10 @@ def test_one_chat_modes_keep_any_chat(mkbot, mode, chat, caplog, run_async):
     reg._msg_map[(0, 6)] = api.name
     assert reg.get_session_by_msg(6, chat) is api   # the wildcard, as before
     # The tap gate is scope-mode only.
-    u, q = _tap(chat, ALY, f"{OLD}:stop")
+    u, q = _tap(chat, ALICE, f"{OLD}:stop")
     assert run_async(bot._tap_passes_gate(q, None, OLD, "stop")) is True
     # "talk" passes the per-session check.
-    u, q = _tap(chat, ALY, f"{OLD}:talk")
+    u, q = _tap(chat, ALICE, f"{OLD}:talk")
     run_async(session_parity.handle_callback(bot, u, q, OLD, "talk"))
     assert NOT_HERE not in _answers(q)
     assert _unstamped_warnings(caplog) == []
@@ -590,7 +590,7 @@ def test_one_dm_install_load_stamps_a_zero_session_and_nothing_changes(
     srv = MiniAppServer(bot, r, port=8765)
     assert {s["label"] for s in srv._build_sessions_payload(DM)["sessions"]} \
         == {"old", "api"}
-    u, q = _tap(DM, ALY, f"{OLD}:talk")
+    u, q = _tap(DM, ALICE, f"{OLD}:talk")
     run_async(session_parity.handle_callback(bot, u, q, OLD, "talk"))
     assert NOT_HERE not in _answers(q)
     assert r.target_for(DM) is old

@@ -53,7 +53,7 @@ def _restored(r, monkeypatch, vloop, *, seconds_in: float | None = 40.0,
     sess = r.sess
     card = r.chat.new_id()
     r.chat.cards[card] = {"reply_to": 1, "stop": True, "deleted": False,
-                          "text": "⏳ aipager_boss · Working · 13s"}
+                          "text": "⏳ shop_api · Working · 13s"}
     sess.busy_msg_id = card
     sess.trigger_msg_id = 1
     sess.busy_card_trigger = 1

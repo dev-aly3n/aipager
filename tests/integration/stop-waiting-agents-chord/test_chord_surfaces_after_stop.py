@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 
 from aipager.state import Status
-from tests.two_prompts_rig import ALY, BG, CARD, GROUP, OTHER, answers
+from tests.two_prompts_rig import ALICE, BG, CARD, GROUP, OTHER, answers
 
 CHORD = b"\x18\x0b"
 
@@ -27,7 +27,7 @@ def _waiting_with_a_shell(rig):
 
 def test_card_toast_and_bar_after_the_stop(rig):
     sess = _waiting_with_a_shell(rig)
-    toast = answers(rig.tap(CARD, "stop", uid=ALY))
+    toast = answers(rig.tap(CARD, "stop", uid=ALICE))
     assert rig.writes.bytes() == [CHORD, CHORD]
     assert rig.card_edits[-1][1].split("\n") == [
         "⚠️ <b>api</b> · @alice stopped 2 background agents",
@@ -55,7 +55,7 @@ def test_an_agents_open_prompt_message_says_its_agent_was_stopped(rig):
     rig.agent_bash(OTHER, "rm -rf dist")
     assert sess.status is Status.INTERACTIVE
     msg = _agent_prompt_message(rig)
-    rig.tap(CARD, "stop", uid=ALY)
+    rig.tap(CARD, "stop", uid=ALICE)
     assert rig.writes.bytes() == [CHORD, CHORD]
     edits = [c for c in rig.bot._app.bot.edit_message_text.await_args_list
              if c.kwargs.get("message_id") == msg["msg_id"]]
@@ -71,7 +71,7 @@ def test_a_late_tap_on_it_types_nothing(rig):
     rig.agent_bash(BG, "rm -rf build")
     rig.agent_bash(OTHER, "rm -rf dist")
     msg = _agent_prompt_message(rig)
-    rig.tap(CARD, "stop", uid=ALY)
+    rig.tap(CARD, "stop", uid=ALICE)
     # Closed for good: its surface is on record as closed, and no record of
     # it is left to be counted open again by a later wait.
     sess = rig.sess
@@ -80,7 +80,7 @@ def test_a_late_tap_on_it_types_nothing(rig):
     assert sess.pending_permission is None and sess.carried_inline_prompt is None
     before = list(rig.writes)
     rig.decisions.clear()
-    rig.tap(msg["msg_id"], "allow", uid=ALY)
+    rig.tap(msg["msg_id"], "allow", uid=ALICE)
     assert rig.writes == before
     assert rig.decisions == []
 
@@ -93,7 +93,7 @@ def test_control_the_same_tap_without_the_stop_answers(rig):
     rig.agent_bash(OTHER, "rm -rf dist")
     msg = _agent_prompt_message(rig)
     rig.decisions.clear()
-    rig.tap(msg["msg_id"], "allow", uid=ALY)
+    rig.tap(msg["msg_id"], "allow", uid=ALICE)
     assert rig.decisions or rig.writes
 
 
@@ -119,7 +119,7 @@ def test_an_answers_agents_block_settles_to_stopped(rig, monkeypatch):
         return {"ok": True}
 
     monkeypatch.setattr(notify, "edit_message_text_rich", _rich)
-    rig.tap(CARD, "stop", uid=ALY)
+    rig.tap(CARD, "stop", uid=ALICE)
     assert rig.writes.bytes() == [CHORD, CHORD]
     later = time.monotonic() + BG_AGENTS_SETTLE_SECONDS + 3600.0
     rig.run_async(rig.bot._tick_agents_lines(sess, later))

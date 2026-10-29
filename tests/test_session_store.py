@@ -14,7 +14,7 @@ def _scope():
     return Scope(
         chat_id=-4152307515, kind="group", label="dev",
         members=(
-            Member(id=1, label="aly", role="owner"),
+            Member(id=1, label="alice", role="owner"),
             Member(id=2, label="bob", role="user", deny_tools=("Bash",)),
             Member(id=3, label="ro", role="read_only"),
         ),
@@ -30,7 +30,7 @@ def test_session_folder_path():
 def test_build_session_md_roster():
     md = ss.build_session_md(_scope(), load_policy(), "jim")
     assert "# Session: jim" in md
-    assert "**aly** (owner — can call any tool)" in md
+    assert "**alice** (owner — can call any tool)" in md
     # Operator decision 2026-09-26: the built-in user role denies every
     # code-running tool (and SendMessage, the worktree tools), so bob's
     # line lists them all (was: just Bash).

@@ -170,7 +170,7 @@ def test_the_card_owner_pop_up_names_the_owner_and_command_verbatim(h):
     bot, tg = _setup(h)
     out = _someone_elses_card(h, bot, tg)
     toast = [t for t in out if t.startswith("[toast] ")][0]
-    assert "@aly" in toast and "/kill x1" in toast
+    assert "@alice" in toast and "/kill x1" in toast
 
 
 def test_the_unknown_action_pop_up_keeps_the_action_verbatim(h):

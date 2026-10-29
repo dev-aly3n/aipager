@@ -37,11 +37,11 @@ def bot(mk_bot):
     bot = i18n_ml2.make_bot(mk_bot)
     bot.scopes = [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=OWNER, label="aly", role="owner"),
+            Member(id=OWNER, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"),
             Member(id=RO, label="ro", role="read_only"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=OWNER, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=OWNER, label="alice", role="owner"),)),
     ]
     bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     return bot

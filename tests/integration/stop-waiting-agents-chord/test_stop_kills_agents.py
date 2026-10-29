@@ -30,7 +30,7 @@ from aipager.dtach import hook_receiver as hr
 from aipager.dtach import inject
 from aipager.miniapp.server import MiniAppServer
 from aipager.state import STOP_KILL_AGENTS, Status
-from tests.two_prompts_rig import ALY, BG, CARD, GROUP, OTHER, S, answers
+from tests.two_prompts_rig import ALICE, BG, CARD, GROUP, OTHER, S, answers
 
 # The same values as this directory's conftest (which cannot be imported).
 CHORD = b"\x18\x0b"
@@ -60,7 +60,7 @@ def _sign(fields: dict) -> str:
     return hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
 
 
-def _init_header(user_id: int = ALY) -> dict:
+def _init_header(user_id: int = ALICE) -> dict:
     fields = {"auth_date": str(int(time.time())),
               "user": json.dumps({"id": user_id, "first_name": "Alice"})}
     fields["hash"] = _sign(fields)
@@ -79,7 +79,7 @@ def _command_update(text: str):
     update.message.chat = MagicMock(id=GROUP, type="supergroup")
     update.effective_message = update.message
     update.effective_chat = MagicMock(id=GROUP, type="supergroup")
-    update.effective_user = MagicMock(id=ALY, username="alice", first_name="Alice")
+    update.effective_user = MagicMock(id=ALICE, username="alice", first_name="Alice")
     update.callback_query = None
     return update
 
@@ -90,15 +90,15 @@ def _replies(update) -> list[str]:
 
 
 def _card(rig) -> list[str]:
-    return answers(rig.tap(CARD, "stop", uid=ALY))
+    return answers(rig.tap(CARD, "stop", uid=ALICE))
 
 
 def _status(rig) -> list[str]:
-    return answers(rig.tap(777, f"ststop{rig.sess.turn_key}", uid=ALY))
+    return answers(rig.tap(777, f"ststop{rig.sess.turn_key}", uid=ALICE))
 
 
 def _picker(rig) -> list[str]:
-    return answers(rig.tap(778, f"pstop{rig.sess.turn_key}", uid=ALY))
+    return answers(rig.tap(778, f"pstop{rig.sess.turn_key}", uid=ALICE))
 
 
 def _command(rig) -> list[str]:
@@ -149,7 +149,7 @@ def _agent_prompt_message(rig) -> dict:
 def _on_prompt(rig) -> list[str]:
     """The ⏹ Stop on an agent's own prompt message (rev-iter6-004)."""
     msg = _agent_prompt_message(rig)
-    rig.prompt_query = rig.tap(msg["msg_id"], "stop", uid=ALY)
+    rig.prompt_query = rig.tap(msg["msg_id"], "stop", uid=ALICE)
     rig.prompt_msg = msg
     return answers(rig.prompt_query)
 
@@ -436,7 +436,7 @@ def test_stop_on_an_agents_prompt_keeps_what_it_asked_and_the_stopped_line(rig):
 def test_stop_on_the_card_still_edits_the_card(rig):
     """Control: the tap on the busy card edits that message, the card."""
     waiting(rig, BG, OTHER)
-    query = rig.tap(CARD, "stop", uid=ALY)
+    query = rig.tap(CARD, "stop", uid=ALICE)
     query.edit_message_text.assert_awaited()
     assert query.edit_message_text.await_args.args[0] == (
         "⚠️ <b>api</b> · @alice stopped 2 background agents")
@@ -450,7 +450,7 @@ def test_stop_on_claudes_own_prompt_message_keeps_its_text(rig):
     rig.agent_bash(OTHER, "make all")
     msgs = rig.prompt_messages()
     assert msgs
-    query = rig.tap(msgs[-1]["msg_id"], "stop", uid=ALY)
+    query = rig.tap(msgs[-1]["msg_id"], "stop", uid=ALICE)
     assert rig.writes.bytes() == [ESC, ESC]
     query.edit_message_text.assert_not_awaited()
     query.edit_message_reply_markup.assert_awaited_with(reply_markup=None)

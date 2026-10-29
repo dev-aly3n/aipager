@@ -30,7 +30,7 @@ from tests.i18n_ml2_bb import DM_A, add_session, make_bot, message, strip_marks
 TEMPLATE = ("Run tests", "Run the tests")
 CLEAR = ("Clear", "/clear")
 COMPACT = ("Compact", "/compact")
-MARKER = "[via Telegram · @aly]\n"
+MARKER = "[via Telegram · @alice]\n"
 
 
 @pytest.fixture

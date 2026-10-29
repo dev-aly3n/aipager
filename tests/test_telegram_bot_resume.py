@@ -11,7 +11,7 @@ from aipager.state import SessionRegistry, Status, TrackedSession
 
 
 def _gone_session(label="jim", *, claude_session_id="abc-def-uuid",
-                  cwd="/home/aly/work", gone_at=None, preview=""):
+                  cwd="/home/alice/work", gone_at=None, preview=""):
     sess = TrackedSession(name=f"claude-{label}", label=label,
                           status=Status.GONE)
     sess.claude_session_id = claude_session_id

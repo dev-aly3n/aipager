@@ -25,7 +25,7 @@ import pytest
 from aipager import session_monitor
 from aipager.state import Status
 
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 CHAT = 256113222
 TUID = "toolu_01Restored"
 

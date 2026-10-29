@@ -155,7 +155,7 @@ def test_quiet_minutes_after_a_429_earn_the_rate_back_in_named_steps(
     never past the ceiling.
 
     AMENDED by 8.30 R5. The 0.7.13 row stepped in 60 s windows: a 429 was
-    forgiven in five minutes, which is how vm3's one warning bought
+    forgiven in five minutes, which is how testbox's one warning bought
     nothing. A 429 now starts the six-hour WARNING REGIME, so the same
     additive steps are the slow ones (``SLOW_WINDOW``) and stop at
     ``FLOOD_WARNED_CEILING`` rather than the full ceiling.

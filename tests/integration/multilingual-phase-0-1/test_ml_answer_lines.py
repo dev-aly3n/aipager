@@ -23,7 +23,7 @@ GROUP = -1001
 DM = 555
 S = "claude-api__g1001"
 DM_S = "claude-api__d555"
-ALY, BOB = 1, 2
+ALICE, BOB = 1, 2
 PROMPT_ID = 77
 HOOK = {"addr": "/nonexistent/aipager-reply-x.sock", "request_id": "req-1"}
 CMD = "Bash: rm -rf build/"
@@ -32,11 +32,11 @@ CMD = "Bash: rm -rf build/"
 def _scopes():
     return [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"),
         )),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
     ]
 
 
@@ -192,16 +192,16 @@ def test_a_dm_line_has_one_dot_per_part(world, run_async):
     """Without an actor the "· @x" part is absent, never an empty field."""
     sess = world.session(name=DM_S, chat=DM, kind="dm")
     world.prompt(sess, run_async)
-    world.tap(run_async, DM, ALY, "allow", name=DM_S)
+    world.tap(run_async, DM, ALICE, "allow", name=DM_S)
     (line,) = world.lines(DM)
-    assert line in (f"✅ <b>api</b> · Allowed · @aly · {CMD}",
+    assert line in (f"✅ <b>api</b> · Allowed · @alice · {CMD}",
                     f"✅ <b>api</b> · Allowed · {CMD}")
 
 
 def test_the_actor_is_html_escaped(world, run_async, monkeypatch):
     """Error guessing: a label with markup must not break the HTML line."""
     world.bot.scopes = [Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="b<o>b", role="user"),
     ))]
     sess = world.session()

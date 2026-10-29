@@ -24,7 +24,7 @@ GROUP, BOB, OWNER, DM = p3a.GROUP, p3a.BOB, p3a.OWNER, p3a.DM
 
 @pytest.fixture
 def env(mk_bot, run_async, monkeypatch):
-    """A Persian group (and aly's Persian DM); bob's own chat is Russian."""
+    """A Persian group (and alice's Persian DM); bob's own chat is Russian."""
     e = Env(mk_bot, run_async, monkeypatch, "fa")
     preferences.set_ui_language(BOB, "ru")
     return e
@@ -76,7 +76,7 @@ def test_session_taps(env):
 
 def test_new_session_taps(env):
     bot, tg = p3a._new_world(env)
-    p3a._open_name_card(env, bot, tg, chat=GROUP)          # aly's card: 7001
+    p3a._open_name_card(env, bot, tg, chat=GROUP)          # alice's card: 7001
     taps = Taps(env, bot, tg)
     start = len(tg.out)
     taps("_:nw:cancel", message_id=7001)

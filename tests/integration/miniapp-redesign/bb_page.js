@@ -255,7 +255,7 @@ function grid(rows, extra) {
 function detail(label, status, extra) {
   return Object.assign({
     label, status, waiting_kind: null, waiting_summary: null, model: "Opus 4.6",
-    context_pct: 57, cost_usd: 0.42, cwd: "/home/aly/proj",
+    context_pct: 57, cost_usd: 0.42, cwd: "/home/alice/proj",
     last_active_seconds_ago: 300, busy_elapsed_seconds: null, skip_perms: false,
     queue_depth: 0, last_message: "Done.", timeline: [], facts: [],
     actions: {}, model_switch: null, answer: null,
@@ -303,7 +303,7 @@ const FIX = {
     models: [{ label: "Opus", hint: "Most capable" }, { label: "Opus 5.5", hint: "" }],
     schema: SCHEMA, scope_defaults: { answer_length: "none" }, can_create: true,
     can_use_auto: true,
-    directories: ["/home/aly/proj", "/home/aly/other"], default_directory: "/home/aly/other",
+    directories: ["/home/alice/proj", "/home/alice/other"], default_directory: "/home/alice/other",
   },
   "POST /api/sessions": { status: 200, body: { label: "made", session_name: "claude-made" } },
   "GET /api/preferences": { schema: SCHEMA, values: {}, can_edit: true },
@@ -852,7 +852,7 @@ SCEN.new_form = async () => {
   const create = posts("/api/sessions")[0];
   let body = null; try { body = create && JSON.parse(create.body); } catch (e) { body = null; }
   check("mb_click_creates", !!create, posts().map(c => c.url));
-  check("chip_cwd_posted", !!body && body.cwd === "/home/aly/proj", body);
+  check("chip_cwd_posted", !!body && body.cwd === "/home/alice/proj", body);
   await finish();
 };
 

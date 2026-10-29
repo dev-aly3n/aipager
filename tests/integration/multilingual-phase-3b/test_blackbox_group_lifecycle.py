@@ -102,7 +102,7 @@ S = "claude-api__g1001"
 
 
 def _members(bob=True):
-    out = [Member(id=OWNER, label="aly", role="owner")]
+    out = [Member(id=OWNER, label="alice", role="owner")]
     if bob:
         out.append(Member(id=BOB, label="bob", role="user"))
     return tuple(out)
@@ -110,8 +110,8 @@ def _members(bob=True):
 
 def _scopes(bob=True):
     return [Scope(chat_id=GROUP, kind="group", label="team", members=_members(bob)),
-            Scope(chat_id=DM, kind="dm", label="aly DM",
-                  members=(Member(id=OWNER, label="aly", role="owner"),))]
+            Scope(chat_id=DM, kind="dm", label="alice DM",
+                  members=(Member(id=OWNER, label="alice", role="owner"),))]
 
 
 @pytest.fixture

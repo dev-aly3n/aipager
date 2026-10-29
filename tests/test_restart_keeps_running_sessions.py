@@ -113,8 +113,8 @@ def test_startup_menu_lists_every_running_session(
         tmp_state_file, tmp_path, monkeypatch, mk_bot, run_async):
     r = _load(tmp_state_file, _saved(tmp_path, ["mona", "jim", "dead"]),
               monkeypatch, {"claude-mona", "claude-jim"})
-    b = mk_bot(r, scopes=[Scope(chat_id=DM, kind="dm", label="aly",
-                                members=(Member(id=DM, label="aly", role="owner"),))])
+    b = mk_bot(r, scopes=[Scope(chat_id=DM, kind="dm", label="alice",
+                                members=(Member(id=DM, label="alice", role="owner"),))])
     b._app.bot.set_my_commands = AsyncMock()
     run_async(b._update_bot_commands())
     commands = {c.command for c in b._app.bot.set_my_commands.await_args.args[0]}

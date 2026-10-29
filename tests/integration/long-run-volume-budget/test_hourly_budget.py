@@ -1,7 +1,7 @@
 """Rows F, L (limiter half), M, N and the hourly half of H/I (roadmap 8.30
 R1/R3/R6, rulings Q1/Q4/Q7): a rolling HOUR per chat.
 
-Before 8.30 the longest window any chat had was 60 s. vm3's DM ran at
+Before 8.30 the longest window any chat had was 60 s. testbox's DM ran at
 ~57 calls a minute for 3 h 23 min — under every short window — and was
 banned outright. Now every chat-scoped call except a reaction counts in a
 rolling hour of ``FLOOD_HOURLY_MAX`` (1200) calls; ornaments stop at

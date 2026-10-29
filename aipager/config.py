@@ -355,7 +355,7 @@ OUTBOX_DIR = Path.home() / ".local" / "state" / "aipager" / "outbox"
 
 # While calls flow, the file is ALSO rewritten this often even when
 # nothing material changed (roadmap 8.30). It carries each chat's rolling
-# HOUR now — the volume that got vm3 banned — and `aipager status`, a
+# HOUR now — the volume that got testbox banned — and `aipager status`, a
 # different process, has no other way to read it; `status` labels the
 # figure with the file's age ("as of 42s ago"). Wired: every call the
 # limiter counts sets `flood_state.mark_volume()`, and the session
@@ -680,7 +680,7 @@ FLOOD_MINIMAL_MODE_RATE_FLOOR: float = 0.2
 # Non-env like everything above, and for the same reason.
 #
 # Every window above is a minute or shorter, and a minute is not what got
-# the vm3 DM banned on 2026-09-23. Two sessions streamed into it for
+# the testbox DM banned on 2026-09-23. Two sessions streamed into it for
 # 3 h 23 min at a rate every short window allowed, ~57 calls a minute with
 # the typing bubble included, with no 429 and no warning until a straight
 # 7-hour ban. Telegram meters long-run VOLUME and does not publish the
@@ -709,7 +709,7 @@ FLOOD_HOURLY_MINIMAL_EXIT_AT: float = 0.80
 # Any 429, on any endpoint — the typing bubble included — puts the chat in
 # a WARNING REGIME for this long: the earned rate may not climb past
 # FLOOD_WARNED_CEILING and recovers on the slow, post-ban schedule. Before
-# 8.30 a 429 was forgiven in about five minutes; on vm3 the one warning
+# 8.30 a 429 was forgiven in about five minutes; on testbox the one warning
 # Telegram gave came 3 h 23 min before the ban, and the rate was back at
 # the ceiling within minutes of it.
 FLOOD_WARNING_HOURS: float = 6.0
@@ -717,7 +717,7 @@ FLOOD_WARNED_CEILING: float = 0.5
 # How long a ban is remembered. While a chat has N bans within this many
 # days, its rate ceiling AND its hourly budget are divided by (1 + N): one
 # ban in a week halves both, two third them. A 24-hour memory (0.7.13)
-# had already forgotten vm3's 2026-09-19 ban when the 2026-09-23 one came.
+# had already forgotten testbox's 2026-09-19 ban when the 2026-09-23 one came.
 FLOOD_BAN_MEMORY_DAYS: float = 7.0
 
 # Busy-card cadence (roadmap 8.21 §4.3). The card interval is
@@ -730,7 +730,7 @@ CARD_CADENCE_FLOOR_PRIVATE: float = 1.0
 CARD_CADENCE_FLOOR_GROUP: float = 3.0
 
 # Busy-card cadence DECAYS WITH TURN AGE (roadmap 8.30). The cadence above
-# is constant for the life of a turn, so on vm3 one card was edited every
+# is constant for the life of a turn, so on testbox one card was edited every
 # few seconds for four hours. From these turn ages on, the card is edited
 # no more often than the paired interval, and from 10 min its elapsed
 # clock moves in 30 s steps (``23:30``, ``1:23:00``) so a slow card never
@@ -798,7 +798,7 @@ CARD_STARVATION_BLOCK_TIMEOUT: float = 5.0
 # answer 200 inside a `retry_after=10` window that refused every edit —
 # which proved typing is not blocked by an edit 429, not that it is free.
 # On 2026-09-23 one loop per busy SESSION had sent ~5,400 uncounted
-# bubbles into the vm3 DM when a 429 on the bubble itself came, and a
+# bubbles into the testbox DM when a 429 on the bubble itself came, and a
 # straight 7-hour ban followed. Now it needs a token more than a card
 # edit, stops first when the rolling hour fills, and is refused for a
 # 429's retry_after; a ban on it mutes the chat like a ban on anything.
@@ -817,7 +817,7 @@ TYPING_INDICATOR_INTERVAL: float = float(
 # TYPING_INDICATOR_INTERVAL for 10 minutes (a steady bubble), then every
 # 15 s — past Telegram's 5 s status, so an older turn's bubble flickers
 # rather than staying lit. The goal is "flicker, never dark": at 4.5 s the
-# bubble alone is 800 calls an hour, and on the vm3 replay it tripped the
+# bubble alone is 800 calls an hour, and on the testbox replay it tripped the
 # hourly shed (75 % of the ornament share) and went dark for 43 minutes at
 # a time; with 9 s from 10 minutes it was still dark for 22.6, and with
 # 15 s (240 an hour) for none. Tier 3 is its own constant so it can be

@@ -341,7 +341,7 @@ class Replay:
         self.updates: asyncio.Queue = asyncio.Queue()
         self.tasks: list[asyncio.Task] = []
         self.sess = bot.registry.get_or_create(NAME)
-        self.sess.label = "aipager_boss"
+        self.sess.label = "shop_api"
         self.sess.scope_chat_id = CHAT
         self.sess.scope_kind = "dm"
         self.sess.transcript_path = transcript

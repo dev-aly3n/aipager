@@ -24,17 +24,17 @@ from aipager.policy import load_policy
 from aipager.scope import Member, Scope
 
 GROUP, DM = -1001, 555
-ALY, BOB = 555, 777
+ALICE, BOB = 555, 777
 
 
 @pytest.fixture
 def bot(mk_bot):
     b = mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
     ])
     b.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     b._app.bot.set_my_commands = AsyncMock()
@@ -53,7 +53,7 @@ def tap(bot, run_async, data, *, chat, user, language_code=None):
     query.message.chat = MagicMock(id=chat)
     query.message.chat_id = chat
     query.from_user = MagicMock(id=user, language_code=language_code)
-    query.from_user.username = "aly" if user == ALY else "bob"
+    query.from_user.username = "alice" if user == ALICE else "bob"
     update = MagicMock()
     update.callback_query = query
     update.effective_user = query.from_user
@@ -94,13 +94,13 @@ def test_stored_automatic_is_never_read_as_a_language():
 
 def test_the_automatic_tap_stores_automatic(bot, run_async):
     preferences.set_ui_language(DM, "fa")
-    q = tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALICE)
     assert preferences.get_ui_language(DM) == "auto"
     assert _marked(q) == ["auto"]
 
 
 def test_the_automatic_tap_in_a_group_is_refused(bot, run_async):
-    q = tap(bot, run_async, "_:set:lang:auto", chat=GROUP, user=ALY)
+    q = tap(bot, run_async, "_:set:lang:auto", chat=GROUP, user=ALICE)
     assert preferences.get_ui_language(GROUP) == ""
     assert q.answer.await_args.args[0] == "Invalid value"
 
@@ -119,7 +119,7 @@ def test_stored_automatic_is_marked_automatic():
 # ---- the one rule (section 6) ---------------------------------------------------
 
 NEW = 4242          # a person new since the marker
-OLD = ALY           # a person listed in the marker
+OLD = ALICE           # a person listed in the marker
 
 
 def _upd(chat, user, language_code=None):
@@ -268,13 +268,13 @@ def test_the_marker_lists_every_known_person(mk_bot, monkeypatch):
     preferences.set_ui_language(-1009, "en")
     bot = mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
         Scope(chat_id=34, kind="dm", label="dm",
               members=(Member(id=34, label="x", role="owner"),)),
     ])
     marker = language_launch.ensure_marker(bot)
-    assert marker["people"] == [31, 32, 33, 34, ALY, BOB]
+    assert marker["people"] == [31, 32, 33, 34, ALICE, BOB]
     assert marker["fresh"] is False
 
 

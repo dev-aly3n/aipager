@@ -37,7 +37,7 @@ GROUP = -1001
 DM = 555
 S = "claude-api__g1001"
 DM_S = "claude-api__d555"
-ALY, BOB, RO = 1, 2, 3
+ALICE, BOB, RO = 1, 2, 3
 PROMPT_ID = 77
 HOOK = {"addr": "/nonexistent/aipager-reply-x.sock", "request_id": "req-1"}
 
@@ -45,12 +45,12 @@ HOOK = {"addr": "/nonexistent/aipager-reply-x.sock", "request_id": "req-1"}
 def _scopes():
     return [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"),
             Member(id=RO, label="ro", role="read_only"),
         )),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
     ]
 
 
@@ -325,7 +325,7 @@ def test_an_answered_separate_prompt_decides_nothing_again(world, run_async):
 def test_another_chats_tap_on_a_separate_prompt_is_refused(world, run_async):
     sess = world.session()
     world.prompt(sess, run_async=run_async)
-    q = world.tap(run_async, DM, ALY, "allow")
+    q = world.tap(run_async, DM, ALICE, "allow")
     assert _answers(q) == [tap_gate.OTHER_CHAT_TEXT]
     assert world.decisions == [] and world.keys == []
 
@@ -349,7 +349,7 @@ def test_an_option_on_a_separate_question_posts_the_line(world, run_async):
 def test_dm_parity_a_separate_prompt_in_a_dm(world, run_async):
     sess = world.session(name=DM_S, chat=DM, kind="dm")
     world.prompt(sess, run_async=run_async)
-    world.tap(run_async, DM, ALY, "allow", name=DM_S)
+    world.tap(run_async, DM, ALICE, "allow", name=DM_S)
     assert world.keys == []
     assert [d for _r, d in world.decisions] == [{"behavior": "allow"}]
     (text, reply), = world.lines(DM)

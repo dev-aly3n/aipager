@@ -1,8 +1,8 @@
 """An upload's caption picks the session the way a text message does.
 
-Observed 2026-09-05: an album captioned ``/aipager_boss check`` went to
+Observed 2026-09-05: an album captioned ``/shop_api check`` went to
 whichever session was last active, and Claude Code received the literal
-prompt ``/aipager_boss check <paths>`` — read as a slash command,
+prompt ``/shop_api check <paths>`` — read as a slash command,
 rejected with "Unknown command", and no hook fired. Text messages have
 always split ``/<label> <prompt>`` into a direct send with the prefix
 stripped; the lone-file and album paths did not.

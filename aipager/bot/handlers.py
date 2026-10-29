@@ -663,9 +663,9 @@ WHOAMI_NOT_MEMBER = Msg("whoami.not_member", "🪪 You're not a member of this s
                         note="/whoami from someone not in this chat's configuration")
 WHOAMI_HEAD = Msg("whoami.head", "🪪 <b>{member}</b> in <b>{scope}</b>",
                   note="HTML. /whoami: who and which configured chat (scope)",
-                  eg={"member": "@aly", "scope": "team"})
+                  eg={"member": "@alice", "scope": "team"})
 WHOAMI_TEAM_HEAD = Msg("whoami.team_head", "🪪 <b>{member}</b>",
-                       note="HTML. /whoami in team mode: who", eg={"member": "@aly"})
+                       note="HTML. /whoami in team mode: who", eg={"member": "@alice"})
 WHOAMI_ROLE = Msg("whoami.role", "  role: <b>{role}</b>",
                   note="HTML. /whoami: the person's role, named as configured",
                   eg={"role": "user"})

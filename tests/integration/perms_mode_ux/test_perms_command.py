@@ -107,7 +107,7 @@ def test_sc6_perms_idle_ask_to_auto_confirm_updates_registry():
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
     sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
-    sess.cwd = "/home/aly"
+    sess.cwd = "/home/alice"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
         "target_mode": "full",
@@ -181,7 +181,7 @@ def test_sc7_perms_idle_auto_to_ask_no_confirm_keyboard():
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
     sess.perm_mode = "full"  # currently Auto
     sess.claude_session_id = "uuid-001"
-    sess.cwd = "/home/aly"
+    sess.cwd = "/home/alice"
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
@@ -230,7 +230,7 @@ def test_sc7_perms_confirm_result_shows_ask_mode():
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
     sess.perm_mode = "full"  # currently Auto
     sess.claude_session_id = "uuid-001"
-    sess.cwd = "/home/aly"
+    sess.cwd = "/home/alice"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
         "target_mode": "ask",
@@ -402,7 +402,7 @@ def test_sc9_stop_switch_relaunches_with_the_target_mode(monkeypatch):
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
     sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
-    sess.cwd = "/home/aly"
+    sess.cwd = "/home/alice"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
         "target_mode": "full",
@@ -435,7 +435,7 @@ def test_sc9_stop_switch_edits_message_to_new_mode(monkeypatch):
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.BUSY)
     sess.perm_mode = "ask"
     sess.claude_session_id = "uuid-001"
-    sess.cwd = "/home/aly"
+    sess.cwd = "/home/alice"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
         "target_mode": "full",
@@ -470,7 +470,7 @@ def test_sc19_perms_switch_preserves_claude_session_id():
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
     sess.perm_mode = "ask"
     sess.claude_session_id = original_session_id
-    sess.cwd = "/home/aly/project"
+    sess.cwd = "/home/alice/project"
     bot.registry._sessions["claude-ben"] = sess
     bot._perms_pending["claude-ben"] = {
         "target_mode": "full",
@@ -502,7 +502,7 @@ def test_sc19_perms_switch_preserves_cwd():
     """SC19: After /perms kill+resume, the original cwd must be passed to
     launch_session."""
     bot = _make_bot()
-    original_cwd = "/home/aly/myproject"
+    original_cwd = "/home/alice/myproject"
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.IDLE)
     sess.perm_mode = "ask"
     sess.claude_session_id = "some-uuid"

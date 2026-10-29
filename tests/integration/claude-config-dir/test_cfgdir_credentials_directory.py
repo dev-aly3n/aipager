@@ -12,6 +12,7 @@ the project's own ``tests/conftest.py``, with a throwaway HOME.
 
 from __future__ import annotations
 
+import getpass
 import os
 import shutil
 import subprocess
@@ -45,7 +46,7 @@ def nested_run(tmp_path_factory):
         env.pop(var, None)
     env.update(HOME=str(home), CREDENTIALS_DIRECTORY=str(creds),
                CFGDIR_PLANTED=str(planted), PYTHONPATH=str(REPO))
-    base = Path("/tmp/pytest-of-aly")
+    base = Path("/tmp") / f"pytest-of-{getpass.getuser()}"
     base.mkdir(parents=True, exist_ok=True)
     basetemp = Path(tempfile.mkdtemp(prefix="cfgi", dir=base))
     try:

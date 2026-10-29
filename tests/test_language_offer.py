@@ -13,7 +13,7 @@ import pytest
 from aipager import i18n, preferences
 from aipager.bot import language_offer, report_offer
 from aipager.i18n import locales
-from tests.test_language_setting import ALY, DM, GROUP, edited, tap, toast
+from tests.test_language_setting import ALICE, DM, GROUP, edited, tap, toast
 from tests.test_language_setting import bot as _bot_fixture  # noqa: F401
 
 bot = _bot_fixture
@@ -73,7 +73,7 @@ def test_the_card_names_the_language_in_its_own_words():
 
 
 def test_keep_english_sets_the_dm_and_confirms(bot, run_async):
-    q = tap(bot, run_async, "_:set:lang_offer:keep", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set:lang_offer:keep", chat=DM, user=ALICE)
     assert preferences.get_ui_language(DM) == "en"
     text, rows = edited(q)
     assert text == ("✅ aipager now speaks English here. Your sessions and Claude's answers "
@@ -89,7 +89,7 @@ def test_an_offer_tap_that_does_not_fit_writes_nothing(bot, run_async, chat, dat
     # known language that is switched off.
     monkeypatch.setitem(locales.LOCALES, "de", dataclasses.replace(
         locales.LOCALES["de"], enabled=False))
-    q = tap(bot, run_async, data, chat=chat, user=ALY)
+    q = tap(bot, run_async, data, chat=chat, user=ALICE)
     assert toast(q)[0] in ("Invalid value", "Invalid callback")
     assert q.edit_message_text.await_count == 0
     assert preferences._ensure_loaded() == {}
@@ -111,7 +111,7 @@ def test_the_offer_has_exactly_one_caller():
 def test_a_language_tap_refreshes_menu_keyboard_and_button(bot, run_async):
     """Like a choice in /language: the `/` menu, ONE reply keyboard and the
     menu button follow at once, so the chat is never half English."""
-    q = tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALICE)
     assert preferences.get_ui_language(DM) == "fa"
     assert "✅" in edited(q)[0]
     bot._send_keyboard.assert_awaited_once_with(level="main", chat_id=DM)
@@ -122,7 +122,7 @@ def test_a_language_tap_gives_the_menu_button_a_link_in_that_language(bot, run_a
     """The menu button's link carries the language (``?lang=``), so the
     Mini App's first frame is already in it (2026-10-10 flash fix)."""
     bot._miniapp_url = "https://tunnel.example/"
-    tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)
+    tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALICE)
     [call] = bot._app.bot.set_chat_menu_button.await_args_list
     assert call.kwargs["chat_id"] == DM
     assert call.kwargs["menu_button"].web_app.url == "https://tunnel.example/?lang=fa"
@@ -130,13 +130,13 @@ def test_a_language_tap_gives_the_menu_button_a_link_in_that_language(bot, run_a
 
 def test_the_tap_calls_the_language_change_once_with_the_keyboard(bot, run_async):
     bot._on_language_changed = AsyncMock()
-    tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALY)
+    tap(bot, run_async, "_:set:lang_offer:fa", chat=DM, user=ALICE)
     bot._on_language_changed.assert_awaited_once_with(DM)
 
 
 def test_keep_english_on_an_english_chat_sends_no_keyboard(bot, run_async):
     bot._on_language_changed = AsyncMock()
-    tap(bot, run_async, "_:set:lang_offer:keep", chat=DM, user=ALY)
+    tap(bot, run_async, "_:set:lang_offer:keep", chat=DM, user=ALICE)
     assert preferences.get_ui_language(DM) == "en"
     bot._on_language_changed.assert_not_awaited()
     bot._send_keyboard.assert_not_awaited()

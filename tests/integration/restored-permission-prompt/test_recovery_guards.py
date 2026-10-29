@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from aipager.state import Status
 
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 
 
 def _run(vloop, coro):

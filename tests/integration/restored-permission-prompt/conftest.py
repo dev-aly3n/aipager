@@ -47,7 +47,7 @@ OWNER = 12345
 # A name no live session can have: a harness named like the operator's own
 # session deleted that session's real policy snapshot (2026-09-28).
 NAME = "claude-restoredprompt_harness"
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 #: The pending tool call's id, as Claude Code's PreToolUse carries it.
 TUID = "toolu_01Restored"
 PREFIX = "[via Telegram · @owner]\n"

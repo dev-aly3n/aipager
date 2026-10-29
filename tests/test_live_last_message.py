@@ -1,6 +1,6 @@
 """The Mini App's "Last message" tracks the live transcript (roadmap 8.34).
 
-On vm3 a live, healthy session showed a week-old
+On testbox a live, healthy session showed a week-old
 ``Please run /login · API Error: 401 …`` as its last message. Two faults
 stacked:
 
@@ -167,7 +167,7 @@ def _fresh_preview_cache():
 # ── R2: synthetic entries are never "the last assistant message" ──────
 
 def test_preview_reader_skips_a_trailing_api_error(tmp_path):
-    """The reader that produced the vm3 snapshot: it returned the 401."""
+    """The reader that produced the testbox snapshot: it returned the 401."""
     tp = write(tmp_path / "t.jsonl", [
         real_reply("The migration is done."), api_error(),
     ])
@@ -434,7 +434,7 @@ def test_clearing_the_snapshot_on_return_is_persisted(
     assert saved["last_assistant_preview"] == ""
 
 
-# ── (c) the vm3 case: stale snapshot persisted on a live session ──────
+# ── (c) the testbox case: stale snapshot persisted on a live session ──────
 
 def test_persisted_stale_snapshot_on_a_live_session_is_healed(
         tmp_path, tmp_state_file, monkeypatch, run_async):
@@ -442,8 +442,8 @@ def test_persisted_stale_snapshot_on_a_live_session_is_healed(
         api_error(), real_reply("Latest real reply on the new token."),
     ])
     tmp_state_file.write_text(json.dumps({"sessions": {
-        "claude-catfish": {
-            "name": "claude-catfish", "label": "catfish",
+        "claude-frontend": {
+            "name": "claude-frontend", "label": "frontend",
             "transcript_path": tp, "claude_session_id": "sid",
             "cwd": "/work", "gone_at": None,
             "last_assistant_preview": API_ERROR_TEXT,
@@ -451,10 +451,10 @@ def test_persisted_stale_snapshot_on_a_live_session_is_healed(
     }}))
     registry = SessionRegistry()
     registry.load()
-    sess = registry.get("claude-catfish")
+    sess = registry.get("claude-frontend")
     assert sess.last_assistant_preview == ""  # R4: ignored at load
 
-    _scan_with(monkeypatch, registry, ["claude-catfish"], run_async)
+    _scan_with(monkeypatch, registry, ["claude-frontend"], run_async)
     assert sess.status == Status.IDLE
     assert sess.last_assistant_preview == ""
     detail = session_detail(sess, time.monotonic())

@@ -52,12 +52,12 @@ APP_HINT = "Only aipager's own text. Claude's answers don't change."
 def scopes():
     return [
         Scope(chat_id=GROUP_CHAT, kind="group", label="team", members=(
-            Member(id=OWNER_ID, label="aly", role="owner"),
+            Member(id=OWNER_ID, label="alice", role="owner"),
             Member(id=BOB_ID, label="bob", role="user"),
             Member(id=RO_ID, label="ro", role="read_only"),
         )),
-        Scope(chat_id=DM_CHAT, kind="dm", label="aly DM",
-              members=(Member(id=OWNER_ID, label="aly", role="owner"),)),
+        Scope(chat_id=DM_CHAT, kind="dm", label="alice DM",
+              members=(Member(id=OWNER_ID, label="alice", role="owner"),)),
     ]
 
 

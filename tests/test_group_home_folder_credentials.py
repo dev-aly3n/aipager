@@ -435,13 +435,13 @@ def test_a_carried_restricted_turn_gets_the_list_back():
 # ===========================================================================
 
 def _scopes():
-    members = (Member(id=OWNER, label="aly", role="owner"),
+    members = (Member(id=OWNER, label="alice", role="owner"),
                Member(id=ADMIN, label="ada", role="admin"),
                Member(id=USER, label="bob", role="user"),
                Member(id=READ_ONLY, label="cy", role="read_only"),
                Member(id=LEAD, label="lee", role="lead"))
-    return [Scope(chat_id=DM, kind="dm", label="aly",
-                  members=(Member(id=OWNER, label="aly", role="owner"),)),
+    return [Scope(chat_id=DM, kind="dm", label="alice",
+                  members=(Member(id=OWNER, label="alice", role="owner"),)),
             Scope(chat_id=GROUP, kind="group", label="team", members=members)]
 
 

@@ -22,10 +22,10 @@ OWNER, BOB = 555, 2
 def scopes():
     return [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=OWNER, label="aly", role="owner"),
+            Member(id=OWNER, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=OWNER, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=OWNER, label="alice", role="owner"),)),
     ]
 
 
@@ -55,7 +55,7 @@ def message(text, *, chat=DM, user=OWNER, reply_to=None, language_code="en"):
     update.message.chat_id = chat
     update.message.chat = MagicMock(id=chat, type="private" if chat > 0 else "supergroup")
     update.effective_user = MagicMock(id=user, language_code=language_code, is_bot=False)
-    update.effective_user.username = "aly" if user == OWNER else "bob"
+    update.effective_user.username = "alice" if user == OWNER else "bob"
     update.effective_chat = update.message.chat
     return update
 
@@ -69,7 +69,7 @@ def callback(data, *, chat=DM, user=OWNER, message_id=42, text=""):
     query.message = MagicMock(message_id=message_id, text=text, chat_id=chat)
     query.message.chat = MagicMock(id=chat, type="private" if chat > 0 else "supergroup")
     query.from_user = MagicMock(id=user, language_code="en")
-    query.from_user.username = "aly" if user == OWNER else "bob"
+    query.from_user.username = "alice" if user == OWNER else "bob"
     update = MagicMock()
     update.callback_query = query
     update.message = None

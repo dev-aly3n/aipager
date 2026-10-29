@@ -2,7 +2,7 @@
 not one for the whole daemon. Two chats get a bubble each; a chat's
 latch, mute, 429 or ban is that chat's alone; a session that moves chats
 takes its bubble with it; and a ban answered to the bubble itself
-(vm3's first 429 was on typing) puts nothing more on the wire.
+(testbox's first 429 was on typing) puts nothing more on the wire.
 
 Runs the REAL typing loop on the harness's virtual event loop, every call
 through the real limiter (``vbot``).
@@ -192,7 +192,7 @@ def test_no_bubble_inside_a_small_typing_429s_retry_after(mk_bot, vbot, vloop):
 def test_a_ban_answered_to_the_bubble_gets_zero_further_requests(
     mk_bot, vbot, vloop,
 ):
-    """vm3: Telegram's first answer was to the TYPING call. If that answer
+    """testbox: Telegram's first answer was to the TYPING call. If that answer
     is a ban (retry_after 25429 s), the loop must put nothing more into the
     chat — no bubble every 4.5 s into a live ban (R7: zero requests into
     a ban, bubble included)."""

@@ -66,7 +66,7 @@ meters them in a separate bucket, so charging them to the chat's budget
 only starved the cards. THEY ARE NOT EXEMPT FROM THE MUTE (8.26 D-1).
 That distinction is the whole of `_CHAT_BUDGET_EXEMPT`: exempt from
 PACING, never from BANS. The "typing…" chat action was exempt too from
-8.24 to 8.30, and earned the vm3 DM a 429 of its own on 2026-09-23 — see
+8.24 to 8.30, and earned the testbox DM a 429 of its own on 2026-09-23 — see
 :data:`CHAT_ACTION_ENDPOINT`.
 
 Since 8.30 every budgeted chat also has a rolling HOUR
@@ -159,7 +159,7 @@ REACTION_ENDPOINT: str = "setMessageReaction"
 # `sendChatAction typing` calls answer 200 inside a `retry_after=10`
 # window that refused every edit. What that proved is that typing is not
 # blocked BY an edit 429 — not that typing is free. On 2026-09-23 the
-# vm3 DM's first warning was a 429 on the typing action itself, after
+# testbox DM's first warning was a 429 on the typing action itself, after
 # hours of one loop per BUSY SESSION sending it every 4.5 s (~5,400 calls,
 # counted by nothing), and a straight 7-hour ban followed.
 #
@@ -191,7 +191,7 @@ _CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT})
 # Display only since 8.30: the POLICY reads the ban memory over
 # ``config.FLOOD_BAN_MEMORY_DAYS`` (7 days) through ``flood_policy``, and
 # divides the ceiling by one plus that count. 0.7.13 remembered a ban for
-# 24 hours and halved the ceiling while it did — and on 2026-09-23 the vm3
+# 24 hours and halved the ceiling while it did — and on 2026-09-23 the testbox
 # chat's 2026-09-19 ban no longer counted, so the chat ran at the full
 # ceiling into a straight 7-hour ban four days later.
 _BANS_TODAY_SECONDS: float = 86400.0
@@ -220,7 +220,7 @@ _TYPING_RESERVE: float = _SKIP_RESERVE + 1.0
 # second of every turn). At a turn's start the card message and its first
 # render take two of the three tokens, and at a full-bucket reserve the
 # bubble would wait for both to refill — measured 4 s into every turn on
-# the vm3 replay. It still leaves a card its own reserve behind; only a
+# the testbox replay. It still leaves a card its own reserve behind; only a
 # REFRESH of a lit bubble needs the extra token.
 _TYPING_STATUS_SECONDS: float = 5.0
 
@@ -463,7 +463,7 @@ class HourlyWindow:
 
     The third window per chat, beside the 1/s bucket and the 60 s
     :class:`SlidingWindow`, and the only one long enough to see what got
-    the vm3 DM banned: 3 h 23 min of volume every short window allowed.
+    the testbox DM banned: 3 h 23 min of volume every short window allowed.
 
     Buckets, not stamps. A stamp deque would hold up to 1200 floats per
     chat and persist them on every write; one bucket a minute holds two
@@ -627,7 +627,7 @@ class ChatBudget:
         # runs the rate ceiling is FLOOD_WARNED_CEILING and quiet windows
         # are the slow post-ban ones. Its own stamp, not ``last_429_at``,
         # which ``_decay`` advances by whole backoff windows and so drifts
-        # (vm3's persisted ``last_429_at`` is a minute after the real 429).
+        # (testbox's persisted ``last_429_at`` is a minute after the real 429).
         self.warned_until: float = 0.0
         # The rolling HOUR (8.30 R1/R3), and the two latches read from it.
         # ``hourly_minimal`` is minimal mode entered because the hour's
@@ -719,7 +719,7 @@ class ChatBudget:
         DISPLAY ONLY since 8.30 (``bans_today`` in ``snapshot()``). The
         limiter's policy reads the 7-day memory instead — see
         :meth:`BudgetRateLimiter.bans_remembered` — because a day-long
-        memory had forgotten the ban that predicted vm3's.
+        memory had forgotten the ban that predicted testbox's.
         """
         return self.bans_within(wall_now, _BANS_TODAY_SECONDS)
 
@@ -1195,7 +1195,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         defect D3 restated.
 
         A THIRD reason for the slow regime since 8.30 (R5): a chat inside
-        its WARNING REGIME. Any 429 is Telegram's warning, and on vm3 it
+        its WARNING REGIME. Any 429 is Telegram's warning, and on testbox it
         was the only one — 3 h 23 min before a 7-hour ban — while the 60 s
         window had forgiven it in five minutes.
         """
@@ -1258,7 +1258,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         ``flood_policy.effective_ceiling``, shared with ``aipager status``.
 
         0.7.13 halved the ceiling for 24 hours after a ban. Four days after
-        vm3's 2026-09-19 ban that memory was gone, the chat was back at the
+        testbox's 2026-09-19 ban that memory was gone, the chat was back at the
         full ceiling, and Telegram — whose memory is plainly longer —
         answered the next long stretch with a straight 7-hour ban.
 
@@ -1736,7 +1736,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget.set_rate(max(budget.rate * 0.5, self._min_rate), now)
         budget.rate_earned_at = now
         # AND the warning regime (8.30 R5): hours of the slow climb under a
-        # 0.5/s ceiling, not the five minutes the 60 s window gave vm3.
+        # 0.5/s ceiling, not the five minutes the 60 s window gave testbox.
         self._arm_warning(budget, self._wall_now())
         # ONE warning, no traceback: Telegram escalates on the COUNT of
         # violations, and 2,021 stack traces told the operator nothing
@@ -1752,7 +1752,7 @@ class BudgetRateLimiter(BaseRateLimiter):
     def note_typing_429(self, chat_id, seconds: float) -> None:
         """Record a small 429 on the "typing…" chat action (8.30 Q5).
 
-        Any 429 is a warning, the typing bubble's included — on vm3 it was
+        Any 429 is a warning, the typing bubble's included — on testbox it was
         the ONLY warning, 3 h 23 min before a 7-hour ban — so it starts
         the chat's warning regime (and so clamps its rate to the warned
         ceiling). And the bubble itself is refused for exactly the

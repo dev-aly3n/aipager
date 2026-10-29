@@ -3,8 +3,7 @@
 Independent of the Developer's own tests (``tests/integration/
 turn-anchor-follows-consumption/`` and any adapted unit tests) — this
 directory is the Tester's own, written against
-``/home/aly/researches/ship/turn-anchor-follows-consumption/design.md``'s
-case table (A, B1-B10) and ``entrypoints.md``'s public contract only,
+the design's case table (A, B1-B10) and ``entrypoints.md``'s public contract only,
 without reading ``implementation.md`` or any non-entry-point source.
 
 This directory's name is not a valid Python identifier, so test modules

@@ -773,17 +773,17 @@ def test_a_gone_session_gets_no_edit(mk_bot, run_async, wire):
 def test_the_bar_shows_and_clears_the_count(mk_bot, monkeypatch):
     monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", str(CHAT))
     bot = mk_bot()
-    sess = _sess(bot, label="aipager_boss")
-    assert bot._render_pinned(CHAT)[0] == "💤 aipager_boss (idle)"
+    sess = _sess(bot, label="shop_api")
+    assert bot._render_pinned(CHAT)[0] == "💤 shop_api (idle)"
     _agents(sess, ("a1", "pipeline-runner"))
     assert bot._render_pinned(CHAT)[0] == \
-        "💤 aipager_boss (idle, 1 agent running)"
+        "💤 shop_api (idle, 1 agent running)"
     _agents(sess, ("a2", "ship-reviewer"))
     assert bot._render_pinned(CHAT)[0] == \
-        "💤 aipager_boss (idle, 2 agents running)"
+        "💤 shop_api (idle, 2 agents running)"
     sess.bg_agent_stopped("a1", time.monotonic())
     sess.bg_agent_stopped("a2", time.monotonic())
-    assert bot._render_pinned(CHAT)[0] == "💤 aipager_boss (idle)"
+    assert bot._render_pinned(CHAT)[0] == "💤 shop_api (idle)"
 
 
 def test_the_bar_puts_the_count_on_the_sessions_own_line(mk_bot, monkeypatch):

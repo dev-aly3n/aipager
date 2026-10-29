@@ -35,7 +35,7 @@ from aipager.policy import Role
 from aipager.safety import DENY_BASH_PATTERNS, bash_violation
 
 SCRATCH = "/tmp/claude-1001/-workspace-hospital-accounting/5b1d7363-aaaa/scratchpad"
-OWN_SCRATCH = "/tmp/claude-1000/-home-aly-aipager/10244463-bbbb/scratchpad"
+OWN_SCRATCH = "/tmp/claude-1000/-home-alice-aipager/10244463-bbbb/scratchpad"
 
 
 # ===========================================================================
@@ -99,7 +99,7 @@ BLOCKED_CONFIG = [
     "ls ~/.claude",
     "cat $HOME/.claude/settings.json",
     "cat ${HOME}/.claude/settings.json",
-    "cat /home/aly/.claude/settings.json",
+    "cat /home/alice/.claude/settings.json",
     "cat /home/alice/.claude/projects/x.jsonl",
     "cat .claude/settings.local.json",
     "cd .claude && cat settings.json",
@@ -107,9 +107,9 @@ BLOCKED_CONFIG = [
     "cp -r ~/.claude /tmp/x",
     "rm -rf ~/.claude",
     # Traversal out of the (exempt) scratchpad root into the config dir.
-    "cat /tmp/claude-1000/../../home/aly/.claude/x",
-    f"cat {OWN_SCRATCH}/../../../../../home/aly/.claude/settings.json",
-    f"cd {OWN_SCRATCH} && cat ../../../../home/aly/.claude/.credentials.json",
+    "cat /tmp/claude-1000/../../home/alice/.claude/x",
+    f"cat {OWN_SCRATCH}/../../../../../home/alice/.claude/settings.json",
+    f"cd {OWN_SCRATCH} && cat ../../../../home/alice/.claude/.credentials.json",
 ]
 
 # aipager's own control files under /tmp share the `claude-` prefix; the

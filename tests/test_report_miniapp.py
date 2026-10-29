@@ -50,10 +50,10 @@ def _configured_bot_token(monkeypatch):
 
 def _scopes(with_owner_dm=True):
     group = Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=ADMIN, label="ada", role="admin")))
-    dm = Scope(chat_id=OWNER, kind="dm", label="aly DM",
-               members=(Member(id=OWNER, label="aly", role="owner"),))
+    dm = Scope(chat_id=OWNER, kind="dm", label="alice DM",
+               members=(Member(id=OWNER, label="alice", role="owner"),))
     return [dm, group] if with_owner_dm else [group]
 
 

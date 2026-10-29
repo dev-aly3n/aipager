@@ -1,6 +1,6 @@
 """Send now lines that are instant, per message, and removed the moment
-Claude takes the message (operator, live tests 2026-09-29; design
-/home/aly/researches/deliver/send-now-instant-lines/design.md).
+Claude takes the message (operator, live tests 2026-09-29; the design notes are kept outside
+the repo).
 
 Live: seven messages queued behind a running ping. The first line came in
 0.3 s; later lines came 12-39 s late (paced as ornaments at the chat's

@@ -15,7 +15,7 @@ them as arguments too, so a limiter built with different limits (a test,
 a tool) is answered with ITS limits rather than the module's.
 
 Why each rule exists is written where the constant is defined
-(``config.py``, the "long-run volume budget" block): the vm3 DM ban of
+(``config.py``, the "long-run volume budget" block): the testbox DM ban of
 2026-09-23 — two sessions streaming for 3 h 23 min under every short
 window we had, then a straight 7-hour ban.
 """

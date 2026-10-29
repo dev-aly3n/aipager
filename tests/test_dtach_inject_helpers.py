@@ -576,7 +576,7 @@ def test_kill_session_gives_up_on_an_unkillable_process(
 # ---- resume only when there is a conversation to resume ------------------
 
 def test_conversation_exists_finds_a_transcript(tmp_path, monkeypatch):
-    projects = tmp_path / ".claude" / "projects" / "-home-aly"
+    projects = tmp_path / ".claude" / "projects" / "-home-alice"
     projects.mkdir(parents=True)
     (projects / "abc-123.jsonl").write_text("{}\n")
     monkeypatch.setattr(claude_paths, "DEFAULT_CONFIG_HOME", tmp_path / ".claude")

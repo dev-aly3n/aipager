@@ -1,9 +1,9 @@
 """Roadmap 8.77: a running turn never gains rights from a message that
 joins it.
 
-Group audit A3 (probe p5): bob (``user``) runs a turn; aly (owner) sends
+Group audit A3 (probe p5): bob (``user``) runs a turn; alice (owner) sends
 anything to the same session. Claude Code fires UserPromptSubmit when it
-QUEUES aly's message, the hook wrote the snapshot of the newly consumed
+QUEUES alice's message, the hook wrote the snapshot of the newly consumed
 note alone, and the rest of bob's turn ran with the owner's bypass.
 
 The fix has two halves, both pinned here:
@@ -50,7 +50,7 @@ DM = 555
 S = "claude-api__g1001"
 DM_S = "claude-api__d555"
 
-ALY, BOB, RO, ADA = 1, 2, 3, 4
+ALICE, BOB, RO, ADA = 1, 2, 3, 4
 
 POLICY = load_policy()
 
@@ -64,7 +64,7 @@ def _snapshot_dir():
 
 def _group_scope():
     return Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
@@ -72,8 +72,8 @@ def _group_scope():
 
 
 def _dm_scope():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 def _member(uid, scope=None):
@@ -169,15 +169,15 @@ def test_p5_an_owners_message_joining_a_users_turn_keeps_the_users_limits(
     assert _snap()["bypass_safety"] is False
     assert ps.turn_is_open(S)
 
-    aly_body = _note(S, ALY, "also bump the version", msg_id=2)
-    consumed, _ = notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "also bump the version", msg_id=2)
+    consumed, _ = notify_hook._match_and_promote(S, alice_body)
 
-    assert [n["body"] for n in consumed] == [aly_body]
+    assert [n["body"] for n in consumed] == [alice_body]
     snap = _snap()
     assert snap["bypass_safety"] is False
     assert "Bash" in snap["deny_tools"]
     assert snap["confine_writes"] is True
-    assert snap["note_bodies"] == [aly_body, bob_body]
+    assert snap["note_bodies"] == [alice_body, bob_body]
     assert snap["scope_mode"] is True
     t = _transcript(tmp_path, _user(bob_body))
     assert _bash(S, t) is not None
@@ -189,12 +189,12 @@ def test_a_fresh_turn_after_stop_runs_with_the_new_note_only(hook, tmp_path):
     hook(S, "Stop", transcript_path=_transcript(tmp_path, _user(bob_body)))
     assert not ps.turn_is_open(S)
 
-    aly_body = _note(S, ALY, "next thing", msg_id=2)
-    notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "next thing", msg_id=2)
+    notify_hook._match_and_promote(S, alice_body)
 
     snap = _snap()
     assert snap["bypass_safety"] is True
-    assert snap["note_bodies"] == [aly_body]
+    assert snap["note_bodies"] == [alice_body]
     assert snap.get("joined_from_telegram") is not True
 
 
@@ -211,8 +211,8 @@ def test_a_task_notification_keeps_the_snapshot_and_reopens_the_turn(
 
     assert _snap() == before
     assert ps.turn_is_open(S)
-    aly_body = _note(S, ALY, "while the job runs", msg_id=2)
-    notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "while the job runs", msg_id=2)
+    notify_hook._match_and_promote(S, alice_body)
     assert _snap()["bypass_safety"] is False
 
 
@@ -221,19 +221,19 @@ def test_a_missed_clear_only_makes_the_next_turn_stricter(hook, tmp_path):
     turn's rules, never the other way round, and the next Stop resets."""
     bob_body = _note(S, BOB, "go")
     notify_hook._match_and_promote(S, bob_body)
-    aly_body = _note(S, ALY, "later, after an interrupt", msg_id=2)
-    notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "later, after an interrupt", msg_id=2)
+    notify_hook._match_and_promote(S, alice_body)
     assert _snap()["bypass_safety"] is False        # over-restricted
 
-    hook(S, "Stop", transcript_path=_transcript(tmp_path, _user(aly_body)))
-    again = _note(S, ALY, "and again", msg_id=3)
+    hook(S, "Stop", transcript_path=_transcript(tmp_path, _user(alice_body)))
+    again = _note(S, ALICE, "and again", msg_id=3)
     notify_hook._match_and_promote(S, again)
     assert _snap()["bypass_safety"] is True
 
 
 def test_a_users_message_joining_an_owners_turn_lowers_it_as_before(tmp_path):
-    aly_body = _note(S, ALY, "go")
-    notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "go")
+    notify_hook._match_and_promote(S, alice_body)
     bob_body = _note(S, BOB, "me too", msg_id=2)
     notify_hook._match_and_promote(S, bob_body)
     snap = _snap()
@@ -259,8 +259,8 @@ def test_a_missing_or_malformed_running_snapshot_carries_the_floor(current):
     ps.mark_turn_open(S)
     if current is not None:
         ps.snapshot_path(S).write_text(current)
-    aly_body = _note(S, ALY, "anything")
-    notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "anything")
+    notify_hook._match_and_promote(S, alice_body)
     snap = _snap()
     assert snap["bypass_safety"] is False
     assert set(ps.FLOOR_SNAPSHOT["deny_tools"]) <= set(snap["deny_tools"])
@@ -288,7 +288,7 @@ def test_a_failed_pick_up_mid_turn_keeps_the_running_turns_rules(
                                  "note_bodies": [], "scope_mode": True})
     ps.mark_turn_open(S)
     _break_the_pick_up(monkeypatch)
-    hook(S, "UserPromptSubmit", prompt=_note(S, ALY, "x"))
+    hook(S, "UserPromptSubmit", prompt=_note(S, ALICE, "x"))
     snap = _snap()
     assert snap["allow_tools"] == ["Read"]
     assert snap["bypass_safety"] is False
@@ -306,7 +306,7 @@ def test_a_failed_pick_up_joining_a_terminal_turn_is_enforced(
 
 def test_a_failed_pick_up_of_a_fresh_turn_is_the_floor(hook, monkeypatch):
     _break_the_pick_up(monkeypatch)
-    hook(S, "UserPromptSubmit", prompt=_note(S, ALY, "x"))
+    hook(S, "UserPromptSubmit", prompt=_note(S, ALICE, "x"))
     assert _snap() == ps.FLOOR_SNAPSHOT
 
 
@@ -461,11 +461,11 @@ def test_an_owner_joining_a_terminal_turn_changes_nothing(tmp_path):
     snapshot is the floor): their Telegram message mid-turn must not
     restrict their own terminal turn."""
     notify_hook._match_and_promote(DM_S, "refactor the module")
-    aly_body = _note(DM_S, ALY, "and push", scope=_dm_scope())
-    notify_hook._match_and_promote(DM_S, aly_body)
+    alice_body = _note(DM_S, ALICE, "and push", scope=_dm_scope())
+    notify_hook._match_and_promote(DM_S, alice_body)
 
     assert _snap(DM_S)["bypass_safety"] is True
-    t = _terminal_turn_absorbing(tmp_path, aly_body)
+    t = _terminal_turn_absorbing(tmp_path, alice_body)
     assert _bash(DM_S, t, "git push") is None
 
 
@@ -488,8 +488,8 @@ def test_a_second_message_joining_a_joined_terminal_turn_never_widens(tmp_path):
     notify_hook._match_and_promote(S, "refactor the module")
     bob_body = _note(S, BOB, "join")
     notify_hook._match_and_promote(S, bob_body)
-    aly_body = _note(S, ALY, "me too", msg_id=2)
-    notify_hook._match_and_promote(S, aly_body)
+    alice_body = _note(S, ALICE, "me too", msg_id=2)
+    notify_hook._match_and_promote(S, alice_body)
     snap = _snap()
     assert snap["bypass_safety"] is False
     assert "Bash" in snap["deny_tools"]
@@ -534,8 +534,8 @@ def test_a_terminal_message_mid_terminal_turn_keeps_it_a_terminal_turn(
     notify_hook._match_and_promote(DM_S, "refactor the module")
     notify_hook._match_and_promote(DM_S, "and the tests")
     assert _snap(DM_S)["turn_origin"] == "terminal"
-    aly_body = _note(DM_S, ALY, "and push", scope=_dm_scope())
-    notify_hook._match_and_promote(DM_S, aly_body)
+    alice_body = _note(DM_S, ALICE, "and push", scope=_dm_scope())
+    notify_hook._match_and_promote(DM_S, alice_body)
     assert _snap(DM_S)["bypass_safety"] is True
 
 
@@ -581,9 +581,9 @@ def test_a_slash_command_named_by_the_bodies_is_not_a_terminal_turn():
 # ===========================================================================
 
 def test_dm_owner_messages_mid_turn_keep_the_owners_rights(tmp_path):
-    first = _note(DM_S, ALY, "go", scope=_dm_scope())
+    first = _note(DM_S, ALICE, "go", scope=_dm_scope())
     notify_hook._match_and_promote(DM_S, first)
-    second = _note(DM_S, ALY, "and this", scope=_dm_scope(), msg_id=2)
+    second = _note(DM_S, ALICE, "and this", scope=_dm_scope(), msg_id=2)
     notify_hook._match_and_promote(DM_S, second)
     snap = _snap(DM_S)
     assert snap["bypass_safety"] is True
@@ -603,7 +603,7 @@ def test_the_hook_reports_a_fresh_turn_and_its_author(hook):
     assert ups[-1]["aipager_turn"] == {
         "fresh": True, "origin": "telegram", "authors": [BOB]}
 
-    body2 = _note(S, ALY, "join", msg_id=2)
+    body2 = _note(S, ALICE, "join", msg_id=2)
     sent = hook(S, "UserPromptSubmit", prompt=body2)
     ups = [p for p in sent if p.get("hook_event_name") == "UserPromptSubmit"]
     assert ups[-1]["aipager_turn"]["fresh"] is False
@@ -619,7 +619,7 @@ def test_the_hook_reports_a_terminal_turn(hook):
     ({"origin": "terminal", "authors": []}, TURN_SENDER_TERMINAL),
     ({"origin": "telegram", "authors": [BOB]}, BOB),
     ({"origin": "telegram", "authors": [BOB, BOB]}, BOB),
-    ({"origin": "telegram", "authors": [BOB, ALY]}, TURN_SENDER_MIXED),
+    ({"origin": "telegram", "authors": [BOB, ALICE]}, TURN_SENDER_MIXED),
     ({"origin": "telegram", "authors": [None]}, None),
     ({"origin": "telegram", "authors": []}, None),
     ({"origin": "telegram", "authors": [True, 0, "2"]}, None),
@@ -652,9 +652,9 @@ def test_the_receiver_records_the_sender_of_a_fresh_turn_only(run_async):
     assert sess.turn_sender_id == BOB
 
     _datagram(recv, run_async, hook_event_name="UserPromptSubmit", session=S,
-              prompt=_body(ALY, "join"),
+              prompt=_body(ALICE, "join"),
               aipager_turn={"fresh": False, "origin": "telegram",
-                            "authors": [ALY]})
+                            "authors": [ALICE]})
     assert sess.turn_sender_id == BOB
 
     registry.transition(S, Status.IDLE)
@@ -774,7 +774,7 @@ def test_p5_daemon_an_owners_message_during_a_users_turn_is_held_then_runs_as_he
         gbot, typed, run_async):
     bot = gbot()
     sess = _session(bot, turn=BOB)
-    u = _update("also bump the version", user_id=ALY)
+    u = _update("also bump the version", user_id=ALICE)
 
     run_async(bot._handle_message(u, _ctx()))
 
@@ -787,10 +787,10 @@ def test_p5_daemon_an_owners_message_during_a_users_turn_is_held_then_runs_as_he
     bot.registry.transition(S, Status.IDLE)
     run_async(bot._drain_next_queued(sess))
 
-    assert typed == [(S, _body(ALY, "also bump the version"))]
+    assert typed == [(S, _body(ALICE, "also bump the version"))]
     note = ps.list_outstanding_notes(S)[0]
     assert note["bypass_safety"] is True
-    assert note["author_user_id"] == ALY
+    assert note["author_user_id"] == ALICE
 
 
 def test_the_turns_own_sender_is_not_held(gbot, typed, run_async):
@@ -801,7 +801,7 @@ def test_the_turns_own_sender_is_not_held(gbot, typed, run_async):
     assert typed == [(S, _body(BOB, "one more"))]
 
 
-@pytest.mark.parametrize("uid,held", [(ALY, False), (BOB, True), (ADA, True)])
+@pytest.mark.parametrize("uid,held", [(ALICE, False), (BOB, True), (ADA, True)])
 def test_joining_a_terminal_turn_is_only_for_the_owner(
         gbot, typed, run_async, uid, held):
     bot = gbot()
@@ -814,7 +814,7 @@ def test_joining_a_terminal_turn_is_only_for_the_owner(
 def test_a_turn_several_people_started_holds_everyone(gbot, typed, run_async):
     bot = gbot()
     sess = _session(bot, turn=TURN_SENDER_MIXED)
-    run_async(bot._handle_message(_update("hi", user_id=ALY), _ctx()))
+    run_async(bot._handle_message(_update("hi", user_id=ALICE), _ctx()))
     assert _held(sess) == ["hi"]
 
 
@@ -826,7 +826,7 @@ def test_no_hold_without_a_known_running_turn(gbot, typed, run_async,
                                               status, turn):
     bot = gbot()
     sess = _session(bot, turn=turn, status=status)
-    run_async(bot._handle_message(_update("hi", user_id=ALY), _ctx()))
+    run_async(bot._handle_message(_update("hi", user_id=ALICE), _ctx()))
     assert sess.pending_queue == []
     assert typed
 
@@ -835,7 +835,7 @@ def test_an_unknown_sender_is_not_held(gbot):
     bot = gbot()
     sess = _session(bot, turn=BOB)
     assert bot._turn_sender_differs(sess, None) is False
-    assert bot._turn_sender_differs(sess, ALY) is True
+    assert bot._turn_sender_differs(sess, ALICE) is True
 
 
 @pytest.mark.parametrize("path", ["template", "keyboard", "direct", "voice",
@@ -846,20 +846,20 @@ def test_every_send_path_holds_another_persons_message(
     sess = _session(bot, turn=BOB)
     if path == "template":
         label, _prompt = next(iter(bot._template_map.items()))
-        run_async(bot._handle_message(_update(label, user_id=ALY), _ctx()))
+        run_async(bot._handle_message(_update(label, user_id=ALICE), _ctx()))
     elif path == "keyboard":
         label = next(lbl for lbl, cmd in bot._command_map.items()
                      if cmd == "/init")
-        run_async(bot._handle_message(_update(label, user_id=ALY), _ctx()))
+        run_async(bot._handle_message(_update(label, user_id=ALICE), _ctx()))
     elif path == "direct":
         run_async(bot._handle_message(
-            _update("/api list the files", user_id=ALY), _ctx()))
+            _update("/api list the files", user_id=ALICE), _ctx()))
     elif path == "voice":
         run_async(bot._dispatch_voice_transcript(
-            _update(None, user_id=ALY), "spoken words", _ctx()))
+            _update(None, user_id=ALICE), "spoken words", _ctx()))
     else:
         run_async(bot._inject_file_prompt(
-            _update(None, user_id=ALY), _ctx(), "see this",
+            _update(None, user_id=ALICE), _ctx(), "see this",
             [Path("/srv/x.txt")], all_photos=False, log_name="x.txt"))
     assert typed == []
     assert len(sess.pending_queue) == 1
@@ -887,8 +887,8 @@ def test_retry_by_someone_else_while_a_turn_runs_is_refused(
     bot = gbot()
     sess = _session(bot, turn=BOB)
     sess.last_prompt = "again please"
-    sess.last_prompt_driver_user_id = ALY
-    query = _retry_tap(bot, run_async, ALY)
+    sess.last_prompt_driver_user_id = ALICE
+    query = _retry_tap(bot, run_async, ALICE)
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
     assert any("Another person's turn is running" in a for a in answers)
     assert typed == []
@@ -906,12 +906,12 @@ def test_retry_by_the_turns_own_sender_goes_through(gbot, typed, run_async):
 def test_a_held_message_waits_while_a_popped_turn_of_someone_else_runs(
         gbot, typed, run_async):
     """The finish path started a turn for bob's queued message (no hook
-    fires for it); aly's held message must not drain into it."""
+    fires for it); alice's held message must not drain into it."""
     bot = gbot()
     sess = _session(bot, turn=None, status=Status.IDLE)
     sess.queued_targets = [{"msg_id": 7, "chat_id": GROUP, "raw_text": "more",
                             "driver_user_id": BOB}]
-    sess.queue_prompt("aly's held message", 8, "", ALY)
+    sess.queue_prompt("alice's held message", 8, "", ALICE)
 
     taken = bot._take_next_prompt(sess)
     assert taken is not None
@@ -920,7 +920,7 @@ def test_a_held_message_waits_while_a_popped_turn_of_someone_else_runs(
 
     run_async(bot._drain_next_queued(sess))
     assert typed == []
-    assert _held(sess) == ["aly's held message"]
+    assert _held(sess) == ["alice's held message"]
 
 
 def test_a_held_message_from_the_popped_turns_sender_drains(
@@ -958,7 +958,7 @@ def test_a_message_while_another_persons_background_job_runs_is_held(
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
     _with_running_agent(sess)
-    run_async(bot._handle_message(_update("hi", user_id=ALY), _ctx()))
+    run_async(bot._handle_message(_update("hi", user_id=ALICE), _ctx()))
     assert typed == []
     assert _held(sess) == ["hi"]
 
@@ -967,11 +967,11 @@ def test_the_job_interim_reopens_the_turn_and_drains_nobody_elses(
         gbot, typed, run_async):
     """bob's job: the hook closed the turn at its interim Stop. The daemon
     reopens it (the agent's tool calls and the continuation still run
-    under bob's rules) and aly's held message stays held."""
+    under bob's rules) and alice's held message stays held."""
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
     _with_running_agent(sess)
-    sess.queue_prompt("aly waits", 8, "", ALY)
+    sess.queue_prompt("alice waits", 8, "", ALICE)
     bot._deliver_job_interim = AsyncMock()
     assert not ps.turn_is_open(S)
 
@@ -979,16 +979,16 @@ def test_the_job_interim_reopens_the_turn_and_drains_nobody_elses(
 
     assert ps.turn_is_open(S)
     assert typed == []
-    assert _held(sess) == ["aly waits"]
+    assert _held(sess) == ["alice waits"]
 
 
 def test_after_the_job_ends_the_held_message_runs_as_its_sender(
         gbot, typed, run_async):
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
-    sess.queue_prompt("aly waits", 8, "", ALY)   # job over: no agent left
+    sess.queue_prompt("alice waits", 8, "", ALICE)   # job over: no agent left
     run_async(bot._drain_next_queued(sess))
-    assert typed == [(S, _body(ALY, "aly waits"))]
+    assert typed == [(S, _body(ALICE, "alice waits"))]
 
 
 @pytest.mark.parametrize("event", ["job_grace_expired", "job_agents_lost"])
@@ -999,7 +999,7 @@ def test_a_job_that_closes_without_a_stop_ends_its_turn(
     as its sender."""
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
-    sess.queue_prompt("aly waits", 8, "", ALY)
+    sess.queue_prompt("alice waits", 8, "", ALICE)
     bot._settle_card_text = AsyncMock(return_value=True)
     bot._stop_animation = MagicMock()
     ps.mark_turn_open(S)
@@ -1007,7 +1007,7 @@ def test_a_job_that_closes_without_a_stop_ends_its_turn(
     run_async(bot.notify(sess, event, {}))
 
     assert not ps.turn_is_open(S)
-    assert typed == [(S, _body(ALY, "aly waits"))]
+    assert typed == [(S, _body(ALICE, "alice waits"))]
 
 
 def test_a_job_still_open_keeps_its_turn_and_its_held_message(
@@ -1015,7 +1015,7 @@ def test_a_job_still_open_keeps_its_turn_and_its_held_message(
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
     _with_running_agent(sess)
-    sess.queue_prompt("aly waits", 8, "", ALY)
+    sess.queue_prompt("alice waits", 8, "", ALICE)
     ps.mark_turn_open(S)
     job_sender = bot._end_job_turn(sess)
     run_async(bot._drain_after_job(sess, job_sender))
@@ -1031,7 +1031,7 @@ def test_a_turn_starting_while_the_job_close_notice_goes_out_keeps_its_state(
     turn that started meanwhile."""
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
-    sess.queue_prompt("aly waits", 8, "", ALY)
+    sess.queue_prompt("alice waits", 8, "", ALICE)
     bot._stop_animation = MagicMock()
     ps.mark_turn_open(S)               # the interim reopened it
     seen = []
@@ -1049,7 +1049,7 @@ def test_a_turn_starting_while_the_job_close_notice_goes_out_keeps_its_state(
     assert seen == [False]
     assert ps.turn_is_open(S)
     assert typed == []
-    assert _held(sess) == ["aly waits"]
+    assert _held(sess) == ["alice waits"]
 
 
 def test_a_lost_agent_drains_only_the_message_held_behind_the_job(
@@ -1070,7 +1070,7 @@ def test_the_jobs_own_sender_drained_at_an_interim_keeps_the_hold(
         gbot, typed, run_async):
     """Review rev-iter2-002: bob's own message drained while his job's
     agent runs starts a Claude turn inside the job; the job is still
-    bob's, so aly's message is still held."""
+    bob's, so alice's message is still held."""
     bot = gbot()
     sess = _session(bot, turn=BOB, status=Status.IDLE)
     _with_running_agent(sess)
@@ -1080,7 +1080,7 @@ def test_the_jobs_own_sender_drained_at_an_interim_keeps_the_hold(
     assert sess.status is Status.BUSY
     assert sess.turn_sender_id == BOB
 
-    run_async(bot._handle_message(_update("hi", user_id=ALY), _ctx()))
+    run_async(bot._handle_message(_update("hi", user_id=ALICE), _ctx()))
     assert _held(sess) == ["hi"]
 
 
@@ -1146,37 +1146,37 @@ def test_dm_an_unstamped_session_still_admits_its_dm_member(
     the home chat; a migrated-admin operator is not held there."""
     from aipager import config
     monkeypatch.setattr(config, "CHAT_ID", str(DM))
-    admin_dm = Scope(chat_id=DM, kind="dm", label="aly DM",
-                     members=(Member(id=ALY, label="aly", role="admin"),))
+    admin_dm = Scope(chat_id=DM, kind="dm", label="alice DM",
+                     members=(Member(id=ALICE, label="alice", role="admin"),))
     bot = gbot([admin_dm])
     sess = _session(bot, "claude-api", 0, "dm", turn=TURN_SENDER_TERMINAL)
-    assert bot._turn_sender_differs(sess, ALY) is False
+    assert bot._turn_sender_differs(sess, ALICE) is False
 
 
 # ---- DM parity and personal mode at the daemon -----------------------------
 
-@pytest.mark.parametrize("turn", [ALY, TURN_SENDER_TERMINAL, None])
+@pytest.mark.parametrize("turn", [ALICE, TURN_SENDER_TERMINAL, None])
 def test_dm_the_operator_is_never_held(gbot, typed, run_async, turn):
     bot = gbot("dm")
     sess = _session(bot, DM_S, DM, "dm", turn=turn)
-    run_async(bot._handle_message(_update("hi", user_id=ALY, chat_id=DM),
+    run_async(bot._handle_message(_update("hi", user_id=ALICE, chat_id=DM),
                                   _ctx()))
     assert sess.pending_queue == []
-    assert typed == [(DM_S, "[via Telegram · @aly]\nhi")]
+    assert typed == [(DM_S, "[via Telegram · @alice]\nhi")]
 
 
 def test_dm_a_migrated_admin_joins_their_own_terminal_turn(
         gbot, typed, run_async):
     """A personal install migrated to scopes made its one member an
     ``admin`` of the DM (review rev-iter1-002): still never held."""
-    admin_dm = Scope(chat_id=DM, kind="dm", label="aly DM",
-                     members=(Member(id=ALY, label="aly", role="admin"),))
+    admin_dm = Scope(chat_id=DM, kind="dm", label="alice DM",
+                     members=(Member(id=ALICE, label="alice", role="admin"),))
     bot = gbot([admin_dm])
     sess = _session(bot, DM_S, DM, "dm", turn=TURN_SENDER_TERMINAL)
-    run_async(bot._handle_message(_update("hi", user_id=ALY, chat_id=DM),
+    run_async(bot._handle_message(_update("hi", user_id=ALICE, chat_id=DM),
                                   _ctx()))
     assert sess.pending_queue == []
-    assert typed == [(DM_S, "[via Telegram · @aly]\nhi")]
+    assert typed == [(DM_S, "[via Telegram · @alice]\nhi")]
 
 
 def test_dm_a_migrated_admins_message_holds_their_terminal_turn_to_admin_rules(
@@ -1185,13 +1185,13 @@ def test_dm_a_migrated_admins_message_holds_their_terminal_turn_to_admin_rules(
     ``admin`` DM, a Telegram message joining a turn typed in the terminal
     holds the rest of that turn to the admin rules (as delivery 2 holds
     any admin Telegram text), where it used to run with none."""
-    admin_dm = Scope(chat_id=DM, kind="dm", label="aly DM",
-                     members=(Member(id=ALY, label="aly", role="admin"),))
+    admin_dm = Scope(chat_id=DM, kind="dm", label="alice DM",
+                     members=(Member(id=ALICE, label="alice", role="admin"),))
     notify_hook._match_and_promote(DM_S, "refactor the module")
     m = admin_dm.members[0]
-    body = "[via Telegram · @aly]\nand push"
+    body = "[via Telegram · @alice]\nand push"
     ps.write_note(DM_S, POLICY.get_role("admin"), admin_dm, m, msg_id=1,
-                  chat_id=DM, sender_key=(DM, ALY), body=body,
+                  chat_id=DM, sender_key=(DM, ALICE), body=body,
                   raw_text="and push", scope_mode=True)
     notify_hook._match_and_promote(DM_S, body)
     snap = _snap(DM_S)
@@ -1219,7 +1219,7 @@ def test_another_persons_dm_does_not_admit_a_group_member_to_a_group_turn():
     sess.scope_chat_id, sess.scope_kind = GROUP, "group"
     sess.turn_sender_id = TURN_SENDER_TERMINAL
     assert _B()._turn_sender_differs(sess, ADA) is True
-    assert _B()._turn_sender_differs(sess, ALY) is False
+    assert _B()._turn_sender_differs(sess, ALICE) is False
 
 
 def test_personal_mode_never_holds_for_a_turn(mk_bot, typed, run_async):
