@@ -197,3 +197,27 @@ def test_the_stop_survives_the_taps_handler_being_cancelled(rig, monkeypatch):
     rig.run_async(go())
     assert rig.writes.bytes() == [CHORD, CHORD]
     assert sess.status is Status.IDLE
+
+
+def test_the_toast_wait_counts_from_the_tap_not_from_the_stop(rig, monkeypatch):
+    """The toast is due ``STOP_TOAST_WAIT`` after the tap came in: checks
+    that take a while before the Stop starts never push it past the empty
+    ack's bound. Here they take 0.2 s, and a wait counted from the Stop's
+    start (0.15 s more) would end after the 0.3 s bound, its toast dropped."""
+    monkeypatch.setattr(session_ops, "STOP_TOAST_WAIT", 0.15)
+    real_gate = rig.bot._tap_passes_gate
+
+    async def _slow_gate(*a, **k):
+        await asyncio.sleep(0.2)
+        return await real_gate(*a, **k)
+
+    monkeypatch.setattr(rig.bot, "_tap_passes_gate", _slow_gate)
+
+    async def _slow(_delay):
+        await asyncio.sleep(SLOW)
+
+    monkeypatch.setattr(session_ops, "_sleep", _slow)
+    q = _tap(rig, CARD, "stop")
+    assert _answers(q) == [STOPPING]
+    assert rig.sess.status is Status.IDLE
+

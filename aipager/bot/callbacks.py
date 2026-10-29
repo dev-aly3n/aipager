@@ -446,15 +446,27 @@ def _keys_stopped_line(outcome, *, html: bool = True, tr=None) -> str:
 class _QueryAck:
     """Whether a callback query has had its one answer yet."""
 
-    __slots__ = ("query", "answered")
+    __slots__ = ("query", "answered", "started")
 
     def __init__(self, query) -> None:
         self.query = query          # held so id(query) is not reused
         self.answered = False
+        self.started = time.monotonic()  # the bound counts from here
 
 
 #: id(query) → its answer state, for the taps in flight.
 _ACKS: dict[int, _QueryAck] = {}
+
+
+def tap_wait_left(query, wait: float) -> float:
+    """What is left of *wait* counted from the tap's arrival (when its
+    ``CALLBACK_ACK_BOUND`` started), not from now: a toast due *wait*
+    after the tap stays below the bound however long the checks before
+    it took. *wait* itself for a query with no answer state."""
+    ack = _ACKS.get(id(query))
+    if ack is None:
+        return wait
+    return max(0.0, wait - (time.monotonic() - ack.started))
 
 
 async def _send_empty_answer(query) -> None:

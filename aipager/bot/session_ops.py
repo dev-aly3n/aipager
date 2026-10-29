@@ -41,6 +41,7 @@ from aipager.bot.callbacks import (
     _PERMS_POLL_INTERVAL,
     _PERMS_RESTART_QUIET,
     _stopped_line,
+    tap_wait_left,
 )
 from aipager.state import (
     KILL_WAKE_EXPECT_SECONDS, STOP_KEYS, STOP_KILL_AGENTS,
@@ -2637,7 +2638,9 @@ class SessionOpsMixin:
             self._stop_core_if_current(sess, query, by=by, turn=turn))
         _BACKGROUND_TASKS.add(core)
         core.add_done_callback(_BACKGROUND_TASKS.discard)
-        await asyncio.wait({core}, timeout=STOP_TOAST_WAIT)
+        # Due STOP_TOAST_WAIT after the tap came in, so the checks before
+        # this never push the toast past the empty ack's bound.
+        await asyncio.wait({core}, timeout=tap_wait_left(query, STOP_TOAST_WAIT))
         if core.done():
             return core.result(), False
         await self._safe_answer(query, tr.text(stop_text.TOAST_STOPPING,
