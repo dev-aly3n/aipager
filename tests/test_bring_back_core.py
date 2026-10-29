@@ -823,9 +823,21 @@ def test_a_safety_halt_of_a_parked_session_is_forced_without_escape(world, run_a
 
 def test_a_safety_halt_of_an_ordinary_session_still_sends_escape(world, run_async):
     world.sess.parked_job = ""
+    world.bot.registry.transition(NAME, Status.BUSY)
     world.bot._settle_card_text = AsyncMock(return_value=True)
     run_async(world.bot._halt_for_safety(world.sess, "rm -rf outside the project"))
     assert [c for c in world.calls if c[0] == "keys"] == [("keys", "Escape")] * 2
+    assert world.runs() == []
+
+
+def test_a_safety_halt_of_an_idle_session_types_nothing(world, run_async):
+    """Roadmap 8.121 F5: Claude's own turn ended (a background agent's call
+    was blocked), so Escape would open Claude Code's Rewind menu."""
+    world.sess.parked_job = ""
+    assert world.sess.status is Status.IDLE
+    world.bot._settle_card_text = AsyncMock(return_value=True)
+    run_async(world.bot._halt_for_safety(world.sess, "rm -rf outside the project"))
+    assert [c for c in world.calls if c[0] == "keys"] == []
     assert world.runs() == []
 
 
