@@ -2169,21 +2169,9 @@ class SessionOpsMixin:
         # `popAll`, and the transcript then no longer shows the text.
         held_chars = queued_chars(sess, held) if held else 0
 
-        # 1. Send Escape twice to Claude Code — proven interrupt
-        # behaviour this change does not touch.
-        await inject.send_keys(sess.name, "Escape")
-        await _sleep(0.15)
-        await inject.send_keys(sess.name, "Escape")
-
-        # 1b. Wipe whatever Claude's own not-yet-picked-up queue
-        # surfaced into the input box (design.md "Stop and /clearqueue
-        # on the same primitive") — the Escapes above can move it there
-        # without cancelling the running task, and left alone it would
-        # concatenate onto the next prompt. Read once, up front, so the
-        # "was anything actually outstanding" check and the combined
-        # drop count below agree on the same snapshot (`held`, step 0).
-        if held:
-            await inject.discard_queued_input(sess.name, held_chars)
+        # 1. The keys: two Escapes, then the queue wipe (1b). Only here,
+        # so no Stop path can type them into an idle session.
+        await self._send_stop_keys(sess, held, held_chars)
 
         # 2. Cancel animation — and a self-woken turn's deferred card
         # (roadmap 8.32): this path ends the turn without the finish path,
@@ -2243,6 +2231,41 @@ class SessionOpsMixin:
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
         return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by)
+
+    async def _send_stop_keys(self, sess: TrackedSession, held: list,
+                              held_chars: int) -> None:
+        """Type Stop's keys into *sess*: Escape twice (the proven
+        interrupt), then wipe what Claude's own queue surfaced into the
+        input box (design.md "Stop and /clearqueue on the same primitive":
+        the Escapes can move it there without cancelling the running task,
+        and left alone it would concatenate onto the next prompt; *held*
+        and *held_chars* are read once, before the Escapes).
+
+        The one place every Stop path (the busy card, /status, the /stop
+        command and picker, ``/<label> stop``, the Mini App's stop route,
+        all through :meth:`_stop_session_core`, and the safety halt,
+        :meth:`_halt_for_safety`) sends them, so none of them
+        can type into a session whose own turn has ended: an IDLE session
+        (Claude's turn over, its job's background agents or shells still
+        running) gets no key at all. Two Escapes into Claude Code's idle
+        prompt open its Rewind menu, and the next message sent is typed
+        into that menu and lost (roadmap 8.121 F5, live 2026-10-29).
+        Escape does not stop a background agent anyway; the rest of Stop
+        (the card, the job, the queue) is the caller's and is unchanged.
+        BUSY and INTERACTIVE get today's keys."""
+        if sess.status is Status.IDLE:
+            # Roadmap 8.121 F5 seam: Claude Code's own "stop the agents"
+            # chord (chat:killAgents) goes here once its keys are proven;
+            # until then nothing is typed.
+            log.info("[%s] Stop typed no keys: Claude's turn has ended "
+                     "(%d held message(s) not wiped in the terminal)",
+                     sess.label, len(held))
+            return
+        await inject.send_keys(sess.name, "Escape")
+        await _sleep(0.15)
+        await inject.send_keys(sess.name, "Escape")
+        if held:
+            await inject.discard_queued_input(sess.name, held_chars)
 
     async def _stop_parked(self, sess: TrackedSession, *, by: str = "") -> StopOutcome:
         """Stop for a session parked on a Claude Code background job: a
@@ -2422,9 +2445,9 @@ class SessionOpsMixin:
                             exc_info=True)
         else:
             try:
-                await inject.send_keys(sess.name, "Escape")
-                await _sleep(0.15)
-                await inject.send_keys(sess.name, "Escape")
+                # Stop's own keys, so a session whose turn already ended
+                # (a background agent's call was blocked) gets none.
+                await self._send_stop_keys(sess, [], 0)
             except Exception:
                 log.debug("[%s] safety halt interrupt failed", sess.label,
                           exc_info=True)
