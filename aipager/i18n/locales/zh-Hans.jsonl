@@ -317,7 +317,7 @@
 {"k": "home.tap_session", "src": "f14797d7", "v": "点按键盘上的会话名称，即可与该会话对话。"}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - 在 Telegram 中使用 Claude Code"}
 {"k": "jobwait.agents", "src": "cdf8fa99", "v": {"other": "正在等 {n} 个代理"}}
-{"k": "jobwait.both", "src": "4f90f011", "v": "正在等 {agents}和 {shells}"}
+{"k": "jobwait.both", "src": "4f90f011", "v": "正在等 {agents}、{shells}"}
 {"k": "jobwait.finishing", "src": "1bfd382d", "v": "正在收尾"}
 {"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"other": "正在等 {n} 个后台命令"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« 返回"}
@@ -1391,7 +1391,7 @@
 {"k": "ui.state.gone", "src": "f957097d", "v": "已结束"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "就绪"}
 {"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"other": "正在等 {n} 个代理"}}
-{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "正在等 {agents}和 {shells}"}
+{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "正在等 {agents}、{shells}"}
 {"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "正在收尾"}
 {"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"other": "正在等 {n} 个后台命令"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "未知"}
@@ -1403,7 +1403,7 @@
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "就绪"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "就绪，上次活动 {age}"}
 {"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"other": "正在等 {n} 个代理"}}
-{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "正在等 {agents}和 {shells}"}
+{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "正在等 {agents}、{shells}"}
 {"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "正在收尾"}
 {"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"other": "正在等 {n} 个后台命令"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "还没有信息"}
