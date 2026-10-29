@@ -1067,7 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "这个群组的设置只有管理员可以更改。"}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "你无权更改这个会话的设置。"}
 {"k": "toast.stop_stale", "src": "51073518", "v": "那个任务已经完成，请使用当前的卡片"}
-{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ 正在停止 {session}……"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ 正在停止 {session}…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "未知：{action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "正在检查…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 只有管理员可以更新 aipager。"}
