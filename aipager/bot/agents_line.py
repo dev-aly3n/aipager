@@ -125,6 +125,13 @@ HEAD_DONE = Plural(
     note="Under an answer, once all its background agents finished; {clock} is how long "
          "after the answer the last one finished (like 6:12)",
     eg={"clock": "6:12"})
+HEAD_STOPPED = Plural(
+    "agents.head.stopped", one="⏹ {n} agent stopped ({clock})",
+    other="⏹ {n} agents stopped ({clock})",
+    note="Under an answer, once its background agents were stopped by a person (Stop) "
+         "before they finished; agents are Claude's background helpers; {clock} is how "
+         "long after the answer they were stopped (like 1:10)",
+    eg={"clock": "1:10"})
 HEAD_SHELLS_RUNNING = Plural(
     "agents.head.shells_running", one="🖥 {n} shell running", other="🖥 {n} shells running",
     note="Under an answer: how many background shell commands of this task are still "
@@ -189,6 +196,14 @@ ROW_DONE = Msg(
          "name, never translated; or two names, the agent that started it first); "
          "{clock} how long it ran. Keep the ✓ and the 🤖",
     eg={"agent": "Explore", "clock": "0:42"})
+#: A narrow text mark like ✓ and ‖, never an emoji (see ROW_WAITING).
+ROW_STOPPED = Msg(
+    "agents.row.stopped", "✗ 🤖 **{agent}** · stopped ({clock})",
+    note="One background agent under an answer that a person stopped (Stop) before it "
+         "finished: {agent} is its type (a name, never translated; or two names, the "
+         "agent that started it first); {clock} how long it ran. Keep the ✗ (a narrow "
+         "text mark, never an emoji) and the 🤖",
+    eg={"agent": "Explore", "clock": "1:10"})
 MORE = Plural(
     "agents.more", one="+{n} more", other="+{n} more",
     note="After the agent rows shown under an answer: how many more agents there are "
@@ -219,7 +234,8 @@ _DESCRIBED = frozenset({"Bash", "Agent", "Task"})
 class AgentRow:
     """One agent of the block. ``seconds`` is the run time shown once
     ``done``; ``waiting`` marks an agent paused for agents of its own (a
-    done one is done). ``parent`` is the index, in its view's
+    done one is done); ``stopped``, a done one a person stopped (its kill,
+    roadmap 8.121 F5). ``parent`` is the index, in its view's
     ``agents``, of the agent that started it, or -1 for one at the top;
     an index out of range, its own, or one that closes a loop counts as
     -1."""
@@ -233,15 +249,19 @@ class AgentRow:
     description: str = ""
     waiting: bool = False
     parent: int = -1
+    stopped: bool = False
 
 
 @dataclass(frozen=True)
 class BlockView:
     """Everything the block shows, at one moment. ``agents`` in the order
-    they started."""
+    they started. ``agents_done_seconds`` is the clock of the agents that
+    finished, ``agents_stopped_seconds`` of the ones a person stopped
+    (``AgentRow.stopped``)."""
 
     agents: tuple[AgentRow, ...] = ()
     agents_done_seconds: float | None = None
+    agents_stopped_seconds: float = 0.0
     shells_running: int = 0
     shells_finished: int = 0
     shells_finished_seconds: float = 0.0
@@ -351,8 +371,13 @@ def _header(view: BlockView, tr) -> str:
     if working:
         parts.append(tr.n(HEAD_WORKING, working, kind="md"))
     elif view.agents:
-        parts.append(tr.n(HEAD_DONE, len(view.agents), kind="md",
-                          clock=Safe(tr.clock(view.agents_done_seconds or 0))))
+        stopped = sum(1 for a in view.agents if a.stopped)
+        if len(view.agents) > stopped:
+            parts.append(tr.n(HEAD_DONE, len(view.agents) - stopped, kind="md",
+                              clock=Safe(tr.clock(view.agents_done_seconds or 0))))
+        if stopped:
+            parts.append(tr.n(HEAD_STOPPED, stopped, kind="md",
+                              clock=Safe(tr.clock(view.agents_stopped_seconds or 0))))
     if view.shells_running:
         parts.append(tr.n(HEAD_SHELLS_RUNNING, view.shells_running, kind="md"))
     else:
@@ -379,6 +404,8 @@ def _row(row: AgentRow, tr, hint: str | None = None, *, item: bool = False) -> s
     agent = _bs(_label(row.agent_type))
     if hint is not None:
         agent = f"{_bs(_label(hint))}{LINEAGE_SEP}{agent}"
+    if row.done and row.stopped:
+        return tr.md(ROW_STOPPED, agent=agent, clock=Safe(tr.clock(row.seconds or 0)))
     if row.done:
         return tr.md(ROW_DONE, agent=agent, clock=Safe(tr.clock(row.seconds or 0)))
     if row.waiting:
@@ -519,7 +546,8 @@ def _worst_rows(tr) -> int:
     best = 0
     for wide in (_WIDE, _AMP):
         agent = wide * LABEL_MAX
-        rows = [AgentRow(agent, True, _WORST_CLOCK), AgentRow(agent, False),
+        rows = [AgentRow(agent, True, _WORST_CLOCK),
+                AgentRow(agent, True, _WORST_CLOCK, stopped=True), AgentRow(agent, False),
                 AgentRow(agent, False, waiting=True),
                 AgentRow(agent, False, prose=wide * (ACTIVITY_MAX + 1)),
                 AgentRow(agent, False, tool=wide * LABEL_MAX),
@@ -545,7 +573,8 @@ def _worst_header(tr) -> int:
                    for n in _WORST_COUNTS)
 
     join = _size(md_to_html(str(tr.md(HEAD_JOIN, first=Safe(""), second=Safe("")))))
-    agents = max(most(HEAD_WORKING), most(HEAD_DONE, clock=clock))
+    agents = max(most(HEAD_WORKING),
+                 most(HEAD_DONE, clock=clock) + join + most(HEAD_STOPPED, clock=clock))
     shells = max(most(HEAD_SHELLS_RUNNING),
                  most(HEAD_SHELLS_FINISHED, clock=clock) + join
                  + most(HEAD_SHELLS_STOPPED, clock=clock))

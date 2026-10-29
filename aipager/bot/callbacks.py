@@ -60,7 +60,9 @@ from aipager.bot.settings_menu import (
     render_settings_root,
     render_settings_section,
 )
-from aipager.state import Status, session_foreign_to, warn_unstamped
+from aipager.state import (
+    STOP_END_JOB, STOP_KILL_AGENTS, Status, session_foreign_to, warn_unstamped,
+)
 from aipager.team import (
     attribution_label,
 )
@@ -69,7 +71,7 @@ from aipager.team import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
-from aipager.bot import rm_refusal
+from aipager.bot import rm_refusal, stop_text
 from aipager.bot.dashboard import ALREADY_ANSWERED, PINNED_ANSWER_VERB, open_prompt_tokens
 from aipager.bot.flood import MUTE, clear_time
 from aipager.bot.transport import (  # noqa: F401
@@ -415,7 +417,18 @@ def _stopped_line(outcome, *, html: bool = True, tr=None) -> str:
     """`⏹ Stopped x1`, with the queued messages it dropped: what every
     Stop says (a toast is plain text, a message HTML), in *tr*'s language
     (English when None). In a group, who stopped it (`outcome.by`,
-    roadmap 8.91c): `⏹ Stopped x1 by @bob`."""
+    roadmap 8.91c): `⏹ Stopped x1 by @bob`. A Stop that ended background
+    agents, or a job with no keys, words it through
+    :func:`aipager.bot.stop_text.stopped_line` (roadmap 8.121 F5)."""
+    tr = tr or i18n.get("en")
+    if getattr(outcome, "mode", "") in (STOP_KILL_AGENTS, STOP_END_JOB):
+        return stop_text.stopped_line(tr, outcome, html=html)
+    return _keys_stopped_line(outcome, html=html, tr=tr)
+
+
+def _keys_stopped_line(outcome, *, html: bool = True, tr=None) -> str:
+    """The Stop line itself (:func:`_stopped_line` without a kill's or a
+    keyless end's further lines)."""
     tr = tr or i18n.get("en")
     render = tr.html if html else tr.text
     session = (Span(f"<b>{html_mod.escape(outcome.label)}</b>") if html
@@ -891,6 +904,10 @@ class CallbackDispatchMixin:
         elif outcome.reason in bg_text.BG_FAILURES:
             # A parked session whose background job could not be stopped.
             answer = bg_text.stop_refused_text(person, outcome)
+        elif outcome.reason in stop_text.STOP_REFUSALS:
+            # Its turn has ended: a dialog of Claude's own is open, or the
+            # agents could not be stopped (roadmap 8.121 F5).
+            answer = stop_text.refusal(person, outcome, html=False)
         else:
             answer = person.text(NOT_WORKING, session=sess.label)
         await self._safe_answer(query, answer)
@@ -1096,9 +1113,11 @@ class CallbackDispatchMixin:
             # whenever the edit that strips its keyboard fails, and gating
             # per-caller is how the perms and restart paths were missed.
             outcome = await self._stop_session(sess, update=update, query=query)
-            if not outcome.ok and outcome.reason != "stale":
-                # A stale tap already explained itself at the seam; adding
-                # "is not busy" on top would be both wrong and louder.
+            if not outcome.ok and outcome.reason == "":
+                # A stale tap, a parked session's failed bring-back and a
+                # refusal of a session whose turn has ended already
+                # explained themselves at the seam; adding "is not busy"
+                # on top would be both wrong and louder.
                 await self._safe_answer(
                     query, i18n.for_person(update).text(NOT_WORKING, session=sess.label))
             return

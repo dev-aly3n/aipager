@@ -1795,7 +1795,7 @@ APP_JS = r"""
         // says so; an Ask/Auto switch is sent, not yet confirmed.
         var done = (action === "perms" && r.data && r.data.status === "sent")
           ? "ui.done.mode_sent" : (ACTION_SUCCESS_NOTICE[action] || "ui.done.generic");
-        showNotice((action === "resume" && r.data && r.data.detail)
+        showNotice(((action === "resume" || action === "stop") && r.data && r.data.detail)
           ? plain(r.data.detail) : t(done), "ok");
         pollTick();
         return;

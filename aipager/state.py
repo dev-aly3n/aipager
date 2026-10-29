@@ -173,6 +173,22 @@ FINISHED_SUBAGENTS_CAP: int = 100
 # subagent stopping mid-turn never arms it, so ordinary turns close
 # exactly as before.
 JOB_CONTINUATION_GRACE_SECONDS: float = 60.0
+# Roadmap 8.121 F5: what Stop does (``TrackedSession.stop_mode``). KEYS:
+# Claude's own turn runs or its own prompt is open, the two Escapes.
+# KILL_AGENTS: Claude's turn is over and background agents still run (or
+# ask), Claude Code's kill chord (aipager.dtach.inject.press_kill_agents).
+# END_JOB: Claude's turn is over and nothing but the job's grace window or
+# shells is left, no keys at all.
+STOP_KEYS = "keys"
+STOP_KILL_AGENTS = "kill_agents"
+STOP_END_JOB = "end_job"
+# After aipager's kill chord, how long a markerless UserPromptSubmit is
+# taken for the turn Claude Code starts by itself to say the agents were
+# stopped (it came 0.2 s after the press, live).
+KILL_WAKE_EXPECT_SECONDS: float = 10.0
+# Ids Claude Code listed in a Stop's ``background_tasks`` remembered per
+# session (newest kept), so one it no longer lists can be told ended.
+BG_TASK_IDS_SEEN_CAP: int = 64
 # Roadmap 8.41 — the background agents a session has running, for the
 # status block under an answer and the pinned bar.
 # How long an agent or shell an answer's block lists must have stayed gone
@@ -777,6 +793,24 @@ class TrackedSession:
     # by Claude's own turn activity (a tool call, a continuation).
     # Transient.
     resumed_after_stop: bool = False
+    # Roadmap 8.121 F5: the INTERACTIVE wait was entered straight from IDLE
+    # (an agent asked while Claude's own turn was over). Set by
+    # ``SessionRegistry.transition`` on IDLE -> INTERACTIVE, cleared by any
+    # other status change and by Claude's own turn activity (a tool call, a
+    # continuation, a prompt typed at the terminal during the wait).
+    # Transient.
+    wait_from_idle: bool = False
+    # Roadmap 8.121 F5, all transient: until when (monotonic) a markerless
+    # prompt is taken for the turn Claude Code starts after aipager's kill
+    # chord (one-shot); the newest ``agents_killed`` transcript line already
+    # handled (wall); the ids Claude Code listed in a Stop's
+    # ``background_tasks`` (newest last, capped); and the event set when a
+    # Stop's teardown is done (None when no Stop runs), which the kill's
+    # wake waits for.
+    kill_expected_until: float = 0.0
+    agents_killed_seen_wall: float = 0.0
+    bg_task_ids_seen: list = field(default_factory=list, repr=False)
+    stop_gate: asyncio.Event | None = field(default=None, repr=False)
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -1900,6 +1934,96 @@ class TrackedSession:
         return (self.status in (Status.BUSY, Status.INTERACTIVE)
                 or self.job_background_open())
 
+    def own_turn_over(self) -> bool:
+        """Whether Claude's own turn is over (roadmap 8.121 F5): IDLE, or an
+        INTERACTIVE wait on agents' prompts only, entered after Claude's
+        turn ended (carried over a Stop, or opened while idle). A prompt of
+        Claude's own, or one whose tool is not known, means its turn may
+        run: False (Stop then takes the Escape path)."""
+        if self.status is Status.IDLE:
+            return True
+        if self.status is not Status.INTERACTIVE:
+            return False
+        if not (self.resumed_after_stop or self.wait_from_idle):
+            return False
+        prompts = self.open_prompts()
+        if not prompts:
+            return False
+        for perm in prompts:
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            if not isinstance(info, dict) or not info.get("agent_id"):
+                return False
+        return True
+
+    def own_dialog_open(self) -> bool:
+        """A dialog of Claude's own is open, or one nobody can name: a
+        terminal dialog no hook tells of, or an open prompt that is not an
+        agent's (its owner ``""`` or not known). The kill chord is never
+        pressed then."""
+        if self.terminal_dialog_open():
+            return True
+        for perm in self.open_prompts():
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            if not isinstance(info, dict) or not info.get("agent_id"):
+                return True
+        return False
+
+    def stop_mode(self) -> str:
+        """What Stop does now (roadmap 8.121 F5): :data:`STOP_KEYS` while
+        Claude's own turn runs or its own prompt is open (the two
+        Escapes); with its turn over, :data:`STOP_KILL_AGENTS` while a
+        background agent runs or an agent's prompt is open, else
+        :data:`STOP_END_JOB` (no keys). Pure."""
+        if self.status is Status.BUSY or not self.own_turn_over():
+            return STOP_KEYS
+        if self.active_subagents or self.prompt_owners():
+            return STOP_KILL_AGENTS
+        return STOP_END_JOB
+
+    def end_killed_agents(self, now: float, ids=None,
+                          outcome: str = "stopped") -> list[tuple[str, dict | None]]:
+        """End agents Claude Code stopped with no SubagentStop (its kill
+        chord, roadmap 8.121 F5): SubagentStop's bookkeeping without its
+        notify. *ids* None: every agent in ``active_subagents`` and
+        ``bg_agents`` (the chord stops all of the session's). *now* is
+        monotonic. Each leaves ``bg_agents`` for ``bg_agents_recent``
+        marked ``ended_by: "killed"`` (answers' blocks get *outcome*), and
+        ``active_subagents`` (archived as finished) and
+        ``agent_tool_calls``. Returns ``(id, active entry or None)`` per
+        id ended, for the caller's card rows."""
+        if ids is None:
+            targets = list(dict.fromkeys(
+                [*self.active_subagents, *self.bg_agents]))
+        else:
+            targets = list(dict.fromkeys(i for i in ids if isinstance(i, str) and i))
+        ended: list[tuple[str, dict | None]] = []
+        for agent_id in targets:
+            known = agent_id in self.active_subagents or agent_id in self.bg_agents
+            if not known:
+                continue
+            if not self.bg_agent_stopped(agent_id, now, outcome=outcome):
+                self._end_in_lines(agent_id, outcome, now)
+            recent = self.bg_agents_recent.get(agent_id)
+            if isinstance(recent, dict):
+                recent["ended_by"] = "killed"
+            info = self.active_subagents.pop(agent_id, None)
+            if isinstance(info, dict):
+                elapsed = max(0.0, now - (info.get("started_at") or now))
+                self.archive_finished_subagent(
+                    str(info.get("type") or "unknown"), info, elapsed)
+            self.agent_tool_calls.pop(agent_id, None)
+            ended.append((agent_id, info if isinstance(info, dict) else None))
+        return ended
+
+    def note_bg_task_ids(self, ids) -> None:
+        """Remember ids Claude Code listed in a Stop's ``background_tasks``
+        (newest last, at most :data:`BG_TASK_IDS_SEEN_CAP`)."""
+        seen = [i for i in self.bg_task_ids_seen if i not in ids]
+        seen.extend(i for i in ids if isinstance(i, str) and i)
+        if len(seen) > BG_TASK_IDS_SEEN_CAP:
+            del seen[: len(seen) - BG_TASK_IDS_SEEN_CAP]
+        self.bg_task_ids_seen = seen
+
     def job_agent_count(self) -> int:
         """The job's running background agents: what an idle session waits
         for. The ONE count every surface names (roadmap 8.121);
@@ -2108,11 +2232,13 @@ class TrackedSession:
                 rec.setdefault("ends", {})[item_id] = {"outcome": outcome,
                                                        "at": now}
 
-    def bg_agent_stopped(self, agent_id: str, now: float) -> bool:
+    def bg_agent_stopped(self, agent_id: str, now: float, *,
+                         outcome: str = "done") -> bool:
         """SubagentStop: the matching agent stopped. An id never started
         (the constant phantom SubagentStops) matches nothing. Its links go
         with it: an agent finished is nobody's running child, and an id
-        used again starts with no children of its own."""
+        used again starts with no children of its own. *outcome* is what
+        the answers listing it show ("stopped" for a kill)."""
         info = self.bg_agents.pop(agent_id, None)
         if info is None:
             return False
@@ -2129,7 +2255,7 @@ class TrackedSession:
         self.bg_agents_recent[agent_id] = info
         while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
             self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
-        self._end_in_lines(agent_id, "done", now)
+        self._end_in_lines(agent_id, outcome, now)
         return True
 
     def agent_launch(self, agent_id: str) -> str:
@@ -4314,6 +4440,10 @@ class SessionRegistry:
                                        and sess.resumed_after_stop))
                     else "ended")
         sess.resumed_after_stop = False
+        # Roadmap 8.121 F5: an agent's prompt that opened while Claude's
+        # own turn was over (``own_turn_over``).
+        sess.wait_from_idle = (sess.status is Status.IDLE
+                               and new_status is Status.INTERACTIVE)
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:

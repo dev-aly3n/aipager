@@ -842,6 +842,50 @@ class NotifyMixin:
             log.debug("[%s] refused prompt message's buttons not removed",
                       sess.label, exc_info=True)
 
+    async def _show_agents_stopped(self, sess: TrackedSession, records) -> None:
+        """Every closed agent prompt's own message in *records* (open
+        prompt records, see ``TrackedSession.open_prompt_records``) says
+        its agent was stopped, with no buttons (roadmap 8.121 F5). The
+        card's inline prompt goes with the card's own settle."""
+        if self._app is None:
+            return
+        tr = i18n.for_sess(sess)
+        for rec in records:
+            if isinstance(rec, dict):
+                await self._show_agent_stopped(sess, rec, tr)
+
+    async def _show_agent_stopped(self, sess: TrackedSession, rec: dict, tr) -> None:
+        """A stopped agent's prompt message: its text as sent, the stopped
+        line under it, and no buttons. Its buttons go even when the text
+        cannot be edited (as :meth:`_show_rm_refused`)."""
+        from aipager.bot.stop_text import PROMPT_AGENT_STOPPED
+        chat_id, msg_id = rec.get("chat_id"), rec.get("msg_id")
+        if not (isinstance(msg_id, int) and msg_id > 0):
+            return
+        chat = chat_id or resolve_chat_id(sess)
+        bot = self._app.bot
+        try:
+            await bot.edit_message_text(
+                chat_id=chat, message_id=msg_id,
+                # Without its countdown, if it had one (roadmap 8.151):
+                # the prompt did not close by Claude Code's own refusal.
+                text=((rec.get("text_unclocked") or rec.get("text") or "")
+                      + "\n\n" + tr.html(PROMPT_AGENT_STOPPED)),
+                parse_mode="HTML", reply_markup=None)
+            return
+        except FloodMuted:
+            log.info("[%s] stopped agent's prompt message not edited - chat "
+                     "flood-muted", sess.label)
+        except Exception:  # noqa: BLE001 - fall back to the buttons alone
+            log.debug("[%s] stopped agent's prompt message edit failed", sess.label,
+                      exc_info=True)
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat, message_id=msg_id,
+                                                reply_markup=None)
+        except Exception:  # noqa: BLE001 - nothing more to do
+            log.debug("[%s] stopped agent's prompt message's buttons not removed",
+                      sess.label, exc_info=True)
+
     async def _on_prompts_carried(self, sess: TrackedSession) -> None:
         """Claude's turn ended with an agent's prompt still open (roadmap
         8.120): the answer is out, and the session waits on that prompt
@@ -1095,6 +1139,8 @@ class NotifyMixin:
 
         rows = []
         agent_ends = []
+        stopped_ends = []
+        done_ends = []
         shells = {"running": 0, "finished": [], "stopped": []}
         for item in rec["items"]:
             end = settled(item["id"])
@@ -1110,9 +1156,13 @@ class NotifyMixin:
             parent = row_of.get(item.get("parent") or "", -1)
             if end is not None:
                 agent_ends.append(end["at"])
+                # Roadmap 8.121 F5: an agent a person's Stop ended reads
+                # "stopped", never "done".
+                stopped = end.get("outcome") == "stopped"
+                (stopped_ends if stopped else done_ends).append(end["at"])
                 ran = end["at"] - (started if started is not None else sent_at)
                 rows.append(_agents_line.AgentRow(item["label"], True, ran,
-                                                  parent=parent))
+                                                  parent=parent, stopped=stopped))
                 continue
             info = sess.bg_agents.get(item["id"]) or {}
             rows.append(_agents_line.AgentRow(
@@ -1123,7 +1173,9 @@ class NotifyMixin:
         all_done = bool(rows) and len(agent_ends) == len(rows)
         return _agents_line.BlockView(
             agents=tuple(rows),
-            agents_done_seconds=(max(agent_ends) - sent_at) if all_done else None,
+            agents_done_seconds=(max(done_ends or agent_ends) - sent_at)
+            if all_done else None,
+            agents_stopped_seconds=(max(stopped_ends) - sent_at) if stopped_ends else 0.0,
             shells_running=shells["running"],
             shells_finished=len(shells["finished"]),
             shells_finished_seconds=max(shells["finished"], default=0.0),
@@ -2933,6 +2985,11 @@ class NotifyMixin:
             return
         if event == "prompts_carried":
             await self._on_prompts_carried(sess)
+            return
+        if event == "agent_prompts_stopped":
+            # Roadmap 8.121 F5: the agents whose prompts these were were
+            # stopped (Claude Code's kill chord): no hook closes them.
+            await self._show_agents_stopped(sess, context.get("records") or ())
             return
 
         # ── A mute lifted and this session has an answer waiting (8.29) ──

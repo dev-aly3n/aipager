@@ -376,19 +376,67 @@ INTERRUPT_SLACK_SECONDS: float = 0.5
 TAIL_READ_BYTES: int = 256 * 1024
 
 
-def _tail_lines(path: str, max_bytes: int = TAIL_READ_BYTES) -> list[str]:
-    """The complete lines in the last *max_bytes* of *path* (a first line
-    cut by the seek is dropped). Raises OSError like ``open``."""
+def _tail_bytes(path: str, max_bytes: int = TAIL_READ_BYTES) -> tuple[bytes, int]:
+    """The last *max_bytes* of *path* and the offset they start at. Raises
+    OSError like ``open``."""
     with open(path, "rb") as f:
         f.seek(0, os.SEEK_END)
         size = f.tell()
         start = max(0, size - max_bytes)
         f.seek(start)
-        data = f.read()
+        return f.read(), start
+
+
+def _split_tail(data: bytes, start: int) -> list[str]:
     lines = data.decode("utf-8", errors="replace").splitlines()
     if start > 0 and lines:
         lines = lines[1:]
     return lines
+
+
+def _tail_lines(path: str, max_bytes: int = TAIL_READ_BYTES) -> list[str]:
+    """The complete lines in the last *max_bytes* of *path* (a first line
+    cut by the seek is dropped). Raises OSError like ``open``."""
+    data, start = _tail_bytes(path, max_bytes)
+    return _split_tail(data, start)
+
+
+_AGENTS_KILLED = b'"agents_killed"'
+
+
+def agents_killed_since(path: str, since_wall: float) -> float | None:
+    """When (epoch seconds) Claude Code last wrote its ``agents_killed``
+    line in *path* (a ``system`` line written the moment its kill chord
+    stopped the background agents, 2.1.312), if at or after *since_wall*;
+    None when there is none that new, or no file. Reads only the file's
+    last :data:`TAIL_READ_BYTES`, and parses lines only when those bytes
+    hold the subtype at all. A line with no usable timestamp is not
+    counted. Never raises."""
+    if not path:
+        return None
+    try:
+        data, start = _tail_bytes(path)
+    except (OSError, ValueError):
+        return None
+    if _AGENTS_KILLED not in data:
+        return None
+    for line in reversed(_split_tail(data, start)):
+        if '"agents_killed"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except (ValueError, RecursionError):
+            continue
+        if (not isinstance(entry, dict) or entry.get("type") != "system"
+                or entry.get("subtype") != "agents_killed"):
+            continue
+        at = _entry_timestamp(entry)
+        if at is not None and at >= since_wall:
+            return at
+        if at is not None:
+            # The newest one is older: so is every line before it.
+            return None
+    return None
 
 
 def last_exchange_at(path: str) -> float | None:

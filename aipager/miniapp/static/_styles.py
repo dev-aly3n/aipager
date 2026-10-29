@@ -613,7 +613,7 @@ CSS = """
     border-color: color-mix(in srgb, var(--lamp-work) 32%, var(--line));
     background: radial-gradient(130% 95% at 0% 0%, var(--lamp-work-soft) 0%, transparent 62%), var(--surface);
   }
-  /* Waiting for its own background agents or shells is working too. */
+  /* Waiting for its own background agents is working too. */
   .tile-tasks {
     border-color: color-mix(in srgb, var(--lamp-work) 32%, var(--line));
     background: radial-gradient(130% 95% at 0% 0%, var(--lamp-work-soft) 0%, transparent 62%), var(--surface);
@@ -631,7 +631,7 @@ CSS = """
     white-space: nowrap;
   }
   .tile-busy .tile-state { color: var(--ink); background: var(--lamp-work-soft); }
-  /* "waiting for 2 agents and 1 shell" may not fit a narrow tile. */
+  /* "waiting for 2 agents" may not fit a narrow tile. */
   .tile-tasks .tile-state {
     color: var(--ink);
     background: var(--lamp-work-soft);
