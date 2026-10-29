@@ -2299,6 +2299,10 @@ class SessionOpsMixin:
         if mode == STOP_KILL_AGENTS:
             dialog = await self._terminal_dialog_before_typing(sess)
             mode = sess.stop_mode()
+            # The look can take seconds: the teardown wipes what is
+            # outstanding now, not before it.
+            outstanding = list_outstanding_notes(sess.name)
+            held = held_by_claude(sess, outstanding + self._queued_candidates(sess))
         # Read again after the awaits above, with none from here to the
         # press (or the keyless end).
         if mode == STOP_KEYS:
