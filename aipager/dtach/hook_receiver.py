@@ -564,6 +564,74 @@ def _summary_text(name: str, inp: dict) -> str:
     if name == send_check.SEND_TOOL:
         files = _send_files(inp)
         return send_check.sending_row(len(files)) if files else name
+    return _short_row(name, inp if isinstance(inp, dict) else {})
+
+
+def _short_row(name: str, inp: dict) -> str:
+    """The row of a built-in tool that names a short field of its input
+    (Claude Code 2.1.312's schemas), or the bare name when the field is
+    missing or not text. Never a message body, prompt, script, plan or
+    file contents: those can hold the person's own words or a secret."""
+    def field(key: str) -> str:
+        return _one_line(inp.get(key), 80)
+
+    def row(*parts: str) -> str:
+        detail = " ".join(part for part in parts if part)
+        return f"{name}: {detail}" if detail else name
+
+    if name == "SendMessage":
+        # Whom Claude wrote to, never `message` or `summary`.
+        to = field("to")
+        return f"{name}: to {to}" if to else name
+    if name == "ToolSearch":
+        return row(field("query"))
+    if name == "Monitor":
+        return row(field("description") or field("command"))
+    if name in ("TaskStop", "KillShell", "KillBash"):
+        # The id of the task it stops (`shell_id` is the older alias).
+        return row(field("task_id") or field("shell_id"))
+    if name in ("GetTask", "TaskGet"):
+        return row(field("taskId"))
+    if name == "TaskCreate":
+        # Claude's brief title for the task, never its description.
+        return row(field("subject"))
+    if name == "TaskUpdate":
+        task, status = field("taskId"), field("status")
+        if task and status:
+            return f"{name}: {task} ({status})"
+        return row(task)
+    if name == "ScheduleWakeup":
+        # The one-sentence reason Claude Code shows the user, never the prompt.
+        return row(field("reason"))
+    if name == "CronCreate":
+        # The schedule, never the prompt it fires.
+        return row(field("cron"))
+    if name == "CronDelete":
+        return row(field("id"))
+    if name == "EnterWorktree":
+        return row(field("name") or field("path"))
+    if name == "ExitWorktree":
+        return row(field("action"))
+    if name == "Workflow":
+        # A predefined workflow's name, never the script.
+        return row(field("name"))
+    if name == "TodoWrite":
+        # How many items are done, of how many: never their text.
+        todos = inp.get("todos")
+        items = ([t for t in todos if isinstance(t, dict)]
+                 if isinstance(todos, list) else [])
+        if not items:
+            return name
+        done = sum(1 for t in items if t.get("status") == "completed")
+        return f"{name}: {done}/{len(items)}"
+    if name == "LSP":
+        return row(field("operation"), field("filePath"))
+    if name == "PowerShell":
+        return row(field("description") or field("command"))
+    if name == "ListMcpResourcesTool":
+        return row(field("server"))
+    if name == "ReadMcpResourceTool":
+        return row(field("server"), field("uri"))
     return name
 
 
@@ -796,6 +864,16 @@ def _detail_text(name: str, inp: dict) -> str:
         return path if isinstance(path, str) else ""
     if name == send_check.SEND_TOOL:
         return "\n".join(_send_files(inp))
+    if name in ("Monitor", "PowerShell"):
+        # Their row shows Claude's description: the prompt shows what runs
+        # (a Monitor's command, else the url of the socket it watches).
+        fields = inp if isinstance(inp, dict) else {}
+        cmd = fields.get("command")
+        if isinstance(cmd, str) and cmd.strip():
+            return cmd.strip()
+        ws = fields.get("ws") if name == "Monitor" else None
+        url = ws.get("url") if isinstance(ws, dict) else None
+        return url.strip() if isinstance(url, str) else ""
     return ""
 
 
