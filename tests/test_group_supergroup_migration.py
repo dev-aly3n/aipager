@@ -44,7 +44,7 @@ OTHER = -1002            # another group scope
 DM = 555
 S = "claude-api__g1001"
 DM_S = "claude-api__d555"
-ALY, BOB = 1, 2
+ALICE, BOB = 1, 2
 
 # The real raw-JSON seam, taken before conftest's autouse guard replaces it
 # (the client under it is faked in the one test that calls it).
@@ -58,13 +58,13 @@ POLICY = load_policy(Path("/nonexistent/aipager-policy.yaml"),
 
 def _group(chat_id=GROUP, label="team"):
     return Scope(chat_id=chat_id, kind="group", label=label,
-                 members=(Member(id=ALY, label="aly", role="owner"),
+                 members=(Member(id=ALICE, label="alice", role="owner"),
                           Member(id=BOB, label="bob", role="user")))
 
 
 def _dm():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 def _cfg() -> Path:
@@ -213,7 +213,7 @@ def _assert_moved(bot, sess, dm_sess, limiter, before: bytes, caplog):
     assert scope_mod.load_chat_migrations() == {GROUP: NEW}
     # 2. In memory: the scope, the gate, the menus.
     assert [(s.chat_id, s.kind, s.label) for s in bot.scopes] == [
-        (DM, "dm", "aly DM"), (NEW, "group", "team")]
+        (DM, "dm", "alice DM"), (NEW, "group", "team")]
     gate = bot._message_chat_gate
     assert gate.check_update(_ptb_text_update(NEW))
     assert not gate.check_update(_ptb_text_update(GROUP))
@@ -373,7 +373,7 @@ def test_p7c_after_the_upgrade_the_owner_is_authorized_in_the_new_chat(
     def _status():
         u = MagicMock()
         u.effective_chat = MagicMock(id=NEW, type="supergroup")
-        u.effective_user = MagicMock(id=ALY, username="aly",
+        u.effective_user = MagicMock(id=ALICE, username="alice",
                                      first_name="A", last_name="")
         m = MagicMock(text="/status", message_id=503, reply_to_message=None,
                       chat=u.effective_chat, reply_text=AsyncMock())
@@ -1165,7 +1165,7 @@ def test_old_chat_prompt_surfaces_notices_and_timers_are_dropped(
     bot._resent_prompts[(GROUP, 5)] = (S, 1)
     bot._resent_prompts[(DM, 6)] = (DM_S, 2)
     bot._read_only_told.add((GROUP, BOB))
-    bot._read_only_told.add((DM, ALY))
+    bot._read_only_told.add((DM, ALICE))
 
     async def _go():
         st = bot._pinned.setdefault(GROUP, PinnedChat())
@@ -1177,7 +1177,7 @@ def test_old_chat_prompt_surfaces_notices_and_timers_are_dropped(
     trailing = run_async(_go())
     assert trailing.cancelled()
     assert list(bot._resent_prompts) == [(DM, 6)]
-    assert bot._read_only_told == {(DM, ALY)}
+    assert bot._read_only_told == {(DM, ALICE)}
 
 
 def test_stop_unregisters_the_daemon(gbot, run_async):
@@ -1208,9 +1208,9 @@ def test_a_flow_style_scope_is_rewritten_whole(gbot, run_async):
     _cfg().write_text(
         "schema_version: 3\nbot_token: '123456:FAKE'\nscopes:\n"
         f"- {{kind: dm, chat_id: {DM}, label: me, members: [{{id: 1, "
-        "label: aly, role: owner}]}\n"
+        "label: alice, role: owner}]}\n"
         f"- {{kind: group, chat_id: {GROUP}, label: team, members: [{{id: 1, "
-        "label: aly, role: owner}]}\n", encoding="utf-8")
+        "label: alice, role: owner}]}\n", encoding="utf-8")
     run_async(bot._migrate_chat(GROUP, NEW))
     loaded, _t = scope_mod.load_scopes(_cfg())
     assert [s.chat_id for s in loaded] == [DM, NEW]
@@ -1249,6 +1249,6 @@ def test_a_note_written_before_the_move_is_the_same_sender(gbot, run_async):
     assert _same_sender((GROUP, BOB), (NEW, BOB)) is False
     run_async(bot._migrate_chat(GROUP, NEW))
     assert _same_sender((GROUP, BOB), (NEW, BOB)) is True
-    assert _same_sender((GROUP, BOB), (NEW, ALY)) is False
-    assert _same_sender((DM, ALY), (NEW, ALY)) is False
+    assert _same_sender((GROUP, BOB), (NEW, ALICE)) is False
+    assert _same_sender((DM, ALICE), (NEW, ALICE)) is False
     assert _same_sender((OTHER, BOB), (NEW, BOB)) is False

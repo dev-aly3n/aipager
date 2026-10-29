@@ -388,7 +388,7 @@ def test_resume_fields_round_trip(tmp_state_file):
     r1.transition("claude-jim", Status.IDLE)
     sess = r1.get("claude-jim")
     sess.claude_session_id = "e4f739a9-e19a-4d17-a8c2-12ba1b288907"
-    sess.cwd = "/home/aly/project"
+    sess.cwd = "/home/alice/project"
     sess.last_assistant_preview = "I have refactored the module."
     sess.gone_at = _RECENT_GONE_AT
     r1.save()
@@ -397,7 +397,7 @@ def test_resume_fields_round_trip(tmp_state_file):
     r2.load()
     s2 = r2.get("claude-jim")
     assert s2.claude_session_id == "e4f739a9-e19a-4d17-a8c2-12ba1b288907"
-    assert s2.cwd == "/home/aly/project"
+    assert s2.cwd == "/home/alice/project"
     assert s2.last_assistant_preview == "I have refactored the module."
     assert s2.gone_at == _RECENT_GONE_AT
 
@@ -531,12 +531,12 @@ def test_find_by_label_prefers_a_live_session_over_a_gone_twin(tmp_state_file):
     ``include_gone`` lookup — the Mini App's per-session settings included
     — landed on the dead twin and the change never applied."""
     r = SessionRegistry()
-    _mk(r, "claude-fable", "aipager_boss", 256113222, status=Status.GONE)
-    _mk(r, "claude-aipager_boss", "aipager_boss", 256113222)
-    live = r.find_by_label("aipager_boss", 256113222, include_gone=True)
-    assert live is not None and live.name == "claude-aipager_boss"
-    unscoped = r.find_by_label("aipager_boss", None, include_gone=True)
-    assert unscoped is not None and unscoped.name == "claude-aipager_boss"
+    _mk(r, "claude-fable", "shop_api", 256113222, status=Status.GONE)
+    _mk(r, "claude-shop_api", "shop_api", 256113222)
+    live = r.find_by_label("shop_api", 256113222, include_gone=True)
+    assert live is not None and live.name == "claude-shop_api"
+    unscoped = r.find_by_label("shop_api", None, include_gone=True)
+    assert unscoped is not None and unscoped.name == "claude-shop_api"
 
 
 def test_find_by_label_still_falls_back_to_the_only_gone_match(tmp_state_file):

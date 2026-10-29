@@ -107,7 +107,7 @@ def _route(mk_bot, monkeypatch, run_async, chat_code, text):
     from unittest.mock import AsyncMock, MagicMock
 
     from aipager import preferences
-    from tests.test_claude_facing_golden import ALY, DM, _bot
+    from tests.test_claude_facing_golden import ALICE, DM, _bot
     preferences.set_ui_language(DM, chat_code)
     bot, _typed, _ = _bot(mk_bot, monkeypatch)
     bot._template_map = dict(config._DEFAULT_TEMPLATES)
@@ -126,7 +126,7 @@ def _route(mk_bot, monkeypatch, run_async, chat_code, text):
                                quote=None, external_reply=None, forward_origin=None,
                                via_bot=None, media_group_id=None, caption=None)
     update.message.reply_text = AsyncMock()
-    update.effective_user = MagicMock(id=ALY)
+    update.effective_user = MagicMock(id=ALICE)
     update.effective_chat = MagicMock(id=DM, type="private")
     run_async(bot._handle_message(update, MagicMock()))
     return sent

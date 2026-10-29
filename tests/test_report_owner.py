@@ -25,7 +25,7 @@ def _dm(chat_id, role="owner", member_id=None):
 
 def _group(chat_id=-1001):
     return Scope(chat_id=chat_id, kind="group", label="team", members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=7, label="bob", role="admin"),
     ))
 
@@ -53,7 +53,7 @@ def test_the_chat_id_is_read_at_call_time(mk_bot, monkeypatch):
 
 def test_legacy_team_mode_owner_is_the_chat_id(mk_bot):
     team = Team(group_id=-1001, users={
-        OWNER: TeamUser(id=OWNER, label="aly", role=TeamRole.ADMIN),
+        OWNER: TeamUser(id=OWNER, label="alice", role=TeamRole.ADMIN),
         7: TeamUser(id=7, label="bob", role=TeamRole.ADMIN)})
     bot = mk_bot(team=team)
     assert report_flow.resolve_owner(bot) == OWNER

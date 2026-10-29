@@ -35,7 +35,7 @@ def _fresh():
 @pytest.fixture
 def bot(mk_bot):
     b = mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=VIEWER, label="rob", role="read_only")))])
     b.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     return b
@@ -120,7 +120,7 @@ def test_the_kill_switch_never_reaches_a_stranger(bot, run_async, monkeypatch):
 
 def test_the_legacy_team_refusal(mk_bot, run_async):
     team = team_mod.Team(group_id=GROUP, users={
-        OWNER: team_mod.User(OWNER, "aly", team_mod.Role.ADMIN)})
+        OWNER: team_mod.User(OWNER, "alice", team_mod.Role.ADMIN)})
     bot = mk_bot(team=team)
     text = _refuse(bot, run_async, chat=GROUP, language_code="fa")
     assert text.startswith(RLM + "🚫 شما اجازهٔ استفاده")
@@ -140,7 +140,7 @@ def test_the_read_only_scope_notice_keeps_the_label_bytes(mk_bot, run_async):
     """English bytes as before keys: the label goes in as it is, never
     escaped (``'`` stays ``'``); in Persian it is isolated as one unit."""
     b = mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=VIEWER, label="o'neil", role="read_only")))])
     b.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     update = _update(VIEWER, GROUP)
@@ -158,7 +158,7 @@ def test_the_read_only_team_notice_keeps_the_label_bytes(mk_bot, run_async):
     """The legacy team path, like the scope one: raw label bytes in
     English, isolated as one unit in Persian."""
     team = team_mod.Team(group_id=GROUP, users={
-        OWNER: team_mod.User(OWNER, "aly", team_mod.Role.ADMIN),
+        OWNER: team_mod.User(OWNER, "alice", team_mod.Role.ADMIN),
         VIEWER: team_mod.User(VIEWER, "o'neil", team_mod.Role.READ_ONLY)})
     b = mk_bot(team=team)
     update = _update(VIEWER, GROUP)

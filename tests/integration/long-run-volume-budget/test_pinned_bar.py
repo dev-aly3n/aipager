@@ -1487,7 +1487,7 @@ def test_a_pending_trailing_refresh_never_recreates_a_removed_chats_bar(
 #
 # Telegram's pinned preview runs the bar's lines together. A first line
 # naming the working sessions above a list that names them again read
-# "⚙️ 1 working — aipager_boss • aipager_boss — working" live.
+# "⚙️ 1 working — shop_api • shop_api — working" live.
 
 @pytest.mark.parametrize("status, expected", [
     (Status.BUSY, "⚙️ solo (working)"),

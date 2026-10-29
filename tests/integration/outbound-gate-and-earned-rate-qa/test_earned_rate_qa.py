@@ -163,7 +163,7 @@ def test_twelve_quiet_minutes_climb_to_the_named_ceiling(
     AMENDED by 8.30 R5. Twelve quiet MINUTES after a 429 are now inside
     its six-hour warning regime, where the ceiling is
     ``FLOOD_WARNED_CEILING``; the named ceiling comes back only once the
-    regime has run out. (0.7.13 reached it in twelve minutes — vm3's one
+    regime has run out. (0.7.13 reached it in twelve minutes — testbox's one
     warning, forgiven before the card had refreshed a hundred times.)
     """
     _seed(limiter, run_async)
@@ -229,7 +229,7 @@ def test_the_full_ceiling_returns_only_once_the_ban_is_a_day_old(
     leaves the memory window. Asserting only the reduction would let a
     permanent half-speed daemon pass, which is the opposite failure. The
     0.7.13 row asserted the lapse at 24 h; a day-old ban is now still
-    remembered (vm3's four-day-old ban was not, and should have been).
+    remembered (testbox's four-day-old ban was not, and should have been).
     """
     _seed(limiter, run_async)
     limiter.note_ban(CHAT, BAN)

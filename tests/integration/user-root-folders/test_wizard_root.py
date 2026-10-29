@@ -107,8 +107,8 @@ def cfg(tmp_path, home):
     group with a user, written to the (redirected) aipager.yaml."""
     p = _scope.CONFIG_PATH
     scopes = [
-        Scope(chat_id=1, kind="dm", label="aly DM",
-              members=(Member(id=1, label="aly", role="owner"),)),
+        Scope(chat_id=1, kind="dm", label="alice DM",
+              members=(Member(id=1, label="alice", role="owner"),)),
         Scope(chat_id=3, kind="dm", label="Sara DM",
               members=(Member(id=3, label="Sara", role="user"),)),
         Scope(chat_id=-100, kind="group", label="team",
@@ -574,8 +574,8 @@ def cfg_collide(tmp_path, home):
     """Sara (3) and sara! (4) sanitise to the same name; a group; the owner."""
     p = _scope.CONFIG_PATH
     scopes = [
-        Scope(chat_id=1, kind="dm", label="aly DM",
-              members=(Member(id=1, label="aly", role="owner"),)),
+        Scope(chat_id=1, kind="dm", label="alice DM",
+              members=(Member(id=1, label="alice", role="owner"),)),
         Scope(chat_id=3, kind="dm", label="Sara DM",
               members=(Member(id=3, label="Sara", role="user"),)),
         Scope(chat_id=4, kind="dm", label="sara! DM",

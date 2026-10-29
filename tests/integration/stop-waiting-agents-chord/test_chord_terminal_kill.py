@@ -165,12 +165,12 @@ def test_after_aipagers_stop_the_wakes_card_lists_no_stopped_agent(rig, tmp_path
     """The turn Claude Code starts after aipager's Stop opens a card of its
     own: the stopped job's agents are not on it (and never as done)."""
     from aipager.bot import animation
-    from tests.two_prompts_rig import ALY, CARD
+    from tests.two_prompts_rig import ALICE, CARD
 
     transcript = tmp_path / "t.jsonl"
     transcript.write_text("")
     sess = _waiting(rig, transcript)
-    rig.tap(CARD, "stop", uid=ALY)
+    rig.tap(CARD, "stop", uid=ALICE)
     rig.hook("UserPromptSubmit", prompt=WAKE, transcript_path=str(transcript))
     assert sess.status is Status.BUSY
     assert not any("🤖" in str(summary) for summary, _done in sess.tool_history)

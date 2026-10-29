@@ -29,7 +29,7 @@ GROUP = -1001
 DM = 555
 # GONE_ID (not a member) sorts first, so a mixed turn has to prefer the
 # author it can name over an earlier one it cannot.
-ALY, BOB, CAROL, GONE_ID = 10, 20, 30, 5
+ALICE, BOB, CAROL, GONE_ID = 10, 20, 30, 5
 
 POLICY = load_policy(Path("/nonexistent/aipager-policy.yaml"),
                      Path("/nonexistent/policy.d"))
@@ -37,7 +37,7 @@ POLICY = load_policy(Path("/nonexistent/aipager-policy.yaml"),
 
 def _group(deny=("Edit",)):
     return Scope(chat_id=GROUP, kind="group", label="team",
-                 members=(Member(id=ALY, label="aly", role="owner"),
+                 members=(Member(id=ALICE, label="alice", role="owner"),
                           Member(id=BOB, label="bob", role="user"),
                           Member(id=CAROL, label="carol", role="user",
                                  deny_tools=("WebFetch",))),
@@ -46,7 +46,7 @@ def _group(deny=("Edit",)):
 
 def _dm(deny=()):
     return Scope(chat_id=DM, kind="dm", label="owner DM",
-                 members=(Member(id=ALY, label="owner", role="owner"),),
+                 members=(Member(id=ALICE, label="owner", role="owner"),),
                  deny_tools=tuple(deny))
 
 
@@ -126,22 +126,22 @@ def test_terminal_turn_a_telegram_message_joined_falls_back(mk_bot, turn):
 
 
 def test_a_users_telegram_turn_is_denied_naming_that_user(mk_bot):
-    """The running turn is bob's even though aly sent the last message."""
+    """The running turn is bob's even though alice sent the last message."""
     bot = _bot(mk_bot)
-    sess = _sess(last=ALY, turn=BOB)
+    sess = _sess(last=ALICE, turn=BOB)
     assert _decide(bot, sess) == (True, "bob")
 
 
 def test_an_owners_telegram_turn_is_not_denied(mk_bot):
-    """The running turn is aly's even though bob sent the last message."""
+    """The running turn is alice's even though bob sent the last message."""
     bot = _bot(mk_bot)
-    sess = _sess(last=BOB, turn=ALY)
+    sess = _sess(last=BOB, turn=ALICE)
     assert _decide(bot, sess) == (False, None)
 
 
 def test_a_users_own_deny_tools_apply_to_their_turn(mk_bot):
     bot = _bot(mk_bot)
-    assert _decide(bot, _sess(last=ALY, turn=CAROL), "WebFetch") == (
+    assert _decide(bot, _sess(last=ALICE, turn=CAROL), "WebFetch") == (
         True, "carol")
     assert _decide(bot, _sess(last=CAROL, turn=BOB), "WebFetch") == (
         False, None)
@@ -149,26 +149,26 @@ def test_a_users_own_deny_tools_apply_to_their_turn(mk_bot):
 
 def test_a_sender_who_left_the_chat_gets_the_scope_wide_list(mk_bot):
     bot = _bot(mk_bot)
-    assert _decide(bot, _sess(last=ALY, turn=GONE_ID)) == (True, None)
-    assert _decide(bot, _sess(last=ALY, turn=GONE_ID), "Bash") == (
+    assert _decide(bot, _sess(last=ALICE, turn=GONE_ID)) == (True, None)
+    assert _decide(bot, _sess(last=ALICE, turn=GONE_ID), "Bash") == (
         False, None)
 
 
 def test_mixed_owner_and_user_is_denied_naming_the_user(mk_bot):
     bot = _bot(mk_bot)
-    sess = _sess(last=ALY, turn=TURN_SENDER_MIXED, mixed=(ALY, BOB))
+    sess = _sess(last=ALICE, turn=TURN_SENDER_MIXED, mixed=(ALICE, BOB))
     assert _decide(bot, sess) == (True, "bob")
 
 
 def test_mixed_names_the_known_author_over_one_who_left(mk_bot):
     bot = _bot(mk_bot)
-    sess = _sess(last=ALY, turn=TURN_SENDER_MIXED, mixed=(BOB, GONE_ID))
+    sess = _sess(last=ALICE, turn=TURN_SENDER_MIXED, mixed=(BOB, GONE_ID))
     assert _decide(bot, sess) == (True, "bob")
 
 
 def test_mixed_with_only_someone_who_left_uses_the_scope_wide_list(mk_bot):
     bot = _bot(mk_bot)
-    sess = _sess(last=ALY, turn=TURN_SENDER_MIXED, mixed=(ALY, GONE_ID))
+    sess = _sess(last=ALICE, turn=TURN_SENDER_MIXED, mixed=(ALICE, GONE_ID))
     assert _decide(bot, sess) == (True, None)
 
 
@@ -180,7 +180,7 @@ def test_mixed_strictest_wins_on_any_authors_own_rule(mk_bot):
 
 def test_mixed_of_owners_only_is_not_denied(mk_bot):
     bot = _bot(mk_bot)
-    sess = _sess(last=BOB, turn=TURN_SENDER_MIXED, mixed=(ALY,))
+    sess = _sess(last=BOB, turn=TURN_SENDER_MIXED, mixed=(ALICE,))
     assert _decide(bot, sess) == (False, None)
 
 
@@ -201,7 +201,7 @@ def test_unknown_turn_uses_the_last_senders_rules(mk_bot):
     known."""
     bot = _bot(mk_bot)
     assert _decide(bot, _sess(last=BOB, turn=None)) == (True, "bob")
-    assert _decide(bot, _sess(last=ALY, turn=None)) == (False, None)
+    assert _decide(bot, _sess(last=ALICE, turn=None)) == (False, None)
 
 
 def test_unknown_turn_and_unknown_sender_use_the_scope_wide_list(mk_bot):
@@ -216,7 +216,7 @@ def test_role_is_read_in_the_sessions_chat(mk_bot):
     other = Scope(chat_id=-1002, kind="group", label="other",
                   members=(Member(id=BOB, label="bob", role="owner"),))
     bot = _bot(mk_bot, scopes=[_group(), _dm(), other])
-    assert _decide(bot, _sess(last=ALY, turn=BOB)) == (True, "bob")
+    assert _decide(bot, _sess(last=ALICE, turn=BOB)) == (True, "bob")
 
 
 def test_no_tool_name_is_never_denied(mk_bot):
@@ -246,7 +246,7 @@ def test_prompt_terminal_turn_shows_the_prompt(mk_bot, run_async):
 
 def test_prompt_users_turn_is_denied_naming_the_user(mk_bot, run_async):
     bot = _bot(mk_bot)
-    sess = _sess(last=ALY, turn=BOB)
+    sess = _sess(last=ALICE, turn=BOB)
     auto = _prompt(bot, sess, run_async)
     auto.assert_awaited_once()
     assert auto.await_args.args[2].label == "bob"
@@ -254,7 +254,7 @@ def test_prompt_users_turn_is_denied_naming_the_user(mk_bot, run_async):
 
 def test_prompt_mixed_turn_is_denied_naming_the_user(mk_bot, run_async):
     bot = _bot(mk_bot)
-    sess = _sess(last=ALY, turn=TURN_SENDER_MIXED, mixed=(ALY, BOB))
+    sess = _sess(last=ALICE, turn=TURN_SENDER_MIXED, mixed=(ALICE, BOB))
     auto = _prompt(bot, sess, run_async)
     auto.assert_awaited_once()
     assert auto.await_args.args[2].label == "bob"
@@ -262,7 +262,7 @@ def test_prompt_mixed_turn_is_denied_naming_the_user(mk_bot, run_async):
 
 def test_prompt_owners_turn_shows_the_prompt(mk_bot, run_async):
     bot = _bot(mk_bot)
-    auto = _prompt(bot, _sess(last=BOB, turn=ALY), run_async)
+    auto = _prompt(bot, _sess(last=BOB, turn=ALICE), run_async)
     auto.assert_not_awaited()
 
 
@@ -275,14 +275,14 @@ def test_prompt_unknown_turn_keeps_the_fallback(mk_bot, run_async):
 
 def test_notice_names_the_turns_sender_not_the_last_sender(
         mk_bot, run_async, monkeypatch):
-    """End to end: the posted line blames bob, whose turn it is, not aly,
+    """End to end: the posted line blames bob, whose turn it is, not alice,
     who sent the last message. (asyncio.sleep is never patched through a
     module path: the 0.1 s pause between the two keys is real.)"""
     bot = _bot(mk_bot)
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.audit.append", lambda **k: None)
-    sess = _sess(last=ALY, turn=BOB)
+    sess = _sess(last=ALICE, turn=BOB)
     bot.registry._sessions[sess.name] = sess
     bot._stop_animation = MagicMock()
     run_async(bot.notify(sess, "permission_prompt", {
@@ -295,10 +295,10 @@ def test_notice_names_the_turns_sender_not_the_last_sender(
 
 # ---- DM parity: the operator's own install --------------------------------
 
-@pytest.mark.parametrize("turn", [TURN_SENDER_TERMINAL, ALY, None])
+@pytest.mark.parametrize("turn", [TURN_SENDER_TERMINAL, ALICE, None])
 def test_dm_owner_is_never_auto_denied(mk_bot, run_async, turn):
     bot = _bot(mk_bot, scopes=[_dm(deny=("Edit",))])
-    sess = _sess(chat=DM, kind="dm", last=ALY, turn=turn)
+    sess = _sess(chat=DM, kind="dm", last=ALICE, turn=turn)
     assert _decide(bot, sess) == (False, None)
     _prompt(bot, sess, run_async).assert_not_awaited()
 

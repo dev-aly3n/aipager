@@ -196,7 +196,7 @@ def test_an_admin_sets_the_group_language(tg_bot, tap):
 
 def test_the_group_confirmation_names_who_changed_it(tg_bot, tap, ml):
     q = tap(tg_bot, "_:set:lang:en", chat_id=GROUP, user_id=OWNER)
-    assert "<i>Changed by @aly.</i>" in ml.edited(q)[0]
+    assert "<i>Changed by @alice.</i>" in ml.edited(q)[0]
 
 
 def test_the_group_confirmation_leads_with_the_line_and_the_list(tg_bot, tap, ml):

@@ -27,7 +27,7 @@ from tests import i18n_surfaces as _shared
 from tests.i18n_surfaces import NOW
 
 #: A private chat (its id is its person's id) and a group, as in
-#: ``tests/i18n_ml2.py``: aly owns both, bob is a member of the group.
+#: ``tests/i18n_ml2.py``: alice owns both, bob is a member of the group.
 DM = 555
 GROUP = -1001
 OWNER = 555
@@ -190,7 +190,7 @@ class Tg:
 
 
 def world(env, *, scopes: bool = True, chats=(DM, GROUP), username=BOT_NAME):
-    """A bot in scope mode (aly's DM and the group) with every Telegram call
+    """A bot in scope mode (alice's DM and the group) with every Telegram call
     recorded, the language of this env stored for *chats*."""
     from tests import i18n_ml2
     env.store(*chats)
@@ -244,7 +244,7 @@ def msg(tg, text, *, chat=DM, user=OWNER, reply_to=None, entities=None):
     m.parse_caption_entities = lambda types=None: {}
     m.from_user = MagicMock(id=user, language_code=None, is_bot=False)
     update.effective_user = m.from_user
-    update.effective_user.username = "aly" if user == OWNER else "bob"
+    update.effective_user.username = "alice" if user == OWNER else "bob"
     update.effective_chat = m.chat
     update.callback_query = None
     return update
@@ -272,7 +272,7 @@ def query(tg, data, *, chat=DM, user=OWNER, message_id=42, text=""):
     q.message.reply_document = tg.documenter(chat)
     q.message.reply_markup = None
     q.from_user = MagicMock(id=user, language_code=None, is_bot=False)
-    q.from_user.username = "aly" if user == OWNER else "bob"
+    q.from_user.username = "alice" if user == OWNER else "bob"
     update = MagicMock()
     update.callback_query = q
     update.message = None
@@ -954,13 +954,13 @@ def _whoami_replies(env):
     cmd(env, bot, tg, "_handle_whoami", "/whoami", chat=GROUP, user=4321)
     team, ttg = world(env, scopes=False, chats=(GROUP,))
     team.team = Team(group_id=GROUP, users={
-        OWNER: User(id=OWNER, label="aly", role=Role.ADMIN),
+        OWNER: User(id=OWNER, label="alice", role=Role.ADMIN),
         BOB: User(id=BOB, label="bob", role=Role.DEVELOPER)},
         rules=Rules(deny_tools=("Bash",)))
     team._authorize = AsyncMock(return_value=True)
     cmd(env, team, ttg, "_handle_whoami", "/whoami", chat=GROUP, user=BOB)
     team.team = Team(group_id=GROUP, users={
-        OWNER: User(id=OWNER, label="aly", role=Role.ADMIN)})
+        OWNER: User(id=OWNER, label="alice", role=Role.ADMIN)})
     cmd(env, team, ttg, "_handle_whoami", "/whoami", chat=GROUP)
     cmd(env, team, ttg, "_handle_whoami", "/whoami", chat=GROUP, user=4321)
     personal, ptg = world(env, scopes=False, chats=(DM,))
@@ -1359,7 +1359,7 @@ def _newflow_taps(env):
     no folder to create one in, cancel; and starting one where you may
     not."""
     bot, tg = _new_world(env)
-    _open_name_card(env, bot, tg, chat=GROUP)          # aly's card: 7001
+    _open_name_card(env, bot, tg, chat=GROUP)          # alice's card: 7001
     start = len(tg.out)
     tap(env, bot, tg, "_:nw:cancel", chat=GROUP, user=BOB, message_id=7001)
     _open_name_card(env, bot, tg, chat=GROUP, user=BOB)
@@ -1886,7 +1886,7 @@ def _owner_taps(env):
     tap(env, bot, tg, _sess_cb(x1, f"endok{x1.turn_key}"), chat=GROUP, user=BOB,
         message_id=card)
     card_owner.claim(bot, GROUP, 4242, OWNER, kind="ask", command="", picker=True,
-                     who=MagicMock(id=OWNER, username="aly"))
+                     who=MagicMock(id=OWNER, username="alice"))
     tap(env, bot, tg, "_:pick:cancel", chat=GROUP, user=BOB, message_id=4242)
     tap(env, bot, tg, "nocolon", chat=GROUP)
     tap(env, bot, tg, _sess_cb(x1, "zzz"), chat=GROUP)

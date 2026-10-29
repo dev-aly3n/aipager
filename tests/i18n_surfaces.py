@@ -599,10 +599,10 @@ def _settings_bot(env):
     env.mp.setattr(launch, "allowed_roots", lambda *a, **k: ["/work/app", "/work/lib"])
     bot = env.mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=555, label="aly", role="owner"),
+            Member(id=555, label="alice", role="owner"),
             Member(id=777, label="bob", role="user"))),
-        Scope(chat_id=555, kind="dm", label="aly DM",
-              members=(Member(id=555, label="aly", role="owner"),)),
+        Scope(chat_id=555, kind="dm", label="alice DM",
+              members=(Member(id=555, label="alice", role="owner"),)),
     ])
     bot.policy = load_policy(_P("/nonexistent/policy.yaml"), _P("/nonexistent/policy.d"))
     bot._app.bot.set_my_commands = AsyncMock()
@@ -2174,7 +2174,7 @@ def _auth_refusals(env):
     out = []
     # Legacy team mode: a stranger, a read-only member, a stranger's tap.
     team = team_mod.Team(group_id=CHAT, users={
-        CHAT: team_mod.User(CHAT, "aly", team_mod.Role.ADMIN),
+        CHAT: team_mod.User(CHAT, "alice", team_mod.Role.ADMIN),
         VIEWER: team_mod.User(VIEWER, "rob", team_mod.Role.READ_ONLY)})
     bot = env.mk_bot(team=team)
     for user in (STRANGER, VIEWER):
@@ -2187,7 +2187,7 @@ def _auth_refusals(env):
     team_mod.reset_unauthorized_seen()
     # Scope mode: an unknown private chat, a non-member, a read-only member.
     bot = env.mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=555, label="aly", role="owner"),
+        Member(id=555, label="alice", role="owner"),
         Member(id=VIEWER, label="rob", role="read_only")))])
     bot.policy = load_policy(_P("/nonexistent/policy.yaml"), _P("/nonexistent/policy.d"))
     for user, chat in ((STRANGER, STRANGER), (LURKER, GROUP), (VIEWER, GROUP)):
@@ -2238,7 +2238,7 @@ def _group_texts(env):
         out.append(env.with_tr(group_intake.talk_hint, bot, GROUP, "x1", dm="",
                                raw_label="x1", chat=GROUP))
     bot = env.mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=555, label="aly", role="owner"),))])
+        Member(id=555, label="alice", role="owner"),))])
     msg = MagicMock(chat_id=GROUP)
     msg.chat = MagicMock(id=GROUP)
     msg.reply_text = AsyncMock(return_value=MagicMock(message_id=3))

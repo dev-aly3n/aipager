@@ -38,7 +38,7 @@ GROUP2 = -1002
 DM = 555
 S = "claude-api__g1001"
 DM_S = "claude-api__d555"
-ALY, BOB, RO, ADA, CARL, STRANGER = 1, 2, 3, 4, 5, 777
+ALICE, BOB, RO, ADA, CARL, STRANGER = 1, 2, 3, 4, 5, 777
 
 POLICY = load_policy(Path("/nonexistent/aipager-policy.yaml"),
                      Path("/nonexistent/aipager-policy.d"))
@@ -50,7 +50,7 @@ DROPPED_BOB = "Dropped: @bob is no longer allowed to send here."
 def _members(**changes):
     """The group's members; ``bob=None`` removes bob, ``bob="read_only"``
     sets his role."""
-    base = {"aly": (ALY, "owner"), "bob": (BOB, "user"),
+    base = {"alice": (ALICE, "owner"), "bob": (BOB, "user"),
             "ro": (RO, "read_only"), "ada": (ADA, "admin")}
     out = []
     for label, (uid, role) in base.items():
@@ -69,8 +69,8 @@ def _group(members=None, chat_id=GROUP, label="team", deny_tools=()):
 
 
 def _dm():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 def _write_config(scopes):
@@ -333,7 +333,7 @@ def test_a_scope_removed_by_reload_is_refused_and_loses_its_menu(
 
     assert not gate.check_update(_ptb_text_update(GROUP))
     assert gate.check_update(_ptb_text_update(DM))
-    assert run_async(bot._authorize(_update("/status", user_id=ALY))) is False
+    assert run_async(bot._authorize(_update("/status", user_id=ALICE))) is False
     deleted = [c.kwargs["scope"].chat_id
                for c in bot._app.bot.delete_my_commands.await_args_list]
     assert deleted == [GROUP]
@@ -461,12 +461,12 @@ def test_a_removed_members_waiting_note_is_deleted(gbot, run_async):
     sess = _session(bot)
     g = _group()
     bob = next(m for m in g.members if m.id == BOB)
-    aly = next(m for m in g.members if m.id == ALY)
+    alice = next(m for m in g.members if m.id == ALICE)
     ps.write_note(S, POLICY.get_role("user"), g, bob, msg_id=7,
                   chat_id=GROUP, sender_key=(GROUP, BOB), body="b",
                   raw_text="b", scope_mode=True)
-    ps.write_note(S, POLICY.get_role("owner"), g, aly, msg_id=8,
-                  chat_id=GROUP, sender_key=(GROUP, ALY), body="a",
+    ps.write_note(S, POLICY.get_role("owner"), g, alice, msg_id=8,
+                  chat_id=GROUP, sender_key=(GROUP, ALICE), body="a",
                   raw_text="a", scope_mode=True)
     _write_config([_group(_members(bob=None)), _dm()])
     run_async(bot.reload_team())
@@ -562,8 +562,8 @@ def test_a_member_deny_tools_edit_narrows_their_turn(gbot, run_async):
 def test_an_owners_turn_is_untouched_by_an_unrelated_edit(gbot, run_async):
     bot = gbot()
     sess = _session(bot, status=Status.BUSY)
-    sess.turn_sender_id = ALY
-    _turn(S, ALY, "aly", "owner")
+    sess.turn_sender_id = ALICE
+    _turn(S, ALICE, "alice", "owner")
     before = _snap_bytes()
     _write_config([_group(_members(bob=None)), _dm()])
     run_async(bot.reload_team())
@@ -584,7 +584,7 @@ def test_a_terminal_turn_is_untouched(gbot, run_async):
     sess.queued_targets.append({"msg_id": 9, "chat_id": GROUP,
                                 "raw_text": "x", "driver_user_id": ADA})
     before = _snap_bytes()
-    _write_config([_group(_members(aly="user", ada=None, bob=None)), _dm()])
+    _write_config([_group(_members(alice="user", ada=None, bob=None)), _dm()])
     run_async(bot.reload_team())
     assert _snap_bytes() == before
 
@@ -601,7 +601,7 @@ def test_a_joined_terminal_turn_is_narrowed_for_a_demoted_joiner(
                                _group().members[0])
     snap.update(turn_origin="terminal", joined_from_telegram=True)
     ps.write_merged_snapshot(S, snap)
-    _write_config([_group(_members(aly="user")), _dm()])
+    _write_config([_group(_members(alice="user")), _dm()])
     run_async(bot.reload_team())
     after = ps.read_snapshot(S)
     assert after["bypass_safety"] is False
@@ -628,9 +628,9 @@ def test_a_joined_terminal_turn_is_untouched_when_no_joiner_lost_rights(
 def test_a_mixed_turn_is_narrowed_for_a_removed_author(gbot, run_async):
     bot = gbot()
     sess = _session(bot, status=Status.BUSY)
-    _turn(S, ALY, "aly", "owner")
+    _turn(S, ALICE, "alice", "owner")
     sess.turn_sender_id = TURN_SENDER_MIXED
-    sess.turn_mixed_authors = (ALY, ADA)
+    sess.turn_mixed_authors = (ALICE, ADA)
     _write_config([_group(_members(ada=None)), _dm()])
     run_async(bot.reload_team())
     snap = ps.read_snapshot(S)
@@ -641,7 +641,7 @@ def test_a_mixed_turn_is_narrowed_for_a_removed_author(gbot, run_async):
 def test_a_mixed_turn_with_no_known_authors_is_left_alone(gbot, run_async):
     bot = gbot()
     sess = _session(bot, status=Status.BUSY)
-    _turn(S, ALY, "aly", "owner")
+    _turn(S, ALICE, "alice", "owner")
     sess.turn_sender_id = TURN_SENDER_MIXED
     sess.turn_mixed_authors = ()
     before = _snap_bytes()
@@ -718,7 +718,7 @@ def test_an_unknown_senders_terminal_turn_after_a_restart_is_untouched(
     snap.update(turn_origin="terminal", joined_from_telegram=False)
     ps.write_merged_snapshot(S, snap)
     before = _snap_bytes()
-    _write_config([_group(_members(aly="user", ada=None)), _dm()])
+    _write_config([_group(_members(alice="user", ada=None)), _dm()])
     run_async(bot.reload_team())
     assert _snap_bytes() == before
 
@@ -941,13 +941,13 @@ def test_a_personal_to_scope_reload_reaches_nothing_in_flight(
     bot._app.bot.set_my_commands = AsyncMock()
     bot._message_chat_gate = filters.Chat(DM)
     sess = _session(bot, name=DM_S, chat=DM, kind="dm", status=Status.BUSY)
-    sess.turn_sender_id = ALY
-    _turn(DM_S, ALY, "aly", "owner", scope=_dm())
+    sess.turn_sender_id = ALICE
+    _turn(DM_S, ALICE, "alice", "owner", scope=_dm())
     d = _dm()
     ps.write_note(DM_S, POLICY.get_role("owner"), d, d.members[0], msg_id=5,
-                  chat_id=DM, sender_key=(DM, ALY), body="x", raw_text="x",
+                  chat_id=DM, sender_key=(DM, ALICE), body="x", raw_text="x",
                   scope_mode=False)
-    sess.queue_prompt("next", 6, "", ALY)
+    sess.queue_prompt("next", 6, "", ALICE)
     before = _snap_bytes(DM_S)
     _write_config([_dm(), _group()])
     run_async(bot.reload_team())
@@ -967,7 +967,7 @@ def test_a_first_config_without_the_operators_chat_drops_nothing(
     bot.policy = POLICY
     bot._app.bot.set_my_commands = AsyncMock()
     sess = _session(bot, name=DM_S, chat=DM, kind="dm")
-    sess.queue_prompt("next", 6, "", ALY)
+    sess.queue_prompt("next", 6, "", ALICE)
     _write_config([_group()])
     run_async(bot.reload_team())
     assert len(sess.pending_queue) == 1
@@ -994,12 +994,12 @@ def test_dm_parity_a_reload_of_the_same_file_changes_nothing(
     sess = _session(bot, name=DM_S, chat=DM, kind="dm", status=Status.BUSY)
     run_async(bot._update_bot_commands())
     bot._app.bot.set_my_commands.reset_mock()
-    sess.turn_sender_id = ALY
-    _turn(DM_S, ALY, "aly", "owner", scope=_dm())
-    _hold(sess, ALY, 700, "next")
+    sess.turn_sender_id = ALICE
+    _turn(DM_S, ALICE, "alice", "owner", scope=_dm())
+    _hold(sess, ALICE, 700, "next")
     d = _dm()
     ps.write_note(DM_S, POLICY.get_role("owner"), d, d.members[0], msg_id=701,
-                  chat_id=DM, sender_key=(DM, ALY), body="x", raw_text="x",
+                  chat_id=DM, sender_key=(DM, ALICE), body="x", raw_text="x",
                   scope_mode=True)
     snap_before = _snap_bytes(DM_S)
     queue_before = list(sess.pending_queue)
@@ -1039,8 +1039,8 @@ def test_group_parity_a_reload_of_the_same_file_changes_nothing(
 
 def test_turn_authors_from_report():
     assert turn_authors_from_report(
-        {"origin": "telegram", "authors": [BOB, ALY, BOB, None, True]}) \
-        == (ALY, BOB)
+        {"origin": "telegram", "authors": [BOB, ALICE, BOB, None, True]}) \
+        == (ALICE, BOB)
     assert turn_authors_from_report({"origin": "terminal",
                                      "authors": [BOB]}) == ()
     assert turn_authors_from_report(None) == ()

@@ -23,7 +23,7 @@ import pytest
 from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 CHAT = 256113222
 TUID = "toolu_01Restored"
 RESTORED = f"[{LABEL}] permission prompt restored after restart - waiting "

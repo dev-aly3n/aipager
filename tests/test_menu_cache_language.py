@@ -20,9 +20,9 @@ GROUP, DM = -1001, 555
 def bot(mk_bot):
     b = mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="g",
-              members=(Member(id=DM, label="aly", role="owner"),)),
-        Scope(chat_id=DM, kind="dm", label="aly",
-              members=(Member(id=DM, label="aly", role="owner"),))])
+              members=(Member(id=DM, label="alice", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice",
+              members=(Member(id=DM, label="alice", role="owner"),))])
     sess = b.registry.get_or_create("claude-x1__g1001")
     sess.label, sess.scope_chat_id = "x1", GROUP
     b.registry.transition(sess.name, Status.IDLE)

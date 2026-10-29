@@ -728,7 +728,7 @@ def test_an_expired_note_leaves_the_turn_on_the_floor(tmp_path, project):
 
 def test_an_owner_note_still_gets_bash(tmp_path, project):
     from aipager.dtach import notify_hook
-    body = "[via Telegram · @aly · role:owner]\nrun ls"
+    body = "[via Telegram · @alice · role:owner]\nrun ls"
     ps.write_note(SESSION, _builtin("owner"), None, None, msg_id=1, chat_id=1,
                   sender_key=(1, 1), body=body, raw_text="run ls")
     notify_hook._match_and_promote(SESSION, body)

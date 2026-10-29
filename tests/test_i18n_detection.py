@@ -16,7 +16,7 @@ import pytest
 from aipager import i18n, preferences
 from aipager.i18n import locales, persist
 
-GROUP, DM, ALY, BOB = -1001, 555, 555, 777
+GROUP, DM, ALICE, BOB = -1001, 555, 555, 777
 
 
 def _update(chat_id, user_id, language_code=None):
@@ -48,40 +48,40 @@ def test_a_persian_telegram_app_does_not_switch_an_existing_chat(fa_ru):
     # No marker: everyone counts as existing.
     assert locales.normalize("fa-IR") == "fa"
     assert locales.detect("fa-IR", follow=False) is None
-    assert i18n.for_update(_update(DM, ALY, "fa-IR")).code == "en"
+    assert i18n.for_update(_update(DM, ALICE, "fa-IR")).code == "en"
     assert i18n.for_chat(DM).code == "en"
     # Remembered all the same (the offer needs it), never stored as a choice.
-    assert persist.seen(ALY) == "fa"
+    assert persist.seen(ALICE) == "fa"
     assert preferences.get_ui_language(DM) == ""
-    assert i18n.for_viewer(ALY, "ru").code == "en"
+    assert i18n.for_viewer(ALICE, "ru").code == "en"
     # A member with no DM choice: the chat's language, not their app's.
     preferences.set_ui_language(GROUP, "ru")
     assert i18n.for_person(_update(GROUP, BOB, "fa")).code == "ru"
     # Picked explicitly, it applies.
     preferences.set_ui_language(DM, "fa")
-    assert i18n.for_update(_update(DM, ALY, "en")).code == "fa"
-    assert i18n.for_viewer(ALY, "en").code == "fa"
+    assert i18n.for_update(_update(DM, ALICE, "en")).code == "fa"
+    assert i18n.for_viewer(ALICE, "en").code == "fa"
 
 
 def test_a_listed_person_stays_english(fa_ru):
-    persist.ensure_launch_marker(people=[ALY], prior_run=True)
-    assert i18n.for_update(_update(DM, ALY, "fa-IR")).code == "en"
-    assert i18n.for_viewer(ALY, "fa").code == "en"
-    assert i18n.for_person(_update(GROUP, ALY, "fa")).code == "en"
+    persist.ensure_launch_marker(people=[ALICE], prior_run=True)
+    assert i18n.for_update(_update(DM, ALICE, "fa-IR")).code == "en"
+    assert i18n.for_viewer(ALICE, "fa").code == "en"
+    assert i18n.for_person(_update(GROUP, ALICE, "fa")).code == "en"
     # Someone added after the marker follows their app.
     assert i18n.for_update(_update(BOB, BOB, "ru")).code == "ru"
 
 
 def test_english_apps_still_read_as_english(fa_ru):
     assert locales.detect("en-US") == "en"
-    assert i18n.for_update(_update(DM, ALY, "en-GB")).code == "en"
-    assert persist.seen(ALY) == "en"
+    assert i18n.for_update(_update(DM, ALICE, "en-GB")).code == "en"
+    assert persist.seen(ALICE) == "en"
     assert locales.detect("qps") is None and locales.detect(None) is None
 
 
 def test_a_new_person_follows_their_app(fa_ru, fresh):
     assert locales.detect("fa-IR") == "fa"
-    assert i18n.for_update(_update(DM, ALY, "fa-IR")).code == "fa"
+    assert i18n.for_update(_update(DM, ALICE, "fa-IR")).code == "fa"
     assert i18n.for_chat(DM).code == "fa"
     assert i18n.for_viewer(BOB, "ru").code == "ru"
     assert i18n.for_person(_update(GROUP, BOB, "ru")).code == "ru"
@@ -90,7 +90,7 @@ def test_a_new_person_follows_their_app(fa_ru, fresh):
 def test_the_kill_switch_brings_back_the_old_behaviour(fa_ru, fresh, monkeypatch):
     monkeypatch.setattr(locales, "AUTO_DETECT", False)
     assert locales.detect("fa-IR") is None
-    assert i18n.for_update(_update(DM, ALY, "fa-IR")).code == "en"
+    assert i18n.for_update(_update(DM, ALICE, "fa-IR")).code == "en"
     assert i18n.for_viewer(BOB, "ru").code == "en"
     # Strangers keep their Telegram language either way.
     assert i18n.for_stranger(_update(DM, 9, "fa")).code == "fa"

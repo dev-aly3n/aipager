@@ -63,7 +63,7 @@ def test_sc4_cli_resume_persisted_auto_passes_true(monkeypatch):
         "name": "claude-ben",
         "label": "ben",
         "claude_session_id": "uuid-001",
-        "cwd": "/home/aly",
+        "cwd": "/home/alice",
         "gone_at": 1234567890.0,
         "last_assistant_preview": "Done.",
         "skip_perms": True,  # the old Auto, which bypassed: Full access now
@@ -99,7 +99,7 @@ def test_sc5_cli_resume_bang_forces_auto_over_persisted_false(monkeypatch):
         "name": "claude-ben",
         "label": "ben",
         "claude_session_id": "uuid-001",
-        "cwd": "/home/aly",
+        "cwd": "/home/alice",
         "gone_at": 1234567890.0,
         "last_assistant_preview": "Done.",
         "perm_mode": "ask",  # persisted Ask mode — must be overridden

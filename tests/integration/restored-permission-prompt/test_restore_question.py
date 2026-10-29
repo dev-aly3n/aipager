@@ -19,7 +19,7 @@ import pytest
 from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 
 ONE = [{"question": "Which branch?", "multiSelect": False,
         "options": [{"label": "main", "description": "the default"},

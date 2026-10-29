@@ -29,7 +29,7 @@ from aipager.state import Status
 
 GROUP = -1001
 S = "claude-api__g1001"
-ALY, BOB = 1, 2
+ALICE, BOB = 1, 2
 CARD = 50
 TRIGGER = 40
 BG = "a1b2c3d4e5f60718a"
@@ -44,7 +44,7 @@ QUESTION = {"questions": [{
 
 def scopes():
     return [Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="alice", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
     ))]
 

@@ -56,7 +56,7 @@ def group_root() -> str:
 
 def group_scope() -> Scope:
     return Scope(chat_id=GROUP, kind="group", label="team", root=GROUP_ROOT or None, members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
@@ -64,8 +64,8 @@ def group_scope() -> Scope:
 
 
 def dm_scope() -> Scope:
-    return Scope(chat_id=DM_CHAT, kind="dm", label="aly DM",
-                 members=(Member(id=OWNER, label="aly", role="owner"),))
+    return Scope(chat_id=DM_CHAT, kind="dm", label="alice DM",
+                 members=(Member(id=OWNER, label="alice", role="owner"),))
 
 
 def prepare_bot(bot):

@@ -1,6 +1,6 @@
 """A message sent while a dialog is open waits for the answer, however long.
 
-The incident (2026-10-12, session aipager_boss): Claude asked a question,
+The incident (2026-10-12, session shop_api): Claude asked a question,
 nobody answered, and after 5 minutes with no hook the INTERACTIVE watchdog
 demoted the session to BUSY ("likely a crashed permission prompt"). The
 operator's next message was then typed into the question still on screen;

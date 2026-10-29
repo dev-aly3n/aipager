@@ -31,7 +31,7 @@ from aipager.session_monitor import (
 from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 OWNER = 12345
 TUID = "toolu_01Restored"
 

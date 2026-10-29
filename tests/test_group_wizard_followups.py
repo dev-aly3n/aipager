@@ -29,7 +29,7 @@ from aipager.wizard.draft import load_draft, save_draft
 GROUP = -1001
 NEW_GROUP = -1005
 DM = 555
-ALY, BOB, EVE = 1, 2, 5
+ALICE, BOB, EVE = 1, 2, 5
 TOKEN = "123456:FAKE"
 PID = 4242
 
@@ -44,7 +44,7 @@ def _dm(chat_id=DM, label="owner", role="owner", deny=()):
 
 def _group(chat_id=GROUP, members=None):
     return Scope(chat_id=chat_id, kind="group", label="team",
-                 members=members or (Member(id=ALY, label="aly", role="owner"),
+                 members=members or (Member(id=ALICE, label="alice", role="owner"),
                                      Member(id=BOB, label="bob", role="user")))
 
 
@@ -474,7 +474,7 @@ def _edit_deny(monkeypatch, scope, member_id):
 
 
 def _team(role, label="carol"):
-    return _group(members=(Member(id=ALY, label="aly", role="owner"),
+    return _group(members=(Member(id=ALICE, label="alice", role="owner"),
                            Member(id=EVE, label=label, role=role)))
 
 

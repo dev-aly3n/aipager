@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.neutral_names import as_renamed
 from tests.i18n_surfaces import (
     AGENTS_TREE_CARD_SURFACES,
     AGENTS_TREE_NEW_SURFACES,
@@ -199,7 +200,8 @@ def test_no_new_value_has_an_em_dash(code):
 def _git_show(path: str) -> bytes:
     """*path* at the feature's base commit. A checkout without that commit
     (CI's shallow clone, a squash-merged main, a tree copy) skips the
-    comparison, as phase 5's base pins do."""
+    comparison, as phase 5's base pins do. Read through :func:`as_renamed`:
+    the example owner's handle was renamed after that commit."""
     try:
         res = subprocess.run(["git", "-C", str(REPO), "show", f"{BASE}:{path}"],
                              capture_output=True, timeout=60)
@@ -207,7 +209,7 @@ def _git_show(path: str) -> bytes:
         pytest.skip("git is not available")
     if res.returncode != 0:
         pytest.skip(f"the feature base {BASE} is not in this checkout")
-    return res.stdout
+    return as_renamed(res.stdout)
 
 
 def test_claude_facing_golden_is_byte_identical():

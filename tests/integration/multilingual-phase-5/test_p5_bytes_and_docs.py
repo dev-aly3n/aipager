@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from aipager.i18n import locales
+from tests.neutral_names import as_renamed
 from tests.i18n_surfaces import (
     AGENTS_TREE_CARD_SURFACES,
     JOB_WAIT_SURFACES,
@@ -67,7 +68,9 @@ def at_base(rel):
         pytest.skip("git is not available")
     if res.returncode != 0:
         pytest.skip(f"the phase base {BASE} is not in this checkout")
-    return res.stdout
+    # The example owner's handle was renamed after the base: compare with
+    # the base as renamed, byte-exact on everything else.
+    return as_renamed(res.stdout)
 
 
 def now(rel):

@@ -22,7 +22,7 @@ from aipager import config
 from aipager.report import policy, store
 from aipager.report import schema as sc
 
-DESIGN = "/home/aly/researches/15-issue-reporting/design.md section 4 (Frequency budget)"
+DESIGN = "the reporting design's frequency budget"
 DAY = 86400
 T0 = 20729 * DAY                        # a fixed clock at a UTC midnight: day 0
 VERSION = "0.8.0"

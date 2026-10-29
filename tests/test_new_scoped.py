@@ -74,12 +74,12 @@ def test_session_system_prompt_none_when_legacy(mk_bot):
 def test_session_system_prompt_returns_roster(mk_bot, tmp_path, monkeypatch):
     monkeypatch.setattr(ss, "SESSIONS_ROOT", tmp_path)
     scope = Scope(chat_id=-100, kind="group", label="dev",
-                  members=(Member(id=1, label="aly", role="owner"),))
+                  members=(Member(id=1, label="alice", role="owner"),))
     bot = mk_bot(scopes=[scope])
     bot.policy = load_policy()
     body = bot._session_system_prompt(-100, "jim")
     assert body is not None
-    assert "# Session: jim" in body and "**aly** (owner" in body
+    assert "# Session: jim" in body and "**alice** (owner" in body
     # files written under tmp
     assert (tmp_path / "group-100" / "jim" / "SESSION.md").exists()
 
@@ -87,7 +87,7 @@ def test_session_system_prompt_returns_roster(mk_bot, tmp_path, monkeypatch):
 def test_new_passes_system_prompt_extra(mk_bot, mk_update, run_async, monkeypatch, tmp_path):
     monkeypatch.setattr(ss, "SESSIONS_ROOT", tmp_path)
     scope = Scope(chat_id=-4152307515, kind="group", label="dev",
-                  members=(Member(id=1, label="aly", role="owner"),))
+                  members=(Member(id=1, label="alice", role="owner"),))
     bot = mk_bot(scopes=[scope])
     bot.policy = load_policy()
     captured = {}

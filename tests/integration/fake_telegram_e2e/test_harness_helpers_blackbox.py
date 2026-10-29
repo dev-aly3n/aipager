@@ -83,8 +83,8 @@ def test_make_root_not_under_real_home(made_root):
     assert not (r == REAL_HOME or r.startswith(REAL_HOME + os.sep))
 
 
-def test_make_root_not_under_slash_home_aly(made_root):
-    assert not str(made_root()).startswith("/home/aly")
+def test_make_root_not_under_slash_home(made_root):
+    assert not str(made_root()).startswith("/home/")
 
 
 def test_make_root_exists_as_dir(made_root):
@@ -109,7 +109,7 @@ DIRTY = {
     "CLAUDE_CODE_OAUTH_TOKEN": "dummy-not-a-secret",
     "CLAUDE_TG_BOT_TOKEN": "1:dummy-not-a-real-token-xxxxxx",
     "CLAUDE_TG_CHAT_ID": REAL_CHAT_ID,
-    "CLAUDE_CONFIG_DIR": "/home/aly/.claude",
+    "CLAUDE_CONFIG_DIR": "/home/alice/.claude",
     "ANTHROPIC_API_KEY": "dummy-not-a-secret",
     "AIPAGER_SOCKET_PATH": "/tmp/aipager.sock",
     "AIPAGER_INSTANCE_DIR": "/somewhere/else",
@@ -117,7 +117,7 @@ DIRTY = {
     "OBSERVER_BOTS": "dummy",
     "MINIAPP_PORT": "8765",
     "CREDENTIALS_DIRECTORY": "/run/credentials/x",
-    "PYTHONPATH": "/home/aly/aipager",
+    "PYTHONPATH": "/home/alice/aipager",
 }
 
 

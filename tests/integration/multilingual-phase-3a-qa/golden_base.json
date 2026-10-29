@@ -142,10 +142,10 @@
  ],
  "scenarios": {
   "claude_bytes": [
-   "[keys] (('[via Telegram \u00b7 @aly]\\nhello 42 & <b>',), [])",
-   "[keys] (('[via Telegram \u00b7 @aly]\\nsecond 7',), [])",
-   "[keys] (('[via Telegram \u00b7 @aly]\\nspoken 3',), [])",
-   "[keys] (('[via Telegram \u00b7 @aly]\\nlook at 5 <files>/<chat>/<ts>_notes_7.txt',), [])",
+   "[keys] (('[via Telegram \u00b7 @alice]\\nhello 42 & <b>',), [])",
+   "[keys] (('[via Telegram \u00b7 @alice]\\nsecond 7',), [])",
+   "[keys] (('[via Telegram \u00b7 @alice]\\nspoken 3',), [])",
+   "[keys] (('[via Telegram \u00b7 @alice]\\nlook at 5 <files>/<chat>/<ts>_notes_7.txt',), [])",
    "\ud83c\udf99\ufe0f <i>Transcribing\u2026</i>",
    "\ud83c\udf99\ufe0f <i>Heard:</i> spoken 3"
   ],
@@ -188,8 +188,8 @@
    "\u23f9 End <b>x1</b>? Claude stops and the session closes.",
    "[btn] \u23f9 End",
    "[btn] Cancel",
-   "[toast] This is @aly's card. Send /kill x1 for your own.",
-   "[toast] This is @aly's card.",
+   "[toast] This is @alice's card. Send /kill x1 for your own.",
+   "[toast] This is @alice's card.",
    "[toast] Invalid callback",
    "[toast] Unknown: zzz",
    "[toast] Session not found",
@@ -263,7 +263,7 @@
    "\u26a0\ufe0f Couldn't make out any speech in that.",
    "\ud83c\udf99\ufe0f <i>Transcribing\u2026</i>",
    "\ud83c\udf99\ufe0f <i>Heard:</i> fix bug 42 in x1 &amp; &lt;tag&gt;",
-   "[keys] (('[via Telegram \u00b7 @aly]\\nfix bug 42 in x1 & <tag>',), [])"
+   "[keys] (('[via Telegram \u00b7 @alice]\\nfix bug 42 in x1 & <tag>',), [])"
   ],
   "mode_replies": [
    "No live sessions here. Start one with /new.",
@@ -307,7 +307,7 @@
    "[btn] \u00ab Back",
    "[btn] \u2716\ufe0f Cancel",
    "\u21a9\ufe0f Cancelled.",
-   "\ud83c\udd95 <b>New session</b> (@aly)\n\nReply to this message with a name, and what to do first if you like:\n<code>x1</code>\n<code>x1 fix the failing tests</code>\n\n\ud83e\udd16 Auto \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 /work/app",
+   "\ud83c\udd95 <b>New session</b> (@alice)\n\nReply to this message with a name, and what to do first if you like:\n<code>x1</code>\n<code>x1 fix the failing tests</code>\n\n\ud83e\udd16 Auto \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 /work/app",
    "[btn] \ud83d\udcac Ask instead",
    "[btn] \ud83e\udde0 Model",
    "[btn] \ud83d\udcc1 Folder",
@@ -404,7 +404,7 @@
    "\u26a0\ufe0f No session named <b>zz</b> in history.\nSend <code>/resume</code> with no name to see what's available.",
    "No active session.",
    "\ud83d\udcf1 The Mini App only works in a private chat - DM the bot and send /app there.",
-   "\ud83e\udeaa <b>@aly</b> in <b>team</b>\n  role: <b>owner</b>\n  bypass_safety: yes\n  bypass_role_denies: yes\n  can_manage: yes\n  effective deny_tools: (none)\n  effective allow_tools: (any)",
+   "\ud83e\udeaa <b>@alice</b> in <b>team</b>\n  role: <b>owner</b>\n  bypass_safety: yes\n  bypass_role_denies: yes\n  can_manage: yes\n  effective deny_tools: (none)\n  effective allow_tools: (any)",
    "\ud83e\udeaa <b>@bob</b> in <b>team</b>\n  role: <b>user</b>\n  bypass_safety: no\n  bypass_role_denies: no\n  can_manage: no\n  effective deny_tools: AppifactRepl, Bash, CronCreate, EnterWorktree, ExitWorktree, Monitor, PowerShell, REPL, RemoteTrigger, SendMessage, Workflow, self_hosted_runner_requeue_session, self_hosted_runner_spawn_local\n  effective allow_tools: (any)"
   ],
   "safety_blocks": [
@@ -616,8 +616,8 @@
    "[btn] \u2716\ufe0f Cancel"
   ],
   "typed_model_command": [
-   "[keys] (('[via Telegram \u00b7 @aly]\\nopus',), [])",
-   "[keys] (('[via Telegram \u00b7 @aly]\\nopus',), [])"
+   "[keys] (('[via Telegram \u00b7 @alice]\\nopus',), [])",
+   "[keys] (('[via Telegram \u00b7 @alice]\\nopus',), [])"
   ]
  }
 }

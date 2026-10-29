@@ -212,7 +212,7 @@ def test_the_chat_action_endpoint_is_metered_by_the_chat_bucket(
     sent — where 8.24 sent all four at once off-budget. 8.24's evidence
     (typing answered 200 inside an edit 429) proved typing is not blocked
     by an edit 429, not that it is free: on 2026-09-23 the uncounted
-    bubble took a 429 of its own and the vm3 DM a 7-hour ban.
+    bubble took a 429 of its own and the testbox DM a 7-hour ban.
 
     Mutation: put ``sendChatAction`` back in ``_CHAT_BUDGET_EXEMPT`` and
     all four go out.

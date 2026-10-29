@@ -5,9 +5,8 @@ gated: this decides only the automatic offer, and that offer is rare by
 construction. The operator, 2026-10-07: "I don't want it to appear for the
 user too often, otherwise it will be another issue itself", "at most once
 in 3-4 days", and never "in the first 2 days after first install (not the
-updates)". Design: /home/aly/researches/15-issue-reporting/design.md
-section 4, "Frequency budget"; D4 for developer installs; section 7 for
-relayed errors.
+updates)". The design notes (kept outside the repo) set the frequency
+budget, the rule for developer installs and the one for relayed errors.
 
 Pure: :func:`due_offer` decides from the stored records, the policy
 :class:`State` and the live :class:`Conditions` passed in. No Telegram,

@@ -739,7 +739,7 @@
   "\u2705 Yes, switch",
   "\u21a9\ufe0f Cancel",
   "\u2699\ufe0f Switching <b>x1</b> to \ud83d\udcac Ask mode (the session restarts)\u2026",
-  "\u2699\ufe0f Switched to \ud83d\udcac Ask mode by @aly.\n\n<b>x1</b> is in \ud83d\udd13 Full access mode.",
+  "\u2699\ufe0f Switched to \ud83d\udcac Ask mode by @alice.\n\n<b>x1</b> is in \ud83d\udd13 Full access mode.",
   "\ud83d\udcac Switch to Ask mode",
   "\ud83e\udd16 Switch to Auto mode"
  ],
@@ -769,7 +769,7 @@
   "\ud83e\udd16 Switch to Auto mode",
   "\ud83d\udd13 Switch to Full access mode",
   "\u2699\ufe0f Switching <b>x1</b> to \ud83d\udcac Ask mode (the session restarts)\u2026",
-  "\u2699\ufe0f Switched to \ud83d\udcac Ask mode by @aly.\n\n<b>x1</b> is in \ud83d\udd13 Full access mode.",
+  "\u2699\ufe0f Switched to \ud83d\udcac Ask mode by @alice.\n\n<b>x1</b> is in \ud83d\udd13 Full access mode.",
   "\ud83d\udcac Switch to Ask mode",
   "\ud83e\udd16 Switch to Auto mode",
   "\u2699\ufe0f Switching <b>x1</b> to \ud83d\udcac Ask mode (the session restarts)\u2026",
@@ -800,13 +800,13 @@
  ],
  "newflow.closed": [
   "\u2716\ufe0f Closed, you moved on. Send /new to start a session.",
-  "\ud83c\udd95 <b>New session</b> (@aly)\n\nReply to this message with a name, and what to do first if you like:\n<code>x1</code>\n<code>x1 fix the failing tests</code>\n\n\ud83d\udcac Ask mode \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 /work/app",
+  "\ud83c\udd95 <b>New session</b> (@alice)\n\nReply to this message with a name, and what to do first if you like:\n<code>x1</code>\n<code>x1 fix the failing tests</code>\n\n\ud83d\udcac Ask mode \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 /work/app",
   "\ud83e\udd16 Auto mode instead",
   "\ud83d\udd13 Full access mode instead",
   "\ud83e\udde0 Model",
   "\ud83d\udcc1 Folder",
   "\u2716\ufe0f Cancel",
-  "This card is @aly's. Send /new for your own.",
+  "This card is @alice's. Send /new for your own.",
   "\u23f1 This new-session card expired. Send /new again."
  ],
  "newflow.conflict_card": [
@@ -884,7 +884,7 @@
   "\ud83e\udde0 Model",
   "\ud83d\udcc1 Folder",
   "\u2716\ufe0f Cancel",
-  "\ud83c\udd95 <b>New session</b> (@aly)\n\nReply to this message with a name, and what to do first if you like:\n<code>x1</code>\n<code>x1 fix the failing tests</code>\n\n\ud83d\udcac Ask mode \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 /work/app",
+  "\ud83c\udd95 <b>New session</b> (@alice)\n\nReply to this message with a name, and what to do first if you like:\n<code>x1</code>\n<code>x1 fix the failing tests</code>\n\n\ud83d\udcac Ask mode \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 /work/app",
   "\ud83e\udd16 Auto mode instead",
   "\ud83d\udd13 Full access mode instead",
   "\ud83e\udde0 Model",
@@ -955,7 +955,7 @@
   "Your role can't do that here.",
   "x1 is working. Switch after it finishes, or use /mode.",
   "Switching...",
-  "\u2705 <b>x1</b> is ready\n\ud83d\udcac Ask mode \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 <code>/work/app</code>\n\ud83d\udd01 Switched to \ud83d\udd13 Full access mode by @aly.\n\nReply to a message from x1 (or mention @aipager_test_bot) to talk to it.\nLater: tap x1 on the keyboard, or reply to any x1 message.",
+  "\u2705 <b>x1</b> is ready\n\ud83d\udcac Ask mode \u00b7 \ud83e\udde0 Default model \u00b7 \ud83d\udcc1 <code>/work/app</code>\n\ud83d\udd01 Switched to \ud83d\udd13 Full access mode by @alice.\n\nReply to a message from x1 (or mention @aipager_test_bot) to talk to it.\nLater: tap x1 on the keyboard, or reply to any x1 message.",
   "\ud83e\udd16 Switch to Auto mode",
   "\ud83d\udd13 Switch to Full access mode",
   "\ud83e\udde0 Model",
@@ -976,7 +976,7 @@
   "\ud83e\udde0 Model",
   "x1 is waiting on a prompt. Answer it first, then switch the mode.",
   "Switching to Opus",
-  "\u2705 <b>x1</b> is ready\n\ud83e\udd16 Auto mode \u00b7 \ud83e\udde0 Opus \u00b7 \ud83d\udcc1 <code>/work/app</code>\n\ud83d\udd01 Model switched to Opus by @aly.\n\nReply to a message from x1 (or mention @aipager_test_bot) to talk to it.\nLater: tap x1 on the keyboard, or reply to any x1 message.",
+  "\u2705 <b>x1</b> is ready\n\ud83e\udd16 Auto mode \u00b7 \ud83e\udde0 Opus \u00b7 \ud83d\udcc1 <code>/work/app</code>\n\ud83d\udd01 Model switched to Opus by @alice.\n\nReply to a message from x1 (or mention @aipager_test_bot) to talk to it.\nLater: tap x1 on the keyboard, or reply to any x1 message.",
   "\ud83d\udcac Switch to Ask mode",
   "\ud83d\udd13 Switch to Full access mode",
   "\ud83e\udde0 Model",
@@ -1587,7 +1587,7 @@
   "This session is being resumed right now. Try again in a moment.",
   "That session is still running. End it first.",
   "That session is still running. End it first.",
-  "\ud83d\uddd1\ufe0f Deleted [<b>x1</b>] by @aly.",
+  "\ud83d\uddd1\ufe0f Deleted [<b>x1</b>] by @alice.",
   "\ud83d\uddd1\ufe0f Deleted [<b>x1</b>].",
   "You can't delete this session.",
   "You can't delete this session."
@@ -1682,7 +1682,7 @@
   "\u2716\ufe0f Cancel",
   "\u26a0\ufe0f No live session named <b>zz</b> here.",
   "Restarting x1...",
-  "\ud83d\udd04 [<b>x1</b>] restarted by @aly.",
+  "\ud83d\udd04 [<b>x1</b>] restarted by @alice.",
   "Restarting x1...",
   "[x1] isn't running.",
   "Restarting x1...",
@@ -1767,8 +1767,8 @@
   "\ud83d\udc64 Preferences",
   "\ud83d\udcdd Diff",
   "\u2716\ufe0f Close",
-  "\u23f9 Ended x1 by @aly",
-  "\u23f9 Ended <b>x1</b> by @aly\n\n\ud83d\udcca <b>Sessions (1)</b>\n\n<b>x1</b> \u00b7 \ud83d\udca4 idle",
+  "\u23f9 Ended x1 by @alice",
+  "\u23f9 Ended <b>x1</b> by @alice\n\n\ud83d\udcca <b>Sessions (1)</b>\n\n<b>x1</b> \u00b7 \ud83d\udca4 idle",
   "\u270d\ufe0f x1",
   "\u22ee",
   "\ud83c\udd95 New",
@@ -2092,7 +2092,7 @@
   "\u2716\ufe0f Close"
  ],
  "settings.taps": [
-  "\ud83d\udccf Answer length\n\nHow long Claude's replies should be.\n\n<i>Changed by @aly.</i>",
+  "\ud83d\udccf Answer length\n\nHow long Claude's replies should be.\n\n<i>Changed by @alice.</i>",
   "Don't apply any rule",
   "Extra short",
   "Short \u2705",
@@ -2102,7 +2102,7 @@
   "Only an admin can change settings in this group.",
   "Invalid callback",
   "Invalid value",
-  "\ud83c\udd95 <b>New sessions</b>\n\nWhat /new starts a session with. You can still change it on the card for one session.\n\nPermissions: \ud83d\udcac Ask mode\nModel: Default model\nFolder: /work/app\n\n<i>Changed by @aly.</i>",
+  "\ud83c\udd95 <b>New sessions</b>\n\nWhat /new starts a session with. You can still change it on the card for one session.\n\nPermissions: \ud83d\udcac Ask mode\nModel: Default model\nFolder: /work/app\n\n<i>Changed by @alice.</i>",
   "\ud83e\udd16 Auto mode",
   "\ud83d\udcac Ask mode \u2705",
   "\ud83d\udd13 Full access mode",
@@ -2200,8 +2200,8 @@
  "taps.gate": [
   "This button belongs to another chat.",
   "Your role can't do that here.",
-  "This is @aly's card. Send /kill x1 for your own.",
-  "This is @aly's card.",
+  "This is @alice's card. Send /kill x1 for your own.",
+  "This is @alice's card.",
   "Invalid callback",
   "Unknown: zzz"
  ],
@@ -2472,11 +2472,11 @@
   "\ud83d\udd04 Check for updates"
  ],
  "whoami.replies": [
-  "\ud83e\udeaa <b>@aly</b> in <b>team</b>\n  role: <b>owner</b>\n  bypass_safety: yes\n  bypass_role_denies: yes\n  can_manage: yes\n  effective deny_tools: (none)\n  effective allow_tools: (any)",
+  "\ud83e\udeaa <b>@alice</b> in <b>team</b>\n  role: <b>owner</b>\n  bypass_safety: yes\n  bypass_role_denies: yes\n  can_manage: yes\n  effective deny_tools: (none)\n  effective allow_tools: (any)",
   "\ud83e\udeaa <b>@bob</b> in <b>team</b>\n  role: <b>user</b>\n  bypass_safety: no\n  bypass_role_denies: no\n  can_manage: no\n  effective deny_tools: Bash, WebFetch\n  effective allow_tools: Read, Grep",
   "\ud83e\udeaa You're not a member of this scope.",
   "\ud83e\udeaa <b>@bob</b>\n  role: <b>developer</b>\n  deny_tools: Bash",
-  "\ud83e\udeaa <b>@aly</b>\n  role: <b>admin</b>\n  deny_tools: (none)",
+  "\ud83e\udeaa <b>@alice</b>\n  role: <b>admin</b>\n  deny_tools: (none)",
   "\ud83e\udeaa You're not on this bot's allow-list.",
   "\ud83e\udeaa Personal mode - full control of this machine from this DM."
  ]

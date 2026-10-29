@@ -11,7 +11,7 @@ import pytest
 from aipager import i18n, preferences
 from aipager.i18n import locales, persist
 
-GROUP, DM, ALY, BOB = -1001, 555, 555, 777
+GROUP, DM, ALICE, BOB = -1001, 555, 555, 777
 
 
 def _update(chat_id, user_id, language_code=None):
@@ -87,33 +87,33 @@ def test_a_private_chat_follows_telegram_until_it_chooses(qps, monkeypatch):
     # A person new since the launch marker (phase 5).
     persist.ensure_launch_marker(people=(), prior_run=False)
     calls = _writes(monkeypatch)
-    assert i18n.for_update(_update(DM, ALY, "fa-IR")).code == "fa"
+    assert i18n.for_update(_update(DM, ALICE, "fa-IR")).code == "fa"
     # Remembered for background messages to that chat (in the language
     # state, never as a choice in preferences).
     assert i18n.for_chat(DM).code == "fa"
     assert calls == []
     preferences.set_ui_language(DM, "en")
-    assert i18n.for_update(_update(DM, ALY, "fa")).code == "en"
+    assert i18n.for_update(_update(DM, ALICE, "fa")).code == "en"
     # A language we do not have falls back to English and is forgotten.
     preferences.set_ui_language(DM, "")
-    assert i18n.for_update(_update(DM, ALY, "ja")).code == "en"
+    assert i18n.for_update(_update(DM, ALICE, "ja")).code == "en"
     assert i18n.for_chat(DM).code == "en"
 
 
 def test_a_group_never_gets_the_dm_language(qps):
     preferences.set_ui_language(DM, "qps")
-    i18n.for_update(_update(DM, ALY, "fa"))
+    i18n.for_update(_update(DM, ALICE, "fa"))
     assert i18n.for_chat(GROUP).code == "en"
-    assert i18n.for_update(_update(GROUP, ALY, "fa")).code == "en"
-    # What only Aly sees in the group is hers.
-    assert i18n.for_person(_update(GROUP, ALY, "fa")).code == "qps"
+    assert i18n.for_update(_update(GROUP, ALICE, "fa")).code == "en"
+    # What only the owner sees in the group is theirs.
+    assert i18n.for_person(_update(GROUP, ALICE, "fa")).code == "qps"
 
 
 def test_a_dm_never_gets_the_group_language(qps):
     preferences.set_ui_language(GROUP, "qps")
     assert i18n.for_update(_update(GROUP, BOB)).code == "qps"
     assert i18n.for_chat(DM).code == "en"
-    assert i18n.for_update(_update(DM, ALY)).code == "en"
+    assert i18n.for_update(_update(DM, ALICE)).code == "en"
     assert i18n.for_person(_update(GROUP, BOB, None)).code == "qps"
     assert i18n.for_person(_update(GROUP, BOB, "fa")).code == "fa"
 
@@ -129,9 +129,9 @@ def test_strangers_and_viewers(qps):
     assert i18n.for_stranger(_update(DM, 9, "fa")).code == "fa"
     assert i18n.for_stranger(_update(DM, 9, "ja")).code == "en"
     assert i18n.for_stranger(_update(DM, 9, "qps")).code == "en"
-    assert i18n.for_viewer(ALY, "fa").code == "fa"
-    preferences.set_ui_language(ALY, "en")
-    assert i18n.for_viewer(ALY, "fa").code == "en"
+    assert i18n.for_viewer(ALICE, "fa").code == "fa"
+    preferences.set_ui_language(ALICE, "en")
+    assert i18n.for_viewer(ALICE, "fa").code == "en"
     assert i18n.for_viewer(None, None).code == "en"
     assert i18n.for_viewer(GROUP, "fa").code == "fa"
 
@@ -166,10 +166,10 @@ def test_check_12_the_language_surfaces_never_cross_chats(mk_bot, run_async, mk_
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
     bot = mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
     ])
     from pathlib import Path
     bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
@@ -179,7 +179,7 @@ def test_check_12_the_language_surfaces_never_cross_chats(mk_bot, run_async, mk_
     mark = "⟦"
 
     # An admin switches the group: the confirmation is the group's.
-    text, rows = edited(tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALY))
+    text, rows = edited(tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALICE))
     assert text.count(mark) >= 2 and rows[-1][0][0].startswith(mark)
 
     def language_cmd(chat, user):
@@ -191,11 +191,11 @@ def test_check_12_the_language_surfaces_never_cross_chats(mk_bot, run_async, mk_
         return call.args[0], [b.text for row in kb.inline_keyboard for b in row]
 
     group_text, group_buttons = language_cmd(GROUP, BOB)
-    dm_text, dm_buttons = language_cmd(DM, ALY)
+    dm_text, dm_buttons = language_cmd(DM, ALICE)
     assert group_text.startswith(mark) and group_buttons[-1].startswith(mark)
     assert mark not in dm_text and not any(mark in b for b in dm_buttons)
 
-    for chat, user, marked in ((GROUP, BOB, True), (DM, ALY, False)):
+    for chat, user, marked in ((GROUP, BOB, True), (DM, ALICE, False)):
         text, rows = edited(tap(bot, run_async, "_:set:lang", chat=chat, user=user))
         assert (mark in text) is marked
         assert (mark in rows[-1][0][0]) is marked

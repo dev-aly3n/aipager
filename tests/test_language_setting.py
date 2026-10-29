@@ -19,7 +19,7 @@ from aipager.policy import load_policy
 from aipager.scope import Member, Scope
 
 GROUP, DM = -1001, 555
-ALY, BOB = 555, 777
+ALICE, BOB = 555, 777
 
 LIST_PRIVATE = ("🌐 The language aipager uses for its own messages and buttons, here and in "
                 "the Mini App. Your Claude sessions don't change: Claude answers in the "
@@ -34,10 +34,10 @@ CONFIRM = ("✅ aipager now speaks English here. Your sessions and Claude's answ
 def bot(mk_bot):
     b = mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
     ])
     b.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     b._app.bot.set_my_commands = AsyncMock()
@@ -56,7 +56,7 @@ def tap(bot, run_async, data, *, chat, user, language_code=None):
     query.message.chat = MagicMock(id=chat)
     query.message.chat_id = chat
     query.from_user = MagicMock(id=user, language_code=language_code)
-    query.from_user.username = "aly" if user == ALY else "bob"
+    query.from_user.username = "alice" if user == ALICE else "bob"
     update = MagicMock()
     update.callback_query = query
     update.effective_user = query.from_user
@@ -107,7 +107,7 @@ BETA_ROWS = [[(name, f"_:set:lang:{code}")] for code, name in (
 
 
 def test_the_language_row_opens_the_list(bot, run_async):
-    q = tap(bot, run_async, "_:set:lang", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set:lang", chat=DM, user=ALICE)
     text, rows = edited(q)
     assert text == LIST_PRIVATE
     # Phase 2: Russian and Persian join the list, marked beta; phase 5
@@ -123,20 +123,20 @@ def test_the_language_row_opens_the_list(bot, run_async):
 
 
 def test_picking_english_confirms(bot, run_async):
-    q = tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALICE)
     text, rows = edited(q)
     assert text == CONFIRM + "\n\n" + LIST_PRIVATE
     assert rows[1] == [("English ✅", "_:set:lang:en")]
     assert preferences.get_ui_language(DM) == "en"
-    q = tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALICE)
     assert preferences.get_ui_language(DM) == "auto"
     assert edited(q)[1][0] == [("Automatic (your Telegram language) ✅", "_:set:lang:auto")]
 
 
 def test_a_group_change_names_who(bot, run_async):
-    q = tap(bot, run_async, "_:set:lang:en", chat=GROUP, user=ALY)
+    q = tap(bot, run_async, "_:set:lang:en", chat=GROUP, user=ALICE)
     text, _rows = edited(q)
-    assert text == CONFIRM + "\n\n" + LIST_GROUP + "\n\n<i>Changed by @aly.</i>"
+    assert text == CONFIRM + "\n\n" + LIST_GROUP + "\n\n<i>Changed by @alice.</i>"
     assert preferences.get_ui_language(GROUP) == "en"
 
 
@@ -150,7 +150,7 @@ def test_a_member_cannot_change_the_group_language(bot, run_async, monkeypatch):
 
 def test_auto_is_refused_in_a_group(bot, run_async, monkeypatch):
     calls = writes(monkeypatch)
-    q = tap(bot, run_async, "_:set:lang:auto", chat=GROUP, user=ALY)
+    q = tap(bot, run_async, "_:set:lang:auto", chat=GROUP, user=ALICE)
     assert toast(q)[0] == "Invalid value"
     assert calls == [] and q.edit_message_text.await_count == 0
 
@@ -164,7 +164,7 @@ def test_a_disabled_or_pseudo_code_is_refused(bot, run_async, monkeypatch, code)
     real = preferences.set_ui_language
     monkeypatch.setattr(preferences, "set_ui_language",
                         lambda chat_id, c: (asked.append(c), real(chat_id, c))[1])
-    for chat, user in ((DM, ALY), (GROUP, ALY)):
+    for chat, user in ((DM, ALICE), (GROUP, ALICE)):
         q = tap(bot, run_async, f"_:set:lang:{code}", chat=chat, user=user)
         assert toast(q)[0] in ("Invalid value", "Invalid callback")
         assert q.edit_message_text.await_count == 0
@@ -173,20 +173,20 @@ def test_a_disabled_or_pseudo_code_is_refused(bot, run_async, monkeypatch, code)
 
 def test_nothing_is_written_for_a_chat_that_did_not_choose(bot, run_async, monkeypatch):
     calls = writes(monkeypatch)
-    tap(bot, run_async, "_:set:lang", chat=DM, user=ALY, language_code="fa")
+    tap(bot, run_async, "_:set:lang", chat=DM, user=ALICE, language_code="fa")
     tap(bot, run_async, "_:set", chat=GROUP, user=BOB)
     assert calls == []
-    tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALY)
-    tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALY)        # the same again
+    tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALICE)
+    tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALICE)        # the same again
     assert len(calls) == 1
     assert not preferences._PREFERENCES_PATH.exists() or "-1001" not in (
         preferences._PREFERENCES_PATH.read_text())
 
 
 def test_repicking_makes_no_extra_call(bot, run_async):
-    tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALY)
-    tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALY)
-    tap(bot, run_async, "_:set:lang:en", chat=GROUP, user=ALY)
+    tap(bot, run_async, "_:set:lang:en", chat=DM, user=ALICE)
+    tap(bot, run_async, "_:set:lang:auto", chat=DM, user=ALICE)
+    tap(bot, run_async, "_:set:lang:en", chat=GROUP, user=ALICE)
     assert bot._app.bot.set_my_commands.await_count == 0
     assert bot._send_keyboard.await_count == 0
     assert bot._app.bot.set_chat_menu_button.await_count == 0
@@ -194,18 +194,18 @@ def test_repicking_makes_no_extra_call(bot, run_async):
 
 def test_switching_reregisters_once(bot, run_async, monkeypatch):
     monkeypatch.setattr(locales, "_TEST_ENABLED", frozenset({"qps"}))
-    tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALY)
+    tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALICE)
     chats = [c.kwargs["scope"].chat_id for c in bot._app.bot.set_my_commands.await_args_list]
     assert chats.count(GROUP) == 1
     assert [c.kwargs.get("chat_id") for c in bot._send_keyboard.await_args_list] == [GROUP]
-    tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALY)
+    tap(bot, run_async, "_:set:lang:qps", chat=GROUP, user=ALICE)
     chats = [c.kwargs["scope"].chat_id for c in bot._app.bot.set_my_commands.await_args_list]
     assert chats.count(GROUP) == 1
     assert bot._send_keyboard.await_count == 1
 
 
 def test_the_settings_root_starts_with_the_language(bot, run_async):
-    q = tap(bot, run_async, "_:set", chat=DM, user=ALY)
+    q = tap(bot, run_async, "_:set", chat=DM, user=ALICE)
     _text, rows = edited(q)
     assert rows[0] == [("🌐 Language: English", "_:set:lang")]
 

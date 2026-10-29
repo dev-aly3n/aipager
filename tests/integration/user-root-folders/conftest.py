@@ -108,8 +108,8 @@ def hal_root(home):
 @pytest.fixture
 def scopes(home, team_root, hal_root):
     return [
-        Scope(chat_id=OWNER, kind="dm", label="aly DM",
-              members=(Member(id=OWNER, label="aly", role="owner"),)),
+        Scope(chat_id=OWNER, kind="dm", label="alice DM",
+              members=(Member(id=OWNER, label="alice", role="owner"),)),
         Scope(chat_id=ADMIN, kind="dm", label="ada DM",
               members=(Member(id=ADMIN, label="ada", role="admin"),)),
         Scope(chat_id=SARA, kind="dm", label="Sara DM",
@@ -120,7 +120,7 @@ def scopes(home, team_root, hal_root):
               members=(Member(id=HAL, label="hal", role="helper"),),
               root=str(hal_root)),
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=OWNER, label="aly", role="owner"),
+            Member(id=OWNER, label="alice", role="owner"),
             Member(id=ADMIN, label="ada", role="admin"),
             Member(id=BOB, label="bob", role="user"),
             Member(id=CY, label="cy", role="read_only"),

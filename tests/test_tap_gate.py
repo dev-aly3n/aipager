@@ -57,8 +57,8 @@ DM = 555
 S = "claude-api__g1001"
 DM_S = "claude-api__d555"
 
-ALY, BOB, RO, ADA = 1, 2, 3, 4      # owner, user, read_only, admin
-ROLE_OF = {ALY: "owner", BOB: "user", RO: "read_only", ADA: "admin"}
+ALICE, BOB, RO, ADA = 1, 2, 3, 4      # owner, user, read_only, admin
+ROLE_OF = {ALICE: "owner", BOB: "user", RO: "read_only", ADA: "admin"}
 
 BOT_DIR = Path(callbacks.__file__).resolve().parent
 DISPATCHERS = [callbacks, session_parity, new_flow, update_flow,
@@ -70,7 +70,7 @@ OTHER_CHAT = tap_gate.OTHER_CHAT_TEXT
 
 def _group_scope():
     return Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
@@ -78,8 +78,8 @@ def _group_scope():
 
 
 def _dm_scope():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 # ---------------------------------------------------------------------------
@@ -414,13 +414,13 @@ MATRIX_TAPS: list[tuple[str, str]] = (
 )
 
 ALLOWED = {
-    VIEW: {ALY, ADA, BOB, RO},
-    APPROVE: {ALY, ADA, BOB},
-    PROMPT: {ALY, ADA, BOB},
+    VIEW: {ALICE, ADA, BOB, RO},
+    APPROVE: {ALICE, ADA, BOB},
+    PROMPT: {ALICE, ADA, BOB},
     # `_is_admin_user` / `_is_update_admin`: roles with can_manage, the
     # owner and the admin (roadmap 8.83, D-B).
-    MANAGE: {ALY, ADA},
-    UPDATE: {ALY, ADA},
+    MANAGE: {ALICE, ADA},
+    UPDATE: {ALICE, ADA},
 }
 
 
@@ -438,7 +438,7 @@ def reached(monkeypatch):
     return seen
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
 @pytest.mark.parametrize("ns,verb", MATRIX_TAPS, ids=lambda x: str(x))
 def test_group_matrix(gbot, reached, run_async, ns, verb, uid):
     bot = gbot()
@@ -457,7 +457,7 @@ def test_group_matrix(gbot, reached, run_async, ns, verb, uid):
 
 
 @pytest.mark.parametrize("verb", ["perms_confirm", "perms_stop_switch"])
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB, RO], ids=lambda u: ROLE_OF[u])
 def test_a_switch_to_full_access_card_needs_an_admin_tapping_it(
         gbot, reached, run_async, verb, uid):
     bot = gbot()
@@ -466,11 +466,11 @@ def test_a_switch_to_full_access_card_needs_an_admin_tapping_it(
                              "label": "api", "turn": 1}
     u, q = _tap(GROUP, uid, f"{S}:{verb}", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert (reached != []) is (uid in (ALY, ADA))
+    assert (reached != []) is (uid in (ALICE, ADA))
 
 
 @pytest.mark.parametrize("target", ["ask", "auto"])
-@pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA, BOB], ids=lambda u: ROLE_OF[u])
 def test_a_switch_out_of_full_access_card_needs_prompt_only(gbot, reached, run_async, uid,
                                                             target):
     bot = gbot()
@@ -561,7 +561,7 @@ def test_p1_read_only_cannot_stop_compact_or_retry(gbot, run_async, monkeypatch)
     sess = _session(bot, status=Status.BUSY)
     sess.busy_msg_id = 50
     sess.last_prompt = "deploy the thing"
-    sess.last_prompt_driver_user_id = ALY
+    sess.last_prompt_driver_user_id = ALICE
     bot._stop_session_core = AsyncMock()
     bot._inject_prompt = AsyncMock(return_value=True)
     for verb in ("stop", f"ststop{sess.turn_key}", f"pstop{sess.turn_key}",
@@ -583,7 +583,7 @@ def test_p1_read_only_stop_was_reachable_before(gbot, run_async, monkeypatch):
     sess = _session(bot, status=Status.BUSY)
     sess.busy_msg_id = 50
     bot._stop_session = AsyncMock(return_value=MagicMock(ok=True, reason=""))
-    u, q = _tap(GROUP, ALY, f"{S}:stop", msg_id=50)
+    u, q = _tap(GROUP, ALICE, f"{S}:stop", msg_id=50)
     run_async(bot._handle_callback(u, MagicMock()))
     bot._stop_session.assert_awaited_once()
 
@@ -610,7 +610,7 @@ def test_p1_stop_and_switch_to_full_access_needs_an_admin(gbot, run_async, monke
     assert fx.nothing()
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA], ids=lambda u: ROLE_OF[u])
 def test_p1_owner_stop_and_switch_to_full_access_goes_ahead(gbot, run_async, monkeypatch,
                                                            uid):
     bot = gbot()
@@ -637,7 +637,7 @@ def test_p1_voice_install_and_restart_need_the_update_admin(
     assert fx.nothing()
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA], ids=lambda u: ROLE_OF[u])
 def test_p1_owner_voice_install_goes_ahead(gbot, run_async, monkeypatch, uid):
     bot = gbot()
     _Effects(monkeypatch, bot)
@@ -770,7 +770,7 @@ def test_p2_user_resume_ask_resumes_the_groups_session_not_the_dm_twin(
     assert not any("PRIVATE" in t for t in _edited_texts(q))
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [ALICE, ADA], ids=lambda u: ROLE_OF[u])
 def test_p2_owner_resume_full_resumes_exactly_the_tapped_session(
         gbot, run_async, monkeypatch, uid):
     bot = gbot()
@@ -826,7 +826,7 @@ def test_legacy_resume_mode_owner_auto_resumes_the_named_session(
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     dm, grp = _p2_world(bot)
-    u, q = _tap(GROUP, ALY, f"{S}:resume_mode_auto", msg_id=60)
+    u, q = _tap(GROUP, ALICE, f"{S}:resume_mode_auto", msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert [n for n, _ in fx.launched] == ["api__g1001"]
     assert fx.launched[0][1].get("mode") == "auto"
@@ -845,7 +845,7 @@ def test_a_dm_sessions_button_tapped_in_the_group_is_refused(
             # The DM session's index registered in the GROUP's table, as a
             # button sent to the wrong chat would carry it.
             else session_parity.session_cb(bot, GROUP, dm, verb))
-    u, q = _tap(GROUP, ALY, data)
+    u, q = _tap(GROUP, ALICE, data)
     run_async(bot._handle_callback(u, MagicMock()))
     assert reached == []
     assert _answers(q) == [OTHER_CHAT]
@@ -855,7 +855,7 @@ def test_a_group_sessions_button_tapped_in_the_dm_is_refused(
         gbot, reached, run_async):
     bot = gbot()
     _session(bot, status=Status.BUSY)
-    u, q = _tap(DM, ALY, f"{S}:stop")
+    u, q = _tap(DM, ALICE, f"{S}:stop")
     run_async(bot._handle_callback(u, MagicMock()))
     assert reached == []
     assert _answers(q) == [OTHER_CHAT]
@@ -872,7 +872,7 @@ def test_a_sessions_own_chat_is_not_refused(gbot, reached, run_async, form):
     assert reached == [(S, "stop")]
 
 
-@pytest.mark.parametrize("chat,uid", [(GROUP, BOB), (DM, ALY)])
+@pytest.mark.parametrize("chat,uid", [(GROUP, BOB), (DM, ALICE)])
 def test_an_unstamped_session_is_refused_in_every_chat(
         gbot, reached, run_async, chat, uid):
     """Roadmap 8.72: a session with no chat stamped is no chat's."""
@@ -890,7 +890,7 @@ def test_sentinels_are_not_sessions(gbot, reached, run_async):
     _session(bot, "__voice__", DM, "dm")
     _session(bot, "_", DM, "dm")
     for data in ("__voice__:install", "_:st:list"):
-        u, q = _tap(GROUP, ALY, data)
+        u, q = _tap(GROUP, ALICE, data)
         run_async(bot._handle_callback(u, MagicMock()))
         assert OTHER_CHAT not in _answers(q)
     assert reached == [("__voice__", "install"), ("_", "st:list")]
@@ -908,7 +908,7 @@ def test_dm_owner_passes_every_tap(gbot, reached, run_async, ns, verb):
     _session(bot, DM_S, DM, "dm")
     bot._perms_pending[DM_S] = {"target_mode": "full", "msg_id": 50,
                                 "label": "api", "turn": 1}
-    u, q = _tap(DM, ALY, f"{ns}:{verb}")
+    u, q = _tap(DM, ALICE, f"{ns}:{verb}")
     run_async(bot._handle_callback(u, MagicMock()))
     assert reached == [(ns, verb)]
     assert not {REFUSED, OTHER_CHAT, update_flow.DENIED_TEXT} & set(_answers(q))
@@ -920,7 +920,7 @@ def test_personal_mode_passes_every_tap(mk_bot, reached, run_async, ns, verb):
     bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     s = bot.registry.get_or_create(S)
     s.scope_chat_id = GROUP              # even a stamped session elsewhere
-    u, q = _tap(DM, ALY, f"{ns}:{verb}")
+    u, q = _tap(DM, ALICE, f"{ns}:{verb}")
     run_async(bot._handle_callback(u, MagicMock()))
     assert reached == [(ns, verb)]
     assert REFUSED not in _answers(q) and OTHER_CHAT not in _answers(q)
@@ -930,7 +930,7 @@ def test_legacy_team_mode_is_unchanged(mk_bot, reached, run_async):
     """Legacy team.yaml mode keeps today's membership-only tap check (the
     gate is scope mode's); its read_only member still reaches handlers."""
     team = Team(group_id=GROUP, users={
-        1: TeamUser(id=1, label="aly", role=TeamRole.ADMIN),
+        1: TeamUser(id=1, label="alice", role=TeamRole.ADMIN),
         3: TeamUser(id=3, label="ro", role=TeamRole.READ_ONLY),
     })
     bot = mk_bot(team=team)
@@ -967,7 +967,7 @@ def _custom_bot(gbot):
     roles["drafter"] = PolicyRole(name="drafter", can_prompt=True, can_approve=False)
     roles["reviewer"] = PolicyRole(name="reviewer", can_prompt=False, can_approve=True)
     scope = Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=7, label="dee", role="drafter"),
         Member(id=8, label="rae", role="reviewer"),
     ))

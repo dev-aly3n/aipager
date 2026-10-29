@@ -2,7 +2,7 @@
 
 Three guards, all autouse, because this package specifically exists to
 exercise process-spawning and network-downloading code paths on a machine
-that has BOTH a live daemon running (``/home/aly/aipager``) AND a history
+that has BOTH a live daemon running (``/home/alice/aipager``) AND a history
 of two OOM incidents this week from unbounded loops. A test that forgets
 to fake a seam here must fail LOUDLY, not silently spawn a real
 ``cloudflared`` or hit the real network:

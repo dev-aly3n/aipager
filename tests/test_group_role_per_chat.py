@@ -31,19 +31,19 @@ from aipager.team import Role, Rules, Team, User as TeamUser
 GROUP = -1001
 CARA_DM = 556
 ADA_DM = 557
-ALY_DM = 555
+ALICE_DM = 555
 G_SESSION = "claude-api__g1001"
 CARA_SESSION = "claude-notes__d556"
 ADA_SESSION = "claude-pad__d557"
 
-ALY, BOB, CARA, ADA = 1, 2, 5, 4
+ALICE, BOB, CARA, ADA = 1, 2, 5, 4
 
 POLICY = load_policy()
 
 
 def _group():
     return Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=CARA, label="cara", role="user"),
         Member(id=ADA, label="ada", role="admin"),
@@ -60,9 +60,9 @@ def _ada_dm():
                  members=(Member(id=ADA, label="ada", role="user"),))
 
 
-def _aly_dm():
-    return Scope(chat_id=ALY_DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+def _alice_dm():
+    return Scope(chat_id=ALICE_DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 # The DMs first (the old bug: group prompts ran as the DM role) and the
@@ -160,7 +160,7 @@ def _note(name):
 def test_a_group_prompt_runs_with_the_group_role_not_the_dm_owner(
         gbot, typed, run_async, order):
     bot = gbot(ORDERS[order]())
-    _session(bot, G_SESSION, GROUP, "group", driver=ALY)
+    _session(bot, G_SESSION, GROUP, "group", driver=ALICE)
     run_async(bot._handle_message(
         _update("run id with Bash", user_id=CARA, chat_id=GROUP), _ctx()))
     assert typed == [(G_SESSION,
@@ -185,7 +185,7 @@ def test_a_dm_prompt_runs_with_the_dm_role(gbot, typed, run_async, order):
 def test_a_group_admin_is_not_cut_down_by_a_lower_dm_role(
         gbot, typed, run_async, order):
     bot = gbot(ORDERS[order]())
-    _session(bot, G_SESSION, GROUP, "group", driver=ALY)
+    _session(bot, G_SESSION, GROUP, "group", driver=ALICE)
     run_async(bot._handle_message(
         _update("refactor it", user_id=ADA, chat_id=GROUP), _ctx()))
     assert typed == [(G_SESSION,
@@ -259,7 +259,7 @@ def test_a_drained_held_message_resolves_in_its_chat(
 def test_retry_by_its_author_resolves_in_the_tapped_chat(
         gbot, typed, run_async, order):
     bot = gbot(ORDERS[order]())
-    sess = _session(bot, G_SESSION, GROUP, "group", driver=ALY)
+    sess = _session(bot, G_SESSION, GROUP, "group", driver=ALICE)
     sess.last_prompt = "again please"
     sess.last_prompt_driver_user_id = CARA
     query = MagicMock()
@@ -283,7 +283,7 @@ def test_retry_by_its_author_resolves_in_the_tapped_chat(
 def test_a_group_slash_command_needs_the_group_role(
         gbot, typed, run_async, order):
     bot = gbot(ORDERS[order]())
-    _session(bot, G_SESSION, GROUP, "group", driver=ALY)
+    _session(bot, G_SESSION, GROUP, "group", driver=ALICE)
     u = _update("/api /deliver ship it", user_id=CARA, chat_id=GROUP)
     run_async(bot._handle_message(u, _ctx()))
     assert typed == []
@@ -338,11 +338,11 @@ def test_retry_of_anothers_slash_command_says_why_by_the_tapped_chats_role(
     from aipager.bot.callbacks import RETRY_OTHERS_COMMAND_REPLY
 
     bot = gbot(ORDERS[order]())
-    sess = _session(bot, G_SESSION, GROUP, "group", driver=ALY)
+    sess = _session(bot, G_SESSION, GROUP, "group", driver=ALICE)
     answers = {}
     for uid in (CARA, ADA):
         sess.last_prompt = "/deliver ship it"
-        sess.last_prompt_driver_user_id = ALY
+        sess.last_prompt_driver_user_id = ALICE
         query = MagicMock()
         query.data = f"{G_SESSION}:retry"
         query.answer = AsyncMock()
@@ -378,11 +378,11 @@ def test_a_dm_owner_is_held_from_a_group_terminal_turn(
 
 def test_a_group_owner_still_joins_a_group_terminal_turn(
         gbot, typed, run_async, order):
-    bot = gbot(ORDERS[order]() + [_aly_dm()])
+    bot = gbot(ORDERS[order]() + [_alice_dm()])
     sess = _session(bot, G_SESSION, GROUP, "group", status=Status.BUSY,
                     turn=TURN_SENDER_TERMINAL)
     run_async(bot._handle_message(
-        _update("also do this", user_id=ALY, chat_id=GROUP), _ctx()))
+        _update("also do this", user_id=ALICE, chat_id=GROUP), _ctx()))
     assert sess.pending_queue == []
     assert len(typed) == 1
 
@@ -406,8 +406,8 @@ def test_the_hold_reads_the_messages_chat_over_the_sessions(gbot, order):
     assert bot._turn_sender_differs(sess, CARA, chat_id=GROUP) is True
     assert bot._turn_sender_differs(sess, CARA) is True
     assert bot._turn_sender_differs(sess, CARA, chat_id=CARA_DM) is False
-    # A drain (no chat): the session's own chat, where ALY is the owner.
-    assert bot._turn_sender_differs(sess, ALY) is False
+    # A drain (no chat): the session's own chat, where ALICE is the owner.
+    assert bot._turn_sender_differs(sess, ALICE) is False
 
 
 # ---- the driver fields -----------------------------------------------------
@@ -426,10 +426,10 @@ def test_mark_driver_resolves_in_the_updates_chat(gbot, order):
 
 def test_mark_driver_refuses_a_chat_the_sender_is_not_in(gbot, order):
     bot = gbot(ORDERS[order]())
-    sess = _session(bot, G_SESSION, GROUP, "group", driver=ALY)
+    sess = _session(bot, G_SESSION, GROUP, "group", driver=ALICE)
     assert bot._mark_driver(
         sess, _update("x", user_id=CARA, chat_id=ADA_DM)) is None
-    assert sess.last_driver_user_id == ALY
+    assert sess.last_driver_user_id == ALICE
 
 
 def test_driver_user_follows_the_sessions_chat(gbot, order):
@@ -495,9 +495,9 @@ def test_a_tap_resolves_in_the_tapped_chat(gbot, run_async, order):
 # ---- live reload: who may have joined a terminal turn ----------------------
 
 def test_terminal_joiners_are_owners_of_the_sessions_chat_only(order):
-    scopes = ORDERS[order]() + [_aly_dm()]
+    scopes = ORDERS[order]() + [_alice_dm()]
     joiners = live_reload._terminal_joiners(scopes, POLICY, GROUP)
-    assert joiners == {ALY}
+    assert joiners == {ALICE}
     assert live_reload._terminal_joiners(scopes, POLICY, CARA_DM) == {CARA}
     assert live_reload._terminal_joiners(scopes, POLICY, None) == set()
 
@@ -505,36 +505,36 @@ def test_terminal_joiners_are_owners_of_the_sessions_chat_only(order):
 # ---- DM parity, personal and legacy team mode ------------------------------
 
 def test_dm_parity_the_operators_install(gbot, typed, run_async):
-    bot = gbot([_aly_dm()])
+    bot = gbot([_alice_dm()])
     name = "claude-dev__d555"
-    sess = _session(bot, name, ALY_DM, "dm", driver=ALY)
+    sess = _session(bot, name, ALICE_DM, "dm", driver=ALICE)
     run_async(bot._handle_message(
-        _update("fix it", user_id=ALY, chat_id=ALY_DM), _ctx()))
-    assert typed == [(name, "[via Telegram · @aly]\nfix it")]
+        _update("fix it", user_id=ALICE, chat_id=ALICE_DM), _ctx()))
+    assert typed == [(name, "[via Telegram · @alice]\nfix it")]
     assert _note(name)["bypass_safety"] is True
-    assert bot._command_needs_admin("/anything", ALY, chat_id=ALY_DM) is False
+    assert bot._command_needs_admin("/anything", ALICE, chat_id=ALICE_DM) is False
     assert bot._driver_user(sess).role == "owner"
     # A Retry or drain with no chat: the session's own (the DM).
-    assert bot._sender_is_owner(ALY, chat_id=bot._attribution_chat(sess, None))
+    assert bot._sender_is_owner(ALICE, chat_id=bot._attribution_chat(sess, None))
     sess.status, sess.turn_sender_id = Status.BUSY, TURN_SENDER_TERMINAL
-    assert bot._turn_sender_differs(sess, ALY) is False
+    assert bot._turn_sender_differs(sess, ALICE) is False
 
 
 def test_dm_parity_an_unstamped_session_resolves_in_the_home_chat(
         gbot, typed, run_async, monkeypatch):
-    bot = gbot([_aly_dm()])
-    monkeypatch.setattr("aipager.state.home_chat", lambda: (ALY_DM, "dm"))
-    sess = _session(bot, "claude-dev", 0, "", driver=ALY)
+    bot = gbot([_alice_dm()])
+    monkeypatch.setattr("aipager.state.home_chat", lambda: (ALICE_DM, "dm"))
+    sess = _session(bot, "claude-dev", 0, "", driver=ALICE)
     assert bot._driver_user(sess).role == "owner"
-    assert run_async(bot._inject_prompt(sess, "hi", driver_user_id=ALY))
-    assert typed == [("claude-dev", "[via Telegram · @aly]\nhi")]
+    assert run_async(bot._inject_prompt(sess, "hi", driver_user_id=ALICE))
+    assert typed == [("claude-dev", "[via Telegram · @alice]\nhi")]
 
 
 def test_personal_mode_resolves_nobody(mk_bot):
     bot = mk_bot()
-    assert bot._driver_user_by_id(ALY, chat_id=None) is None
-    assert bot._driver_user_by_id(ALY, chat_id=ALY_DM) is None
-    assert bot._command_needs_admin("/x", ALY, chat_id=None) is False
+    assert bot._driver_user_by_id(ALICE, chat_id=None) is None
+    assert bot._driver_user_by_id(ALICE, chat_id=ALICE_DM) is None
+    assert bot._command_needs_admin("/x", ALICE, chat_id=None) is False
 
 
 def test_legacy_team_mode_ignores_the_chat(mk_bot):

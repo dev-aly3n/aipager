@@ -337,7 +337,7 @@ def validate_cwd(candidate: object, roots: list[str], *,
     ``..`` are collapsed before the check rather than after — to a
     directory at or beneath one of ``roots``. The comparison is done on
     path components, not string prefixes: a plain ``startswith`` would
-    accept ``/home/aly/aipager-evil`` for the root ``/home/aly/aipager``.
+    accept ``/home/alice/aipager-evil`` for the root ``/home/alice/aipager``.
 
     ``confined``: neither the result nor, for an empty candidate, the
     daemon's own directory may be ``/``, the home folder or a folder above

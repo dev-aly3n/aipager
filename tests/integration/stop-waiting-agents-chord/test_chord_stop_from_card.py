@@ -17,7 +17,7 @@ import time
 from unittest.mock import AsyncMock
 
 from aipager.state import Status
-from tests.two_prompts_rig import ALY, BG, CARD, GROUP, OTHER
+from tests.two_prompts_rig import ALICE, BG, CARD, GROUP, OTHER
 
 CHORD = b"\x18\x0b"
 ESC = b"\x1b"
@@ -51,7 +51,7 @@ def test_stop_from_the_card_then_the_wake(rig, tmp_path, monkeypatch):
     assert sess.status is Status.IDLE and sess.shown_state().state == "tasks"
     assert sess.bg_task_ids_seen == [BG, OTHER]
 
-    rig.tap(CARD, "stop", uid=ALY)
+    rig.tap(CARD, "stop", uid=ALICE)
     assert rig.writes.bytes() == [CHORD, CHORD]
     assert rig.writes.gaps() == [1.0]
     assert ESC not in b"".join(rig.writes.bytes())

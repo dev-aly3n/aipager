@@ -55,7 +55,7 @@ def _group_scopes():
 def _dm_scopes():
     return [Scope(
         chat_id=555, kind="dm", label="dm",
-        members=(Member(id=1, label="aly", role="owner"),),
+        members=(Member(id=1, label="alice", role="owner"),),
     )]
 
 

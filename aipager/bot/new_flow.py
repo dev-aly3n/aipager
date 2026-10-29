@@ -136,7 +136,7 @@ _CLOSED_TEXT = Msg("newflow.closed", "✖️ Closed, you moved on. Send /new to 
 NEW_TITLE = Msg("newflow.title", "🆕 <b>New session</b>", note="The /new card's title")
 NEW_TITLE_OWNER = Msg("newflow.title_owner", "🆕 <b>New session</b> ({owner})",
                       note="The /new card's title in a group: whose card it is",
-                      eg={"owner": "@aly"})
+                      eg={"owner": "@alice"})
 NEW_GROUP_NAME_ASK = Msg("newflow.group_name_ask",
                          "Reply to this message with a name, and what to do first if you "
                          "like:", note="The /new card in a group, above two examples")
@@ -261,7 +261,7 @@ TOAST_SWITCHING_TO = Msg("toast.new_switching_to", "Switching to {model}",
 OTHERS_CARD_NAMED = Msg("newflow.others_card_named",
                         "This card is {owner}'s. Send /new for your own.",
                         note="A reply to someone else's /new card in a group",
-                        eg={"owner": "@aly"})
+                        eg={"owner": "@alice"})
 OTHERS_CARD_SOMEONE = Msg("newflow.others_card_someone",
                           "This card is someone else's. Send /new for your own.",
                           note="As newflow.others_card_named, the owner unknown")

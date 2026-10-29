@@ -49,11 +49,11 @@ EM_DASH = "\u2014"
 def scopes():
     return [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=OWNER, label="aly", role="owner"),
+            Member(id=OWNER, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"),
             Member(id=CAROL, label="carol", role="user"))),
-        Scope(chat_id=DM_A, kind="dm", label="aly DM",
-              members=(Member(id=OWNER, label="aly", role="owner"),)),
+        Scope(chat_id=DM_A, kind="dm", label="alice DM",
+              members=(Member(id=OWNER, label="alice", role="owner"),)),
         Scope(chat_id=DM_B, kind="dm", label="bob DM",
               members=(Member(id=BOB, label="bob", role="owner"),)),
         Scope(chat_id=DM_C, kind="dm", label="carol DM",
@@ -88,7 +88,7 @@ def add_session(bot, *, chat=DM_A, label="x1", status=Status.IDLE):
 
 
 def _user(uid, language_code):
-    names = {OWNER: "aly", BOB: "bob", CAROL: "carol"}
+    names = {OWNER: "alice", BOB: "bob", CAROL: "carol"}
     user = MagicMock(id=uid, language_code=language_code, is_bot=False)
     user.username = names.get(uid, "someone")
     user.first_name = user.username

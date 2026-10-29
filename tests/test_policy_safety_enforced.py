@@ -43,7 +43,7 @@ from aipager.scope import Member, Scope
 
 GROUP = -1001
 S = "claude-api__g1001"
-ALY, BOB, ADA = 1, 2, 4
+ALICE, BOB, ADA = 1, 2, 4
 
 SAFETY_YAML = """\
 safety:
@@ -107,7 +107,7 @@ def without_safety(home):
 
 def _group():
     return Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=ADA, label="ada", role="admin"),
     ))
@@ -270,7 +270,7 @@ def test_without_the_section_the_same_admin_calls_are_allowed(
 def test_an_owner_turn_is_not_held_to_it(
         gbot, typed, run_async, tmp_path, home, with_safety):
     bot = gbot(with_safety)
-    t = _turn(bot, run_async, typed, tmp_path, ALY)
+    t = _turn(bot, run_async, typed, tmp_path, ALICE)
     proj = home / "proj"
 
     assert _decide(t, "Read", {"file_path": SECRET}, proj) is None
@@ -292,7 +292,7 @@ def test_an_unanchored_safety_path_denies_every_admin_and_user_search(
         t = _turn(bot, run_async, typed, tmp_path, uid)
         assert _decide(t, "Grep", {"path": str(proj), "pattern": "x"},
                        proj) is not None, uid
-    t = _turn(bot, run_async, typed, tmp_path, ALY)
+    t = _turn(bot, run_async, typed, tmp_path, ALICE)
     assert _decide(t, "Grep", {"path": str(proj), "pattern": "x"},
                    proj) is None
 
@@ -387,7 +387,7 @@ def test_a_safety_only_reload_drops_no_waiting_note(
     ps.set_live_policy(without_safety)
     from aipager.state import Status
     sess = _session(bot)
-    _send(bot, run_async, typed, ALY, "owner text")
+    _send(bot, run_async, typed, ALICE, "owner text")
     _send(bot, run_async, typed, BOB, "user text")
     sess.status = Status.BUSY
     sess.turn_sender_id = BOB
@@ -844,7 +844,7 @@ def test_the_owners_install_writes_the_same_notes_as_before(
     """One DM, one owner, no policy.yaml: the note's rules are what the
     old code resolved."""
     bot = gbot(without_safety)
-    _send(bot, run_async, typed, ALY)
+    _send(bot, run_async, typed, ALICE)
     note = _note_lists()[-1]
     old = _old_resolve_snapshot(without_safety.get_role("owner"),
                                 _group(), _group().members[0])

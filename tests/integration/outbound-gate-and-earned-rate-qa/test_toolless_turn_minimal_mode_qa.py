@@ -1,6 +1,6 @@
 """A tool-less turn finishing in a chat in MINIMAL MODE (roadmap 8.32 R1).
 
-The vm3 chat that produced the bare Done cards was in minimal mode — held
+The testbox chat that produced the bare Done cards was in minimal mode — held
 to 0.05 calls/s. Driven here through the daemon's REAL limiter: the rich
 side runs the real ``_post`` onto an ``httpx.MockTransport``, the PTB side
 the real ``process_request``, so what is asserted is what reached the

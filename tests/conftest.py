@@ -1125,7 +1125,7 @@ def _isolate_session_tmp_files(tmp_path, monkeypatch):
     A live session's snapshot is what its safety hook reads. A test that
     ran the ``/kill`` path for a session named like a live one deleted
     that session's real snapshot (incident 2026-09-28: the card-lifecycle
-    harness used ``claude-aipager_boss``), and the next turn the session
+    harness used a live session's name), and the next turn the session
     woke itself for was then held to the restrictive floor: the owner's
     Bash blocked and the session halted. Patched on the module AND on every
     module that bound the name at import time (``enforce`` imports

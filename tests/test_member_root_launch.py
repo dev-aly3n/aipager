@@ -25,7 +25,7 @@ from aipager.state import SessionRegistry, Status
 
 GROUP = -1001
 DM = 1
-ALY, ADA, BOB, RO = 1, 2, 3, 4
+ALICE, ADA, BOB, RO = 1, 2, 3, 4
 OUT = "claude-x__g1001"
 OUTSIDE = ("This session works outside your folder ~/aipager-users/group-team, so "
            "your role can't resume, restart or switch it. Ask an admin.")
@@ -51,12 +51,12 @@ def root(home):
 
 def _scopes():
     return [Scope(chat_id=GROUP, kind="group", label="team", members=(
-                Member(id=ALY, label="aly", role="owner"),
+                Member(id=ALICE, label="alice", role="owner"),
                 Member(id=ADA, label="ada", role="admin"),
                 Member(id=BOB, label="bob", role="user"),
                 Member(id=RO, label="ro", role="read_only"))),
-            Scope(chat_id=DM, kind="dm", label="aly DM",
-                  members=(Member(id=ALY, label="aly", role="owner"),))]
+            Scope(chat_id=DM, kind="dm", label="alice DM",
+                  members=(Member(id=ALICE, label="alice", role="owner"),))]
 
 
 @pytest.fixture
@@ -148,7 +148,7 @@ def test_new_card_defaults_to_root(gbot, run_async, root):
     assert pending["cwd"] == str(root)
     assert stat.S_IMODE(os.stat(root).st_mode) == 0o700
     # The owner keeps the chat's stored default.
-    assert _open(bot, run_async, ALY)["cwd"] == str(root.parent.parent)
+    assert _open(bot, run_async, ALICE)["cwd"] == str(root.parent.parent)
 
 
 def test_user_picker_lists_only_root(gbot, run_async, home, root):
@@ -181,7 +181,7 @@ def test_user_folder_page_has_no_default_row(gbot, run_async, home, root, monkey
     assert bot._new_wizard_pending[(GROUP, BOB)]["cwd"] == str(root)
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA])
+@pytest.mark.parametrize("uid", [ALICE, ADA])
 def test_admin_picker_unchanged(gbot, run_async, home, uid):
     bot = gbot()
     _outside(bot, home)
@@ -226,7 +226,7 @@ def test_defaults_screen_lists_root_for_user(gbot, run_async, home, root):
         return [b.text.removesuffix(" ✅") for row in kb.inline_keyboard for b in row]
     assert labels(BOB)[0] == new_flow._short_path(str(root))
     assert new_flow._short_path(str(home / "aipager")) not in labels(BOB)
-    assert new_flow._short_path(str(home / "aipager")) in labels(ALY)
+    assert new_flow._short_path(str(home / "aipager")) in labels(ALICE)
     text, _kb = new_flow.render_new_session_defaults(bot, GROUP, viewer=BOB)
     assert new_flow._short_path(str(root)) in text
 
@@ -249,7 +249,7 @@ def test_create_session_inside_root_starts(gbot, run_async, root, fx):
     assert err == "" and fx["launched"][0][1]["cwd"] == str(root / "p")
 
 
-@pytest.mark.parametrize("uid", [ALY, ADA])
+@pytest.mark.parametrize("uid", [ALICE, ADA])
 def test_create_session_unchanged_for_owner_and_admin(gbot, run_async, home, fx, uid):
     run_async(gbot().create_session("x", scope_chat_id=GROUP, cwd=str(home / "aipager"),
                                     driver_user_id=uid, mode="auto"))
@@ -269,7 +269,7 @@ def test_typed_resume_outside_root_refused(gbot, run_async, home, fx):
     run_async(bot._do_resume(label="x", reply_fn=_reply, update=u, query=q, sess=sess))
     assert replies == [OUTSIDE] and fx["launched"] == []
     replies.clear()
-    u, q = _tap(ALY, "x")
+    u, q = _tap(ALICE, "x")
     run_async(bot._do_resume(label="x", reply_fn=_reply, update=u, query=q, sess=sess))
     assert len(fx["launched"]) == 1
 
@@ -487,6 +487,6 @@ def test_member_message_note_carries_group_root(gbot, run_async, home, root, fx,
     run_async(bot._inject_prompt(sess, "hi", driver_user_id=BOB, chat_id=GROUP))
     role, bound = seen[-1]
     assert role.name == "user" and bound.root == str(root)
-    assert str(home / "aipager-users" / "aly") in bound.deny
-    run_async(bot._inject_prompt(sess, "hi", driver_user_id=ALY, chat_id=GROUP))
+    assert str(home / "aipager-users" / "alice") in bound.deny
+    run_async(bot._inject_prompt(sess, "hi", driver_user_id=ALICE, chat_id=GROUP))
     assert seen[-1][1] is None

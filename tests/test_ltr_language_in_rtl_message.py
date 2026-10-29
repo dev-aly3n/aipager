@@ -173,13 +173,13 @@ def test_bare_strips_the_twins_marks_only():
 
 
 def test_isolate_wraps_only_where_parameters_are_isolated():
-    assert twin().isolate("safar") == FSI + "safar" + PDI
+    assert twin().isolate("docs") == FSI + "docs" + PDI
     assert twin().isolate("a\ufdd2") == FSI + "a\ufffd" + PDI
     assert isinstance(twin().isolate(Safe("x")), Safe)
     assert i18n.get("fa").isolate("x") == FSI + "x" + PDI
     assert i18n.get("fa").directed(False).isolate("x") == FSI + "x" + PDI
-    assert i18n.get("en").isolate("safar") == "safar"
-    assert i18n.get("de").isolate("safar") == "safar"
+    assert i18n.get("en").isolate("docs") == "docs"
+    assert i18n.get("de").isolate("docs") == "docs"
 
 
 def test_mark_and_lead_stay_rlm_only():
@@ -269,7 +269,7 @@ def _card_session():
     from aipager.state import SessionRegistry, Status
     reg = SessionRegistry()
     s = reg.get_or_create("claude-x1")
-    s.label = "safar"
+    s.label = "docs"
     s.status = Status.BUSY
     s.busy_started_at = time.monotonic() - 125
     s.tool_history = [("SendMessage", True), ("Read: /a", "failed"),

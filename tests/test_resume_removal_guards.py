@@ -48,7 +48,7 @@ def _gone_session(registry: SessionRegistry, *, name: str = NAME,
     )
     sess.gone_at = time.time() - gone_days_ago * 86400.0
     sess.claude_session_id = "uuid-1234"
-    sess.cwd = "/home/aly/aipager"
+    sess.cwd = "/home/alice/aipager"
     sess.scope_chat_id = CHAT
     sess.perm_mode = "full"
     registry._sessions[name] = sess
@@ -121,7 +121,7 @@ def test_the_count_cap_cannot_evict_a_session_mid_resume(
     assert outcome.ok and outcome.reason == "resumed"
     assert registry.get(NAME) is sess, "the cap evicted the session mid-resume"
     assert sess.status == Status.IDLE
-    assert sess.cwd == "/home/aly/aipager"
+    assert sess.cwd == "/home/alice/aipager"
     assert sess.scope_chat_id == CHAT
     assert sess.perm_mode == "full"
     assert registry.get_session_by_msg(MSG, CHAT) is sess

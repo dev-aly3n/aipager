@@ -22,7 +22,7 @@ from aipager.session_monitor import IDLE_RECOVERY_GRACE, SessionMonitor
 from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
-LABEL = "aipager_boss"
+LABEL = "shop_api"
 OWNER = 12345
 CHAT = 256113222
 

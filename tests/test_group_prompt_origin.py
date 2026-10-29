@@ -38,12 +38,12 @@ GROUP = -1001
 DM = 555
 SESSION = "claude-api__g1001"
 
-ALY, BOB, RO, ADA, STRANGER = 1, 2, 3, 4, 777
+ALICE, BOB, RO, ADA, STRANGER = 1, 2, 3, 4, 777
 
 
 def _group_scope(members=None):
     return Scope(chat_id=GROUP, kind="group", label="team", members=members or (
-        Member(id=ALY, label="aly", role="owner"),
+        Member(id=ALICE, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="admin"),
@@ -51,8 +51,8 @@ def _group_scope(members=None):
 
 
 def _dm_scope():
-    return Scope(chat_id=DM, kind="dm", label="aly DM",
-                 members=(Member(id=ALY, label="aly", role="owner"),))
+    return Scope(chat_id=DM, kind="dm", label="alice DM",
+                 members=(Member(id=ALICE, label="alice", role="owner"),))
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def gbot(mk_bot):
     return _mk
 
 
-def _session(bot, name=SESSION, chat=GROUP, kind="group", driver=ALY):
+def _session(bot, name=SESSION, chat=GROUP, kind="group", driver=ALICE):
     s = bot.registry.get_or_create(name)
     s.label = name.removeprefix("claude-").split("__")[0]
     s.scope_chat_id, s.scope_kind = chat, kind
@@ -186,7 +186,7 @@ def test_the_central_guard_refuses_a_users_slash_command(gbot, typed, run_async)
     assert typed == []
     assert _notes() == []
     assert sess.last_prompt_origin == origin_before
-    assert sess.last_driver_user_id == ALY        # bob never drove it
+    assert sess.last_driver_user_id == ALICE        # bob never drove it
 
 
 @pytest.mark.parametrize("sender", [None, STRANGER, RO])
@@ -199,7 +199,7 @@ def test_an_unknown_or_read_only_sender_lacks_the_right(
     assert typed == []
 
 
-@pytest.mark.parametrize("sender", [ALY, ADA])
+@pytest.mark.parametrize("sender", [ALICE, ADA])
 def test_owners_and_admins_send_any_slash_command_raw(
         gbot, typed, run_async, sender):
     bot = gbot()
@@ -351,7 +351,7 @@ def test_p8_a_removed_members_held_message_drains_marked_and_floored(
     bot = gbot()
     sess = _session(bot, driver=BOB)
     sess.queue_prompt("rm the deploy keys and push", 600, "", BOB)
-    bot.scopes = [_group_scope((Member(id=ALY, label="aly", role="owner"),))]
+    bot.scopes = [_group_scope((Member(id=ALICE, label="alice", role="owner"),))]
 
     run_async(bot._drain_next_queued(sess))
 
@@ -378,14 +378,14 @@ def test_an_unknown_sender_gets_the_bare_marker(gbot, typed, run_async):
     sess = _session(bot)
     run_async(bot._inject_prompt(sess, "hello", driver_user_id=STRANGER))
     assert typed == [(SESSION, "[via Telegram]\nhello")]
-    assert sess.last_driver_user_id == ALY     # a stranger never drives
+    assert sess.last_driver_user_id == ALICE     # a stranger never drives
 
 
 def test_no_sender_never_borrows_the_last_drivers_marker(gbot, typed, run_async):
     """Retry by someone else, a drained entry with no captured sender:
     the last driver (the owner) must not label it."""
     bot = gbot()
-    sess = _session(bot, driver=ALY)
+    sess = _session(bot, driver=ALICE)
     run_async(bot._inject_prompt(sess, "hello"))
     assert typed == [(SESSION, "[via Telegram]\nhello")]
 
@@ -394,7 +394,7 @@ def test_bobs_direct_send_is_labelled_bob_and_makes_him_the_driver(
         gbot, typed, run_async):
     """A1 side effect: bob's ``/api …`` reached Claude as the owner's."""
     bot = gbot()
-    sess = _session(bot, driver=ALY)
+    sess = _session(bot, driver=ALICE)
     u = _update("/api list the files", user_id=BOB)
     run_async(bot._handle_message(u, _ctx()))
     assert typed == [(SESSION, "[via Telegram · @bob · role:user]\nlist the files")]
@@ -419,7 +419,7 @@ def test_direct_send_to_an_untracked_live_session_makes_the_sender_driver(
 
 def test_a_template_makes_the_sender_the_driver(gbot, typed, run_async):
     bot = gbot()
-    sess = _session(bot, driver=ALY)
+    sess = _session(bot, driver=ALICE)
     label, prompt = next(iter(bot._template_map.items()))
     u = _update(group_intake.KEYBOARD_MARKER + label, user_id=BOB)
     run_async(bot._handle_message(u, _ctx()))
@@ -445,7 +445,7 @@ def _retry_tap(bot, run_async, user_id):
 def test_retry_by_its_author_runs_as_and_makes_the_author_the_driver(
         gbot, typed, run_async):
     bot = gbot()
-    sess = _session(bot, driver=ALY)
+    sess = _session(bot, driver=ALICE)
     sess.last_prompt = "again please"
     sess.last_prompt_driver_user_id = BOB
     _retry_tap(bot, run_async, BOB)
@@ -456,12 +456,12 @@ def test_retry_by_its_author_runs_as_and_makes_the_author_the_driver(
 def test_retry_by_someone_else_keeps_the_driver_and_is_unattributed(
         gbot, typed, run_async):
     bot = gbot()
-    sess = _session(bot, driver=ALY)
+    sess = _session(bot, driver=ALICE)
     sess.last_prompt = "again please"
     sess.last_prompt_driver_user_id = BOB
     _retry_tap(bot, run_async, ADA)
     assert typed == [(SESSION, "[via Telegram]\nagain please")]
-    assert sess.last_driver_user_id == ALY
+    assert sess.last_driver_user_id == ALICE
 
 
 # ---- DM parity and personal mode --------------------------------------------
@@ -473,23 +473,23 @@ def test_dm_parity_owner_marker_and_slash_commands_unchanged(
     note."""
     bot = gbot(scopes=[_dm_scope()])
     name = "claude-dev__d555"
-    sess = _session(bot, name=name, chat=DM, kind="dm", driver=ALY)
+    sess = _session(bot, name=name, chat=DM, kind="dm", driver=ALICE)
 
-    assert run_async(bot._inject_prompt(sess, "fix it", driver_user_id=ALY))
-    assert run_async(bot._inject_prompt(sess, "/deliver ship it", driver_user_id=ALY))
-    assert run_async(bot._inject_prompt(sess, "/security-review", driver_user_id=ALY))
+    assert run_async(bot._inject_prompt(sess, "fix it", driver_user_id=ALICE))
+    assert run_async(bot._inject_prompt(sess, "/deliver ship it", driver_user_id=ALICE))
+    assert run_async(bot._inject_prompt(sess, "/security-review", driver_user_id=ALICE))
 
-    assert typed == [(name, "[via Telegram · @aly]\nfix it"),
+    assert typed == [(name, "[via Telegram · @alice]\nfix it"),
                      (name, "/deliver ship it"),
                      (name, "/security-review")]
     assert all(n["bypass_safety"] is True for n in _notes(name))
-    assert sess.last_driver_user_id == ALY
+    assert sess.last_driver_user_id == ALICE
 
 
 def test_dm_parity_owner_direct_send_of_a_slash_command(gbot, typed, run_async):
     bot = gbot(scopes=[_dm_scope()])
     sess = _session(bot, name="claude-dev__d555", chat=DM, kind="dm")
-    u = _update("/dev /deliver ship it", user_id=ALY, chat_id=DM)
+    u = _update("/dev /deliver ship it", user_id=ALICE, chat_id=DM)
     run_async(bot._handle_message(u, _ctx()))
     assert typed == [("claude-dev__d555", "/deliver ship it")]
     assert NEEDS_ADMIN_REPLY not in _replies(u)
@@ -642,7 +642,7 @@ def test_the_scan_prefilter_parses_a_command_record_line(tmp_path):
     t = _write_transcript(
         tmp_path,
         {"type": "user", "message": {"role": "user",
-                                     "content": "[via Telegram · @aly]\nolder"}},
+                                     "content": "[via Telegram · @alice]\nolder"}},
         _command_record("/review"), _meta_body())
     assert enforce._origin_from_transcript(t, ()) == "terminal"
 
@@ -693,7 +693,7 @@ def test_retry_of_an_owners_slash_command_by_a_user_says_why(
     bot = gbot()
     sess = _session(bot)
     sess.last_prompt = "/deliver ship it"
-    sess.last_prompt_driver_user_id = ALY
+    sess.last_prompt_driver_user_id = ALICE
     query = _retry_tap(bot, run_async, BOB)
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
     assert NEEDS_ADMIN_REPLY in answers
@@ -719,7 +719,7 @@ def test_a_slash_command_is_typed_without_leading_whitespace(
     it as a plain prompt, which carries no marker."""
     bot = gbot()
     sess = _session(bot)
-    assert run_async(bot._inject_prompt(sess, "  /deliver x", driver_user_id=ALY))
+    assert run_async(bot._inject_prompt(sess, "  /deliver x", driver_user_id=ALICE))
     assert typed == [(SESSION, "/deliver x")]
 
 
@@ -924,7 +924,7 @@ def test_an_owner_retrying_a_members_slash_command_is_told_why(
     sess = _session(bot)
     sess.last_prompt = "/deliver ship it"
     sess.last_prompt_driver_user_id = BOB
-    query = _retry_tap(bot, run_async, ALY)
+    query = _retry_tap(bot, run_async, ALICE)
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
     assert "Only its sender can retry that command." in answers
     assert NEEDS_ADMIN_REPLY not in answers
@@ -937,8 +937,8 @@ def test_an_owner_retrying_their_own_slash_command_resends_it(
     bot = gbot()
     sess = _session(bot)
     sess.last_prompt = "/deliver ship it"
-    sess.last_prompt_driver_user_id = ALY
-    _retry_tap(bot, run_async, ALY)
+    sess.last_prompt_driver_user_id = ALICE
+    _retry_tap(bot, run_async, ALICE)
     assert typed == [(SESSION, "/deliver ship it")]
 
 

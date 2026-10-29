@@ -1,5 +1,5 @@
 """Fixtures for the black-box scenarios of multilingual phase 3a: the
-real bot (aly's, bob's and carol's DMs and their group), every Telegram
+real bot (alice's, bob's and carol's DMs and their group), every Telegram
 call recorded in order, the language of each chat chosen the way a person
 chooses it (a ``_:set:lang:<code>`` tap in that chat)."""
 

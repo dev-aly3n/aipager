@@ -189,7 +189,7 @@ def test_chat_actions_are_metered_and_never_wait(
 ):
     """R8 / criterion 22, AMENDED by 8.30 R1/R2 (was
     ``test_chat_actions_spend_no_chat_token_and_never_wait``). The 2026-09-12
-    probe showed chat actions are not blocked by an edit 429; vm3 showed
+    probe showed chat actions are not blocked by an edit 429; testbox showed
     they are not free. Ten in a row, far past ``TELEGRAM_CHAT_BURST``: the
     first goes out, the rest are REFUSED — metered — and still none of
     them waits, because the bubble is skip-kind: the injected sleep is

@@ -61,8 +61,8 @@ def _no_rlm_at_line_start(text: str) -> bool:
 
 def _session(prompt: str = "", commentary: tuple[str, ...] = (), chat: int = 0):
     reg = SessionRegistry()
-    s = reg.get_or_create("claude-aipager_boss")
-    s.label = "aipager_boss"
+    s = reg.get_or_create("claude-shop_api")
+    s.label = "shop_api"
     s.status = Status.BUSY
     if chat:
         s.scope_chat_id, s.scope_kind = chat, "dm"
@@ -120,7 +120,7 @@ def test_left_to_right_puts_no_rlm_but_an_lrm_where_a_line_opens_right_to_left(c
 def test_left_to_right_keeps_the_isolates_and_the_digits(code):
     ltr = i18n.get(code).directed(False)
     rtl = i18n.get(code)
-    lead = "\U0001f4ac **aipager\\_boss**"
+    lead = "\U0001f4ac **shop\\_api**"
     shown = finished_line(ltr, lead, "md", seconds=38)
     assert FSI + lead + PDI in shown
     assert rtl.clock(38) in shown and "0:38" not in shown
@@ -192,7 +192,7 @@ def test_card_under_english_commentary_keeps_the_chats_direction(code):
     # Claude's English (was: reads left to right with no U+200F).
     s = _session(commentary=(ENGLISH,))
     card = unfooter(animation.build_stream_card(s, "Calculating", tr=i18n.get(code)))
-    assert _status(card).startswith(RLM + "⏳ **" + FSI + "aipager_boss" + PDI + "**")
+    assert _status(card).startswith(RLM + "⏳ **" + FSI + "shop_api" + PDI + "**")
     assert RLI not in card
     # Claude's English sentence keeps its own direction inside the card.
     assert "> " + LRM + "\u2066" + ENGLISH + PDI + LRM in card.split("\n")
@@ -468,7 +468,7 @@ def test_the_card_shows_the_chats_verb(code):
 def test_an_english_card_shows_the_english_verb():
     s = _session(commentary=(ENGLISH,))
     status = _status(unfooter(animation.build_stream_card(s, "Noodling", tr=i18n.get("en"))))
-    assert status.startswith("⏳ **aipager_boss** · Noodling · ")
+    assert status.startswith("⏳ **shop_api** · Noodling · ")
 
 
 def surf_strip(text: str) -> str:

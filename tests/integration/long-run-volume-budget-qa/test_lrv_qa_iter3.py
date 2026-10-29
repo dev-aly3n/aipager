@@ -69,7 +69,7 @@ class _Bot(_h._GatedBot):
       the wire (its callback ran);
     * ``slow_ban``: ``endpoint -> seconds``. The first such call is
       admitted, stays in flight for *seconds*, and is then answered with
-      vm3's 25,429 s ban. ``ban_at`` records when that answer came back;
+      testbox's 25,429 s ban. ``ban_at`` records when that answer came back;
     * ``script``: several in-flight calls answered with chosen bans at
       chosen times (two 429s for one chat, as Telegram sends when two
       calls are in flight when the ban starts).

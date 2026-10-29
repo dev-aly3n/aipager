@@ -45,7 +45,7 @@ def _aged_gone_session(registry: SessionRegistry, *, past_cutoff_by: float) -> T
     sess = TrackedSession(name=NAME, label="proj", status=Status.GONE)
     sess.gone_at = time.time() - GONE_SESSION_MAX_AGE_DAYS * DAY - past_cutoff_by
     sess.claude_session_id = "uuid-1234"
-    sess.cwd = "/home/aly/aipager"
+    sess.cwd = "/home/alice/aipager"
     sess.scope_chat_id = CHAT
     sess.perm_mode = "full"
     registry._sessions[NAME] = sess
@@ -88,7 +88,7 @@ def test_a_sweep_during_the_launch_cannot_strand_the_resume(
     assert swept == [[]], "the sweep took the session mid-resume"
     assert registry.get(NAME) is sess, "the registry holds a replacement, not the resumed session"
     assert sess.status == Status.IDLE
-    assert sess.cwd == "/home/aly/aipager"
+    assert sess.cwd == "/home/alice/aipager"
     assert sess.scope_chat_id == CHAT
     assert sess.perm_mode == "full"
     assert sess.gone_at is None

@@ -64,7 +64,7 @@ def test_dropped_reply_is_in_the_chats_language(mk_bot, run_async, monkeypatch):
 def test_post_as_yourself_in_the_chats_language(mk_bot, run_async):
     preferences.set_ui_language(GROUP, "fa")
     bot = mk_bot(scopes=[Scope(chat_id=GROUP, kind="group", label="team",
-                               members=(Member(id=555, label="aly", role="owner"),))])
+                               members=(Member(id=555, label="alice", role="owner"),))])
     msg = MagicMock(chat_id=GROUP)
     msg.chat = MagicMock(id=GROUP)
     msg.reply_text = AsyncMock(return_value=MagicMock(message_id=3))

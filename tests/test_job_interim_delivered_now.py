@@ -3,7 +3,7 @@ decision 2026-09-24).
 
 Live 2026-09-24 19:52: the operator's session started a background agent
 (a ~4 min full test run) and Claude's turn ended at once with an answer. The
-terminal showed it; Telegram showed only the waiting card — "🔄 aipager_boss
+terminal showed it; Telegram showed only the waiting card — "🔄 shop_api
 · 1 agent (general-purpose) still working" — because the job model held
 every interim answer in ``job_interim_buffer`` and merged it into the job's
 final message. The operator wants the opposite.

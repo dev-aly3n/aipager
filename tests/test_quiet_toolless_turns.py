@@ -1,4 +1,4 @@
-"""Quiet tool-less turns (roadmap 8.32, vm3 2026-09-24).
+"""Quiet tool-less turns (roadmap 8.32, testbox 2026-09-24).
 
 Two rules, each with its reproductions:
 
@@ -287,7 +287,7 @@ def _cards(w: _Wire) -> list[dict]:
 def test_a_self_woken_turn_ending_quickly_sends_only_its_answer(
     mk_bot, run_async, wire, gate,
 ):
-    """(c) The catfish turn: woken by a <task-notification>, 3 s, no tool.
+    """(c) The frontend turn: woken by a <task-notification>, 3 s, no tool.
     No busy card at the prompt, none at the end — one answer message
     carrying the stats."""
     bot = _wire_bot(mk_bot, wire)
@@ -373,7 +373,7 @@ def test_the_self_woken_card_delay_is_fifteen_seconds():
 def test_a_human_prompt_still_gets_its_card_at_once(
     mk_bot, run_async, wire, gate,
 ):
-    """(f) A terminal-typed prompt (the bigdog turns): the card goes out at
+    """(f) A terminal-typed prompt (the backend turns): the card goes out at
     the prompt, as before, and no deferral is armed."""
     bot = _wire_bot(mk_bot, wire)
     sess = _busy_sess(bot)

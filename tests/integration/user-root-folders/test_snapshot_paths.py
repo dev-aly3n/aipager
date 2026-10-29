@@ -345,7 +345,7 @@ def _peer_turn(tmp_path, owner_snap):
               "name": "send", "fromMode": "bypass", "verifiedPeerPid": PID,
               "verifiedPeerProcStart": str(START), "body": BODY}
     entries = [
-        {"type": "user", "message": {"role": "user", "content": "[via Telegram · @aly]\nearlier"}},
+        {"type": "user", "message": {"role": "user", "content": "[via Telegram · @alice]\nearlier"}},
         {"type": "user", "turnOrigin": "peer", "promptSource": "system", "origin": origin,
          "isMeta": True, "message": {"role": "user", "content": _envelope()}},
     ]

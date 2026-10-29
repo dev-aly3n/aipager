@@ -1,8 +1,8 @@
-"""The vm3 timeline, replayed (rows C and K; the 8.30 acceptance).
+"""The testbox timeline, replayed (rows C and K; the 8.30 acceptance).
 
-What happened, 2026-09-23, owner DM on vm3, aipager 0.7.13: two sessions
-streaming into one chat for 3 h 23 min — bigdog ONE continuous turn the
-whole time, catfish ten turns, the last of them long — under every
+What happened, 2026-09-23, owner DM on testbox, aipager 0.7.13: two sessions
+streaming into one chat for 3 h 23 min — backend ONE continuous turn the
+whole time, frontend ten turns, the last of them long — under every
 per-second and per-minute window the daemon had; a 429 on the typing
 bubble, forgiven in five minutes; then, with no further warning, a
 straight 7-hour ban. Modelled, not measured (edits were not logged): about
@@ -37,7 +37,7 @@ from aipager.state import Status
 CHAT = 256113222
 T = 12_240.0                       # 3 h 24 min of virtual time
 HOUR = 3600.0
-BIGDOG_MSG = 1000
+BACKEND_MSG = 1000
 PINNED = 9999
 ANSWER = "the answer"
 #: Minutes of the replay in which BOTH sessions send a hook. The replay
@@ -125,48 +125,48 @@ async def _work(bot, sess, rng: random.Random, until: float, loop,
 
 
 def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
-    """Run the vm3 timeline and return the catfish schedule, the run's
+    """Run the testbox timeline and return the frontend schedule, the run's
     start and end, and every tool hook as ``(label, time)``."""
     rng = random.Random(seed)
-    bigdog = _session(bot, "bigdog")
-    catfish = _session(bot, "catfish")
+    backend = _session(bot, "backend")
+    frontend = _session(bot, "frontend")
     hooks: list[tuple[str, float]] = []
-    schedule: dict = {"catfish": [], "hooks": hooks,
+    schedule: dict = {"frontend": [], "hooks": hooks,
                       "start": vloop.time(), "end": vloop.time() + T}
     # The run's END on the loop's clock. `T` is a DURATION: the virtual
     # loop starts at 1,000,000, so passing `T` itself as `_work`'s
-    # deadline (as this did until 8.30's iteration 3) ended bigdog's work
-    # before its first hook, and catfish's last turn too. The replay then
-    # never had two sessions streaming at once, only bigdog's animator.
+    # deadline (as this did until 8.30's iteration 3) ended backend's work
+    # before its first hook, and frontend's last turn too. The replay then
+    # never had two sessions streaming at once, only backend's animator.
     end = vloop.time() + T
 
-    async def _bigdog():
-        await _begin(bot, bigdog, BIGDOG_MSG, vloop.time())
-        await _work(bot, bigdog, random.Random(seed + 1), end, vloop, hooks)
+    async def _backend():
+        await _begin(bot, backend, BACKEND_MSG, vloop.time())
+        await _work(bot, backend, random.Random(seed + 1), end, vloop, hooks)
 
-    async def _catfish():
+    async def _frontend():
         for turn in range(9):
             await asyncio.sleep(rng.uniform(120, 360))          # idle gap
             start = vloop.time()
-            await _begin(bot, catfish, 2000 + turn, start)
-            await _work(bot, catfish, rng, start + rng.uniform(180, 480), vloop,
+            await _begin(bot, frontend, 2000 + turn, start)
+            await _work(bot, frontend, rng, start + rng.uniform(180, 480), vloop,
                         hooks)
-            await _end(bot, catfish)
-            schedule["catfish"].append((start, vloop.time()))
+            await _end(bot, frontend)
+            schedule["frontend"].append((start, vloop.time()))
         await asyncio.sleep(rng.uniform(120, 360))
         start = vloop.time()
-        await _begin(bot, catfish, 2100, start)                # the long one
-        schedule["catfish"].append((start, end))
-        await _work(bot, catfish, rng, end, vloop, hooks)
+        await _begin(bot, frontend, 2100, start)                # the long one
+        schedule["frontend"].append((start, end))
+        await _work(bot, frontend, rng, end, vloop, hooks)
 
     async def main():
-        tasks = [asyncio.ensure_future(_bigdog()),
-                 asyncio.ensure_future(_catfish())]
+        tasks = [asyncio.ensure_future(_backend()),
+                 asyncio.ensure_future(_frontend())]
         await asyncio.sleep(T)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        for sess in (bigdog, catfish):
+        for sess in (backend, frontend):
             bot._stop_animation(sess)
         await asyncio.sleep(0)
 
@@ -176,7 +176,7 @@ def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
 
 # ── C ───────────────────────────────────────────────────────────────────────
 
-def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
+def test_c_the_testbox_timeline_stays_inside_the_long_run_budget(
     mk_bot, vloop, vlimiter, volume_telegram, volume_bot, caplog, monkeypatch,
 ):
     """Row C, the acceptance (Q1/Q7). Over the whole 3.4 h:
@@ -192,7 +192,7 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
       (75 % of the ornament share) — no gap of ten minutes or more. It was
       dark for 71 minutes before ruling #2, and for 22.6 with a 9 s tier;
     * zero 429s and zero bans from a Telegram that bans on volume;
-    * bigdog's four-hour card: at most 120 edits in any hour after its
+    * backend's four-hour card: at most 120 edits in any hour after its
       first, one per 30 s (it has no state change to bypass on; the hour
       tier was 60 s, so 60 edits, until the 2026-10-09 ruling);
     * total calls ≤ 4,080 — the modelled 0.7.13 figure is ~11,500;
@@ -253,8 +253,8 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     ornaments = [t for e, c, _m, t, x in calls
                  if c == CHAT and not (e == "sendMessage" and x == ANSWER)]
     typing = volume_telegram.stamps(endpoint="sendChatAction")
-    bigdog = volume_telegram.stamps(endpoint="editMessageText",
-                                    message_id=BIGDOG_MSG)
+    backend = volume_telegram.stamps(endpoint="editMessageText",
+                                    message_id=BACKEND_MSG)
     # The dashboard edit goes through PTB with its message id positional,
     # so the fake records no id for it; every card edit carries one.
     dashboard = [t for e, c, m, t, _x in calls
@@ -264,7 +264,7 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
             if not any(start + 60.0 * m <= t < start + 60.0 * (m + 1)
                        for t in typing)]
     report = {"total": len(everything), "answers": len(answers),
-              "typing": len(typing), "bigdog_edits": len(bigdog),
+              "typing": len(typing), "backend_edits": len(backend),
               "dashboard": len(dashboard),
               "max_hour": _most_in_window(everything),
               "max_hour_ornament": _most_in_window(ornaments),
@@ -286,7 +286,7 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     assert not [g for g in gaps if late + 1e-3 < g < 10 * 60.0], report
     late_gaps = [g for g in gaps if g > late + 1e-3]
     assert late_gaps == [], (late_gaps, report)
-    after_first_hour = [t for t in bigdog if t >= bigdog[0] + HOUR]
+    after_first_hour = [t for t in backend if t >= backend[0] + HOUR]
     assert _most_in_window(after_first_hour) <= 120, report
     assert report["total"] <= 4080, report
     assert len(answers) == 9, report          # every short turn answered
@@ -300,12 +300,12 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     assert _most_in_window(dashboard) <= 120, report
     # Both sessions really stream (rev-iter3-001). Until 8.30's iteration
     # 3 the replay passed `T` as `_work`'s absolute deadline on a loop
-    # that starts at 1,000,000, so bigdog made no hook at all and catfish's
+    # that starts at 1,000,000, so backend made no hook at all and frontend's
     # long turn none either: every row above passed on one session's
     # animator. Both must still be sending hooks in the run's last ten
     # minutes, and for at least two hours of minutes both must have sent.
     last = run["end"] - 600.0
-    for label in ("bigdog", "catfish"):
+    for label in ("backend", "frontend"):
         assert [t for lab, t in run["hooks"] if lab == label and t >= last], (
             f"{label} sent no hook in the run's last ten minutes")
     by_minute: dict[int, set[str]] = {}
@@ -331,15 +331,15 @@ def test_k_a_ban_mid_replay_still_gets_zero_requests_bubble_included(
     """
     bot = mk_bot()
     bot._app.bot = volume_bot
-    bigdog = _session(bot, "bigdog")
-    catfish = _session(bot, "catfish")
+    backend = _session(bot, "backend")
+    frontend = _session(bot, "frontend")
     window: dict = {}
 
     async def main():
-        await _begin(bot, bigdog, BIGDOG_MSG, vloop.time() - 20 * 60.0)
-        await _begin(bot, catfish, 2000, vloop.time() - 20 * 60.0)
+        await _begin(bot, backend, BACKEND_MSG, vloop.time() - 20 * 60.0)
+        await _begin(bot, frontend, 2000, vloop.time() - 20 * 60.0)
         workers = [asyncio.ensure_future(_work(bot, s, random.Random(i), 1e12, vloop))
-                   for i, s in enumerate((bigdog, catfish))]
+                   for i, s in enumerate((backend, frontend))]
         await asyncio.sleep(600.0)
         MUTE.mute(CHAT, 1800.0)                  # Telegram: banned for 30 min
         window["from"] = vloop.time()
@@ -354,7 +354,7 @@ def test_k_a_ban_mid_replay_still_gets_zero_requests_bubble_included(
         for task in workers:
             task.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
-        for sess in (bigdog, catfish):
+        for sess in (backend, frontend):
             bot._stop_animation(sess)
 
     vloop.run_until_complete(main())

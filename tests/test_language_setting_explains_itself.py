@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from tests.test_language_setting import (
-    ALY,
+    ALICE,
     BOB,
     CONFIRM,
     DM,
@@ -46,7 +46,7 @@ def _language_cmd(bot, run_async, mk_update, chat, user):
 
 
 def test_the_language_command_says_it_in_a_private_chat(bot, run_async, mk_update):
-    text, _kb = _language_cmd(bot, run_async, mk_update, DM, ALY)
+    text, _kb = _language_cmd(bot, run_async, mk_update, DM, ALICE)
     assert text == LIST_PRIVATE
     _says(text, PRIVATE_SAYS)
 
@@ -60,7 +60,7 @@ def test_the_language_command_says_it_in_a_group(bot, run_async, mk_update):
 
 
 @pytest.mark.parametrize("chat, user, want, pieces", [
-    (DM, ALY, LIST_PRIVATE, PRIVATE_SAYS), (GROUP, BOB, LIST_GROUP, GROUP_SAYS)])
+    (DM, ALICE, LIST_PRIVATE, PRIVATE_SAYS), (GROUP, BOB, LIST_GROUP, GROUP_SAYS)])
 def test_the_settings_row_opens_the_list_that_says_it(bot, run_async, chat, user, want,
                                                       pieces):
     root = edited(tap(bot, run_async, "_:set", chat=chat, user=user))
@@ -72,7 +72,7 @@ def test_the_settings_row_opens_the_list_that_says_it(bot, run_async, chat, user
 
 @pytest.mark.parametrize("chat, list_text", [(DM, LIST_PRIVATE), (GROUP, LIST_GROUP)])
 def test_the_confirmation_says_it(bot, run_async, chat, list_text):
-    text, _rows = edited(tap(bot, run_async, "_:set:lang:en", chat=chat, user=ALY))
+    text, _rows = edited(tap(bot, run_async, "_:set:lang:en", chat=chat, user=ALICE))
     assert text.startswith(CONFIRM + "\n\n" + list_text)
     _says(text, CONFIRM_SAYS)
 

@@ -1,7 +1,7 @@
 """Rows D, E, O, P, Q, R, T (roadmap 8.30 R4, rulings Q2/Q3, "other
 counters"): a busy card's cadence and elapsed unit decay with turn age.
 
-vm3, 2026-09-23: bigdog's ONE turn lasted four hours, and its card was
+testbox, 2026-09-23: backend's ONE turn lasted four hours, and its card was
 edited on the same few-second cadence in hour three as in second three —
 some three thousand edits of one message, plus every hook event (676
 phantom SubagentStops among them) racing the animator for a 1.2 s debounce.
@@ -289,7 +289,7 @@ def test_p_phantom_subagent_stops_never_edit_before_the_tier(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
     """Row P (Q2). A phantom SubagentStop — empty type, unknown id, 0.0 s —
-    every second at 2 h: no edit attempted before the 30 s tier. vm3 took
+    every second at 2 h: no edit attempted before the 30 s tier. testbox took
     676 of them in three hours, each a candidate edit on a 1.2 s debounce.
 
     Counted as ATTEMPTS through the real ``_edit_busy_rich``: a phantom
@@ -408,7 +408,7 @@ def test_t_the_watchdog_waits_for_twice_the_tier(age, edited_ago, expect):
     """Row T. A card on the 30 s tier (from 10 min, and from an hour)
     last edited 45 s ago is on schedule — no forced refresh (0.7.13 forced
     one at 20 s: "forced stale-card refresh (63s since last edit)" on
-    vm3). At 61 s it is stale. At tier 0 the 20 s rule is unchanged.
+    testbox). At 61 s it is stale. At tier 0 the 20 s rule is unchanged.
 
     Mutation: pass ``CARD_STALE_SECONDS`` instead of ``stale_after`` and
     the 45 s row refreshes.

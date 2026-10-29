@@ -38,7 +38,7 @@ def clean_env(home, pythonpath):
     return env
 
 
-DM = 555            # aly's private chat (its id is aly's id)
+DM = 555            # alice's private chat (its id is alice's id)
 DM_B = 2            # bob's private chat
 GROUP = -1001
 OWNER = 555
@@ -155,10 +155,10 @@ def scopes():
     from aipager.scope import Member, Scope
     return [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=OWNER, label="aly", role="owner"),
+            Member(id=OWNER, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=OWNER, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=OWNER, label="alice", role="owner"),)),
         Scope(chat_id=DM_B, kind="dm", label="bob DM",
               members=(Member(id=BOB, label="bob", role="owner"),)),
     ]
@@ -195,7 +195,7 @@ def session(bot, label="x1", *, chat=DM, status=None):
 
 def _user(uid):
     u = MagicMock(id=uid, language_code=None, is_bot=False)
-    u.username = {OWNER: "aly", BOB: "bob"}.get(uid, "someone")
+    u.username = {OWNER: "alice", BOB: "bob"}.get(uid, "someone")
     u.first_name = u.username
     return u
 
@@ -697,7 +697,7 @@ def gate_and_dispatcher_taps(h, lang):
     cmd(h, bot, tg, "_handle_kill_cmd", "/kill x1", chat=GROUP)
     tap(h, bot, tg, f"{x1.name}:endok{x1.turn_key}", chat=GROUP, user=BOB, message_id=card)
     card_owner.claim(bot, GROUP, 4242, OWNER, kind="ask", command="", picker=True,
-                     who=MagicMock(id=OWNER, username="aly"))
+                     who=MagicMock(id=OWNER, username="alice"))
     tap(h, bot, tg, "_:pick:cancel", chat=GROUP, user=BOB, message_id=4242)
     tap(h, bot, tg, "nocolon", chat=GROUP, user=BOB)
     tap(h, bot, tg, f"{x1.name}:zzz", chat=GROUP, user=BOB)
@@ -843,7 +843,7 @@ def exported_renderers(h, lang):
         for owner in (True, False):
             out.append(notify.memory_cap_body(hook, owner))
     card_owner.claim(bot, GROUP, 4243, OWNER, kind="ask", command="/kill x1", picker=False,
-                     who=MagicMock(id=OWNER, username="aly"))
+                     who=MagicMock(id=OWNER, username="alice"))
     out.append(repr(card_owner.refusal(bot, GROUP, 4243, BOB, "claude-x1__g1001", "endok")))
     out.append(repr(card_owner.refusal(bot, GROUP, 4243, OWNER, "claude-x1__g1001", "endok")))
     x1 = session(bot, "x1", chat=DM)

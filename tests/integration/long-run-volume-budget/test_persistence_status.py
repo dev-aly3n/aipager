@@ -2,7 +2,7 @@
 warning regime survive a restart, are written while calls flow, and are
 what ``aipager status`` / ``aipager doctor`` show.
 
-The vm3 ban was diagnosable only from a journal. Now one command reads,
+The testbox ban was diagnosable only from a journal. Now one command reads,
 per chat: calls in the last hour against the chat's budget (and how old
 that figure is), the warning regime's time left, bans in the last seven
 days and the rate ceiling they imply.

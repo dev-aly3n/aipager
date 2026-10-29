@@ -1,7 +1,7 @@
 """Rows G, H, I (roadmap 8.30 R5/R6): a 429 is a warning worth hours, and
 a ban is remembered for a week.
 
-vm3, 2026-09-23. The chat's one warning — a 429 at 01:13 — was forgiven
+testbox, 2026-09-23. The chat's one warning — a 429 at 01:13 — was forgiven
 in about five minutes: the 60 s success window climbed the rate from 0.5
 back to the 1.0 ceiling. Its previous ban, 2026-09-19, was four days old
 and outside 0.7.13's 24-hour memory, so it limited nothing. 3 h 23 min
@@ -61,7 +61,7 @@ def test_h_a_ban_four_days_ago_halves_the_ceiling(limiter, flood_clock,
     """Row H (R6). One ban stamp 4 days old, warning regime long expired →
     the chat may climb to 0.5/s and no higher. On 0.7.13 the stamp is
     outside the 24 h memory and the chat climbs to the full 1.0 — the
-    shape of vm3 on 2026-09-23.
+    shape of testbox on 2026-09-23.
 
     Mutation: count bans over 24 h (or drop the divisor) and the climb
     reaches 1.0.
@@ -201,7 +201,7 @@ def test_a_ban_starts_the_warning_regime_too(limiter, flood_clock, run_async):
 
 
 def test_the_regime_runs_on_the_injected_wall_clock(monkeypatch):
-    """The ``wall_clock=`` seam the vm3 replay needs: with this module's
+    """The ``wall_clock=`` seam the testbox replay needs: with this module's
     own ``time`` left REAL, moving only the injected clocks must run the
     regime out. Mutation: read ``time.time()`` directly anywhere on the
     regime's path and six virtual hours never pass."""

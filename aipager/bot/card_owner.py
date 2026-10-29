@@ -45,10 +45,10 @@ from aipager.state import MAX_CARD_OWNERS
 #: The pop-up for a tap on someone else's card (the tapper's language).
 OWNER_CARD = Msg("toast.owner_card", "This is {owner}'s card.",
                  note="Pop-up: a tap on a card that is someone else's in a group",
-                 eg={"owner": "@aly"})
+                 eg={"owner": "@alice"})
 OWNER_CARD_SEND = Msg("toast.owner_card_send", "This is {owner}'s card. Send {command} for your "
                       "own.", note="As toast.owner_card, with the command that gives the tapper "
-                                   "their own", eg={"owner": "@aly", "command": "/kill x1"})
+                                   "their own", eg={"owner": "@alice", "command": "/kill x1"})
 
 if TYPE_CHECKING:
     from aipager.bot import TelegramBot

@@ -3,7 +3,7 @@ in (typed, taps, /new !x, the chat default, a stale card, resume); Ask and
 Auto are for everyone who may prompt, and leaving Full access needs no
 admin; the tap gate's capabilities for the new and moved verbs.
 
-A real group scope with real roles: owner (aly), admin (ada), user (bob),
+A real group scope with real roles: owner (alice), admin (ada), user (bob),
 read_only (ro). Nothing about who is an admin is mocked."""
 
 from __future__ import annotations
@@ -392,7 +392,7 @@ def _demote_ada(bot):
     from aipager.scope import Member, Scope
     from _tm3 import dm_scope
     bot.scopes = [Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=BOB, label="bob", role="user"),
         Member(id=RO, label="ro", role="read_only"),
         Member(id=ADA, label="ada", role="user"),

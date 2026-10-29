@@ -33,10 +33,10 @@ OFFER_KEY = "_:set:lang_offer:"
 def bot(mk_bot):
     b = mk_bot(scopes=[
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=DM, label="aly", role="owner"),
+            Member(id=DM, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"))),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=DM, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=DM, label="alice", role="owner"),)),
     ])
     b.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     b._app.bot.set_my_commands = AsyncMock()

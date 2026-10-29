@@ -211,10 +211,10 @@ def test_notice_keyboard_labels_are_translated(tr, check):
 
 def _scopes():
     group = Scope(chat_id=GROUP, kind="group", label="team", members=(
-        Member(id=OWNER, label="aly", role="owner"),
+        Member(id=OWNER, label="alice", role="owner"),
         Member(id=ADMIN, label="ada", role="admin")))
-    dm = Scope(chat_id=OWNER, kind="dm", label="aly DM",
-               members=(Member(id=OWNER, label="aly", role="owner"),))
+    dm = Scope(chat_id=OWNER, kind="dm", label="alice DM",
+               members=(Member(id=OWNER, label="alice", role="owner"),))
     return [dm, group]
 
 

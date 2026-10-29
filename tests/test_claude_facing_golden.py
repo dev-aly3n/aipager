@@ -41,7 +41,7 @@ SEND_GOLDEN = Path(__file__).parent / "golden" / "claude_facing_send.json"
 
 GROUP = -1001
 DM = 555
-ALY, BOB = 1, 2
+ALICE, BOB = 1, 2
 HOOK = {"addr": "/nonexistent/aipager-reply-x.sock", "request_id": "req-1"}
 
 
@@ -49,11 +49,11 @@ def _scopes():
     from aipager.scope import Member, Scope
     return [
         Scope(chat_id=GROUP, kind="group", label="team", members=(
-            Member(id=ALY, label="aly", role="owner"),
+            Member(id=ALICE, label="alice", role="owner"),
             Member(id=BOB, label="bob", role="user"),
         )),
-        Scope(chat_id=DM, kind="dm", label="aly DM",
-              members=(Member(id=ALY, label="aly", role="owner"),)),
+        Scope(chat_id=DM, kind="dm", label="alice DM",
+              members=(Member(id=ALICE, label="alice", role="owner"),)),
     ]
 
 
@@ -250,9 +250,9 @@ def _prompts(mk_bot, monkeypatch, run_async) -> dict[str, str]:
     cases = (
         ("group.member", group, "fix the bug", BOB, GROUP),
         ("group.unknown", group, "fix the bug", 4242, GROUP),
-        ("dm.owner", dm, "fix the bug", ALY, DM),
-        ("template", dm, "Run the tests", ALY, DM),
-        ("command", dm, "/compact", ALY, DM),
+        ("dm.owner", dm, "fix the bug", ALICE, DM),
+        ("template", dm, "Run the tests", ALICE, DM),
+        ("command", dm, "/compact", ALICE, DM),
     )
     for key, sess, text, uid, chat in cases:
         typed.clear()
@@ -270,7 +270,7 @@ def _prompts(mk_bot, monkeypatch, run_async) -> dict[str, str]:
 def _deny_taps(mk_bot, monkeypatch, run_async) -> dict[str, str]:
     from aipager.state import Status
     out = {}
-    for key, uid in (("member", BOB), ("anonymous", ALY)):
+    for key, uid in (("member", BOB), ("anonymous", ALICE)):
         bot, _typed, decisions = _bot(mk_bot, monkeypatch)
         if key == "anonymous":
             bot.scopes = None   # personal mode: nobody to name
@@ -342,7 +342,7 @@ def test_send_text_claude_reads_is_byte_identical():
 @pytest.mark.parametrize("code", ["fa", "ru"])
 def test_send_text_is_the_same_in_persian_and_russian(code):
     from aipager import preferences
-    for chat in (GROUP, DM, ALY, BOB):
+    for chat in (GROUP, DM, ALICE, BOB):
         preferences.set_ui_language(chat, code)
     golden = json.loads(SEND_GOLDEN.read_text(encoding="utf-8"))
     assert send_corpus() == golden
@@ -366,7 +366,7 @@ def test_claude_reads_the_same_in_persian_and_russian(code, mk_bot, monkeypatch,
     people in them) set to Persian or Russian: Claude reads exactly the
     golden bytes (G73)."""
     from aipager import preferences
-    for chat in (GROUP, DM, ALY, BOB):
+    for chat in (GROUP, DM, ALICE, BOB):
         preferences.set_ui_language(chat, code)
     corpus = build_corpus(mk_bot, monkeypatch, run_async)
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
@@ -406,7 +406,7 @@ def test_a_translated_template_or_command_tap_sends_the_english(
                                    quote=None, external_reply=None, forward_origin=None,
                                    via_bot=None, media_group_id=None, caption=None)
         update.message.reply_text = AsyncMock()
-        update.effective_user = MagicMock(id=ALY)
+        update.effective_user = MagicMock(id=ALICE)
         update.effective_chat = MagicMock(id=DM, type="private")
         run_async(bot._handle_message(update, MagicMock()))
     assert sent_templates == [p for _l, p in config._DEFAULT_TEMPLATES]

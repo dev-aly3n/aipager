@@ -6,7 +6,7 @@ on entrypoints.md's "NOT exported" list).
 
 Every git repo here is a real, throwaway repo built fresh inside
 `tmp_path` -- never the real project repo, never
-`/home/aly/aipager` / this worktree.
+`/home/alice/aipager` / this worktree.
 
 Same disclosed methodology deviation as the other files in this
 directory: `MiniAppServer` is imported only to obtain a real bound

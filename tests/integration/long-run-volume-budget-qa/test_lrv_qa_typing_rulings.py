@@ -575,7 +575,7 @@ def test_b_two_quiet_two_hour_turns_never_go_dark(
 def test_b_two_streaming_two_hour_turns_never_go_dark(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
-    """vm3's own shape — two sessions working in one DM, a tool call every
+    """testbox's own shape — two sessions working in one DM, a tool call every
     2–8 s each (seeded) — for two hours. "Flicker, never dark"."""
     start, end, bubbles = _two_hour_run(mk_bot, vbot, vloop, rich_http,
                                         sessions=2, hook_every=(2.0, 8.0))
@@ -632,7 +632,7 @@ def _ban_on_the_bubble(mk_bot, vbot, vloop, rich_http, *, flush_twice=False):
     during the ban and again after it lifts. Returns a dict of what was
     observed."""
     bot = _bot(mk_bot, vbot, rich_http, vloop)
-    sess = _session(bot, vloop, "vm3", age=0.0)
+    sess = _session(bot, vloop, "testbox", age=0.0)
     vbot.fail["sendChatAction"] = lambda: RetryAfter(BAN)
     out: dict = {}
 
