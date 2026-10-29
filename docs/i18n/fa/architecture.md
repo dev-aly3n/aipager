@@ -2,7 +2,7 @@
 
 # معماری
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../architecture.md))
 
@@ -103,6 +103,7 @@ flowchart LR
 | &lrm;`$XDG_RUNTIME_DIR/aipager.sock` | سوکت datagram یونیکس برای رویدادهای هوک (بدون &lrm;`$XDG_RUNTIME_DIR` در &lrm;`/tmp/aipager.sock`؛&rlm; &lrm;`$AIPAGER_SOCKET_PATH` بر هر دو مقدم است) | aipager (bind می‌کند) |
 | `aipager-reply-<id>.sock` (کنار سوکت کنترل) | یک سوکت جواب کوتاه‌عمر برای هر درخواست اجازه‌ای که هوک منتظرش است | `aipager-hook` |
 | `aipager-flood-mute.json`،&rlm; `aipager-flood-backoff.json` (کنار سوکت کنترل) | وضعیت فعلی محدودیت سرعت تلگرام، برای `aipager status` و doctor | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (کنار سوکت کنترل) | رویداد هوکی که در یک datagram جا نمی‌شود؛ aipager وقتی datagram اشاره‌کننده به آن برسد آن را می‌خواند و پاک می‌کند؛ فایل‌های قدیمی‌تر از ۵ دقیقه در شروع پاک می‌شوند ([هوک‌ها](hooks.md)) | `aipager-hook` (می‌نویسد)، aipager (پوشه را می‌سازد، فایل‌ها را می‌خواند و پاک می‌کند) |
 | `aipager-modelswitch-<name>.json` (کنار سوکت کنترل) | علامت یک تعویض مدل که خود aipager تایپ کرده، برای ۳۰ ثانیه ([هوک‌ها](hooks.md#premodelswitch)) | aipager (می‌نویسد)، `aipager-hook` (برمی‌دارد) |
 | &lrm;`/tmp/claude-dtach-<name>.sock` | سوکت کنترل dtach برای هر سشن | dtach |
 | &lrm;`/tmp/claude-status-<name>.json` | دادهٔ خط وضعیت هر سشن | `aipager-statusline` |
@@ -146,7 +147,7 @@ flowchart LR
 
 ### <a id="isolated-instance-for-testing"></a>یک نسخهٔ جدا (برای تست)
 
-&rlm;`AIPAGER_INSTANCE_DIR` را برابر یک پوشهٔ مطلق که مال خودتان است بگذارید تا همهٔ فایل‌های مشترک زمان اجرا در جدول بالا به آن منتقل شوند: سوکت کنترل (و سوکت‌های جواب، فایل‌های علامت محدودیت سرعت و علامت تعویض مدل که کنارش هستند)، سوکت‌های `claude-dtach-*`&lrm;، فایل‌های `claude-policy-*`&lrm;،&rlm; `claude-notes-*`&lrm;،&rlm; `claude-status-*`&lrm;،&rlm; `claude-reply-*`&lrm;،&rlm; `claude-bgjob-*`&lrm; و `claude-exit-*`&lrm;، فایل کف ایمنی، پوشهٔ دانلود `aipager-files` و لاگ ری‌استارت خودکار. سشن‌هایی که این نسخه شروع می‌کند این تنظیم را به ارث می‌برند، پس هوک‌هایشان فقط با همین نسخه حرف می‌زنند، و قانون‌های ایمنی از فایل‌های منتقل‌شده هم همان‌طور محافظت می‌کنند. این نسخه &lrm;`.env` یک checkout را نمی‌خواند.
+&rlm;`AIPAGER_INSTANCE_DIR` را برابر یک پوشهٔ مطلق که مال خودتان است بگذارید تا همهٔ فایل‌های مشترک زمان اجرا در جدول بالا به آن منتقل شوند: سوکت کنترل (و سوکت‌های جواب، فایل‌های علامت محدودیت سرعت، علامت تعویض مدل و پوشهٔ سرریز هوک که کنارش هستند)، سوکت‌های `claude-dtach-*`&lrm;، فایل‌های `claude-policy-*`&lrm;،&rlm; `claude-notes-*`&lrm;،&rlm; `claude-status-*`&lrm;،&rlm; `claude-reply-*`&lrm;،&rlm; `claude-bgjob-*`&lrm; و `claude-exit-*`&lrm;، فایل کف ایمنی، پوشهٔ دانلود `aipager-files` و لاگ ری‌استارت خودکار. سشن‌هایی که این نسخه شروع می‌کند این تنظیم را به ارث می‌برند، پس هوک‌هایشان فقط با همین نسخه حرف می‌زنند، و قانون‌های ایمنی از فایل‌های منتقل‌شده هم همان‌طور محافظت می‌کنند. این نسخه &lrm;`.env` یک checkout را نمی‌خواند.
 
 فایل‌های زیر پوشهٔ خانه جابه‌جا نمی‌شوند، پس `HOME` را هم به یک پوشهٔ جدا ببرید. `aipager start` اجرا نمی‌شود اگر پوشهٔ نسخه تنظیم شده باشد و `HOME` پوشهٔ خانهٔ واقعی شما باشد، اگر آن پوشه یک مسیر مطلق به پوشه‌ای که مال شماست نباشد، یا اگر برای مسیر یک سوکت زیادی طولانی باشد.
 

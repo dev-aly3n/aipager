@@ -2,7 +2,7 @@
 
 # البنية
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../architecture.md))
 
@@ -103,6 +103,7 @@ flowchart LR
 | &lrm;`$XDG_RUNTIME_DIR/aipager.sock` | مقبس datagram من نوع Unix لأحداث الهوك (&lrm;`/tmp/aipager.sock` عند غياب &lrm;`$XDG_RUNTIME_DIR`؛ و&lrm;`$AIPAGER_SOCKET_PATH` مقدَّم على كليهما) | aipager (bind) |
 | `aipager-reply-<id>.sock` (بجانب مقبس التحكم) | مقبس رد قصير العمر لكل طلب إذن ينتظره الهوك | `aipager-hook` |
 | `aipager-flood-mute.json`،&rlm; `aipager-flood-backoff.json` (بجانب مقبس التحكم) | حالة حدود السرعة الحالية في Telegram، من أجل `aipager status` و`aipager doctor` | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (بجانب مقبس التحكم) | حدث هوك أكبر من أن يتسع له datagram واحد، يقرأه aipager ويحذفه حين يصل الـ datagram الذي يشير إليه؛ وتُزال الملفات الأقدم من ٥ دقائق عند البدء ([الهوكات](hooks.md)) | `aipager-hook` (يكتب)، aipager (ينشئ المجلد، ويقرأ الملفات ويحذفها) |
 | `aipager-modelswitch-<name>.json` (بجانب مقبس التحكم) | يعلّم تبديل نموذج كتبه aipager، لمدة ٣٠ ثانية ([الهوكات](hooks.md#premodelswitch)) | aipager (يكتب)، `aipager-hook` (يأخذه) |
 | &lrm;`/tmp/claude-dtach-<name>.sock` | مقبس التحكم الخاص بـ dtach لكل جلسة | dtach |
 | &lrm;`/tmp/claude-status-<name>.json` | بيانات سطر الحالة لكل جلسة | `aipager-statusline` |
@@ -146,7 +147,7 @@ flowchart LR
 
 ### <a id="isolated-instance-for-testing"></a>نسخة معزولة (للاختبار)
 
-عند ضبط `AIPAGER_INSTANCE_DIR` على مجلد مطلق مملوك لك، تنتقل إليه كل الملفات المشتركة المذكورة أعلاه: مقبس التحكم (ومقابس الرد وملفات إشارات حدود السرعة وعلامة تبديل النموذج التي بجانبه)، ومقابس `claude-dtach-*`&lrm;، وملفات `claude-policy-*`&lrm; و`claude-notes-*`&lrm; و`claude-status-*`&lrm; و`claude-reply-*`&lrm; و`claude-bgjob-*`&lrm; و`claude-exit-*`&lrm;، وملف الحد الأدنى، ومجلد التنزيلات `aipager-files`، وسجل إعادة التشغيل الذاتية. الجلسات التي تبدؤها هذه النسخة ترث الإعداد، فلا تتحدث هوكاتها إلا مع تلك النسخة، وتحمي قواعد الأمان الملفات المنقولة بالطريقة نفسها. لا تقرأ هذه النسخة ملف &lrm;`.env` من نسخة الشيفرة.
+عند ضبط `AIPAGER_INSTANCE_DIR` على مجلد مطلق مملوك لك، تنتقل إليه كل الملفات المشتركة المذكورة أعلاه: مقبس التحكم (ومقابس الرد وملفات إشارات حدود السرعة وعلامة تبديل النموذج ومجلد الفائض للهوك التي بجانبه)، ومقابس `claude-dtach-*`&lrm;، وملفات `claude-policy-*`&lrm; و`claude-notes-*`&lrm; و`claude-status-*`&lrm; و`claude-reply-*`&lrm; و`claude-bgjob-*`&lrm; و`claude-exit-*`&lrm;، وملف الحد الأدنى، ومجلد التنزيلات `aipager-files`، وسجل إعادة التشغيل الذاتية. الجلسات التي تبدؤها هذه النسخة ترث الإعداد، فلا تتحدث هوكاتها إلا مع تلك النسخة، وتحمي قواعد الأمان الملفات المنقولة بالطريقة نفسها. لا تقرأ هذه النسخة ملف &lrm;`.env` من نسخة الشيفرة.
 
 الملفات الموجودة في مجلدك الرئيسي لا تنتقل، لذا يلزم توجيه `HOME` أيضًا إلى مجلد منفصل. يرفض `aipager start` العمل عندما يكون مجلد النسخة مضبوطًا و`HOME` هو مجلدك الرئيسي الحقيقي، أو عندما لا يكون المجلد مسارًا مطلقًا إلى مجلد مملوك لك، أو عندما يكون أطول من أن يصلح مسارًا لمقبس.
 

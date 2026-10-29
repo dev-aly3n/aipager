@@ -1,6 +1,6 @@
 # Güvenlik modeli
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager **loopback dışında hiçbir TCP portunu dinlemez**. Mini App sunucusu 
 Gelen:
 
 - `$XDG_RUNTIME_DIR/aipager.sock` konumundaki Unix datagram soketi (`$XDG_RUNTIME_DIR` ayarlı değilken `/tmp/aipager.sock` yedeğiyle). aipager başlarken bağlanır ve izinlerini `chmod` ile alır (`aipager/dtach/hook_receiver.py`). İzinler `0o666`, böylece her yerel süreç ona hook olayları gönderebilir: hook'ları neyin çalıştıracağına zaten karar veren `~/.claude/settings.json` dosyasına duyulan güvenin aynısı.
+- Hook taşma klasörü, o soketin yanındaki `aipager-spill-<uid>`. Tek bir datagram'a sığmayacak kadar büyük bir hook olayı oraya dosya olarak yazılır ve datagram yalnızca dosyanın adını verir (bkz. [hooks](hooks.md)). aipager klasörü `0700` izinleriyle oluşturur ve kendisine ait değilse kullanmaz. Hook yalnızca bu klasöre yazar, o da yalnızca klasör aynı kullanıcıya aitse ve grubun ya da diğerlerinin erişimi yoksa; her dosya `0600` izinleriyle ve rastgele bir adla oluşturulur. Bir datagram bir ad taşır, asla bir yol taşımaz: aipager yalnızca kendi ad kalıbını kabul eder, dosyayı klasörün içinde bağlantıları izlemeden açar, yalnızca kendi kullanıcısına ait, 4 MiB'a kadar normal bir dosyayı kabul eder ve okuduğu ya da reddettiği her dosyayı siler. Durmuş bir aipager'ın bıraktığı dosyalar, 5 dakikadan eskiyse bir sonraki başlangıçta silinir. Kısıtlı görevlerin dosya araçları, `/tmp/claude-*` kontrol dosyalarında olduğu gibi bu klasörden de uzak tutulur.
 
 Bu, aipager'ın uzaktan saldırı yüzeyi olmadığı anlamına gelir. Ağdaki bir saldırgan, bilgisayarın kendisinde bir dayanağı olmadan ona ulaşamaz.
 

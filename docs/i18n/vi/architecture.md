@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Việc tự khởi động lại từ Telegram dựa vào việc toàn bộ trì
 | `$XDG_RUNTIME_DIR/aipager.sock` | Socket datagram Unix cho các sự kiện hook (`/tmp/aipager.sock` khi không có `$XDG_RUNTIME_DIR`; `$AIPAGER_SOCKET_PATH` được ưu tiên hơn cả hai) | aipager (bind) |
 | `aipager-reply-<id>.sock` (cạnh socket điều khiển) | Một socket trả lời ngắn hạn cho mỗi yêu cầu cấp quyền mà hook đang chờ | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (cạnh socket điều khiển) | Trạng thái giới hạn tốc độ hiện tại của Telegram, cho `aipager status` và doctor | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (cạnh socket điều khiển) | Một sự kiện hook quá lớn so với một datagram, được aipager đọc và xóa khi datagram trỏ tới nó đến; các file cũ hơn 5 phút bị dọn lúc khởi động ([hook](hooks.md)) | `aipager-hook` (ghi), aipager (tạo thư mục, đọc và xóa file) |
 | `aipager-modelswitch-<name>.json` (cạnh socket điều khiển) | Đánh dấu một lần đổi mô hình do aipager gõ, trong 30 giây ([hook](hooks.md#premodelswitch)) | aipager (ghi), `aipager-hook` (nhận) |
 | `/tmp/claude-dtach-<name>.sock` | Socket điều khiển của dtach cho mỗi phiên | dtach |
 | `/tmp/claude-status-<name>.json` | Dữ liệu dòng trạng thái của mỗi phiên | `aipager-statusline` |
@@ -140,7 +141,7 @@ Ngoài những file này, aipager tạo một thư mục phiên mới khi bạn 
 
 ### <a id="isolated-instance-for-testing"></a>Bản chạy tách biệt (để thử nghiệm)
 
-Đặt `AIPAGER_INSTANCE_DIR` thành một thư mục tuyệt đối thuộc về bạn, và mọi file dùng chung ở trên sẽ chuyển vào đó: socket điều khiển (cùng các socket trả lời, file tín hiệu giới hạn tốc độ và dấu đổi mô hình nằm cạnh nó), các socket `claude-dtach-*`, các file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` và `claude-exit-*`, file mức an toàn tối thiểu, thư mục tải về `aipager-files` và log tự khởi động lại. Các phiên mà bản chạy này khởi động sẽ thừa hưởng cài đặt, nên hook của chúng chỉ nói chuyện với bản chạy đó, và các quy tắc an toàn bảo vệ các file đã chuyển theo cùng cách. Bản chạy này không đọc `.env` của một bản sao mã nguồn.
+Đặt `AIPAGER_INSTANCE_DIR` thành một thư mục tuyệt đối thuộc về bạn, và mọi file dùng chung ở trên sẽ chuyển vào đó: socket điều khiển (cùng các socket trả lời, file tín hiệu giới hạn tốc độ, dấu đổi mô hình và thư mục tràn của hook nằm cạnh nó), các socket `claude-dtach-*`, các file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` và `claude-exit-*`, file mức an toàn tối thiểu, thư mục tải về `aipager-files` và log tự khởi động lại. Các phiên mà bản chạy này khởi động sẽ thừa hưởng cài đặt, nên hook của chúng chỉ nói chuyện với bản chạy đó, và các quy tắc an toàn bảo vệ các file đã chuyển theo cùng cách. Bản chạy này không đọc `.env` của một bản sao mã nguồn.
 
 Các file trong thư mục home của bạn không chuyển theo, nên hãy trỏ cả `HOME` tới một thư mục riêng. `aipager start` từ chối chạy khi thư mục bản chạy được đặt mà `HOME` lại là thư mục home thật của bạn, khi thư mục đó không phải đường dẫn tuyệt đối tới một thư mục thuộc về bạn, hoặc khi nó quá dài để làm đường dẫn socket.
 

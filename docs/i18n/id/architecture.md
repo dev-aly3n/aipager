@@ -1,6 +1,6 @@
 # Arsitektur
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Mulai ulang dari Telegram mengandalkan seluruh jalur ini selesai sebelum penggan
 | `$XDG_RUNTIME_DIR/aipager.sock` | Soket datagram Unix untuk event hook (`/tmp/aipager.sock` tanpa `$XDG_RUNTIME_DIR`; `$AIPAGER_SOCKET_PATH` menggantikan keduanya) | aipager (bind) |
 | `aipager-reply-<id>.sock` (di samping soket kontrol) | Soket balasan berumur pendek untuk setiap permintaan izin yang ditunggu hook | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (di samping soket kontrol) | Keadaan batas Telegram saat ini, untuk `aipager status` dan doctor | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (di samping soket kontrol) | Event hook yang terlalu besar untuk satu datagram, dibaca dan dihapus aipager saat datagram yang menunjuk ke sana tiba; file yang lebih tua dari 5 menit dibersihkan saat mulai ([hooks](hooks.md)) | `aipager-hook` (menulis), aipager (membuat folder, membaca dan menghapus file) |
 | `aipager-modelswitch-<name>.json` (di samping soket kontrol) | Menandai penggantian model yang diketik aipager, selama 30 dtk ([hooks](hooks.md#premodelswitch)) | aipager (menulis), `aipager-hook` (mengambil) |
 | `/tmp/claude-dtach-<name>.sock` | Soket kontrol dtach untuk setiap sesi | dtach |
 | `/tmp/claude-status-<name>.json` | Data baris status setiap sesi | `aipager-statusline` |
@@ -140,7 +141,7 @@ Selain itu, aipager membuat folder sesi baru saat kamu memintanya (Folder baru d
 
 ### <a id="isolated-instance-for-testing"></a>Instance terisolasi (untuk pengujian)
 
-Atur `AIPAGER_INSTANCE_DIR` ke folder absolut milikmu, dan setiap file kerja bersama dari daftar di atas pindah ke sana: soket kontrol (dan di sampingnya soket balasan, file sinyal batas, serta penanda penggantian model), soket `claude-dtach-*`, file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, dan `claude-exit-*`, file batas bawah, folder unduhan `aipager-files`, dan log mulai ulang oleh aipager sendiri. Sesi yang dimulai instance itu mewarisi pengaturannya, jadi hook-nya hanya bicara dengan instance itu, dan aturan keamanan melindungi file yang dipindahkan dengan cara yang sama. Instance itu tidak membaca `.env` dari salinan kerja repo.
+Atur `AIPAGER_INSTANCE_DIR` ke folder absolut milikmu, dan setiap file kerja bersama dari daftar di atas pindah ke sana: soket kontrol (dan di sampingnya soket balasan, file sinyal batas, penanda penggantian model, serta folder luapan hook), soket `claude-dtach-*`, file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, dan `claude-exit-*`, file batas bawah, folder unduhan `aipager-files`, dan log mulai ulang oleh aipager sendiri. Sesi yang dimulai instance itu mewarisi pengaturannya, jadi hook-nya hanya bicara dengan instance itu, dan aturan keamanan melindungi file yang dipindahkan dengan cara yang sama. Instance itu tidak membaca `.env` dari salinan kerja repo.
 
 File di folder home-mu tidak ikut pindah, jadi arahkan juga `HOME` ke folder terpisah. `aipager start` menolak berjalan kalau folder instance diatur sementara `HOME` adalah folder home-mu yang asli, kalau folder itu bukan path absolut ke folder milikmu, atau kalau terlalu panjang untuk path soket.
 

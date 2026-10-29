@@ -1,6 +1,6 @@
 # Mimari
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Telegram'dan yeniden başlatma, yerine gelen sürecin sokete bağlanmasından ö
 | `$XDG_RUNTIME_DIR/aipager.sock` | Hook olayları için Unix datagram soketi (`$XDG_RUNTIME_DIR` yoksa `/tmp/aipager.sock`; `$AIPAGER_SOCKET_PATH` ikisinin de yerine geçer) | aipager (bağlanır) |
 | `aipager-reply-<id>.sock` (kontrol soketinin yanında) | Bir hook'un beklediği her izin isteği için kısa ömürlü bir yanıt soketi | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (kontrol soketinin yanında) | `aipager status` ve doctor için Telegram sınırlarının o anki durumu | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (kontrol soketinin yanında) | Tek bir datagram'a sığmayacak kadar büyük bir hook olayı; aipager onu, ona işaret eden datagram gelince okur ve siler; 5 dakikadan eski dosyalar başlangıçta temizlenir ([hooks](hooks.md)) | `aipager-hook` (yazar), aipager (klasörü oluşturur, dosyaları okur ve siler) |
 | `aipager-modelswitch-<name>.json` (kontrol soketinin yanında) | aipager'ın yazdığı bir model değişikliğini 30 sn boyunca işaretler ([hooks](hooks.md#premodelswitch)) | aipager (yazar), `aipager-hook` (alır) |
 | `/tmp/claude-dtach-<name>.sock` | Her oturum için dtach kontrol soketi | dtach |
 | `/tmp/claude-status-<name>.json` | Her oturumun durum satırı verisi | `aipager-statusline` |
@@ -140,7 +141,7 @@ Bunun dışında aipager, sen istediğinde yeni bir oturum klasörü oluşturur 
 
 ### <a id="isolated-instance-for-testing"></a>Yalıtılmış örnek (testler için)
 
-`AIPAGER_INSTANCE_DIR` değerini sana ait mutlak bir klasöre ayarla; yukarıdaki listedeki her paylaşılan çalışma dosyası oraya taşınır: kontrol soketi (ve yanında yanıt soketleri, sınır sinyal dosyaları ve model değişikliği işareti), `claude-dtach-*` soketleri, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` ve `claude-exit-*` dosyaları, alt sınır dosyası, `aipager-files` indirme klasörü ve aipager'ın kendini yeniden başlatma günlüğü. Bu örneğin başlattığı oturumlar ayarı devralır, bu yüzden hook'ları yalnızca bu örnekle konuşur ve güvenlik kuralları taşınan dosyaları da aynı şekilde korur. Örnek, repo çalışma kopyasının `.env` dosyasını okumaz.
+`AIPAGER_INSTANCE_DIR` değerini sana ait mutlak bir klasöre ayarla; yukarıdaki listedeki her paylaşılan çalışma dosyası oraya taşınır: kontrol soketi (ve yanında yanıt soketleri, sınır sinyal dosyaları, model değişikliği işareti ve hook taşma klasörü), `claude-dtach-*` soketleri, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` ve `claude-exit-*` dosyaları, alt sınır dosyası, `aipager-files` indirme klasörü ve aipager'ın kendini yeniden başlatma günlüğü. Bu örneğin başlattığı oturumlar ayarı devralır, bu yüzden hook'ları yalnızca bu örnekle konuşur ve güvenlik kuralları taşınan dosyaları da aynı şekilde korur. Örnek, repo çalışma kopyasının `.env` dosyasını okumaz.
 
 Ev klasöründeki dosyalar taşınmaz, bu yüzden `HOME` değerini de ayrı bir klasöre yönlendir. Örnek klasörü ayarlıyken `HOME` gerçek ev klasörünse, klasör sana ait bir klasörün mutlak yolu değilse ya da soket yolu için çok uzunsa `aipager start` çalışmayı reddeder.
 

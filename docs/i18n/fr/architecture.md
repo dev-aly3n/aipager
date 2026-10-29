@@ -1,6 +1,6 @@
 # Architecture
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Le redémarrage lancé depuis Telegram compte sur le fait que tout ce chemin ail
 | `$XDG_RUNTIME_DIR/aipager.sock` | Socket datagram Unix pour les événements de hook (`/tmp/aipager.sock` sans `$XDG_RUNTIME_DIR` ; `$AIPAGER_SOCKET_PATH` remplace les deux) | aipager (se lie au socket) |
 | `aipager-reply-<id>.sock` (à côté du socket de contrôle) | Un socket de réponse de courte durée pour chaque demande d'autorisation que le hook attend | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (à côté du socket de contrôle) | L'état actuel des limites de Telegram, pour `aipager status` et `aipager doctor` | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (à côté du socket de contrôle) | Un événement de hook trop gros pour un seul datagramme, lu et supprimé par aipager quand arrive le datagramme qui le désigne ; les fichiers de plus de 5 minutes sont nettoyés au démarrage ([hooks](hooks.md)) | `aipager-hook` (écrit), aipager (crée le dossier, lit et supprime les fichiers) |
 | `aipager-modelswitch-<name>.json` (à côté du socket de contrôle) | Marque un changement de modèle tapé par aipager, pendant 30 s ([hooks](hooks.md#premodelswitch)) | aipager (écrit), `aipager-hook` (le prend) |
 | `/tmp/claude-dtach-<name>.sock` | Socket de contrôle dtach de chaque session | dtach |
 | `/tmp/claude-status-<name>.json` | Les données de la ligne d'état de chaque session | `aipager-statusline` |
@@ -140,7 +141,7 @@ En plus de ceux-ci, aipager crée un nouveau dossier de session quand vous en de
 
 ### <a id="isolated-instance-for-testing"></a>Une instance isolée (pour les tests)
 
-Définissez `AIPAGER_INSTANCE_DIR` comme un dossier absolu qui vous appartient et tous les fichiers d'exécution partagés ci-dessus vont dedans : le socket de contrôle (et, à côté, les sockets de réponse, les fichiers de signal des limites et la marque de changement de modèle), les sockets `claude-dtach-*`, les fichiers `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` et `claude-exit-*`, le fichier du socle, le dossier de téléchargement `aipager-files` et le journal du redémarrage par aipager lui-même. Les sessions que l'instance lance héritent du réglage, donc leurs hooks ne parlent qu'à cette instance, et les règles de sécurité protègent les fichiers déplacés de la même façon. L'instance ne lit pas le `.env` d'une copie de travail du dépôt.
+Définissez `AIPAGER_INSTANCE_DIR` comme un dossier absolu qui vous appartient et tous les fichiers d'exécution partagés ci-dessus vont dedans : le socket de contrôle (et, à côté, les sockets de réponse, les fichiers de signal des limites, la marque de changement de modèle et le dossier de débordement des hooks), les sockets `claude-dtach-*`, les fichiers `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` et `claude-exit-*`, le fichier du socle, le dossier de téléchargement `aipager-files` et le journal du redémarrage par aipager lui-même. Les sessions que l'instance lance héritent du réglage, donc leurs hooks ne parlent qu'à cette instance, et les règles de sécurité protègent les fichiers déplacés de la même façon. L'instance ne lit pas le `.env` d'une copie de travail du dépôt.
 
 Les fichiers de votre dossier personnel ne bougent pas, donc faites aussi pointer `HOME` vers un dossier à part. `aipager start` refuse de tourner quand le dossier d'instance est défini et que `HOME` est votre vrai dossier personnel, quand le dossier n'est pas un chemin absolu vers un dossier qui vous appartient, ou quand il est trop long pour un chemin de socket.
 

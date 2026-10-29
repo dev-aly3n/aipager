@@ -1,6 +1,6 @@
 # Modèle de sécurité
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager n'écoute sur **aucun port TCP autre que le bouclage local**. Le serveur
 Connexions entrantes :
 
 - Un socket datagram Unix à `$XDG_RUNTIME_DIR/aipager.sock` (avec un repli sur `/tmp/aipager.sock` quand `$XDG_RUNTIME_DIR` n'est pas défini). Lié et réglé par `chmod` par aipager au démarrage (`aipager/dtach/hook_receiver.py`). Droits `0o666` pour que n'importe quel processus local puisse lui envoyer des événements de hook : la même confiance que `~/.claude/settings.json`, qui contrôle déjà ce qui lance les hooks.
+- Le dossier de débordement des hooks, `aipager-spill-<uid>` à côté de ce socket. Un événement de hook trop gros pour un seul datagramme y est écrit comme fichier, et le datagramme ne fait que le nommer (voir [hooks](hooks.md)). aipager crée le dossier avec les droits `0700` et ne l'utilise pas s'il ne lui appartient pas. Le hook n'écrit que dans ce dossier, et seulement s'il appartient au même utilisateur, sans accès pour le groupe ni les autres ; chaque fichier est créé en `0600` avec un nom aléatoire. Un datagramme porte un nom, jamais un chemin : aipager n'accepte que son propre modèle de nom, ouvre le fichier dans le dossier sans suivre les liens, n'accepte qu'un fichier ordinaire de son propre utilisateur jusqu'à 4 Mio, et supprime chaque fichier qu'il lit ou refuse. Les fichiers laissés par un aipager qui s'est arrêté sont supprimés au démarrage suivant s'ils ont plus de 5 minutes. Les outils de fichiers des tâches restreintes sont tenus à l'écart du dossier, comme des fichiers de contrôle `/tmp/claude-*`.
 
 Cela veut dire qu'aipager n'est pas une surface d'attaque à distance. Un attaquant sur le réseau ne peut pas l'atteindre sans avoir déjà pris pied sur l'ordinateur.
 

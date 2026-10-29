@@ -1,6 +1,6 @@
 # Mô hình bảo mật
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager **không lắng nghe trên cổng TCP nào ngoài loopback**. Máy chủ
 Kết nối đi vào:
 
 - Socket datagram Unix ở `$XDG_RUNTIME_DIR/aipager.sock` (quay về `/tmp/aipager.sock` khi không đặt `$XDG_RUNTIME_DIR`). Được aipager bind và đặt quyền bằng `chmod` lúc khởi động (`aipager/dtach/hook_receiver.py`). Quyền `0o666` để mọi tiến trình trên máy đều gửi được sự kiện hook tới nó: cùng mức tin cậy với `~/.claude/settings.json`, file vốn đã quyết định cái gì chạy hook.
+- Thư mục tràn của hook, `aipager-spill-<uid>` cạnh socket đó. Một sự kiện hook quá lớn so với một datagram được ghi vào đó thành file, và datagram chỉ nêu tên file (xem [hook](hooks.md)). aipager tạo thư mục với quyền `0700` và không dùng nó nếu nó không thuộc về aipager. Hook chỉ ghi vào thư mục đó, và chỉ khi thư mục đó thuộc về cùng người dùng và cả nhóm lẫn người khác đều không có quyền truy cập; mỗi file được tạo với `0600` và một tên ngẫu nhiên. Một datagram mang một cái tên, không bao giờ là một đường dẫn: aipager chỉ nhận mẫu tên của chính nó, mở file bên trong thư mục mà không đi theo liên kết, chỉ nhận một file thường của chính người dùng của nó tối đa 4 MiB, và xóa mọi file nó đã đọc hoặc từ chối. File do một aipager đã dừng để lại sẽ bị xóa ở lần khởi động sau khi đã cũ hơn 5 phút. Công cụ file của các việc bị giới hạn không được đụng tới thư mục đó, cũng như các file điều khiển `/tmp/claude-*`.
 
 Điều này có nghĩa: aipager không phải là một bề mặt tấn công từ xa. Một kẻ tấn công trên mạng không chạm tới được nó nếu chưa có chỗ đứng trên chính máy đó.
 

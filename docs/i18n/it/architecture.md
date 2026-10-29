@@ -1,6 +1,6 @@
 # Architettura
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Un autoriavvio lanciato da Telegram conta sul fatto che tutto questo finisca pri
 | `$XDG_RUNTIME_DIR/aipager.sock` | Socket Unix datagram per gli eventi hook (`/tmp/aipager.sock` senza `$XDG_RUNTIME_DIR`; `$AIPAGER_SOCKET_PATH` vince su entrambi) | aipager (bind) |
 | `aipager-reply-<id>.sock` (accanto al socket di controllo) | Socket di risposta di breve durata, uno per ogni richiesta di permesso su cui l'hook resta in attesa | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (accanto al socket di controllo) | Stato attuale dei limiti di Telegram, per `aipager status` e doctor | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (accanto al socket di controllo) | Un evento hook troppo grande per un solo datagram, letto e cancellato da aipager quando arriva il datagram che lo indica; i file con più di 5 minuti vengono rimossi all'avvio ([hook](hooks.md)) | `aipager-hook` (scrive), aipager (crea la cartella, legge e cancella i file) |
 | `aipager-modelswitch-<name>.json` (accanto al socket di controllo) | Segna per 30 secondi un cambio di modello scritto da aipager ([hook](hooks.md#premodelswitch)) | aipager (scrive), `aipager-hook` (lo prende) |
 | `/tmp/claude-dtach-<name>.sock` | Socket di controllo dtach di ogni sessione | dtach |
 | `/tmp/claude-status-<name>.json` | Dati della riga di stato di ogni sessione | `aipager-statusline` |
@@ -140,7 +141,7 @@ Oltre a questi, aipager crea nuove cartelle di sessione quando lo chiedi tu («N
 
 ### <a id="isolated-instance-for-testing"></a>Istanza isolata (per i test)
 
-Imposta `AIPAGER_INSTANCE_DIR` su una cartella tua, con un percorso assoluto, e ogni file condiviso di runtime qui sopra si sposta lì: il socket di controllo (e accanto a lui i socket di risposta, i file con lo stato dei limiti e il segno di cambio modello), i socket `claude-dtach-*`, i file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` e `claude-exit-*`, il file della base di sicurezza, la cartella di download `aipager-files` e il log dell'autoriavvio. Le sessioni avviate da questa istanza ereditano l'impostazione, così i loro hook parlano solo con lei, e le regole di sicurezza proteggono i file spostati allo stesso modo. Questa istanza non legge il `.env` della copia del codice sorgente.
+Imposta `AIPAGER_INSTANCE_DIR` su una cartella tua, con un percorso assoluto, e ogni file condiviso di runtime qui sopra si sposta lì: il socket di controllo (e accanto a lui i socket di risposta, i file con lo stato dei limiti, il segno di cambio modello e la cartella di appoggio degli hook), i socket `claude-dtach-*`, i file `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` e `claude-exit-*`, il file della base di sicurezza, la cartella di download `aipager-files` e il log dell'autoriavvio. Le sessioni avviate da questa istanza ereditano l'impostazione, così i loro hook parlano solo con lei, e le regole di sicurezza proteggono i file spostati allo stesso modo. Questa istanza non legge il `.env` della copia del codice sorgente.
 
 I file sotto la cartella home non si spostano, quindi punta anche `HOME` su una cartella a parte. `aipager start` si rifiuta di partire quando la cartella dell'istanza è impostata ma `HOME` è la tua vera cartella home, quando la cartella non è un percorso assoluto verso una cartella tua, o quando è troppo lunga per un percorso di socket.
 

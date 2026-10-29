@@ -1,6 +1,6 @@
 # Model keamanan
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../security.md))
 
@@ -192,6 +192,7 @@ aipager **tidak mendengarkan port TCP apa pun selain loopback**. Server Mini App
 Masuk:
 
 - Soket datagram Unix di `$XDG_RUNTIME_DIR/aipager.sock` (dengan cadangan `/tmp/aipager.sock` saat `$XDG_RUNTIME_DIR` tidak diatur). Di-bind dan diberi izin lewat `chmod` saat aipager mulai (`aipager/dtach/hook_receiver.py`). Izinnya `0o666` supaya proses lokal mana pun bisa mengirim event hook ke sana: kepercayaan yang sama dengan `~/.claude/settings.json`, yang memang sudah menentukan apa yang menjalankan hook.
+- Folder luapan hook, `aipager-spill-<uid>` di samping soket itu. Event hook yang terlalu besar untuk satu datagram ditulis di sana sebagai file, dan datagram hanya menyebut namanya (lihat [hooks](hooks.md)). aipager membuat folder itu dengan izin `0700` dan tidak memakainya kalau bukan miliknya. Hook hanya menulis ke folder itu, dan hanya kalau folder itu milik pengguna yang sama tanpa akses untuk grup atau pengguna lain; setiap file dibuat dengan `0600` dan nama acak. Datagram membawa nama, tidak pernah path: aipager hanya menerima pola namanya sendiri, membuka file di dalam folder tanpa mengikuti tautan, hanya menerima file biasa milik penggunanya sendiri sampai 4 MiB, dan menghapus setiap file yang dibaca atau ditolaknya. File yang ditinggalkan aipager yang sudah berhenti dihapus saat mulai berikutnya kalau umurnya lebih dari 5 menit. Alat file milik tugas yang dibatasi dijauhkan dari folder itu, sama seperti dari file kontrol `/tmp/claude-*`.
 
 Artinya aipager bukan permukaan serangan jarak jauh. Penyerang di jaringan tidak bisa menjangkaunya tanpa pijakan di komputer itu sendiri.
 

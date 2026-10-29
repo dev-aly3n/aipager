@@ -1,6 +1,6 @@
 # Architektur
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Der aus Telegram ausgelöste Neustart verlässt sich darauf, dass dieser ganze A
 | `$XDG_RUNTIME_DIR/aipager.sock` | Unix-Datagram-Socket für Hook-Ereignisse (`/tmp/aipager.sock` ohne `$XDG_RUNTIME_DIR`; `$AIPAGER_SOCKET_PATH` überschreibt beide) | aipager (bindet ihn) |
 | `aipager-reply-<id>.sock` (neben dem Steuer-Socket) | Ein kurzlebiger Antwort-Socket pro Berechtigungsanfrage, auf die der Hook wartet | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (neben dem Steuer-Socket) | Der aktuelle Stand der Telegram-Limits, für `aipager status` und den doctor | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (neben dem Steuer-Socket) | Ein Hook-Ereignis, das für ein Datagramm zu groß ist; aipager liest und löscht es, wenn das Datagramm ankommt, das darauf verweist; Dateien, die älter als 5 Minuten sind, werden beim Start weggeräumt ([Hooks](hooks.md)) | `aipager-hook` (schreibt), aipager (legt den Ordner an, liest und löscht die Dateien) |
 | `aipager-modelswitch-<name>.json` (neben dem Steuer-Socket) | Markiert einen Modellwechsel, den aipager getippt hat, für 30 s ([Hooks](hooks.md#premodelswitch)) | aipager (schreibt), `aipager-hook` (übernimmt ihn) |
 | `/tmp/claude-dtach-<name>.sock` | Steuer-Socket von dtach pro Sitzung | dtach |
 | `/tmp/claude-status-<name>.json` | Die Daten der Statuszeile pro Sitzung | `aipager-statusline` |
@@ -140,7 +141,7 @@ Außerdem legt aipager einen neuen Sitzungsordner an, wenn du einen anforderst (
 
 ### <a id="isolated-instance-for-testing"></a>Eine isolierte Instanz (zum Testen)
 
-Setz `AIPAGER_INSTANCE_DIR` auf einen absoluten Ordner, der dir gehört, und jede oben genannte gemeinsame Laufzeitdatei zieht dort hinein: der Steuer-Socket (und daneben die Antwort-Sockets, die Signaldateien der Limits und die Markierung für den Modellwechsel), die Sockets `claude-dtach-*`, die Dateien `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` und `claude-exit-*`, die Datei der Untergrenze, der Download-Ordner `aipager-files` und das Log des Neustarts durch aipager selbst. Sitzungen, die die Instanz startet, erben die Einstellung, ihre Hooks sprechen also nur mit dieser Instanz, und die Sicherheitsregeln schützen die verschobenen Dateien genauso. Die Instanz liest nicht die `.env` einer Arbeitskopie des Repos.
+Setz `AIPAGER_INSTANCE_DIR` auf einen absoluten Ordner, der dir gehört, und jede oben genannte gemeinsame Laufzeitdatei zieht dort hinein: der Steuer-Socket (und daneben die Antwort-Sockets, die Signaldateien der Limits, die Markierung für den Modellwechsel und der Überlauf-Ordner der Hooks), die Sockets `claude-dtach-*`, die Dateien `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*` und `claude-exit-*`, die Datei der Untergrenze, der Download-Ordner `aipager-files` und das Log des Neustarts durch aipager selbst. Sitzungen, die die Instanz startet, erben die Einstellung, ihre Hooks sprechen also nur mit dieser Instanz, und die Sicherheitsregeln schützen die verschobenen Dateien genauso. Die Instanz liest nicht die `.env` einer Arbeitskopie des Repos.
 
 Die Dateien in deinem Home-Ordner ziehen nicht um, lass also auch `HOME` auf einen eigenen Ordner zeigen. `aipager start` verweigert den Start, wenn der Instanzordner gesetzt ist und `HOME` dein echter Home-Ordner ist, wenn der Ordner kein absoluter Pfad zu einem Ordner ist, der dir gehört, oder wenn er für einen Socket-Pfad zu lang ist.
 

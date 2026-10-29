@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -97,6 +97,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 | `$XDG_RUNTIME_DIR/aipager.sock` | hook 이벤트용 Unix datagram 소켓(`$XDG_RUNTIME_DIR`이 없으면 `/tmp/aipager.sock`, `$AIPAGER_SOCKET_PATH`가 둘보다 우선) | aipager (bind) |
 | `aipager-reply-<id>.sock` (제어 소켓 옆) | hook이 기다리는 권한 요청마다 하나씩 있는 짧게 쓰는 응답 소켓 | `aipager-hook` |
 | `aipager-flood-mute.json`, `aipager-flood-backoff.json` (제어 소켓 옆) | 현재 Telegram 속도 제한 상태, `aipager status`와 doctor가 읽어요 | aipager |
+| `aipager-spill-<uid>/ev-<id>.json` (제어 소켓 옆) | datagram 하나에 담기에 너무 큰 hook 이벤트, 이를 가리키는 datagram이 도착하면 aipager가 읽고 지워요. 5분이 지난 파일은 시작할 때 치워요([hook](hooks.md)) | `aipager-hook` (씀), aipager (폴더를 만들고, 파일을 읽고 지움) |
 | `aipager-modelswitch-<name>.json` (제어 소켓 옆) | aipager가 입력한 모델 변경 한 번을 표시해요, 30초 동안 유효([hook](hooks.md#premodelswitch)) | aipager (씀), `aipager-hook` (가져감) |
 | `/tmp/claude-dtach-<name>.sock` | 세션마다 있는 dtach 제어 소켓 | dtach |
 | `/tmp/claude-status-<name>.json` | 세션마다 있는 상태 줄 데이터 | `aipager-statusline` |
@@ -140,7 +141,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 
 ### <a id="isolated-instance-for-testing"></a>격리된 인스턴스 (테스트용)
 
-`AIPAGER_INSTANCE_DIR`을 내 소유의 절대 경로 폴더로 설정하면, 위에 나온 공유 런타임 파일이 모두 그리로 옮겨 가요. 제어 소켓(그리고 그 옆의 응답 소켓, 속도 제한 신호 파일, 모델 변경 표시), `claude-dtach-*` 소켓, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, `claude-exit-*` 파일, 안전 기준선 파일, `aipager-files` 다운로드 폴더, 자체 재시작 로그예요. 이 인스턴스가 시작한 세션은 이 설정을 물려받아서, 그 hook은 이 인스턴스하고만 통신하고, 안전 규칙도 옮겨진 파일을 같은 방식으로 지켜요. 이 인스턴스는 소스 복사본의 `.env`를 읽지 않아요.
+`AIPAGER_INSTANCE_DIR`을 내 소유의 절대 경로 폴더로 설정하면, 위에 나온 공유 런타임 파일이 모두 그리로 옮겨 가요. 제어 소켓(그리고 그 옆의 응답 소켓, 속도 제한 신호 파일, 모델 변경 표시, hook 넘침 폴더), `claude-dtach-*` 소켓, `claude-policy-*`, `claude-notes-*`, `claude-status-*`, `claude-reply-*`, `claude-bgjob-*`, `claude-exit-*` 파일, 안전 기준선 파일, `aipager-files` 다운로드 폴더, 자체 재시작 로그예요. 이 인스턴스가 시작한 세션은 이 설정을 물려받아서, 그 hook은 이 인스턴스하고만 통신하고, 안전 규칙도 옮겨진 파일을 같은 방식으로 지켜요. 이 인스턴스는 소스 복사본의 `.env`를 읽지 않아요.
 
 홈 폴더 아래의 파일은 옮겨지지 않으니 `HOME`도 별도 폴더로 지정하세요. 인스턴스 폴더를 설정했는데 `HOME`이 내 실제 홈 폴더일 때, 이 폴더가 내 폴더를 가리키는 절대 경로가 아닐 때, 또는 소켓 경로로 쓰기에 너무 길 때 `aipager start`는 실행을 거부해요.
 

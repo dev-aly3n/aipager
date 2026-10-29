@@ -1,6 +1,6 @@
 # Modelo de segurança
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../security.md))
 
@@ -194,6 +194,7 @@ O aipager **não escuta em nenhuma porta TCP que não seja loopback**. O servido
 Conexões de entrada:
 
 - Socket datagram do Unix em `$XDG_RUNTIME_DIR/aipager.sock` (ou `/tmp/aipager.sock` quando `$XDG_RUNTIME_DIR` não está definido). O aipager o abre e define as permissões dele ao iniciar (`aipager/dtach/hook_receiver.py`). Permissões `0o666` para qualquer processo local poder mandar eventos de hook para ele: a mesma confiança que o `~/.claude/settings.json`, que já decide o que roda os hooks.
+- A pasta de transbordo dos hooks, `aipager-spill-<uid>` ao lado desse socket. Um evento de hook grande demais para um datagrama é escrito lá como arquivo, e o datagrama só dá o nome dele (veja [hooks](hooks.md)). O aipager cria a pasta com permissões `0700` e não a usa se ela não for dele. O hook só escreve nessa pasta, e só quando ela é do mesmo usuário, sem acesso para o grupo nem para outros; cada arquivo é criado com `0600` e um nome aleatório. Um datagrama leva um nome, nunca um caminho: o aipager só aceita o próprio padrão de nomes, abre o arquivo dentro da pasta sem seguir links, só aceita um arquivo comum do próprio usuário de até 4 MiB, e apaga todo arquivo que lê ou recusa. Arquivos deixados por um aipager que parou são apagados no próximo início quando têm mais de 5 minutos. As ferramentas de arquivos das tarefas restritas ficam fora da pasta, como ficam fora dos arquivos de controle `/tmp/claude-*`.
 
 Isso quer dizer que o aipager não pode ser atacado a distância. Um atacante na rede não consegue chegar a ele sem já ter um pé no computador.
 

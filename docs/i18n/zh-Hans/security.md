@@ -1,6 +1,6 @@
 # 安全模型
 
-<!-- i18n-source: docs/security.md @ 6295e500 -->
+<!-- i18n-source: docs/security.md @ 16c28aab -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../security.md)）
 
@@ -192,6 +192,7 @@ aipager **不在回环地址之外监听任何 TCP 端口**。Mini App 服务器
 向内的连接：
 
 - `$XDG_RUNTIME_DIR/aipager.sock` 上的 Unix 数据报套接字（没有设置 `$XDG_RUNTIME_DIR` 时退回到 `/tmp/aipager.sock`）。由 aipager 在启动时绑定并用 `chmod` 设置权限（`aipager/dtach/hook_receiver.py`）。权限是 `0o666`，这样电脑上的任何进程都能向它发送 hook 事件：与 `~/.claude/settings.json` 的信任级别相同，那个文件本来就决定了什么会运行 hook。
+- hook 溢出文件夹，即那个套接字旁边的 `aipager-spill-<uid>`。一个数据报装不下的 hook 事件会作为文件写到这里，数据报只写明文件名（见 [hook](hooks.md)）。aipager 以 `0700` 权限创建这个文件夹，不是自己的就不用。hook 只往这个文件夹里写，而且只在它属于同一用户、组和其他用户都无权访问时才写；每个文件都以 `0600` 和随机名称创建。数据报只带名称，从不带路径：aipager 只接受自己的命名格式，在文件夹内打开文件且不跟随链接，只接受属于自己用户、不超过 4 MiB 的普通文件，并删除它读过或拒绝的每个文件。已停止的 aipager 留下的文件，在下次启动时如果超过 5 分钟就会被删除。受限任务的文件工具不能碰这个文件夹，和 `/tmp/claude-*` 控制文件一样。
 
 这意味着：aipager 不是一个远程攻击面。网络上的攻击者如果不先在这台电脑上取得立足点，就接触不到它。
 

@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ d4381f41 -->
+<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -97,6 +97,7 @@ flowchart LR
 | `$XDG_RUNTIME_DIR/aipager.sock` | 用于 hook 事件的 Unix datagram 套接字（没有 `$XDG_RUNTIME_DIR` 时为 `/tmp/aipager.sock`；`$AIPAGER_SOCKET_PATH` 优先于两者） | aipager（bind） |
 | `aipager-reply-<id>.sock`（在控制套接字旁边） | hook 等待的每个权限请求各有一个短期的回复套接字 | `aipager-hook` |
 | `aipager-flood-mute.json`、`aipager-flood-backoff.json`（在控制套接字旁边） | 当前的 Telegram 限流状态，供 `aipager status` 和 doctor 使用 | aipager |
+| `aipager-spill-<uid>/ev-<id>.json`（在控制套接字旁边） | 一个 datagram 装不下的 hook 事件，指向它的 datagram 到达时由 aipager 读取并删除；超过 5 分钟的文件在启动时清理（[hook](hooks.md)） | `aipager-hook`（写入）、aipager（创建文件夹，读取并删除文件） |
 | `aipager-modelswitch-<name>.json`（在控制套接字旁边） | 标记 aipager 输入的一次模型切换，有效 30 秒（[hook](hooks.md#premodelswitch)） | aipager（写入）、`aipager-hook`（领取） |
 | `/tmp/claude-dtach-<name>.sock` | 每个会话的 dtach 控制套接字 | dtach |
 | `/tmp/claude-status-<name>.json` | 每个会话的状态行数据 | `aipager-statusline` |
@@ -140,7 +141,7 @@ flowchart LR
 
 ### <a id="isolated-instance-for-testing"></a>隔离实例（用于测试）
 
-把 `AIPAGER_INSTANCE_DIR` 设为一个属于你的绝对路径文件夹，上面每个共享的运行时文件都会移到那里：控制套接字（以及它旁边的回复套接字、限流信号文件和模型切换标记）、`claude-dtach-*` 套接字、`claude-policy-*`、`claude-notes-*`、`claude-status-*`、`claude-reply-*`、`claude-bgjob-*` 和 `claude-exit-*` 文件、安全底线文件、`aipager-files` 下载文件夹和自我重启日志。这个实例启动的会话会继承该设置，所以它们的 hook 只与这个实例通信，安全规则也以同样的方式保护被移动的文件。这个实例不会读取源码副本里的 `.env`。
+把 `AIPAGER_INSTANCE_DIR` 设为一个属于你的绝对路径文件夹，上面每个共享的运行时文件都会移到那里：控制套接字（以及它旁边的回复套接字、限流信号文件、模型切换标记和 hook 溢出文件夹）、`claude-dtach-*` 套接字、`claude-policy-*`、`claude-notes-*`、`claude-status-*`、`claude-reply-*`、`claude-bgjob-*` 和 `claude-exit-*` 文件、安全底线文件、`aipager-files` 下载文件夹和自我重启日志。这个实例启动的会话会继承该设置，所以它们的 hook 只与这个实例通信，安全规则也以同样的方式保护被移动的文件。这个实例不会读取源码副本里的 `.env`。
 
 主文件夹下的文件不会移动，所以也要把 `HOME` 指向一个单独的文件夹。当设置了实例文件夹而 `HOME` 却是你真实的主文件夹时、当这个文件夹不是指向你自己文件夹的绝对路径时，或当它太长不能作为套接字路径时，`aipager start` 会拒绝运行。
 
