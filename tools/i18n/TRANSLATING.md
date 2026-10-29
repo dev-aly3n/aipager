@@ -231,7 +231,7 @@ a person types or a program prints: commands, flags, paths, file names,
 environment variables, YAML and JSON keys, log lines, and the CLI's own
 output (the command line speaks English). Product, tool and model names,
 role names (`owner`, `admin`, `user`, `read_only`) and the session states
-the CLI prints (`IDLE`, `BUSY`, `WAITING`, `GONE`).
+the CLI prints (`IDLE`, `BUSY`, `WAITING`, `TASKS`, `GONE`).
 
 **Text aipager shows in Telegram or the Mini App.** Quote it the way the
 reader sees it: the catalog's translation in this language, exactly, with
