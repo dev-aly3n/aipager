@@ -348,6 +348,11 @@ def _count(record: dict | None, key: str) -> int:
     return value
 
 
+#: A saved ``shown`` state id (``state.SHOWN_*``) -> the CLI's row state.
+#: ``needs_you`` is a saved INTERACTIVE status, read before it.
+_SHOWN_ROW = {"busy": "BUSY", "tasks": "TASKS", "idle": "IDLE"}
+
+
 def _gather_sessions() -> tuple[list[dict], set[str]]:
     """Returns (session_dicts, live_names).
 
@@ -361,7 +366,10 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
     background agents its job started still run; counted as working,
     ``job_agents`` says how many, 0 on every other row) or ``GONE``. Checked in
     that order after GONE: WAITING, TASKS, BUSY (the waiting card keeps
-    its ``busy_msg_id``), IDLE.
+    its ``busy_msg_id``), IDLE. BUSY, TASKS and IDLE come from the state
+    the daemon saved as every chat surface shows it (``shown``), so the
+    CLI never disagrees with them; a file an older daemon wrote falls
+    back to the busy card (``busy_msg_id``: BUSY).
     """
     state = _read_state()
     persisted = state.get("sessions", {}) or {}
@@ -386,7 +394,13 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             # Waiting for its job's background agents (roadmap 8.121): the
             # daemon saves the record only in that state.
             status = "TASKS"
+        elif sess.get("shown") in _SHOWN_ROW:
+            # The state the chat and the Mini App show, as the daemon
+            # saved it: an idle session whose job card still lives (a
+            # shell-only job, the grace window) is IDLE here too.
+            status = _SHOWN_ROW[sess["shown"]]
         elif busy_msg_id:
+            # A file written by an older daemon: the card decides.
             status = "BUSY"
         else:
             status = "IDLE"

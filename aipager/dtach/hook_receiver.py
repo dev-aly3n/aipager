@@ -861,6 +861,26 @@ def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
 KILL_WAKE_GATE_SECONDS: float = 5.0
 
 
+def _kill_line_floor(sess, ids=None) -> float:
+    """The oldest an ``agents_killed`` transcript line may be to be about
+    the agents on record (*ids*, all of them when None): the last Stop that
+    closed a turn, or the newest of their starts when later (an agent
+    started after a kill was not stopped by it). Not the last Stop alone:
+    a Stop that leaves the job's agents running does not move it, so a
+    line from earlier in the same job would count again, and a kill
+    pressed while Claude's own turn ran (its line written before that
+    turn's Stop, probe G4) must still count."""
+    newest = sess.newest_agent_start_wall(time.monotonic(), time.time(), ids)
+    return max(sess.files_turn_closed_wall, newest)
+
+
+def _note_kill_line(sess, at) -> None:
+    """Remember an ``agents_killed`` line handled (S1, S2 or S3), so it
+    never counts again for agents started later."""
+    if at is not None and at > sess.agents_killed_seen_wall:
+        sess.agents_killed_seen_wall = at
+
+
 def _markerless_prompt(prompt) -> bool:
     """A prompt with none of the structural marks a prompt's origin is told
     by: aipager's Telegram marker, Claude Code's <task-notification> or
@@ -1056,10 +1076,13 @@ class HookReceiver:
         await self.notify_fn(sess, "extra_prompt", context)
 
     async def _agent_finished(self, sess, agent_id: str, agent_type: str,
-                              info: dict | None, elapsed: float) -> None:
+                              info: dict | None, elapsed: float, *,
+                              stopped: bool = False) -> None:
         """Tell the bot an agent ended (its card row settles): what
-        SubagentStop sends, and a kill (:meth:`_agents_killed`) too."""
+        SubagentStop sends, and a kill (:meth:`_agents_killed`) too.
+        *stopped*: a kill ended it, so its row reads stopped, never done."""
         await self.notify_fn(sess, "subagent_stop", {
+            "stopped": stopped,
             "agent_id": agent_id,
             "agent_type": agent_type,
             "elapsed": elapsed,
@@ -1075,18 +1098,22 @@ class HookReceiver:
         background agents (roadmap 8.121 F5), and how that is known:
         ``"aipager"`` inside the window aipager's own chord armed (one-shot,
         consumed here), ``"transcript"`` when the session has agents and
-        the transcript's ``agents_killed`` line is newer than the last Stop
-        and than any handled before; ``""`` otherwise. Structural signals
-        only, never the sentence's words."""
+        the transcript's ``agents_killed`` line is newer than any handled
+        before and than :func:`_kill_line_floor`; ``""`` otherwise.
+        Structural signals only, never the sentence's words. The line a
+        match is about is remembered (``agents_killed_seen_wall``), so it
+        never counts again for agents started later."""
         if not _markerless_prompt(prompt):
             return ""
+        path = transcript_path or sess.transcript_path
         if sess.kill_expected_until and time.monotonic() < sess.kill_expected_until:
             sess.kill_expected_until = 0.0
+            _note_kill_line(sess, agents_killed_since(
+                path, max(sess.files_turn_closed_wall, sess.agents_killed_seen_wall)))
             return "aipager"
         if not (sess.active_subagents or sess.bg_agents):
             return ""
-        path = transcript_path or sess.transcript_path
-        at = agents_killed_since(path, sess.files_turn_closed_wall)
+        at = agents_killed_since(path, _kill_line_floor(sess))
         if at is not None and at > sess.agents_killed_seen_wall:
             sess.agents_killed_seen_wall = at
             return "transcript"
@@ -1126,20 +1153,25 @@ class HookReceiver:
 
         records = [rec for _where, perm, rec in sess.open_prompt_records()
                    if isinstance(rec, dict) and theirs(perm)]
-        closed, inline_closed = sess.close_prompts(theirs)
         outcome = "stopped"
-        if source == "stop-tasks" and agents_killed_since(
-                sess.transcript_path, sess.files_turn_closed_wall) is None:
-            # Gone from the list with no kill on record: a lost
-            # SubagentStop, not a person's Stop.
-            outcome = "done"
+        if source == "stop-tasks":
+            at = agents_killed_since(sess.transcript_path,
+                                     _kill_line_floor(sess, targets))
+            if at is None:
+                # Gone from the list with no kill on record after they
+                # started: a lost SubagentStop, not a person's Stop.
+                outcome = "done"
+            else:
+                _note_kill_line(sess, at)
+        closed, inline_closed = sess.close_prompts(theirs)
         ended = sess.end_killed_agents(now, ids, outcome=outcome)
         for agent_id, info in ended:
             if info is not None:
                 elapsed = max(0.0, now - (info.get("started_at") or now))
                 await self._agent_finished(sess, agent_id,
                                            str(info.get("type") or "unknown"),
-                                           info, elapsed)
+                                           info, elapsed,
+                                           stopped=outcome == "stopped")
         if (ended and not sess.job_work_running() and sess.job_interim_seen):
             # As the last agent's SubagentStop: Claude's own wake-up turn
             # comes next, and the job stays open across the gap.
@@ -2009,6 +2041,10 @@ class HookReceiver:
                         self.registry.transition(
                             session_name, Status.BUSY, preserve_job_state=True,
                         )
+                    if kill_wake:
+                        # Its hook wrote a "terminal" origin for this
+                        # markerless prompt: not a person's terminal turn.
+                        cont_sess.kill_wake_turn = True
                     await self.notify_fn(cont_sess, "job_continuation", {})
                     return
                 # Nothing to continue. The daemon has no turn or job open
@@ -2040,6 +2076,11 @@ class HookReceiver:
                         "a fresh turn", cont_sess.label,
                     )
                 fresh = self.registry.transition(session_name, Status.BUSY)
+                if kill_wake:
+                    # Its hook wrote a "terminal" origin for this markerless
+                    # prompt: not a person's terminal turn (the per-member
+                    # tool denies, ``_turn_is_pure_terminal``).
+                    cont_sess.kill_wake_turn = True
                 if fresh:
                     await self.notify_fn(fresh, "user_prompt_submit",
                                          {"self_woken": True})
@@ -3044,15 +3085,17 @@ class HookReceiver:
                     log.debug("[%s] idle notification while waiting — already "
                               "reminded this wait", waiting.label)
                 return
-            # A risky-removal prompt past its refusal window was refused by
-            # Claude Code itself (roadmap 8.128): said before the IDLE
-            # transition, so its row is on the finished card.
-            if event.lower() == "stop" and waiting is not None:
+            if (event.lower() == "stop" and waiting is not None
+                    and not msg.get("agent_id")):
                 # Roadmap 8.121 F5: agents Claude Code listed at an earlier
                 # Stop and no longer lists ended with no SubagentStop (its
                 # kill chord, pressed at the terminal): ended before the
                 # finish, so it settles as Finished, not another interim.
+                # Claude's own Stop only: an agent's lists its own tasks.
                 await self._ended_unlisted_agents(waiting, msg.get("background_tasks"))
+            # A risky-removal prompt past its refusal window was refused by
+            # Claude Code itself (roadmap 8.128): said before the IDLE
+            # transition, so its row is on the finished card.
             refused = (self._refusals_due(waiting) if event.lower() == "stop"
                        else None)
             carry = self._carry_agent_prompts(session_name)

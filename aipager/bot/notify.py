@@ -3739,9 +3739,16 @@ class NotifyMixin:
             # always fixed ("agent activity rows on the busy card").
             done_summary = settled_agent_row(
                 context.get("card_label") or agent_type, tool_count, elapsed)
+            mark: object = True
+            if context.get("stopped"):
+                # A kill chord stopped it (roadmap 8.121 F5): its row reads
+                # stopped, never done.
+                done_summary = card_rows.stopped_agent_row(
+                    context.get("card_label") or agent_type, elapsed)
+                mark = _bg_shells.STOPPED
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
-                sess.tool_history[history_idx] = (done_summary, True)
+                sess.tool_history[history_idx] = (done_summary, mark)
             elif agent_type:
                 # No matching start — daemon restart, or the start was
                 # evicted by the active_subagents cap — append as done
@@ -3750,7 +3757,7 @@ class NotifyMixin:
                 # jobs" requirement 5) carries no real information to show,
                 # so it must not pollute the timeline with a meaningless
                 # "🤖 " row.
-                sess.record_tool(done_summary, True)
+                sess.record_tool(done_summary, mark)
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
@@ -4313,6 +4320,8 @@ class NotifyMixin:
                 sess.tool_history = [
                     (s, d if ((d in ("failed", _bg_shells.STOPPED)
                                and s.startswith(_bg_shells.SHELL_ROW_PREFIX))
+                              or (d == _bg_shells.STOPPED
+                                  and card_rows.stopped_agent(s))
                               or (d == "failed" and card_rows.refused_by_claude(s)))
                      else True)
                     for s, d in sess.tool_history]

@@ -51,6 +51,11 @@ AGENT_DONE = Plural(
     note="A finished agent's row on the busy card: its type (code), how many tool "
          "calls it made, how long it ran",
     eg={"agent": "Explore", "clock": "1:05"})
+AGENT_STOPPED = Msg("card.row.agent_stopped", "🤖 {agent} · stopped ({clock})",
+                    note="A background agent that was stopped (Stop, or the terminal's "
+                         "stop-agents keys) before it finished: its type (code), how long "
+                         "it ran",
+                    eg={"agent": "Explore", "clock": "1:10"})
 AGENT_LIVE = Msg("card.row.agent_live", "🤖 {agent} · {activity} · {clock}",
                  note="A running agent's row: its type, what it is doing now (a tool "
                       "call, kept as it is, or the word for starting), how long",
@@ -123,6 +128,10 @@ SELECTED = Msg("ans.verb.selected", "Selected: {options}",
 _CLOCK = r"(?P<clock>\d+:\d{2}(?::\d{2})?)"
 _AGENT_DONE_RE = re.compile(
     r"\A🤖 (?P<agent>.+?) · (?P<n>\d+) tool calls? · " + _CLOCK + r"\Z", re.S)
+# Written by stopped_agent_row below, from the key's own English.
+_AGENT_STOPPED_RE = re.compile(
+    r"\A" + re.escape(str(AGENT_STOPPED)).replace(re.escape("{agent}"), r"(?P<agent>.+?)")
+    .replace(re.escape("{clock}"), _CLOCK) + r"\Z", re.S)
 _SHELL_RE = re.compile(
     r"\Ashell: (?P<label>.*) - (?P<what>done|failed|no end seen|stopped) "
     r"\((?P<detail>[^()]*)\)\Z", re.S)
@@ -198,6 +207,10 @@ def _render(tr, summary: str, kind: str, code) -> str | None:
     def span(text: str):
         return _isolated(tr, code(text), text) if kind == "md" else text
 
+    m = _AGENT_STOPPED_RE.match(summary)
+    if m:
+        return render(AGENT_STOPPED, agent=span(m.group("agent")),
+                      clock=Safe(tr.clock(_seconds(m.group("clock")))))
     m = _AGENT_DONE_RE.match(summary)
     if m:
         return tr.n(AGENT_DONE, int(m.group("n")), kind=kind, agent=span(m.group("agent")),
@@ -221,6 +234,23 @@ def _render(tr, summary: str, kind: str, code) -> str | None:
         return render(ANSWER, icon=Safe(m.group("icon")), detail=span(m.group("detail")),
                       verb=Safe(verb_text(tr, m.group("verb"), kind)))
     return None
+
+
+def stopped_agent_row(agent: str, seconds: float) -> str:
+    """A background agent a kill chord stopped (roadmap 8.121 F5), as its
+    busy-card row is STORED in ``tool_history``: :data:`AGENT_STOPPED`'s
+    English (``🤖 Explore · stopped (1:10)``), marked ``bg_shells.STOPPED``;
+    drawn in the chat's language like every stored row."""
+    from aipager.clockfmt import elapsed
+    return str(AGENT_STOPPED).replace("{agent}", agent, 1).replace(
+        "{clock}", elapsed(seconds), 1)
+
+
+def stopped_agent(summary: object) -> bool:
+    """Whether a stored history row is a background agent a kill chord
+    stopped (``state.stopped_agent_row``, roadmap 8.121 F5): the turn's end
+    keeps its ⏹ mark instead of marking it done."""
+    return isinstance(summary, str) and _AGENT_STOPPED_RE.match(summary) is not None
 
 
 def refused_by_claude(summary: object) -> bool:

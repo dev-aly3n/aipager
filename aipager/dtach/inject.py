@@ -1122,6 +1122,7 @@ KILL_AGENTS_MAX_GAP: float = 2.5
 
 
 async def press_kill_agents(session: str, may_press: Callable[[], bool],
+                            before_second_press: Callable[[], None] | None = None,
                             ) -> bool | _SendStopped:
     """Press Claude Code's ``chat:killAgents`` chord twice in *session*,
     ``KILL_AGENTS_PRESS_GAP`` apart: it stops every background agent of the
@@ -1136,7 +1137,13 @@ async def press_kill_agents(session: str, may_press: Callable[[], bool],
     second press is not written and this returns False; a lone first press
     only shows Claude Code's confirm line for 3 s). Both presses and the
     gap under ONE hold of the write lock, counted once. True only when
-    both writes went out, the second within ``KILL_AGENTS_MAX_GAP``."""
+    both writes went out, the second within ``KILL_AGENTS_MAX_GAP``.
+
+    *before_second_press* runs once every check before the second press
+    passed, right before it is written, with no await in between: the
+    turn Claude Code starts after the kill cannot come before that press
+    (one press stops nothing), so a prompt typed at the terminal any
+    earlier is never mistaken for it."""
     if _refuse_parked(session):
         return False
     await _await_chord(session)
@@ -1176,6 +1183,8 @@ async def press_kill_agents(session: str, may_press: Callable[[], bool],
                 log.warning("Kill-agents chord → %s: second press not written, "
                             "%.1f s after the first", session, _kill_clock() - t1)
                 return False
+            if before_second_press is not None:
+                before_second_press()
             ok, _ = await _run([_DTACH, "-p", sock], stdin=seq)
     finally:
         _gate_finish(session, ok)
