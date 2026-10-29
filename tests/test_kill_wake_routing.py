@@ -197,20 +197,24 @@ def _wake_and_its_stop_during_the_teardown(rig, sess):
     async def go():
         await rig.bot._stop_session_core(sess)
         order.append("stop-done")
-        await asyncio.gather(*tasks)
+        # Well inside the order bound (set high by the test): the wake's
+        # Stop goes as soon as the wake is routed, not when the bound ends.
+        await asyncio.wait_for(asyncio.gather(*tasks), timeout=2.0)
         order.append(f"wake-done:{sess.status.name}")
 
     rig.run_async(go())
     return order
 
 
-def test_the_wakes_stop_waits_until_the_wake_is_routed(rig):
+def test_the_wakes_stop_waits_until_the_wake_is_routed(rig, monkeypatch):
     """The wake's Stop datagram is delivered before its held UserPromptSubmit
     is routed: it is handled after it, so the wake turn ends. The session
     ends IDLE, with no deferred card left to send a phantom "Thinking"
     card, and a message sent now is not taken for one queued behind a
     running turn. Mutant: the Stop does not wait, and the session sits
-    BUSY with the wake's card armed."""
+    BUSY with the wake's card armed. Mutant: the wake is not marked routed
+    when it is done, and its Stop waits out the whole (here 30 s) bound."""
+    monkeypatch.setattr(hr, "KILL_WAKE_ORDER_SECONDS", 30.0)
     sess = _waiting(rig)
     seen = _spy(rig)
     order = _wake_and_its_stop_during_the_teardown(rig, sess)
