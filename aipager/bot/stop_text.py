@@ -95,6 +95,13 @@ STOP_AGENTS_NOT_STOPPED = Msg(
          "Background agents are Claude's background helpers; background shells are commands "
          "it started in the background, which Stop does not end",
     eg={"session": "x1"})
+TOAST_STOPPING = Msg(
+    "toast.stopping",
+    "⏹ Stopping {session}…",
+    note="Pop-up right after Stop was tapped, while the stop is still under way (it can take "
+         "a few seconds). The busy card, or the list the button was on, shows how it went "
+         "a moment later",
+    eg={"session": "x1"})
 PROMPT_AGENT_STOPPED = Msg(
     "prompt.agent_stopped",
     "⏹ This prompt closed because its background agent was stopped.",

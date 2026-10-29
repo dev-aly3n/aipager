@@ -1067,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "En este grupo solo los admins pueden cambiar los ajustes."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "No puedes cambiar los ajustes de esta sesión."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "Esa tarea ya terminó: usa la tarjeta actual"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ Deteniendo {session}…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "Desconocido: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "Comprobando…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 Solo un admin puede actualizar aipager."}

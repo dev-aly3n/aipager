@@ -1067,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "در این گروه فقط ادمین‌ها می‌توانند تنظیمات را عوض کنند."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "شما اجازهٔ تغییر تنظیمات این سشن را ندارید."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "آن کار قبلاً تمام شده - از کارت فعلی استفاده کنید"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ {session} در حال توقف است…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "ناشناخته: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "در حال چک کردن…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 فقط ادمین می‌تواند aipager را آپدیت کند."}

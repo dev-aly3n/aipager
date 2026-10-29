@@ -1067,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "Bu grupta ayarları yalnızca yöneticiler değiştirebilir."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Bu oturumun ayarlarını değiştiremezsin."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "Bu görev zaten bitti: güncel kartı kullan"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ {session} durduruluyor…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "Bilinmeyen: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "Kontrol ediliyor…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 aipager'ı yalnızca bir yönetici güncelleyebilir."}

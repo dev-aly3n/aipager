@@ -1067,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "이 그룹의 설정은 관리자만 바꿀 수 있어요."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "이 세션의 설정을 바꿀 권한이 없어요."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "그 작업은 이미 끝났어요. 현재 카드를 쓰세요"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ {session} 중지하는 중…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "알 수 없음: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "확인하는 중…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 aipager는 관리자만 업데이트할 수 있어요."}

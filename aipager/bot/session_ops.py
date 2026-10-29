@@ -127,6 +127,21 @@ _spawn = asyncio.create_task
 #: already has "💀 Killed"). Only prunes: the id itself decides.
 KILL_NOTICE_QUIET_SECONDS: float = 60.0
 
+#: How long a Stop tap waits for its Stop before it answers the tap. A tap
+#: takes ONE answer (Telegram refuses a second), and the dispatcher sends
+#: the empty one that clears the button's spinner after
+#: ``callbacks.CALLBACK_ACK_BOUND`` (1 s), so a toast sent later is
+#: dropped. A Stop takes longer than that: the kill chord's two presses
+#: alone are ``inject.KILL_AGENTS_PRESS_GAP`` (1 s) apart, and the Escape
+#: path took 5 to 6 s live (roadmap 8.121 F5, live round 2). So the tap
+#: answers below the bound: with the outcome when the Stop is done by
+#: then, else with ``stop_text.TOAST_STOPPING``, and the card (or the
+#: list the button was on) then shows the outcome. Telegram documents no
+#: deadline for answering a tap, and nothing here measured one, so the
+#: answer is never held past aipager's own bound. The same pattern as a
+#: slow Send now tap (``send_now.SEND_NOW_TOAST_WAIT``).
+STOP_TOAST_WAIT: float = 0.8
+
 
 @dataclass
 class StopOutcome:
@@ -2533,18 +2548,29 @@ class SessionOpsMixin:
             calling_chat_id(update if update is not None else query), person)
         # The busy card as it was at the tap: the core retires it.
         card_id = sess.busy_msg_id
-        outcome = await self._stop_session_core(sess, by=by)
+        toasted = False
+        if query is not None:
+            outcome, toasted = await self._stop_for_tap(
+                sess, query, i18n.for_person(
+                    update if update is not None
+                    else SimpleNamespace(callback_query=query)),
+                self._stop_session_core(sess, by=by))
+        else:
+            outcome = await self._stop_session_core(sess, by=by)
         if not outcome.ok:
             if outcome.reason in BG_FAILURES or outcome.reason in stop_text.STOP_REFUSALS:
-                await self._say_stop_refused(sess, outcome, update, query)
+                await self._say_stop_refused(sess, outcome, update, query,
+                                             toasted=toasted)
             return outcome
 
-        # Acknowledge, in the words every Stop uses.
-        if query:
+        # Acknowledge, in the words every Stop uses: a tap already told
+        # "Stopping" is shown the outcome by the card edit below.
+        if query and not toasted:
             await self._safe_answer(query, _stopped_line(
                 outcome, html=False,
                 tr=i18n.for_person(update if update is not None
                                    else SimpleNamespace(callback_query=query))))
+        if query:
             tapped = getattr(getattr(query, "message", None), "message_id", None)
             try:
                 if card_id and tapped == card_id:
@@ -2582,13 +2608,45 @@ class SessionOpsMixin:
 
         return outcome
 
+    async def _stop_for_tap(self, sess: TrackedSession, query, tr,
+                            stop) -> tuple[StopOutcome, bool]:
+        """Await *stop* (the caller's :meth:`_stop_session_core`, made
+        after its own turn check) for a button tap, answering the tap in
+        time (:data:`STOP_TOAST_WAIT`): ``(outcome, toasted)``.
+        *toasted* True means the tap was answered with
+        ``stop_text.TOAST_STOPPING`` while the Stop still ran, so the
+        caller shows the outcome elsewhere, never in a second answer. The
+        core runs in its own task, so the tap's handler being cancelled
+        never cuts a Stop short halfway."""
+        from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
+        core = asyncio.ensure_future(stop)
+        _BACKGROUND_TASKS.add(core)
+        core.add_done_callback(_BACKGROUND_TASKS.discard)
+        await asyncio.wait({core}, timeout=STOP_TOAST_WAIT)
+        if core.done():
+            return core.result(), False
+        await self._safe_answer(query, tr.text(stop_text.TOAST_STOPPING,
+                                               session=sess.label))
+        await asyncio.wait({core})
+        return core.result(), True
+
     async def _say_stop_refused(self, sess: TrackedSession, outcome: StopOutcome,
-                                update, query) -> None:
+                                update, query, *, toasted: bool = False) -> None:
         """Why a Stop did not happen (a parked session's failed bring-back,
         or a session whose turn has ended refused, roadmap 8.121 F5): a
-        pop-up for a tap, a reply for a command. Best-effort."""
+        pop-up for a tap, a reply for a command. A tap already answered
+        "Stopping" (*toasted*) gets the reason as a reply under the tapped
+        message instead: its one answer is spent. Best-effort."""
         try:
-            if query is not None:
+            message = getattr(query, "message", None) if query is not None else None
+            if toasted and message is not None:
+                tr = i18n.for_chat(calling_chat_id(update if update is not None
+                                                   else query))
+                await reply_text(message,
+                                 stop_text.refusal(tr, outcome, html=True)
+                                 or stop_refused_html(tr, outcome),
+                                 parse_mode="HTML")
+            elif query is not None:
                 tr = i18n.for_person(update if update is not None
                                      else SimpleNamespace(callback_query=query))
                 await self._safe_answer(query, stop_text.refusal(tr, outcome, html=False)

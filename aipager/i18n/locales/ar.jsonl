@@ -1067,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "لا يغيّر الإعدادات في هذه المجموعة إلا المشرفون."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "ليس لديك إذن بتغيير إعدادات هذه الجلسة."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "تلك المهمة انتهت بالفعل - يمكنك استخدام البطاقة الحالية"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ يجري إيقاف {session} الآن…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "غير معروف: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "يجري التحقق…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 لا يمكن تحديث aipager إلا للمشرفين."}

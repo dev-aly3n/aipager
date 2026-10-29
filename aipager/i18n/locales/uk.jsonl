@@ -1067,6 +1067,7 @@
 {"k": "toast.settings_admin_only", "src": "cb92b64a", "v": "У цій групі змінювати налаштування можуть лише адміни."}
 {"k": "toast.spref_not_allowed", "src": "9a8fc4c7", "v": "Ти не можеш змінювати налаштування цієї сесії."}
 {"k": "toast.stop_stale", "src": "51073518", "v": "Це завдання вже закінчилося: скористайся поточною карткою"}
+{"k": "toast.stopping", "src": "a804eae6", "v": "⏹ Зупиняю {session}…"}
 {"k": "toast.unknown_action", "src": "967e7e51", "v": "Невідомо: {action}"}
 {"k": "toast.upd.checking", "src": "820d6004", "v": "Перевіряю…"}
 {"k": "toast.upd.denied", "src": "b89706b4", "v": "🚫 Оновлювати aipager може лише адмін."}
