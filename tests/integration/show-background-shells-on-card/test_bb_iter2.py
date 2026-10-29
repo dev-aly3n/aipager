@@ -302,14 +302,16 @@ def test_bb_swept_agent_card_still_waits_on_the_shell(replay, vloop,
                                                       monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
     # The card's last edit may predate the sweep (its edits keep their
-    # tier), so it may still name the agent; it still waits on the shell.
-    assert "1 shell · " in out["card"].splitlines()[-1]
+    # tier), so it may still name the agent; either way it still waits.
+    last = out["card"].splitlines()[-1]
+    assert "🔄 <b>frontend</b> · " in last, last
+    assert "1 shell still working · " in last or "waiting for 1 agent · " in last, last
 
 
 def test_bb_swept_agent_pin_still_counts_the_shell(replay, vloop,
                                                    monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
-    assert out["pin"] == "🔄 frontend (waiting for 1 shell)"
+    assert out["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 def test_bb_swept_agent_sends_no_notice(replay, vloop, monkeypatch):

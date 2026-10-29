@@ -447,18 +447,14 @@ def test_a_shells_command_is_never_shown(bot, sess, wire, run_async):
     assert "secret-dev-server" not in bb.block_of(text)
 
 
-def test_the_pinned_bar_names_only_the_jobs_shell_while_it_waits(
-        bot, sess, wire, run_async, monkeypatch):
-    """Roadmap 8.121: while the session waits for its job's shell, its
-    row names only what the job waits for (the older shell left the job);
-    the same count the card and /status name."""
+def test_the_pinned_bar_still_counts_every_shell(bot, sess, wire, run_async, monkeypatch):
     monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", str(bb.CHAT))
     now = time.monotonic()
     _shell(sess, "old", now - 900)
     sess.bg_shells_leave_job()
     _shell(sess, "new", now - 5)
     bb.finish(run_async, bot, sess)
-    assert bot._render_pinned(bb.CHAT)[0].endswith("(waiting for 1 shell)")
+    assert "2 shells" in bot._render_pinned(bb.CHAT)[0]
 
 
 def _shell_answer(run_async, bot, sess, ran):

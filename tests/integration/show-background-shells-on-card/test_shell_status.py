@@ -110,7 +110,7 @@ def test_pin_counts_a_running_shell(replay, vloop):
 
     working, idle = _run(vloop, scenario())
     assert working == "⚙️ frontend (working, 1 shell running)"
-    assert idle == "🔄 frontend (waiting for 1 shell)"
+    assert idle == "💤 frontend (idle, 1 shell running)"
     assert _pin(r) == "💤 frontend (idle)"
 
 
@@ -134,7 +134,7 @@ def test_pin_counts_agents_and_shells(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert _pin(r) == "🔄 frontend (waiting for 2 agents and 2 shells)"
+    assert _pin(r) == "🔄 frontend (waiting for 2 agents)"
 
 
 # ── the answer line ─────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ def test_shell_past_max_age_closes_the_job_with_a_notice(replay, vloop,
         return early
 
     early = _run(vloop, scenario())
-    assert early == "🔄 frontend (waiting for 1 shell)"
+    assert early == "💤 frontend (idle, 1 shell running)"
     assert _pin(r) == "💤 frontend (idle)"
     card = _only_card(r)
     assert card["stop"] is False

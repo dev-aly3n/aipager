@@ -1,7 +1,10 @@
-"""design.md success criteria on the chat surfaces: the pinned bar, /status,
-the /x switch line and the busy card show the waiting state with the
-glyph 🔄 and the JOB counts, count it with working, and leave every other
-state (and non-job background work on an idle session) as it was.
+"""design.md success criteria on the chat surfaces, as amended
+(design-amend-5 A, agents only): the pinned bar, /status, the /x switch
+line and the busy card show the waiting state with the glyph 🔄 and the
+JOB's agent count, count it with working, and leave every other state (and
+non-job background work on an idle session) as it was. A job with only
+shells, or nothing left running, is idle on the bar, /status and /x as on
+main; the busy card follows the job and keeps main's words for it.
 
 One fixture session carries noise on purpose: work outside the job (an
 agent tracked session-wide only and a shell left out of the job), so a
@@ -52,26 +55,33 @@ def _line_of(text: str, label: str) -> str:
 
 # ---- the pinned bar: one session -------------------------------------------------
 
-def test_bar_single_session_names_the_job_counts(chat_bot):
+def test_bar_single_session_names_the_agent_count(chat_bot):
     sess = _waiting(chat_bot)
-    assert _bar(chat_bot, sess).split("\n")[0] == f"🔄 {L} (waiting for 2 agents and 1 shell)"
+    assert _bar(chat_bot, sess).split("\n")[0] == f"🔄 {L} (waiting for 2 agents)"
 
 
 @pytest.mark.parametrize("agents, shells, words", [
     (1, 0, "waiting for 1 agent"),
     (2, 0, "waiting for 2 agents"),
-    (0, 1, "waiting for 1 shell"),
-    (0, 2, "waiting for 2 shells"),
-], ids=["1a", "2a", "1s", "2s"])
+    (1, 2, "waiting for 1 agent"),
+], ids=["1a", "2a", "1a2s"])
 def test_bar_single_session_plural_forms(chat_bot, agents, shells, words):
     sess = _waiting(chat_bot, agents=agents, job_shells=shells)
     assert _bar(chat_bot, sess).split("\n")[0] == f"🔄 {L} ({words})"
 
 
-def test_bar_finishing_up_while_grace_runs(chat_bot):
-    sess = _waiting(chat_bot, agents=0, job_shells=0)
+@pytest.mark.parametrize("shells, words", [(1, "1 shell"), (2, "2 shells")],
+                         ids=["1s", "2s"])
+def test_bar_job_shells_alone_read_idle_with_the_running_note(chat_bot, shells, words):
+    """design-amend-5 A: exactly as on main."""
+    sess = _waiting(chat_bot, agents=0, job_shells=shells, other_agents=0, other_shells=0)
+    assert _bar(chat_bot, sess).split("\n")[0] == f"💤 {L} (idle, {words} running)"
+
+
+def test_bar_grace_window_reads_idle(chat_bot):
+    sess = _waiting(chat_bot, agents=0, job_shells=0, other_agents=0, other_shells=0)
     sess.job_grace_until = time.monotonic() + 60
-    assert _bar(chat_bot, sess).split("\n")[0] == f"🔄 {L} (finishing up)"
+    assert _bar(chat_bot, sess).split("\n")[0] == f"💤 {L} (idle)"
 
 
 def test_bar_tasks_row_has_no_session_wide_running_note(chat_bot):
@@ -127,9 +137,15 @@ def test_bar_counts_tasks_with_working_next_to_a_busy_session(chat_bot):
     assert _bar(chat_bot, a, b).split("\n")[0] == "⚙️ 2 working"
 
 
-def test_bar_several_sessions_line_names_the_job_counts(chat_bot):
+def test_bar_several_sessions_line_names_the_agent_count(chat_bot):
     a, b = _two(chat_bot, Status.IDLE)
-    assert _line_of(_bar(chat_bot, a, b), L) == f"• {L} (waiting for 2 agents and 1 shell)"
+    assert _line_of(_bar(chat_bot, a, b), L) == f"• {L} (waiting for 2 agents)"
+
+
+def test_bar_a_job_with_only_a_shell_counts_as_idle(chat_bot):
+    a = _waiting(chat_bot, agents=0, other_agents=0, other_shells=0)
+    b = kit.register(chat_bot, kit.make_session(name="claude-x2", label="x2"))
+    assert _bar(chat_bot, a, b).split("\n")[0] == "💤 2 idle"
 
 
 def test_bar_several_sessions_idle_neighbour_with_a_server_keeps_its_note(chat_bot):
@@ -139,10 +155,10 @@ def test_bar_several_sessions_idle_neighbour_with_a_server_keeps_its_note(chat_b
 
 # ---- /status -----------------------------------------------------------------------
 
-def test_status_head_names_the_job_counts(chat_bot):
+def test_status_head_names_the_agent_count(chat_bot):
     sess = _waiting(chat_bot)
     head = _head(chat_bot, sess)
-    assert head.endswith(f"{L} · 🔄 waiting for 2 agents and 1 shell")
+    assert head.endswith(f"{L} · 🔄 waiting for 2 agents")
 
 
 def test_status_block_names_agents_only_once(chat_bot):
@@ -152,23 +168,33 @@ def test_status_block_names_agents_only_once(chat_bot):
     assert len(re.findall(r"\bagents?\b", block)) == 1, block
 
 
-def test_status_block_names_shells_only_once(chat_bot):
+def test_status_block_counts_every_running_shell_on_the_details_line(chat_bot):
+    """The head names only the agents; the shells running (in the job and
+    out of it) stay on the details line, as for an idle row."""
     sess = _waiting(chat_bot, other_agents=4, other_shells=3)
     block = chat_bot._status_block(sess, None, tr=EN)
-    assert len(re.findall(r"\bshells?\b", block)) == 1, block
+    head, *rest = block.split("\n")
+    assert "shell" not in head
+    assert "4 shells" in "".join(rest), block
 
 
-def test_status_finishing_up_head(chat_bot):
-    sess = _waiting(chat_bot, agents=0, job_shells=0)
+def test_status_job_shell_alone_reads_idle(chat_bot):
+    sess = _waiting(chat_bot, agents=0, other_agents=0, other_shells=0)
+    head = _head(chat_bot, sess)
+    assert head.endswith(f"{L} · 💤 idle")
+
+
+def test_status_pending_continuation_reads_idle(chat_bot):
+    sess = _waiting(chat_bot, agents=0, job_shells=0, other_agents=0, other_shells=0)
     sess.job_continuation_active = True
     head = _head(chat_bot, sess)
-    assert head.endswith(f"{L} · 🔄 finishing up")
+    assert head.endswith(f"{L} · 💤 idle")
 
 
 def test_status_list_shows_the_waiting_head(chat_bot):
     _waiting(chat_bot)
     text = _plain(chat_bot._render_status_list(kit.CHAT)[0])
-    assert f"{L} · 🔄 waiting for 2 agents and 1 shell" in text
+    assert f"{L} · 🔄 waiting for 2 agents" in text
 
 
 def _verbs(kb) -> set[str]:
@@ -223,16 +249,16 @@ def test_status_busy_with_agents_is_not_waiting_for(chat_bot):
 
 # ---- /x switch line ----------------------------------------------------------------
 
-def test_switch_reply_names_the_job_counts(chat_bot):
+def test_switch_reply_names_the_agent_count(chat_bot):
     sess = _waiting(chat_bot)
     text = chat_bot._render_switch_reply(kit.CHAT, sess)[0]
-    assert " · 🔄 waiting for 2 agents and 1 shell · " in text
+    assert " · 🔄 waiting for 2 agents · " in text
 
 
-def test_switch_reply_one_shell(chat_bot):
+def test_switch_reply_one_job_shell_reads_idle(chat_bot):
     sess = _waiting(chat_bot, agents=0, job_shells=1)
     text = chat_bot._render_switch_reply(kit.CHAT, sess)[0]
-    assert " · 🔄 waiting for 1 shell · " in text
+    assert " · 💤 idle · " in text
 
 
 def test_switch_reply_plain_idle_is_not_waiting_for(chat_bot):
@@ -248,15 +274,15 @@ def _card_last(sess) -> str:
     return out.splitlines()[-1]
 
 
-def test_card_last_line_names_the_job_counts():
+def test_card_last_line_names_the_agent_count():
     sess = kit.make_session(agents=2, job_shells=1, other_agents=1, other_shells=1)
-    assert re.fullmatch(r"🔄 \*\*x1\*\* · waiting for 2 agents and 1 shell · 3:1\d",
+    assert re.fullmatch(r"🔄 \*\*x1\*\* · waiting for 2 agents · 3:1\d",
                         _card_last(sess)), _card_last(sess)
 
 
 @pytest.mark.parametrize("agents, shells, words", [
-    (1, 0, "waiting for 1 agent"), (0, 1, "waiting for 1 shell"),
-    (2, 0, "waiting for 2 agents"), (0, 2, "waiting for 2 shells"),
+    (1, 0, "waiting for 1 agent"), (0, 1, "1 shell still working"),
+    (2, 0, "waiting for 2 agents"), (0, 2, "2 shells still working"),
 ], ids=["1a", "1s", "2a", "2s"])
 def test_card_last_line_plural_forms(agents, shells, words):
     sess = kit.make_session(agents=agents, job_shells=shells)
@@ -271,10 +297,10 @@ def test_card_last_line_finishing_up_at_zero_counts():
 
 # ---- every chat surface agrees ------------------------------------------------------
 
-def test_every_chat_surface_names_the_same_counts(chat_bot):
+def test_every_chat_surface_names_the_same_count(chat_bot):
     """One fixture, one phrase on the bar, /status, /x and the card."""
     sess = _waiting(chat_bot)
-    phrase = "waiting for 2 agents and 1 shell"
+    phrase = "waiting for 2 agents"
     texts = {
         "bar": _bar(chat_bot, sess),
         "status": chat_bot._status_block(sess, None, tr=EN),

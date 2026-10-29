@@ -6,6 +6,9 @@ stops while it runs, the agent stops, Claude wakes with a
 surface shows the same state with the same counts: the pinned bar, the
 Mini App's ``GET /api/sessions``, the CLI's rows (from the file the
 registry writes on its next ``save_if_dirty()``) and the busy card.
+Agents only (design-amend-5 A): between the agent's end and the
+continuation the derived surfaces read idle, while the card, which
+follows the job, says "finishing up".
 """
 
 from __future__ import annotations
@@ -47,8 +50,8 @@ def _surfaces(bot, client_rows, monkeypatch) -> dict:
     cli = next(r for r in rows if r["name"] == SESSION)
     card = as_md(build_stream_card(sess, "Working", waiting=True).splitlines()[-1])
     return {"shown": sess.shown_state(), "bar": bar,
-            "api": (api["status"], api["job_agents"], api["job_shells"]),
-            "cli": (cli["status"], cli["job_agents"], cli["job_shells"]),
+            "api": (api["status"], api["job_agents"]),
+            "cli": (cli["status"], cli["job_agents"]),
             "cli_text": cli_status.tasks_text(cli), "card": card}
 
 
@@ -98,34 +101,34 @@ def test_a_background_agent_that_outlives_the_turn(bot, run_async, monkeypatch,
     working = seen["working"]
     assert working["shown"].state == "busy"
     assert working["bar"].startswith(f"⚙️ {SESSION} (working")
-    assert working["api"] == ("busy", 0, 0)
+    assert working["api"] == ("busy", 0)
 
     waiting = seen["waiting"]
-    assert tuple(waiting["shown"]) == ("tasks", 1, 0)
+    assert tuple(waiting["shown"]) == ("tasks", 1)
     assert waiting["bar"] == f"🔄 {SESSION} (waiting for 1 agent)"
-    assert waiting["api"] == ("tasks", 1, 0)
-    assert waiting["cli"] == ("TASKS", 1, 0)
+    assert waiting["api"] == ("tasks", 1)
+    assert waiting["cli"] == ("TASKS", 1)
     assert waiting["cli_text"] == "waiting for 1 agent"
     assert waiting["card"].startswith(f"🔄 **{SESSION}** · waiting for 1 agent · ")
 
     finishing = seen["finishing"]
-    assert tuple(finishing["shown"]) == ("tasks", 0, 0)
-    assert finishing["bar"] == f"🔄 {SESSION} (finishing up)"
-    assert finishing["api"] == ("tasks", 0, 0)
-    assert finishing["cli"] == ("TASKS", 0, 0)
-    assert finishing["cli_text"] == "finishing up"
+    assert tuple(finishing["shown"]) == ("idle", 0)
+    assert finishing["bar"] == f"💤 {SESSION} (idle)"
+    assert finishing["api"] == ("idle", 0)
+    assert finishing["cli"] == ("BUSY", 0)  # its card is still up, as on main
+    assert finishing["cli_text"] == ""
     assert finishing["card"].startswith(f"🔄 **{SESSION}** · finishing up · ")
 
     continuation = seen["continuation"]
     assert continuation["shown"].state == "busy"
-    assert continuation["api"] == ("busy", 0, 0)
-    assert continuation["cli"] == ("BUSY", 0, 0)
+    assert continuation["api"] == ("busy", 0)
+    assert continuation["cli"] == ("BUSY", 0)
 
     done = seen["done"]
-    assert tuple(done["shown"]) == ("idle", 0, 0)
+    assert tuple(done["shown"]) == ("idle", 0)
     assert done["bar"] == f"💤 {SESSION} (idle)"
-    assert done["api"] == ("idle", 0, 0)
-    assert done["cli"] == ("IDLE", 0, 0)
+    assert done["api"] == ("idle", 0)
+    assert done["cli"] == ("IDLE", 0)
     assert done["cli_text"] == ""
     assert bot.registry.get(SESSION).status is Status.IDLE
 
@@ -169,4 +172,4 @@ def test_the_waiting_session_offers_stop_and_stop_ends_it(bot, run_async, monkey
     run_async(_drive())
     assert out["detail"] == ("tasks", 1, {"available": True, "reason": None})
     assert out["stop"] == 200
-    assert out["after"] == ("idle", 0, 0)
+    assert out["after"] == ("idle", 0)

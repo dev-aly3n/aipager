@@ -346,8 +346,8 @@ function fullActionsFor(status, opts) {
     return out;
   }
   if (status === "tasks") {
-    // Roadmap 8.121: idle, but its job's agents or shells still run
-    // (sessions._RELEVANT_ACTIONS["tasks"]).
+    // Roadmap 8.121: idle, but its job's background agents still run
+    // (sessions._STATUS_ACTION_KEYS["tasks"]).
     return {
       stop: { available: true, reason: null },
       compact: { available: true, reason: null },
@@ -395,7 +395,7 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
   perms_idle: fullDetailFor("idle", { isAdmin: true, mode: "ask" }),
   perms_busy: fullDetailFor("busy", { isAdmin: true, mode: "ask" }),
   perms_tasks: Object.assign(fullDetailFor("tasks", { isAdmin: true, mode: "ask" }),
-                             { job_agents: 2, job_shells: 0 }),
+                             { job_agents: 2 }),
   perms_full_requires_admin: fullDetailFor("idle", { isAdmin: false, mode: "ask" }),
   perms_in_place: fullDetailFor("busy", { isAdmin: false, mode: "ask" }),
   perms_leave_full: fullDetailFor("idle", { isAdmin: false, mode: "full" }),
@@ -785,21 +785,19 @@ const GRID_FIXTURES = {
   ]),
   answer_viewer: () => gridOf(mixedRows(), { can_act: false }),
   grid_empty: () => gridOf([]),
-  // Roadmap 8.121: two sessions waiting for their own background work
-  // (one with counts, one finishing up) beside a working and an idle one.
+  // Roadmap 8.121: a session waiting for its own background agents
+  // beside a working one and two idle ones.
   grid_tasks: () => gridOf([
     row("charlie", "busy"),
-    row("tasker", "tasks", { job_agents: 2, job_shells: 1 }),
-    row("finisher", "tasks", { job_agents: 0, job_shells: 0 }),
+    row("tasker", "tasks", { job_agents: 2 }),
+    row("server", "idle"),
     row("echo", "idle"),
   ]),
-  detail_tasks: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
-  detail_tasks_recount: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
-  // Consecutive polls while the agents end one by one (2, 1, none left),
-  // then one of the shells-only row's two shells ends.
+  detail_tasks: () => gridOf([row("tasker", "tasks", { job_agents: 2 })]),
+  detail_tasks_recount: () => gridOf([row("tasker", "tasks", { job_agents: 2 })]),
+  // Consecutive polls while only the agent count moves (2, 1, 3).
   grid_tasks_recount: () => gridOf([
-    row("tasker", "tasks", { job_agents: 2, job_shells: 0 }),
-    row("server", "tasks", { job_agents: 0, job_shells: 2 }),
+    row("tasker", "tasks", { job_agents: 2 }),
     row("echo", "idle"),
   ]),
   grid_empty_then_expired: () => gridOf([]),
@@ -807,7 +805,7 @@ const GRID_FIXTURES = {
 };
 if (SCENARIO === "detail_tasks" || SCENARIO === "detail_tasks_recount") {
   FIXTURES["/api/sessions/tasker"] = Object.assign(fullDetailFor("tasks"), {
-    label: "tasker", job_agents: 2, job_shells: 0, context_pct: 30 });
+    label: "tasker", job_agents: 2, context_pct: 30 });
 }
 if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
     SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton" ||
@@ -3280,26 +3278,23 @@ function driveGridRender() {
 
 function tileWord(t) { return t.children[0].children[1].children[0].textContent; }
 
-// Roadmap 8.121: a session waiting for its own agents or shells names
-// them on its tile, lights the work lamp, and counts with working.
+// Roadmap 8.121: a session waiting for its own agents names them on its
+// tile, lights the work lamp, and counts with working.
 function driveGridTasks() {
   setTimeoutReal(() => {
     const byLabel = {};
     tiles().forEach(t => { byLabel[tileLabel(t)] = t; });
     const tasker = byLabel.tasker;
-    const finisher = byLabel.finisher;
-    if (!tasker || !finisher) fail("the waiting sessions have no tiles");
-    if (tileWord(tasker) !== "waiting for 2 agents and 1 shell")
+    if (!tasker) fail("the waiting session has no tile");
+    if (tileWord(tasker) !== "waiting for 2 agents")
       fail("tile word: " + JSON.stringify(tileWord(tasker)));
-    if (tileWord(finisher) !== "finishing up")
-      fail("finishing tile word: " + JSON.stringify(tileWord(finisher)));
     if (tileLamp(tasker).className !== "lamp lamp-work")
       fail("tile lamp: " + tileLamp(tasker).className);
     if (!/^tile tile-tasks\b/.test(tasker.className)) fail("tile class: " + tasker.className);
     if (tileLamp(byLabel.echo).className !== "lamp lamp-rest") fail("the idle lamp is lit");
-    if (pulseText() !== "3 working, 1 resting")
+    if (pulseText() !== "2 working, 2 resting")
       fail("pulse sentence: " + JSON.stringify(pulseText()));
-    console.log("ok: grid -> waiting for its tasks reads its counts, lit, counted working");
+    console.log("ok: grid -> waiting for its agents reads its count, lit, counted working");
     process.exit(0);
   }, 10);
 }
@@ -3322,22 +3317,18 @@ function driveDetailTasks() {
   }, 10);
 }
 
-// The counts move between two polls with nothing else changing: the tile
-// must follow them (the grid's and the tile's change checks both carry
-// the counts), on the same tile, still lit and counted working.
+// The count moves between two polls with nothing else changing: the tile
+// must follow it (the grid's and the tile's change checks both carry the
+// count), on the same tile, still lit and counted working.
 function driveGridTasksRecount() {
   setTimeoutReal(() => {
     const tile = tiles()[0];
     if (tileLabel(tile) !== "tasker") fail("first tile: " + tileLabel(tile));
     if (tileWord(tile) !== "waiting for 2 agents")
       fail("first poll tile word: " + JSON.stringify(tileWord(tile)));
-    const shellTile = tiles()[1];
-    if (tileLabel(shellTile) !== "server") fail("second tile: " + tileLabel(shellTile));
-    if (tileWord(shellTile) !== "waiting for 2 shells")
-      fail("shells-only tile word: " + JSON.stringify(tileWord(shellTile)));
-    if (pulseText() !== "2 working, 1 resting")
+    if (pulseText() !== "1 working, 1 resting")
       fail("first poll pulse: " + JSON.stringify(pulseText()));
-    const steps = [[1, "waiting for 1 agent"], [0, "finishing up"]];
+    const steps = [[1, "waiting for 1 agent"], [3, "waiting for 3 agents"]];
     let data = clone(FIXTURES["/api/sessions"]);
     steps.forEach(([agents, want]) => {
       data = clone(data);
@@ -3348,53 +3339,38 @@ function driveGridTasksRecount() {
         fail(agents + " agents left, tile word: " + JSON.stringify(tileWord(tile)));
       if (tileLamp(tile).className !== "lamp lamp-work")
         fail(agents + " agents left, lamp: " + tileLamp(tile).className);
-      if (pulseText() !== "2 working, 1 resting")
+      if (pulseText() !== "1 working, 1 resting")
         fail(agents + " agents left, pulse: " + JSON.stringify(pulseText()));
     });
-    // Only the shells-only row's shell count moves (2 to 1).
-    data = clone(data);
-    data.sessions[1].job_shells = 1;
-    api.renderGrid(data);
-    if (tiles()[1] !== shellTile) fail("a shell recount rebuilt the tile instead of updating it");
-    if (tileWord(shellTile) !== "waiting for 1 shell")
-      fail("1 shell left, tile word: " + JSON.stringify(tileWord(shellTile)));
-    if (tileLamp(shellTile).className !== "lamp lamp-work")
-      fail("1 shell left, lamp: " + tileLamp(shellTile).className);
-    if (pulseText() !== "2 working, 1 resting")
-      fail("1 shell left, pulse: " + JSON.stringify(pulseText()));
-    console.log("ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up, "
-      + "2 shells, 1 shell");
+    console.log("ok: grid -> a recount moves the tile word 2 agents, 1 agent, 3 agents");
     process.exit(0);
   }, 10);
 }
 
-// The session page's state line follows the counts poll by poll: agents,
-// both, shells, then finishing up.
+// The session page's state line follows the count poll by poll.
 function driveDetailTasksRecount() {
   const steps = [
-    [1, 1, "Waiting for 1 agent and 1 shell"],
-    [0, 2, "Waiting for 2 shells"],
-    [0, 0, "Finishing up"],
+    [1, "Waiting for 1 agent"],
+    [3, "Waiting for 3 agents"],
   ];
-  function detail(agents, shells) {
+  function detail(agents) {
     return Object.assign(fullDetailFor("tasks"), {
-      label: "tasker", job_agents: agents, job_shells: shells, context_pct: 30 });
+      label: "tasker", job_agents: agents, context_pct: 30 });
   }
   function next(i) {
     if (i === steps.length) {
-      console.log("ok: session page -> the state line follows the counts to Finishing up");
+      console.log("ok: session page -> the state line follows the count");
       process.exit(0);
     }
-    const [agents, shells, want] = steps[i];
-    FIXTURES["/api/sessions/tasker"] = detail(agents, shells);
+    const [agents, want] = steps[i];
+    FIXTURES["/api/sessions/tasker"] = detail(agents);
     api.pollTick();
     setTimeoutReal(() => {
       if (byId["detail-state"].textContent !== want)
-        fail(agents + " agents, " + shells + " shells, state line: " +
+        fail(agents + " agents, state line: " +
              JSON.stringify(byId["detail-state"].textContent));
       if (byId["detail-ring"].className !== "lamp lamp-lg lamp-work")
-        fail(agents + " agents, " + shells + " shells, ring: " +
-             byId["detail-ring"].className);
+        fail(agents + " agents, ring: " + byId["detail-ring"].className);
       next(i + 1);
     }, 10);
   }

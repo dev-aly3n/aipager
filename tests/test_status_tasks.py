@@ -1,12 +1,13 @@
 """Roadmap 8.121: `aipager status` / `aipager session ls` show a session
-waiting for its own background agents or shells as TASKS.
+waiting for its own background agents as TASKS.
 
 The CLI is another process: it reads only the daemon's state file. The
-daemon writes a computed ``job_wait`` record (the job's counts) for a
-session in the ``tasks`` state, and nothing in any other state. Agents and
-shells start and end, and the grace window runs out, without marking the
-registry dirty, so ``save_if_dirty()`` also saves when a session's shown
-state moved since the last save.
+daemon writes a computed ``job_wait`` record (the job's agent count) for
+a session in the ``tasks`` state, and nothing in any other state. Agents
+only (design-amend-5 A): a job shell or the grace window alone writes no
+record. Agents start and end without marking the registry dirty, so
+``save_if_dirty()`` also saves when a session's shown state moved since
+the last save.
 """
 
 from __future__ import annotations
@@ -61,7 +62,7 @@ def _shell(sess: TrackedSession, task_id: str, in_job: bool = True) -> None:
 
 # ---- the daemon's save ----------------------------------------------------------------
 
-def test_the_save_carries_the_job_counts_only_while_waiting():
+def test_the_save_carries_the_agent_count_only_while_waiting():
     waiting = _sess("claude-w", busy_msg_id=7)
     _agent(waiting, "a1")
     _agent(waiting, "a2")
@@ -71,11 +72,14 @@ def test_the_save_carries_the_job_counts_only_while_waiting():
     _agent(busy, "a3")
     idle = _sess("claude-i")
     _shell(idle, "s3", in_job=False)
-    _registry(waiting, busy, idle).save()
+    shells_only = _sess("claude-s", busy_msg_id=9)
+    _shell(shells_only, "s4")
+    _registry(waiting, busy, idle, shells_only).save()
     saved = _file()
-    assert saved["claude-w"]["job_wait"] == {"agents": 2, "shells": 1}
+    assert saved["claude-w"]["job_wait"] == {"agents": 2}
     assert "job_wait" not in saved["claude-b"]
     assert "job_wait" not in saved["claude-i"]
+    assert "job_wait" not in saved["claude-s"], "a job shell alone writes no record"
 
 
 def test_load_ignores_the_record():
@@ -91,7 +95,8 @@ def test_load_ignores_the_record():
 
 def test_save_if_dirty_saves_when_an_agent_starts_unmarked():
     """Guard 10: the registry is clean, an agent starts (no event marks
-    it dirty), and the next save_if_dirty() writes the record."""
+    it dirty), and the next save_if_dirty() writes the record; when it
+    ends, the next one drops it."""
     sess = _sess("claude-w")
     registry = _registry(sess)
     registry.save()
@@ -99,20 +104,22 @@ def test_save_if_dirty_saves_when_an_agent_starts_unmarked():
     assert registry._dirty is False
     _agent(sess, "a1")
     registry.save_if_dirty()
-    assert _file()["claude-w"]["job_wait"] == {"agents": 1, "shells": 0}
-    _shell(sess, "s1")
+    assert _file()["claude-w"]["job_wait"] == {"agents": 1}
+    _agent(sess, "a2")
     registry.save_if_dirty()
-    assert _file()["claude-w"]["job_wait"] == {"agents": 1, "shells": 1}
+    assert _file()["claude-w"]["job_wait"] == {"agents": 2}
+    sess.active_subagents.clear()
+    registry.save_if_dirty()
+    assert "job_wait" not in _file()["claude-w"]
 
 
-def test_an_expired_grace_window_drops_the_record():
+def test_a_grace_window_or_a_job_shell_writes_no_record():
     sess = _sess("claude-w")
     sess.job_grace_until = time.monotonic() + 60
+    _shell(sess, "s1")
     registry = _registry(sess)
     registry.save_if_dirty()
-    assert _file()["claude-w"]["job_wait"] == {"agents": 0, "shells": 0}
-    sess.job_grace_until = time.monotonic() - 1
-    registry.save_if_dirty()
+    registry.save()
     assert "job_wait" not in _file()["claude-w"]
 
 
@@ -123,13 +130,14 @@ def test_nothing_moved_means_no_save(monkeypatch):
     registry.save()
     saves = []
     monkeypatch.setattr(registry, "save", lambda: saves.append(1))
+    _shell(sess, "s1")  # a shell does not move the shown state
     registry.save_if_dirty()
     assert saves == []
 
 
 # ---- what the CLI reads -------------------------------------------------------------
 
-def test_a_waiting_session_reads_tasks_with_its_counts(monkeypatch):
+def test_a_waiting_session_reads_tasks_with_its_count(monkeypatch):
     """Guard 9: the waiting card keeps its busy_msg_id, so TASKS is read
     before BUSY."""
     sess = _sess("claude-w", busy_msg_id=7)
@@ -138,15 +146,24 @@ def test_a_waiting_session_reads_tasks_with_its_counts(monkeypatch):
     _shell(sess, "s1")
     _registry(sess).save()
     row = _rows(monkeypatch, live={"claude-w"})["claude-w"]
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("TASKS", 2, 1)
-    assert status.tasks_text(row) == "waiting for 2 agents and 1 shell"
+    assert (row["status"], row["job_agents"]) == ("TASKS", 2)
+    assert "job_shells" not in row
+    assert status.tasks_text(row) == "waiting for 2 agents"
+
+
+def test_a_job_with_only_shells_reads_as_its_card(monkeypatch):
+    sess = _sess("claude-w", busy_msg_id=7)
+    _shell(sess, "s1")
+    _registry(sess).save()
+    row = _rows(monkeypatch, live={"claude-w"})["claude-w"]
+    assert (row["status"], row["job_agents"]) == ("BUSY", 0)
 
 
 def test_a_file_without_the_record_reads_as_before(monkeypatch):
     _write_state({"claude-x": {"label": "x", "busy_msg_id": 9, "status": "IDLE",
                                "pending_queue": []}})
     row = _rows(monkeypatch, live={"claude-x"})["claude-x"]
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("BUSY", 0, 0)
+    assert (row["status"], row["job_agents"]) == ("BUSY", 0)
     assert status.tasks_text(row) == ""
 
 
@@ -156,47 +173,51 @@ def test_a_file_without_the_record_reads_as_before(monkeypatch):
 ], ids=["needs-you-wins", "gone-wins"])
 def test_waiting_on_a_person_and_gone_come_first(monkeypatch, saved, live, expected):
     entry = {"label": "x", "busy_msg_id": 9, "pending_queue": [],
-             "job_wait": {"agents": 1, "shells": 0}, **saved}
+             "job_wait": {"agents": 1}, **saved}
     _write_state({"claude-x": entry})
     row = _rows(monkeypatch, live={"claude-x"} if live else set())["claude-x"]
-    assert (row["status"], row["job_agents"], row["job_shells"]) == (expected, 0, 0)
+    assert (row["status"], row["job_agents"]) == (expected, 0)
 
 
-@pytest.mark.parametrize("record, counts", [
-    ({"agents": "2", "shells": -1}, (0, 0)),
-    ({"agents": True, "shells": 3}, (0, 3)),
-    ({}, (0, 0)),
-], ids=["bad", "bool", "empty"])
-def test_a_hand_edited_record_reads_safe_counts(monkeypatch, record, counts):
+@pytest.mark.parametrize("record, count", [
+    ({"agents": "2"}, 0),
+    ({"agents": -1}, 0),
+    ({"agents": True}, 0),
+    ({"agents": 3, "shells": 4}, 3),
+    ({}, 0),
+], ids=["text", "negative", "bool", "old-shells-field", "empty"])
+def test_a_hand_edited_record_reads_a_safe_count(monkeypatch, record, count):
     _write_state({"claude-x": {"label": "x", "pending_queue": [], "job_wait": record}})
     row = _rows(monkeypatch, live={"claude-x"})["claude-x"]
     assert row["status"] == "TASKS"
-    assert (row["job_agents"], row["job_shells"]) == counts
+    assert row["job_agents"] == count
+    assert "job_shells" not in row
 
 
-def test_an_unregistered_live_socket_has_zero_counts(monkeypatch):
+def test_an_unregistered_live_socket_has_a_zero_count(monkeypatch):
     _write_state({})
     row = _rows(monkeypatch, live={"claude-new"})["claude-new"]
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("IDLE", 0, 0)
+    assert (row["status"], row["job_agents"]) == ("IDLE", 0)
 
 
-@pytest.mark.parametrize("agents, shells, text", [
-    (2, 0, "waiting for 2 agents"),
-    (1, 0, "waiting for 1 agent"),
-    (0, 1, "waiting for 1 shell"),
-    (2, 1, "waiting for 2 agents and 1 shell"),
-    (0, 0, "finishing up"),
-], ids=["agents", "agent", "shell", "both", "finishing"])
-def test_tasks_text(agents, shells, text):
-    row = {"status": "TASKS", "job_agents": agents, "job_shells": shells}
+@pytest.mark.parametrize("agents, text", [
+    (2, "waiting for 2 agents"),
+    (1, "waiting for 1 agent"),
+], ids=["agents", "agent"])
+def test_tasks_text(agents, text):
+    row = {"status": "TASKS", "job_agents": agents}
     assert status.tasks_text(row) == text
+
+
+def test_tasks_text_is_empty_for_any_other_row():
+    assert status.tasks_text({"status": "BUSY", "job_agents": 2}) == ""
 
 
 def test_the_rows_print_the_state_and_what_it_waits_for(monkeypatch, capsys):
     rows = [{"name": "claude-w", "label": "w", "status": "TASKS", "model": "",
              "context_pct": None, "cost_usd": None, "queue_depth": 0,
              "waiting_kind": None, "waiting_summary": None,
-             "job_agents": 2, "job_shells": 0}]
+             "job_agents": 2}]
     status.render_sessions_plain(rows)
     out = capsys.readouterr().out
     assert "w  TASKS  waiting for 2 agents" in out

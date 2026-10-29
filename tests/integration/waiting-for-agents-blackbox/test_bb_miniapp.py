@@ -1,7 +1,9 @@
 """entrypoints.md HTTP routes: ``GET /api/sessions``,
 ``GET /api/sessions/{label}``, ``POST /api/sessions/{label}/stop`` for a
-session waiting for its job (``status: "tasks"``), and the exported
-``session_summary`` / ``session_actions`` / ``sort_for_display``.
+session waiting for its job's agents (``status: "tasks"``), and the
+exported ``session_summary`` / ``session_actions`` / ``sort_for_display``.
+Agents only (design-amend-5 A): no ``job_shells`` field, and a job with
+only shells, or nothing left running, is ``idle`` as on main.
 
 Driven through the Mini App's own aiohttp app with signed initData. The
 dtach side (``inject.send_keys``, ``inject.kill_session``) and
@@ -42,22 +44,27 @@ def test_row_carries_the_job_agent_count(miniapp, run_async):
     assert kit.miniapp_row(miniapp, run_async)["job_agents"] == 2
 
 
-def test_row_carries_the_job_shell_count(miniapp, run_async):
+def test_row_carries_no_shell_count(miniapp, run_async):
     _waiting(miniapp)
-    assert kit.miniapp_row(miniapp, run_async)["job_shells"] == 1
+    assert "job_shells" not in kit.miniapp_row(miniapp, run_async)
 
 
-def test_row_counts_are_ints(miniapp, run_async):
+def test_row_count_is_an_int(miniapp, run_async):
     _waiting(miniapp)
+    assert type(kit.miniapp_row(miniapp, run_async)["job_agents"]) is int
+
+
+def test_row_with_only_job_shells_is_idle(miniapp, run_async):
+    _waiting(miniapp, agents=0, job_shells=2)
     row = kit.miniapp_row(miniapp, run_async)
-    assert (type(row["job_agents"]), type(row["job_shells"])) == (int, int)
+    assert (row["status"], row["job_agents"]) == ("idle", 0)
 
 
-def test_row_finishing_up_is_tasks_with_zero_counts(miniapp, run_async):
+def test_row_grace_window_is_idle(miniapp, run_async):
     sess = _waiting(miniapp, agents=0, job_shells=0)
     sess.job_grace_until = time.monotonic() + 60
     row = kit.miniapp_row(miniapp, run_async)
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("tasks", 0, 0)
+    assert (row["status"], row["job_agents"]) == ("idle", 0)
 
 
 @pytest.mark.parametrize("status, expected", [
@@ -72,14 +79,13 @@ def test_row_other_states_with_job_work_keep_their_status(miniapp, run_async, st
 
 @pytest.mark.parametrize("status", [Status.BUSY, Status.INTERACTIVE, Status.IDLE],
                          ids=["busy", "interactive", "idle"])
-def test_row_counts_are_zero_outside_tasks(miniapp, run_async, status):
+def test_row_count_is_zero_outside_tasks(miniapp, run_async, status):
     agents = 0 if status is Status.IDLE else 2
     sess = kit.miniapp_session(miniapp, status=status, agents=agents,
                                other_agents=3, other_shells=2)
     if status is Status.INTERACTIVE:
         sess.pending_permission = {"tool_summary": "Bash: ls"}
-    row = kit.miniapp_row(miniapp, run_async)
-    assert (row["job_agents"], row["job_shells"]) == (0, 0)
+    assert kit.miniapp_row(miniapp, run_async)["job_agents"] == 0
 
 
 def test_row_idle_with_only_non_job_work_is_idle(miniapp, run_async):
@@ -113,15 +119,16 @@ def test_sort_for_display_puts_tasks_before_idle():
 def test_session_summary_agrees_with_shown_state():
     sess = kit.make_session(agents=3, job_shells=2, other_shells=1)
     row = ma.session_summary(sess, time.monotonic())
-    assert (row["status"], row["job_agents"], row["job_shells"]) == tuple(sess.shown_state())
+    assert (row["status"], row["job_agents"]) == tuple(sess.shown_state())
 
 
 # ---- GET /api/sessions/{label} -----------------------------------------------------
 
-def test_detail_status_and_counts(miniapp, run_async):
+def test_detail_status_and_count(miniapp, run_async):
     _waiting(miniapp)
     d = kit.miniapp_detail(miniapp, run_async)
-    assert (d["status"], d["job_agents"], d["job_shells"]) == ("tasks", 2, 1)
+    assert (d["status"], d["job_agents"]) == ("tasks", 2)
+    assert "job_shells" not in d
 
 
 def test_detail_actions_are_exactly_the_tasks_set_in_order(miniapp, run_async):
@@ -179,11 +186,10 @@ def test_after_stop_the_row_is_idle(miniapp, run_async, dtach):
     assert kit.miniapp_row(miniapp, run_async)["status"] == "idle"
 
 
-def test_after_stop_the_row_counts_are_zero(miniapp, run_async, dtach):
+def test_after_stop_the_row_count_is_zero(miniapp, run_async, dtach):
     _waiting(miniapp)
     kit.miniapp_call(miniapp, run_async, "post", f"/api/sessions/{L}/stop")
-    row = kit.miniapp_row(miniapp, run_async)
-    assert (row["job_agents"], row["job_shells"]) == (0, 0)
+    assert kit.miniapp_row(miniapp, run_async)["job_agents"] == 0
 
 
 def test_after_stop_the_session_shows_idle(miniapp, run_async, dtach):
@@ -209,13 +215,13 @@ def test_kill_removes_a_tasks_session_from_the_grid(miniapp, run_async, dtach):
 
 # ---- the page's words (entrypoints.md "Mini App page keys") -------------------------
 
-PAGE_KEYS = ("ui.count.agents", "ui.count.shells", "ui.state.tasks_agents",
-             "ui.state.tasks_shells", "ui.state.tasks_both", "ui.state.tasks_finishing",
-             "ui.state_line.tasks_agents", "ui.state_line.tasks_shells",
-             "ui.state_line.tasks_both", "ui.state_line.tasks_finishing")
-PLURAL_PAGE_KEYS = ("ui.count.agents", "ui.count.shells", "ui.state.tasks_agents",
-                    "ui.state.tasks_shells", "ui.state_line.tasks_agents",
-                    "ui.state_line.tasks_shells")
+PAGE_KEYS = ("ui.state.tasks_agents", "ui.state_line.tasks_agents")
+PLURAL_PAGE_KEYS = PAGE_KEYS
+#: Removed with the shells (design-amend-5 A): in no catalog, not served.
+GONE_PAGE_KEYS = ("ui.count.agents", "ui.count.shells", "ui.state.tasks_shells",
+                  "ui.state.tasks_both", "ui.state.tasks_finishing",
+                  "ui.state_line.tasks_shells", "ui.state_line.tasks_both",
+                  "ui.state_line.tasks_finishing")
 
 
 @pytest.mark.parametrize("key", PAGE_KEYS)
@@ -224,6 +230,13 @@ def test_every_catalog_carries_the_page_key(key):
     from aipager.i18n.locales import LOCALES
     missing = [c for c in LOCALES if c != "en" and key not in core._catalog(c)]
     assert missing == []
+
+
+@pytest.mark.parametrize("key", GONE_PAGE_KEYS)
+def test_no_catalog_keeps_a_removed_page_key(key):
+    from aipager.i18n import core
+    from aipager.i18n.locales import LOCALES
+    assert [c for c in LOCALES if key in core._catalog(c)] == []
 
 
 @pytest.mark.parametrize("key", PLURAL_PAGE_KEYS)
@@ -246,3 +259,4 @@ def test_the_served_russian_catalog_carries_the_page_keys(miniapp, run_async, mo
     assert status == 200, body
     flat = json.dumps(body)
     assert [k for k in PAGE_KEYS if f'"{k}"' not in flat] == []
+    assert [k for k in GONE_PAGE_KEYS if f'"{k}"' in flat] == []

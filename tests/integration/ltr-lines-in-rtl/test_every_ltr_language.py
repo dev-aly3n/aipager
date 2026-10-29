@@ -114,7 +114,7 @@ def test_the_waiting_line_says_what_it_waits_for_and_nothing_else_moved(key):
     code = key.split("/", 1)[0]
     assert _head(now[key]) == _head(MAIN[key])
     status = now[key].rpartition(STATUS_OPEN)[2]
-    phrase = job_wait.phrase(i18n.get(code), 5, 0, kind="html")
+    phrase = job_wait.phrase(i18n.get(code), 5, kind="html")
     assert _MARKS.sub("", str(phrase)) in _MARKS.sub("", status)
     assert status != MAIN[key].rpartition(STATUS_OPEN)[2]
 

@@ -21,8 +21,6 @@ DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
 IDLE = "💤 frontend (idle)"
 IDLE_ONE = "💤 frontend (idle, 1 shell running)"
-# Roadmap 8.121: Claude's turn ended while its job's shell runs.
-TASKS_ONE = "🔄 frontend (waiting for 1 shell)"
 
 
 def _run(vloop, coro):
@@ -195,7 +193,7 @@ def test_bb_shell_past_max_age_stops_counting(replay, vloop, monkeypatch):
 
 def test_bb_shell_under_max_age_keeps_counting(replay, vloop, monkeypatch):
     out = _aged(replay, vloop, monkeypatch, max_age=600, wait=200)
-    assert out["pin"] == TASKS_ONE
+    assert out["pin"] == IDLE_ONE
 
 
 def test_bb_shell_past_max_age_closes_the_idle_job(replay, vloop,

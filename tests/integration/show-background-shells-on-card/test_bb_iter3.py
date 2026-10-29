@@ -367,7 +367,7 @@ def test_bb_ghost_end_leaves_another_id_running(replay, vloop, monkeypatch):
 
 def test_bb_ghost_end_leaves_another_id_counted(replay, vloop, monkeypatch):
     out = _ghost_end(replay, vloop, monkeypatch, then_launch="breal1")
-    assert out["pin"] == "🔄 frontend (waiting for 1 shell)"
+    assert out["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 def test_bb_ghost_end_leaves_another_id_holding_the_job(replay, vloop,
@@ -464,14 +464,14 @@ def test_bb_relaunch_long_after_shows_a_running_row(replay, vloop,
 def test_bb_relaunch_long_after_is_counted_in_the_pin(replay, vloop,
                                                       monkeypatch, source):
     out = _relaunch_long_after(replay, vloop, monkeypatch, source=source)
-    assert out["pin"] == "🔄 frontend (waiting for 1 shell)"
+    assert out["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 @pytest.mark.parametrize("source", SOURCES)
 def test_bb_relaunch_long_after_keeps_the_job_waiting(replay, vloop,
                                                       monkeypatch, source):
     out = _relaunch_long_after(replay, vloop, monkeypatch, source=source)
-    assert "waiting for 1 shell" in out["card"]
+    assert "1 shell still working" in out["card"]
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -516,11 +516,10 @@ def _typed_while_answer_held(r, vloop, monkeypatch) -> dict:
 
 
 def test_bb_typed_prompt_scenario_starts_idle(replay, vloop, monkeypatch):
-    """Control: before the typed prompt the pin reads waiting for its
-    shell (Claude's turn ended; roadmap 8.121), so the next test's flip to
-    working is the prompt's doing."""
+    """Control: before the typed prompt the pin reads idle, so the next
+    test's flip to working is the prompt's doing."""
     out = _typed_while_answer_held(replay, vloop, monkeypatch)
-    assert out["before"] == "🔄 frontend (waiting for 1 shell)"
+    assert out["before"].startswith(IDLE[:-1])
 
 
 def test_bb_typed_prompt_while_answer_held_is_handled_at_once(replay, vloop,

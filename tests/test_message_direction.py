@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from aipager import config, i18n
-from aipager.bot import agents_line, animation, card_rows, held_message, job_wait
+from aipager.bot import agents_line, animation, card_rows, held_message
 from aipager.bot.notify import finished_line
 from aipager.bot.rich_message import message_rtl, text_direction
 from aipager.dtach import hook_receiver
@@ -111,7 +111,7 @@ def test_a_right_to_left_language_keeps_its_own_direction_by_default(code):
 @pytest.mark.parametrize("code", RTL_LANGS)
 def test_left_to_right_puts_no_rlm_but_an_lrm_where_a_line_opens_right_to_left(code):
     ltr = i18n.get(code).directed(False)
-    text = ltr.md(job_wait.WAIT_FINISHING)        # a line that is all the language's words
+    text = ltr.md(animation.FINISHING)            # a line that is all the language's words
     assert RLM not in text
     assert text.startswith(LRM + RLI) and text.endswith(PDI)
 

@@ -1,8 +1,10 @@
-"""design.md success criteria, end to end: a background agent (and shell)
-outlives Claude's Stop, and every surface shows the waiting state with the
-same counts; then each end path (the continuation turn's Stop, grace
-expiry, /stop, the session ending) brings every surface back, the CLI
-within one monitor scan.
+"""design.md success criteria as amended (design-amend-5 A, agents
+only), end to end: a background agent outlives Claude's Stop, and every
+surface shows the waiting state with the same agent count (a job shell
+beside it is not named); then each end path (the last agent ending, the
+continuation turn's Stop, grace expiry, /stop, the session ending) brings
+every derived surface back, the CLI within one monitor scan. A job with
+only a shell reads as on main everywhere; its card keeps main's words.
 
 Driven through the real ``HookReceiver`` and ``TelegramBot`` on the
 virtual loop (conftest.py); the CLI reads the file the monitor's scan
@@ -112,14 +114,14 @@ def _snapshot(w) -> dict:
     return {
         "shown": tuple(w.sess.shown_state()),
         "bar": w.bar().split("\n")[0],
-        "miniapp": (row["status"], row["job_agents"], row["job_shells"]),
-        "cli": (cli["status"], cli["job_agents"], cli["job_shells"]),
+        "miniapp": (row["status"], row["job_agents"]),
+        "cli": (cli["status"], cli["job_agents"]),
     }
 
 
 # ---- every surface agrees -----------------------------------------------------------
 
-def test_every_surface_shows_the_same_counts(world, vloop):
+def test_every_surface_shows_the_same_agent_count(world, vloop):
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world)
@@ -131,12 +133,12 @@ def test_every_surface_shows_the_same_counts(world, vloop):
     snap = _run(vloop, scenario())
     card = snap.pop("card")
     assert snap == {
-        "shown": ("tasks", 2, 1),
-        "bar": f"🔄 {LABEL} (waiting for 2 agents and 1 shell)",
-        "miniapp": ("tasks", 2, 1),
-        "cli": ("TASKS", 2, 1),
+        "shown": ("tasks", 2),
+        "bar": f"🔄 {LABEL} (waiting for 2 agents)",
+        "miniapp": ("tasks", 2),
+        "cli": ("TASKS", 2),
     }
-    assert re.fullmatch(rf"🔄 \*\*{LABEL}\*\* · waiting for 2 agents and 1 shell · \d+:\d\d",
+    assert re.fullmatch(rf"🔄 \*\*{LABEL}\*\* · waiting for 2 agents · \d+:\d\d",
                         card), card
 
 
@@ -153,7 +155,9 @@ def test_the_session_is_idle_underneath(world, vloop):
 
 # ---- the end paths -------------------------------------------------------------------
 
-def test_last_agent_stopping_shows_finishing_up(world, vloop):
+def test_last_agent_stopping_reads_idle_and_the_card_finishing_up(world, vloop):
+    """design-amend-5 A: the grace window shows idle (live about a
+    second); the CLI reads the card still up, as on main."""
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world, agents=("a1",), shell=False)
@@ -165,8 +169,9 @@ def test_last_agent_stopping_shows_finishing_up(world, vloop):
         return snap
 
     snap = _run(vloop, scenario())
-    assert (snap["shown"], snap["bar"], snap["cli"]) == (
-        ("tasks", 0, 0), f"🔄 {LABEL} (finishing up)", ("TASKS", 0, 0))
+    assert (snap["shown"], snap["bar"], snap["miniapp"], snap["cli"]) == (
+        ("idle", 0), f"💤 {LABEL} (idle)", ("idle", 0), ("BUSY", 0))
+    assert "job_wait" not in kit.saved_sessions()[world.sess.name]
 
 
 def test_continuation_turn_stop_brings_every_surface_back_to_idle(world, vloop):
@@ -187,18 +192,18 @@ def test_continuation_turn_stop_brings_every_surface_back_to_idle(world, vloop):
 
     mid, snap = _run(vloop, scenario())
     assert (mid, snap) == ("busy", {
-        "shown": ("idle", 0, 0), "bar": f"💤 {LABEL} (idle)",
-        "miniapp": ("idle", 0, 0), "cli": ("IDLE", 0, 0)})
+        "shown": ("idle", 0), "bar": f"💤 {LABEL} (idle)",
+        "miniapp": ("idle", 0), "cli": ("IDLE", 0)})
 
 
 def test_grace_expiry_without_a_continuation_brings_every_surface_back(world, vloop):
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world, agents=("a1",), shell=False)
+        before = world.cli_row()["status"]
         _stop_agent(world.r, "a1")
         await asyncio.sleep(0.2)
         await world.scan()
-        before = world.cli_row()["status"]
         await asyncio.sleep(61)
         await world.scan()
         snap = _snapshot(world)
@@ -276,15 +281,44 @@ def test_a_new_prompt_while_waiting_shows_working(world, vloop):
         "busy", True, "BUSY")
 
 
-def test_a_shell_only_job_reads_waiting_for_one_shell(world, vloop):
+def test_a_shell_only_job_reads_as_on_main(world, vloop):
+    """design-amend-5 A (live F3): a job shell alone never makes the
+    session wait. The bar notes the running shell, the Mini App rests, the
+    CLI reads the card still up (BUSY, as on main), no record is saved,
+    and the card keeps main's words."""
     async def scenario():
         w = asyncio.ensure_future(world.r._updates())
         await _agents_outlive_stop(world, agents=(), shell=True)
+        snap = _snapshot(world)
+        snap["card"] = world.card_last()
+        w.cancel()
+        return snap
+
+    snap = _run(vloop, scenario())
+    card = snap.pop("card")
+    assert snap == {"shown": ("idle", 0),
+                    "bar": f"💤 {LABEL} (idle, 1 shell running)",
+                    "miniapp": ("idle", 0), "cli": ("BUSY", 0)}
+    assert "job_wait" not in kit.saved_sessions()[world.sess.name]
+    assert re.fullmatch(rf"🔄 \*\*{LABEL}\*\* · 1 shell still working · \d+:\d\d",
+                        card), card
+
+
+def test_a_later_turn_carrying_the_shell_still_reads_idle(world, vloop):
+    """Live F3: a new turn inside the open job carries the running shell;
+    when that turn ends the session reads idle, not waiting."""
+    async def scenario():
+        w = asyncio.ensure_future(world.r._updates())
+        await _agents_outlive_stop(world, agents=(), shell=True)
+        await _turn(world.r, 2, "reply with exactly OK")
+        world.r.stop("OK")
+        await asyncio.sleep(8)
+        await world.scan()
         snap = _snapshot(world)
         w.cancel()
         return snap
 
     snap = _run(vloop, scenario())
-    assert snap == {"shown": ("tasks", 0, 1),
-                    "bar": f"🔄 {LABEL} (waiting for 1 shell)",
-                    "miniapp": ("tasks", 0, 1), "cli": ("TASKS", 0, 1)}
+    assert (snap["shown"], snap["bar"], snap["miniapp"]) == (
+        ("idle", 0), f"💤 {LABEL} (idle, 1 shell running)", ("idle", 0))
+    assert snap["cli"][0] != "TASKS"

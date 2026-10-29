@@ -110,7 +110,7 @@ def test_bb_stop_with_running_shell_is_not_done(replay, vloop, monkeypatch):
 def test_bb_waiting_card_says_one_shell_still_working(replay, vloop,
                                                       monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch)
-    assert "· waiting for 1 shell ·" in snap["card"]
+    assert "· 1 shell still working ·" in snap["card"]
 
 
 def test_bb_waiting_card_keeps_the_running_row(replay, vloop, monkeypatch):
@@ -126,7 +126,7 @@ def test_bb_answer_ends_with_shell_still_running_line(replay, vloop,
 
 def test_bb_pin_says_idle_with_one_shell_running(replay, vloop, monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch)
-    assert snap["pin"] == "🔄 frontend (waiting for 1 shell)"
+    assert snap["pin"] == "💤 frontend (idle, 1 shell running)"
 
 
 def test_bb_answer_block_never_names_the_shell(replay, vloop, monkeypatch):
@@ -140,8 +140,7 @@ def test_bb_answer_block_never_names_the_shell(replay, vloop, monkeypatch):
 
 def test_bb_mixed_waiting_card_wording(replay, vloop, monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch, agent=True)
-    assert "· waiting for 1 agent and 1 shell ·" in \
-        snap["card"]
+    assert "· waiting for 1 agent ·" in snap["card"]
 
 
 def test_bb_mixed_answer_line_wording(replay, vloop, monkeypatch):
@@ -155,7 +154,7 @@ def test_bb_mixed_answer_line_wording(replay, vloop, monkeypatch):
 
 def test_bb_mixed_pin_wording(replay, vloop, monkeypatch):
     snap = _waiting(replay, vloop, monkeypatch, agent=True)
-    assert snap["pin"] == "🔄 frontend (waiting for 1 agent and 1 shell)"
+    assert snap["pin"] == "🔄 frontend (waiting for 1 agent)"
 
 
 # ── the wake-up continues the same job ─────────────────────────────────────
@@ -296,7 +295,7 @@ def test_bb_monitor_wakeup_does_not_end_the_shell(replay, vloop, monkeypatch):
         w.cancel()
         return _pin(r)
 
-    assert _run(vloop, scenario()) == "🔄 frontend (waiting for 1 shell)"
+    assert _run(vloop, scenario()) == "💤 frontend (idle, 1 shell running)"
 
 
 def test_bb_subagent_shell_does_not_hold_the_job(replay, vloop, monkeypatch):

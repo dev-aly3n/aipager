@@ -1,11 +1,14 @@
 """Roadmap 8.121: every chat surface shows a session waiting for its own
-background agents or shells the same way, from the same counts.
+background agents the same way, from the same count.
 
-One idle session whose job runs 2 agents and 1 shell reads "waiting for 2
-agents and 1 shell" with 🔄 on the pinned bar, in /status, in the /x reply
-and on the busy card, and is counted with working when several sessions
-share the bar. Work outside the job (a shell a later turn left out, an
-agent restored without a job) keeps the 8.41 "(idle, N … running)" note.
+One idle session whose job runs 2 agents reads "waiting for 2 agents"
+with 🔄 on the pinned bar, in /status, in the /x reply and on the busy
+card, and is counted with working when several sessions share the bar.
+Agents only (design-amend-5 A): a job shell never joins the phrase, and a
+session whose job holds only shells, or nothing left running, shows idle
+everywhere but on the busy card, which follows the job and keeps main's
+words ("1 shell still working", "finishing up"). Work outside the job
+keeps the 8.41 "(idle, N … running)" note.
 """
 
 from __future__ import annotations
@@ -64,28 +67,27 @@ def _card_line(sess) -> str:
     return as_md(build_stream_card(sess, "Working", waiting=True).splitlines()[-1])
 
 
-# ---- one session, every surface, the same counts ----------------------------------------
+# ---- one session, every surface, the same count ----------------------------------------
 
-def test_every_surface_names_the_same_job_counts(mk_bot, bar_chat):
+def test_every_surface_names_the_same_agent_count(mk_bot, bar_chat):
     bot = mk_bot()
     sess = _sess(bot, agents=2, shells=1, outside_shells=1)
-    phrase = "waiting for 2 agents and 1 shell"
+    phrase = "waiting for 2 agents"
     assert _bar(bot) == f"🔄 x1 ({phrase})"
     assert f"<b>x1</b> · 🔄 {phrase}" in _status_block(bot, sess)
     text, _kb = bot._render_switch_reply(CHAT, sess)
     assert f"· 🔄 {phrase} ·" in text.splitlines()[0]
     assert _card_line(sess).startswith(f"🔄 **x1** · {phrase} · ")
     row = app_sessions.session_summary(sess, time.monotonic())
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("tasks", 2, 1)
+    assert (row["status"], row["job_agents"]) == ("tasks", 2)
+    assert "job_shells" not in row
 
 
 @pytest.mark.parametrize("agents, shells, phrase", [
     (1, 0, "waiting for 1 agent"),
     (3, 0, "waiting for 3 agents"),
-    (0, 1, "waiting for 1 shell"),
-    (0, 2, "waiting for 2 shells"),
-    (1, 2, "waiting for 1 agent and 2 shells"),
-], ids=["agent", "agents", "shell", "shells", "both"])
+    (1, 2, "waiting for 1 agent"),
+], ids=["agent", "agents", "agent-and-shells"])
 def test_each_count_reads_as_its_own_sentence(mk_bot, bar_chat, agents, shells, phrase):
     bot = mk_bot()
     sess = _sess(bot, agents=agents, shells=shells)
@@ -93,25 +95,43 @@ def test_each_count_reads_as_its_own_sentence(mk_bot, bar_chat, agents, shells, 
     assert _card_line(sess).startswith(f"🔄 **x1** · {phrase} · ")
 
 
-def test_the_grace_window_reads_finishing_up_everywhere(mk_bot, bar_chat):
+@pytest.mark.parametrize("shells, card", [
+    (1, "🔄 **x1** · 1 shell still working · "),
+    (2, "🔄 **x1** · 2 shells still working · "),
+], ids=["shell", "shells"])
+def test_a_job_with_only_shells_is_idle_but_its_card_still_works(
+        mk_bot, bar_chat, shells, card):
+    """design-amend-5 A: a job shell alone is idle on every derived
+    surface, with main's running note; the card keeps main's line."""
+    bot = mk_bot()
+    sess = _sess(bot, shells=shells)
+    noun = "shell" if shells == 1 else "shells"
+    assert _bar(bot) == f"💤 x1 (idle, {shells} {noun} running)"
+    assert "<b>x1</b> · 💤 idle" in _status_block(bot, sess)
+    text, _kb = bot._render_switch_reply(CHAT, sess)
+    assert "· 💤 idle ·" in text.splitlines()[0]
+    row = app_sessions.session_summary(sess, time.monotonic())
+    assert (row["status"], row["job_agents"]) == ("idle", 0)
+    assert _card_line(sess).startswith(card)
+
+
+def test_the_grace_window_is_idle_but_its_card_is_finishing_up(mk_bot, bar_chat):
     """Guard 3 on the surfaces: the job is open with nothing running."""
     bot = mk_bot()
     sess = _sess(bot)
     sess.job_grace_until = time.monotonic() + 60
-    assert _bar(bot) == "🔄 x1 (finishing up)"
-    assert "<b>x1</b> · 🔄 finishing up" in _status_block(bot, sess)
+    assert _bar(bot) == "💤 x1 (idle)"
+    assert "<b>x1</b> · 💤 idle" in _status_block(bot, sess)
     assert _card_line(sess).startswith("🔄 **x1** · finishing up · ")
     row = app_sessions.session_summary(sess, time.monotonic())
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("tasks", 0, 0)
+    assert (row["status"], row["job_agents"]) == ("idle", 0)
 
 
-def test_the_phrase_branches_on_the_counts_only():
+def test_the_phrase_names_the_agents():
     from aipager import i18n
     en = i18n.get("en")
-    assert job_wait.phrase(en, 0, 0) == "finishing up"
-    assert job_wait.phrase(en, 2, 0) == "waiting for 2 agents"
-    assert job_wait.phrase(en, 0, 1) == "waiting for 1 shell"
-    assert job_wait.phrase(en, 2, 1) == "waiting for 2 agents and 1 shell"
+    assert job_wait.phrase(en, 1) == "waiting for 1 agent"
+    assert job_wait.phrase(en, 2) == "waiting for 2 agents"
 
 
 # ---- the pinned bar -------------------------------------------------------------------
@@ -127,10 +147,11 @@ def test_the_bar_counts_a_waiting_session_as_working(mk_bot, bar_chat):
         "• <b>x2</b> (idle)")
 
 
-def test_a_waiting_row_names_only_the_job_counts(mk_bot, bar_chat):
-    """Guard 5: agents and shells outside the job do not join the row."""
+def test_a_waiting_row_names_only_the_job_agents(mk_bot, bar_chat):
+    """Guard 5: agents and shells outside the job, and the job's own
+    shell, do not join the row."""
     bot = mk_bot()
-    _sess(bot, agents=1, outside_agents=2, outside_shells=1)
+    _sess(bot, agents=1, shells=1, outside_agents=2, outside_shells=1)
     assert _bar(bot) == "🔄 x1 (waiting for 1 agent)"
 
 
@@ -155,15 +176,17 @@ def test_a_session_that_needs_you_wins(mk_bot, bar_chat):
 
 # ---- /status ---------------------------------------------------------------------------
 
-def test_status_names_the_job_counts_once(mk_bot):
-    """Guard 11: the head says what the session waits for; the details
-    line does not count agents or shells again (from another source)."""
+def test_status_names_the_agent_count_once(mk_bot):
+    """Guard 11: the head says how many agents the session waits for; the
+    details line does not count the agents again (from another source),
+    and still counts the shells running, as it does for an idle row."""
     bot = mk_bot()
     sess = _sess(bot, agents=2, outside_shells=3)
     block = _status_block(bot, sess)
     head, *rest = block.split("\n")
     assert head.endswith("<b>x1</b> · 🔄 waiting for 2 agents")
-    assert "agent" not in "".join(rest) and "shell" not in "".join(rest)
+    assert "agent" not in "".join(rest)
+    assert "3 shells" in "".join(rest)
 
 
 def test_status_offers_stop_while_it_waits(mk_bot):
@@ -177,11 +200,11 @@ def test_status_offers_stop_while_it_waits(mk_bot):
 
 # ---- a translated chat ------------------------------------------------------------------
 
-def test_a_translated_chat_keeps_the_glyph_and_the_counts(mk_bot, bar_chat):
+def test_a_translated_chat_keeps_the_glyph_and_the_count(mk_bot, bar_chat):
     from aipager import i18n
     ru = i18n.get("ru")
-    phrase = job_wait.phrase(ru, 2, 1)
-    assert "2" in phrase and "1" in phrase and "waiting" not in phrase
+    phrase = job_wait.phrase(ru, 2)
+    assert "2" in phrase and "waiting" not in phrase
     pseudo = i18n.get("qps")
-    marked = job_wait.phrase(pseudo, 2, 1)
-    assert "⟦" in marked and "2" in marked and "1" in marked
+    marked = job_wait.phrase(pseudo, 2)
+    assert "⟦" in marked and "2" in marked

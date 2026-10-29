@@ -126,22 +126,23 @@ def with_agent_calls_folded(value):
 
 
 #: The surfaces roadmap 8.121 changed: a session waiting for its own
-#: background agents or shells says "waiting for 2 agents" on the busy
-#: card, the pinned bar, /status and /x (see :func:`without_job_wait`).
+#: background agents says "waiting for 2 agents" on the busy card, the
+#: pinned bar, /status and /x (see :func:`without_job_wait`).
 JOB_WAIT_SURFACES = frozenset({"card.waiting", "pinned", "status.list", "status.switch"})
 #: The busy card's waiting lines before roadmap 8.121, by their new words.
 _OLD_WAITING_LINES = (
-    ("waiting for 2 agents and 1 shell",
-     "2 agents (Explore, general-purpose), 1 shell still working"),
+    ("waiting for 2 agents", "2 agents (Explore, general-purpose), 1 shell still working"),
     ("waiting for 1 agent", "1 agent (general-purpose) still working"),
-    ("waiting for 2 shells", "2 shells still working"),
 )
+#: The bar renders roadmap 8.121 added that show no waiting words: a job
+#: with only a shell, and one with nothing left running, both idle.
+_ADDED_IDLE_PINS = ("\U0001f4a4 s (idle, 1 shell running)", "\U0001f4a4 g (idle)")
 
 
 def without_job_wait(name: str, value):
     """*value* (surface *name*'s list of texts) as goldens recorded before
     roadmap 8.121 have it: the card's old waiting words, /status's x3 idle
-    with its counts on the details line, and without the renders the
+    with its agent count on the details line, and without the renders the
     feature added to the bar and the /x reply. Nothing else changed."""
     if name == "card.waiting":
         out = []
@@ -151,8 +152,8 @@ def without_job_wait(name: str, value):
             out.append(v)
         return out
     if name == "status.list":
-        return [v.replace("<b>x3</b> · \U0001f504 waiting for 2 agents\n   sonnet · ctx 12%",
-                          "<b>x3</b> · \U0001f4a4 idle\n   sonnet · ctx 12% · 2 agents · 1 shell")
+        return [v.replace("<b>x3</b> · \U0001f504 waiting for 2 agents\n   sonnet · ctx 12% · ",
+                          "<b>x3</b> · \U0001f4a4 idle\n   sonnet · ctx 12% · 2 agents · ")
                 for v in value]
     if name == "status.switch":
         out, skip = [], False
@@ -167,7 +168,7 @@ def without_job_wait(name: str, value):
         return out
     if name == "pinned":
         return [v for v in value
-                if "waiting for" not in v and "finishing up" not in v]
+                if "waiting for" not in v and v not in _ADDED_IDLE_PINS]
     return value
 
 
@@ -1272,8 +1273,10 @@ def _pinned_bar(env):
     out += _pinned(env, [e, f])
     out += _pinned(env, [], limiter=_Limiter())
     out += _pinned(env, [], limiter=_Limiter(warning=0, hourly=False, minimal=True))
-    # Roadmap 8.121: idle, waiting for its job's agents and shells (alone,
-    # then counted as working beside an idle one), and finishing up.
+    # Roadmap 8.121: idle, waiting for its job's agents (alone, then
+    # counted as working beside an idle one; its job's shell is not
+    # named), then a job with only a shell and one with nothing left
+    # running, both idle (agents only, design-amend-5).
     tasks = _sess(name="claude-t", label="t", status=Status.IDLE)
     tasks.active_subagents = {"a": {"type": "Explore"}, "b": {"type": "Plan"}}
     tasks.bg_shells = {"t": {"label": "npm", "in_job": True}}

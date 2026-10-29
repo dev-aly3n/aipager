@@ -1755,13 +1755,11 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
 
 @pytest.mark.parametrize("scenario, expected", [
     ("grid_render", "ok: grid -> 2 beacons, 3 lanterns, 3 on the shelf, pulse sentence"),
-    ("grid_tasks", "ok: grid -> waiting for its tasks reads its counts, lit, counted working"),
+    ("grid_tasks", "ok: grid -> waiting for its agents reads its count, lit, counted working"),
     ("detail_tasks", "ok: session page -> Waiting for 2 agents, working, lit ring"),
     ("grid_tasks_recount",
-     "ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up, "
-     "2 shells, 1 shell"),
-    ("detail_tasks_recount",
-     "ok: session page -> the state line follows the counts to Finishing up"),
+     "ok: grid -> a recount moves the tile word 2 agents, 1 agent, 3 agents"),
+    ("detail_tasks_recount", "ok: session page -> the state line follows the count"),
     ("grid_keyed", "ok: a changed poll reuses the tile and moves its ring"),
     ("grid_unchanged", "ok: an unchanged poll touches nothing"),
     ("grid_reorder", "ok: reorder moves the same tiles, no FLIP without its APIs"),
@@ -1790,8 +1788,8 @@ def test_lantern_grid_and_answer_scenarios(node_bin, tmp_path, scenario, expecte
 # Guard the guard for each mechanism above: break it in the page and the
 # scenario that names it must fail.
 _GRID_MUTANTS = [
-    # Roadmap 8.121 (guard 8): a session waiting for its own agents or
-    # shells is counted with working and its lamp is lit.
+    # Roadmap 8.121 (guard 8): a session waiting for its own agents is
+    # counted with working and its lamp is lit.
     pytest.param(
         '      var st = s.status === "tasks" ? "busy" : s.status;',
         "      var st = s.status;",
@@ -1809,17 +1807,9 @@ _GRID_MUTANTS = [
         "",
         "detail_tasks", id="tasks-state-line"),
     pytest.param(
-        '    if (m) { return tn("ui.state.tasks_shells", m); }',
-        "",
-        "grid_tasks_recount", id="tasks-tile-word-shells"),
-    pytest.param(
-        '    if (m) { return tn("ui.state_line.tasks_shells", m); }',
-        "",
-        "detail_tasks_recount", id="tasks-state-line-shells"),
-    pytest.param(
-        '      return t("ui.state_line.tasks_both",',
-        '      return t("ui.state_line.tasks_finishing",',
-        "detail_tasks_recount", id="tasks-state-line-both"),
+        '    return tn("ui.state_line.tasks_agents", Number(d.job_agents) || 0);',
+        '    return tn("ui.state_line.tasks_agents", 2);',
+        "detail_tasks_recount", id="tasks-state-line-count"),
     pytest.param(
         "      if (item) { update(item, s); } else { item = map[s.label] = build(s); }",
         "      item = map[s.label] = build(s);",
@@ -1888,16 +1878,14 @@ def test_the_grid_harness_detects_a_broken_mechanism(node_bin, tmp_path, old, ne
     )
 
 
-# The counts are in both change checks, so a tile follows an agent ending
-# (2, 1, finishing up) or a shell ending (2 shells, 1 shell) even when
-# nothing else on the row moved. Each count is dropped on its own from each
-# check, and the scenario must fail on the stale tile word it names, not on
-# a crash.
-_GRID_SIG = '              pctOf(s), s.cost_usd, s.project, s.job_agents, s.job_shells].join("|");'
+# The agent count is in both change checks, so a tile follows an agent
+# ending even when nothing else on the row moved. The count is dropped from
+# each check on its own, and the scenario must fail on the stale tile word
+# it names, not on a crash.
+_GRID_SIG = '              pctOf(s), s.cost_usd, s.project, s.job_agents].join("|");'
 _TILE_SIG = ('    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
-             '               s.job_agents, s.job_shells].join("|");')
+             '               s.job_agents].join("|");')
 _AGENTS_STALE = 'FAIL: 1 agents left, tile word: "waiting for 2 agents"'
-_SHELLS_STALE = 'FAIL: 1 shell left, tile word: "waiting for 2 shells"'
 _COUNT_SIGNATURE_MUTANTS = [
     pytest.param(
         _GRID_SIG,
@@ -1907,15 +1895,6 @@ _COUNT_SIGNATURE_MUTANTS = [
         _TILE_SIG,
         '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");',
         _AGENTS_STALE, id="tasks-counts-in-tile-signature"),
-    pytest.param(
-        _GRID_SIG,
-        '              pctOf(s), s.cost_usd, s.project, s.job_agents].join("|");',
-        _SHELLS_STALE, id="tasks-shells-in-grid-signature"),
-    pytest.param(
-        _TILE_SIG,
-        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
-        '               s.job_agents].join("|");',
-        _SHELLS_STALE, id="tasks-shells-in-tile-signature"),
 ]
 
 

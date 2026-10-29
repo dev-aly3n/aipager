@@ -1,14 +1,18 @@
-"""The waiting status line decides "finishing up" from the counts, not
-from the words (the multilingual design, 5.4): a reworded or translated
-phrase must not change which line the card shows. Since roadmap 8.121 the
-line is ``job_wait.phrase``, the same words the bar, /status and /x use,
-chosen from the job's counts (``TrackedSession.job_counts()``)."""
+"""The busy card's waiting line decides "finishing up" from the counts,
+not from the words (the multilingual design, 5.4): a reworded or
+translated phrase must not change which line the card shows.
+
+The card follows the job (roadmap 8.121, design-amend-5): with the job's
+agents running it says ``waiting for N agents`` (``job_wait.phrase``, the
+words the bar, /status and /x use); with only the job's shells it keeps
+``N shells still working``; with nothing left running, ``finishing up``.
+"""
 
 from __future__ import annotations
 
 import time
 
-from aipager.bot import job_wait
+from aipager.bot import animation, job_wait
 from aipager.bot.animation import build_stream_card
 from aipager.i18n import Msg, Plural
 from aipager.state import Status, TrackedSession
@@ -28,12 +32,21 @@ def _status(sess):
 
 
 def test_finishing_survives_a_reworded_phrase(monkeypatch):
-    monkeypatch.setattr(job_wait, "WAIT_FINISHING", Msg("jobwait.finishing", "wrapping up"))
+    monkeypatch.setattr(animation, "FINISHING", Msg("card.finishing", "wrapping up"))
     status = _status(_sess())
     assert status.startswith("🔄 **hiva** · wrapping up · ")
+    assert "still working" not in status
 
 
-def test_a_count_phrase_that_reads_like_finishing_still_counts(monkeypatch):
+def test_a_shell_count_that_reads_like_finishing_still_counts(monkeypatch):
+    monkeypatch.setattr(animation, "SHELLS", Plural(
+        "card.shells", one="finishing up {n}", other="finishing up {n}"))
+    sess = _sess()
+    sess.bg_shells["s1"] = {"label": "npm test", "in_job": True}
+    assert "· finishing up 1 still working · " in _status(sess)
+
+
+def test_an_agent_count_that_reads_like_finishing_still_counts(monkeypatch):
     monkeypatch.setattr(job_wait, "WAIT_AGENTS", Plural(
         "jobwait.agents", one="finishing up {n}", other="finishing up {n}"))
     sess = _sess()
@@ -45,9 +58,11 @@ def test_the_real_phrases():
     sess = _sess()
     sess.job_grace_until = 10**12
     assert "🔄 **hiva** · finishing up · " in _status(sess)
+    sess.bg_shells["s2"] = {"label": "npm run dev", "in_job": False}
+    assert "🔄 **hiva** · finishing up · " in _status(sess), "a shell outside the job"
+    sess.bg_shells["s1"] = {"label": "npm test", "in_job": True}
+    assert "🔄 **hiva** · 1 shell still working · " in _status(sess)
     sess.active_subagents["a1"] = {"type": "Explore"}
     assert "🔄 **hiva** · waiting for 1 agent · " in _status(sess)
-    sess.bg_shells["s1"] = {"label": "npm test", "in_job": True}
-    assert "🔄 **hiva** · waiting for 1 agent and 1 shell · " in _status(sess)
-    sess.bg_shells["s2"] = {"label": "npm run dev", "in_job": False}
-    assert "🔄 **hiva** · waiting for 1 agent and 1 shell · " in _status(sess)
+    del sess.bg_shells["s1"]
+    assert "🔄 **hiva** · waiting for 1 agent · " in _status(sess)

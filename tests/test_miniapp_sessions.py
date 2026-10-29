@@ -641,7 +641,7 @@ def test_build_timeline_trailing_commentary_past_last_tool_is_appended():
     assert len(rows) == 2
 
 
-# ===== roadmap 8.121: waiting for its own background agents or shells =====
+# ===== roadmap 8.121: waiting for its own background agents (agents only) =====
 
 def _tasks_sess(**kwargs) -> TrackedSession:
     sess = _sess(status=Status.IDLE, **kwargs)
@@ -653,8 +653,16 @@ def _tasks_sess(**kwargs) -> TrackedSession:
     return sess
 
 
-def test_derive_status_idle_with_an_open_job_is_tasks():
+def test_derive_status_idle_with_job_agents_is_tasks():
     assert _derive_status(_tasks_sess()) == ("tasks", None, None)
+
+
+def test_derive_status_idle_with_only_a_job_shell_is_idle():
+    """design-amend-5 A: a job shell alone never makes the session wait."""
+    sess = _tasks_sess()
+    sess.active_subagents = {}
+    assert sess.job_background_open()
+    assert _derive_status(sess) == ("idle", None, None)
 
 
 def test_derive_status_busy_with_job_agents_stays_busy():
@@ -670,20 +678,21 @@ def test_a_parked_session_with_an_open_job_stays_background():
     assert _derive_status(sess) == ("background", None, None)
 
 
-def test_the_grid_row_carries_the_job_counts():
+def test_the_grid_row_carries_the_agent_count():
     row = session_summary(_tasks_sess(), time.monotonic())
-    assert (row["status"], row["job_agents"], row["job_shells"]) == ("tasks", 2, 1)
+    assert (row["status"], row["job_agents"]) == ("tasks", 2)
+    assert "job_shells" not in row
 
 
 @pytest.mark.parametrize("status", [Status.IDLE, Status.BUSY, Status.GONE],
                          ids=["idle", "busy", "gone"])
-def test_the_other_rows_carry_zero_counts(status):
+def test_the_other_rows_carry_a_zero_count(status):
     sess = _sess(status=status)
     sess.active_subagents = {"a1": {"type": "Explore"}} if status != Status.IDLE else {}
     row = session_summary(sess, time.monotonic())
-    assert (row["job_agents"], row["job_shells"]) == (0, 0)
+    assert row["job_agents"] == 0
     detail = session_detail(sess, time.monotonic())
-    assert (detail["job_agents"], detail["job_shells"]) == (0, 0)
+    assert detail["job_agents"] == 0
 
 
 def test_the_detail_offers_stop_and_the_idle_set_while_it_waits():
@@ -691,7 +700,8 @@ def test_the_detail_offers_stop_and_the_idle_set_while_it_waits():
     `can_be_stopped()`), with the idle actions, in canonical order."""
     detail = session_detail(_tasks_sess(), time.monotonic())
     assert detail["status"] == "tasks"
-    assert (detail["job_agents"], detail["job_shells"]) == (2, 1)
+    assert detail["job_agents"] == 2
+    assert "job_shells" not in detail
     assert list(detail["actions"]) == ["stop", "compact", "rename", "kill", "perms", "restart"]
     assert detail["actions"]["stop"] == {"available": True, "reason": None}
     assert detail["model_switch"] == {"available": True, "reason": None}
