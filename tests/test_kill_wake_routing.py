@@ -167,6 +167,113 @@ def test_s1_waits_for_the_stops_teardown(rig):
     assert order == ["settle:IDLE", "stop-done", "wake-done:BUSY"]
 
 
+def _datagram(rig, event, **fields):
+    payload = dict({"session": S, "hook_event_name": event, "transcript_path": "",
+                    "_seq": next(rig.n)}, **fields)
+    return asyncio.ensure_future(rig.recv._on_datagram(json.dumps(payload).encode()))
+
+
+def _wake_and_its_stop_during_the_teardown(rig, sess):
+    """The wake's UserPromptSubmit, then its own Stop, both delivered while
+    the Stop that pressed the chord still edits its card (live round 2,
+    H3: Claude's reply came before the teardown was done)."""
+    order: list[str] = []
+    real_settle = rig.bot._settle_card_text
+    tasks: list = []
+
+    async def settle(s, text):
+        tasks.append(_datagram(rig, "UserPromptSubmit", prompt=WAKE))
+        for _ in range(20):
+            await asyncio.sleep(0)
+        tasks.append(_datagram(rig, "Stop", stop_hook_active=False,
+                               last_assistant_message="Noted.", background_tasks=[]))
+        for _ in range(50):
+            await asyncio.sleep(0)
+        order.append(f"settle:{sess.status.name}")
+        return await real_settle(s, text)
+
+    rig.bot._settle_card_text = settle
+
+    async def go():
+        await rig.bot._stop_session_core(sess)
+        order.append("stop-done")
+        await asyncio.gather(*tasks)
+        order.append(f"wake-done:{sess.status.name}")
+
+    rig.run_async(go())
+    return order
+
+
+def test_the_wakes_stop_waits_until_the_wake_is_routed(rig):
+    """The wake's Stop datagram is delivered before its held UserPromptSubmit
+    is routed: it is handled after it, so the wake turn ends. The session
+    ends IDLE, with no deferred card left to send a phantom "Thinking"
+    card, and a message sent now is not taken for one queued behind a
+    running turn. Mutant: the Stop does not wait, and the session sits
+    BUSY with the wake's card armed."""
+    sess = _waiting(rig)
+    seen = _spy(rig)
+    order = _wake_and_its_stop_during_the_teardown(rig, sess)
+    assert order == ["settle:IDLE", "stop-done", "wake-done:IDLE"], order
+    assert sess.status is Status.IDLE
+    assert sess.lazy_card_task is None and sess.lazy_card_at == 0.0
+    assert sess.kill_wake_routing is None
+    assert not sess.kill_wake_turn
+    # The wake started its turn, and its own Stop finished it.
+    assert seen == ["user_prompt_submit", "idle_prompt"], seen
+
+
+def test_an_agents_event_does_not_wait_for_the_wake(rig):
+    """Only the session's own turn is ordered behind the wake: an agent's
+    datagram (a tool call of an agent the kill missed) is handled at once."""
+    sess = _waiting(rig)
+    gate_seen: list[bool] = []
+    real_settle = rig.bot._settle_card_text
+
+    async def settle(s, text):
+        wake = _datagram(rig, "UserPromptSubmit", prompt=WAKE)
+        for _ in range(20):
+            await asyncio.sleep(0)
+        assert sess.kill_wake_routing is not None
+        phantom = _datagram(rig, "PreToolUse", agent_id="f00dfeed12345678a",
+                            agent_type="ship-other", tool_name="Read",
+                            tool_input={"file_path": "/home/alice/README.md"},
+                            tool_use_id="toolu_agent_read")
+        for _ in range(50):
+            await asyncio.sleep(0)
+        gate_seen.append(phantom.done())
+        result = await real_settle(s, text)
+        rig.wake = wake
+        return result
+
+    rig.bot._settle_card_text = settle
+
+    async def go():
+        await rig.bot._stop_session_core(sess)
+        await rig.wake
+
+    rig.run_async(go())
+    assert gate_seen == [True]
+    assert sess.kill_wake_routing is None
+
+
+def test_the_order_wait_is_bounded(rig, monkeypatch):
+    """A wake that is never routed holds its turn's events only for
+    ``KILL_WAKE_ORDER_SECONDS``."""
+    monkeypatch.setattr(hr, "KILL_WAKE_ORDER_SECONDS", 0.05)
+    sess = _waiting(rig)
+    stuck = asyncio.Event()
+    sess.kill_wake_routing = stuck
+
+    async def go():
+        task = _datagram(rig, "Stop", stop_hook_active=False,
+                         last_assistant_message="Noted.")
+        await asyncio.wait_for(task, timeout=2.0)
+
+    rig.run_async(go())
+    assert not stuck.is_set()
+
+
 # ---- S2 ---------------------------------------------------------------------------
 
 def test_s2_a_kill_line_after_the_last_stop_ends_the_agents(rig, tmp_path):

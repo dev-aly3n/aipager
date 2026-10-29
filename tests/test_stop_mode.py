@@ -244,7 +244,7 @@ def test_listed_ids_are_remembered_newest_last_and_capped():
 def test_none_of_the_new_fields_is_saved():
     from aipager import state
     names = {"wait_from_idle", "kill_expected_until", "agents_killed_seen_wall",
-             "bg_task_ids_seen", "stop_gate", "kill_wake_turn"}
+             "bg_task_ids_seen", "stop_gate", "kill_wake_turn", "kill_wake_routing"}
     assert not names & set(state.SessionRegistry._PERSIST_FIELDS)
 
 

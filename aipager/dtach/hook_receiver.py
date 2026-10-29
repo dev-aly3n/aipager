@@ -860,6 +860,11 @@ def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
 #: handled anyway.
 KILL_WAKE_GATE_SECONDS: float = 5.0
 
+#: How long an event of the session's own turn that came after that wake's
+#: UserPromptSubmit waits for the wake to be routed (its Stop above all):
+#: the wake's own wait for the Stop's teardown, plus room for its routing.
+KILL_WAKE_ORDER_SECONDS: float = KILL_WAKE_GATE_SECONDS + 2.0
+
 
 def _kill_line_floor(sess, ids=None) -> float:
     """The oldest an ``agents_killed`` transcript line may be to be about
@@ -1133,6 +1138,18 @@ class HookReceiver:
             log.warning("[%s] the Stop that stopped the agents is still not done "
                         "after %.0fs - handling its wake anyway", sess.label,
                         KILL_WAKE_GATE_SECONDS)
+
+    async def _await_wake_routed(self, sess, routed: asyncio.Event,
+                                 event: str) -> None:
+        """Wait (at most :data:`KILL_WAKE_ORDER_SECONDS`) until the wake of
+        aipager's kill chord that arrived before this event is routed, so
+        the wake turn's events are handled in the order they came."""
+        try:
+            await asyncio.wait_for(routed.wait(), timeout=KILL_WAKE_ORDER_SECONDS)
+        except asyncio.TimeoutError:
+            log.warning("[%s] the turn after the background agents were stopped is "
+                        "still not routed after %.0fs - handling its %s anyway",
+                        sess.label, KILL_WAKE_ORDER_SECONDS, event)
 
     async def _agents_killed(self, sess, ids, *, source: str) -> None:
         """Background agents Claude Code's kill chord stopped (roadmap
@@ -1519,6 +1536,21 @@ class HookReceiver:
                     _DIALOG_DATAGRAMS.pop(session, None)
 
     async def _on_datagram(self, data: bytes, *, spilled: int = 0) -> None:
+        """Handle one hook datagram (:meth:`_handle_datagram`). A wake of
+        aipager's kill chord it routed is marked routed when it is done,
+        however it ends, so the events held behind it go on."""
+        wake_routing: list = []
+        try:
+            await self._handle_datagram(data, spilled=spilled,
+                                        wake_routing=wake_routing)
+        finally:
+            for sess, routed in wake_routing:
+                routed.set()
+                if sess.kill_wake_routing is routed:
+                    sess.kill_wake_routing = None
+
+    async def _handle_datagram(self, data: bytes, *, spilled: int,
+                               wake_routing: list) -> None:
         try:
             msg = json.loads(data)
         except (json.JSONDecodeError, UnicodeDecodeError, RecursionError):
@@ -1701,6 +1733,31 @@ class HookReceiver:
             sess_ref.cwd = cwd
             self.registry.mark_dirty()
 
+        # Roadmap 8.121 F5: the turn Claude Code starts by itself after its
+        # kill chord stopped the background agents (a plain sentence, no
+        # wrapper) is the job's own wake, never a person's terminal turn.
+        # Told here, in the step the datagram arrives in (no await before
+        # it), so the events that come after it know it is ahead of them.
+        kill_wake = ""
+        wake_ahead = None
+        if event == "UserPromptSubmit" and not hook_agent_id:
+            kill_wake = self._kill_wake_source(sess_ref, msg.get("prompt"),
+                                               transcript_path)
+        if kill_wake == "aipager":
+            # Held below until that Stop's teardown is done. Every later
+            # event of the session's own turn (its Stop above all) waits
+            # until this prompt is routed: handled first, a Stop would find
+            # the session IDLE already, and this prompt would then leave it
+            # BUSY with no Stop to come (live round 2, H3).
+            routed = asyncio.Event()
+            sess_ref.kill_wake_routing = routed
+            wake_routing.append((sess_ref, routed))
+        elif (not hook_agent_id and event not in _INTERNAL_HOOK_EVENTS
+                and event not in _NOT_TURN_EVIDENCE):
+            ahead = sess_ref.kill_wake_routing
+            if ahead is not None and not ahead.is_set():
+                wake_ahead = ahead
+
         # The permission mode Claude Code is in, from every event that
         # carries it (aipager/perm_modes.py). The parent's own events only:
         # a subagent's or the prompt-suggestion helper's mode is not the
@@ -1729,17 +1786,12 @@ class HookReceiver:
 
         log.debug("Hook event: %s from %s", event, session_name)
 
-        # Roadmap 8.121 F5: the turn Claude Code starts by itself after its
-        # kill chord stopped the background agents (a plain sentence, no
-        # wrapper) is the job's own wake, never a person's terminal turn.
-        kill_wake = ""
-        if event == "UserPromptSubmit" and not hook_agent_id:
-            kill_wake = self._kill_wake_source(sess_ref, msg.get("prompt"),
-                                               transcript_path)
         if _is_turn_activity(event, msg) or kill_wake:
             await self._hold_for_turn_state(sess_ref, event, msg)
         if kill_wake == "aipager":
             await self._await_stop_gate(sess_ref)
+        elif wake_ahead is not None:
+            await self._await_wake_routed(sess_ref, wake_ahead, event)
 
         if event == "PermissionRequest":
             # Primary path: structured tool data directly from hook payload

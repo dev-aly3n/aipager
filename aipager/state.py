@@ -818,6 +818,12 @@ class TrackedSession:
     kill_wake_turn: bool = False
     bg_task_ids_seen: list = field(default_factory=list, repr=False)
     stop_gate: asyncio.Event | None = field(default=None, repr=False)
+    # Roadmap 8.121 F5 (live round 2): set by the hook receiver while the
+    # wake of aipager's kill chord (its UserPromptSubmit) waits for that
+    # Stop's teardown, until it is routed; the session's own events that
+    # come after it wait for it, so its Stop is never handled first.
+    # Transient.
+    kill_wake_routing: asyncio.Event | None = field(default=None, repr=False)
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
