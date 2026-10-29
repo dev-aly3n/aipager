@@ -28,7 +28,7 @@ from aipager import preferences as prefs
 from aipager.state import Status
 from aipager.transcript import saved_prompt_evidence
 
-CHAT = 256113222
+CHAT = 222333444
 NAME = "claude-rppbb_harness"
 LABEL = "rppbb"
 OWNER = 12345

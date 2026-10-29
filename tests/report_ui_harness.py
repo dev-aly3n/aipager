@@ -15,7 +15,7 @@ import httpx
 
 from aipager.report import endpoint
 
-OWNER = 256113222          # tests/conftest.py pins config.CHAT_ID to this
+OWNER = 222333444          # tests/conftest.py pins config.CHAT_ID to this
 STRANGER = 4242
 GROUP = -1001234
 

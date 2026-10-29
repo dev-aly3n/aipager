@@ -20,7 +20,7 @@ import pytest
 from aipager import preferences as prefs
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 TASK = "bping0929"
 COMMAND = "ping -c 60 127.0.0.1"
 NOTIFICATION = (

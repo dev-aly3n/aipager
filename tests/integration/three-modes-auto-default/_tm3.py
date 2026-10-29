@@ -39,7 +39,7 @@ NEVER = "--allow-dangerously-skip-permissions"
 
 GROUP = -1001
 OWNER, BOB, RO, ADA = 1, 2, 3, 4          # owner, user, read_only, admin
-DM_CHAT = 256113222   # the configured chat conftest pins
+DM_CHAT = 222333444   # the configured chat conftest pins
 
 
 #: The group's members' root folder (user-root-folders): the folder the

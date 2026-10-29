@@ -262,7 +262,7 @@ def test_perms_stop_switch_stays_within_64_bytes_for_a_maximum_length_name():
     produce a callback_data that fits, however large the per-chat index
     gets."""
     bot = _make_bot()
-    max_name = "claude-" + "x" * 45 + "__d256113222"  # 64 bytes, per spec.md
+    max_name = "claude-" + "x" * 45 + "__d222333444"  # 64 bytes, per spec.md
     assert len(max_name.encode()) == 64
     sess = TrackedSession(name=max_name, label="x" * 45, status=Status.BUSY)
     bot.registry._sessions[sess.name] = sess

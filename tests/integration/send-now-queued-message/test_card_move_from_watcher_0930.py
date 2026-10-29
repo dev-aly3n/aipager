@@ -16,7 +16,7 @@ import pytest
 
 from aipager import preferences as prefs
 
-CHAT = 256113222
+CHAT = 222333444
 MESSAGES = [(2, "hello?"), (3, "hi?"), (4, "hmmm?")]
 
 

@@ -19,7 +19,7 @@ from aipager import preferences as prefs
 from aipager.dtach import hook_receiver as hook_receiver_mod
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 PREFIX = "[via Telegram · @owner]\n"
 
 

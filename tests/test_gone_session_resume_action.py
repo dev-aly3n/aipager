@@ -87,11 +87,11 @@ def test_delete_is_still_offered_only_for_gone_sessions(mk_bot):
 def test_every_menu_callback_fits_the_telegram_cap(mk_bot):
     """Including the new Resume row, at the longest name dtach permits."""
     bot = mk_bot()
-    name = "claude-" + ("w" * 45) + "__d256113222"
+    name = "claude-" + ("w" * 45) + "__d222333444"
     assert len(name) == 64
     sess = _sess(bot, name, "w" * 45, status=Status.GONE, transcript="uuid-3")
 
-    _t, kb = sp._render_session_menu(bot, 256113222, sess)
+    _t, kb = sp._render_session_menu(bot, 222333444, sess)
 
     for cb in _cb(kb):
         assert len(cb.encode()) <= 64, f"{len(cb.encode())} bytes: {cb!r}"
@@ -105,10 +105,10 @@ def test_the_resume_picker_callbacks_fit_the_telegram_cap(mk_bot):
     oversized row, so a single long-named gone session made the entire
     picker unusable."""
     bot = mk_bot()
-    name = "claude-" + ("w" * 45) + "__d256113222"
+    name = "claude-" + ("w" * 45) + "__d222333444"
     _sess(bot, name, "w" * 45, status=Status.GONE, transcript="uuid-4")
 
-    _text, kb = bot._render_resume_picker(page=0, scope_chat_id=256113222)
+    _text, kb = bot._render_resume_picker(page=0, scope_chat_id=222333444)
 
     assert kb is not None
     for cb in _cb(kb):

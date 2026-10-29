@@ -45,7 +45,7 @@ from aipager.team import Role as TeamRole, Rules, Team, User as TeamUser
 GROUP = -1001
 DM = 555
 OTHER = 999                     # a chat that is no scope
-CHAT = 256113222                # conftest's pinned single chat
+CHAT = 222333444                # conftest's pinned single chat
 TEAM_CHAT = -100                # a legacy team.yaml group
 ALICE, BOB = 1, 2                 # owner, user
 OLD = "claude-old"              # the session that missed its stamp

@@ -33,7 +33,7 @@ from aipager.bot.flood_budget import (
     rate_limit_args,
 )
 
-CHAT = 256113222
+CHAT = 222333444
 GROUP = -1001234567890
 BAN = 34212.0
 

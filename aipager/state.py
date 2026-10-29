@@ -4192,8 +4192,8 @@ class SessionRegistry:
             # Strip the scope disambiguator too, not just the prefix:
             # a discovered session would otherwise wear its INTERNAL
             # name everywhere the label is shown (grid, gone list,
-            # /status, keyboard) — "Jkhk__d256113222" for a session
-            # the operator named "Jkhk".
+            # /status, keyboard) — "frontend__d222333444" for a session
+            # the operator named "frontend".
             # A label remembered from a kill wins over re-derivation: the
             # user picked it, the derivation is only a fallback for a
             # session we have genuinely never seen.

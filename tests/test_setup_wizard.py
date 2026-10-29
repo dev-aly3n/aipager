@@ -229,21 +229,21 @@ def test_step_deps_returns_false_when_claude_missing(monkeypatch):
 def test_resolve_user_at_handle_returns_id_and_username(monkeypatch):
 
     def fake_http(url, timeout=10.0):
-        assert "getChat" in url and "chat_id=%40arian_hamdi" in url \
-            or "chat_id=@arian_hamdi" in url
+        assert "getChat" in url and "chat_id=%40bob_example" in url \
+            or "chat_id=@bob_example" in url
         return ({
             "ok": True,
             "result": {
-                "id": 256113222,
-                "first_name": "Arian",
-                "username": "Arian_Hamdi",
+                "id": 222333444,
+                "first_name": "Bob",
+                "username": "Bob_Example",
                 "type": "private",
             },
         }, 200, "")
 
     monkeypatch.setattr(team_setup, "_http_json", fake_http)
-    out = team_setup._resolve_user("token", "@arian_hamdi")
-    assert out == (256113222, "arian_hamdi")  # lowercased
+    out = team_setup._resolve_user("token", "@bob_example")
+    assert out == (222333444, "bob_example")  # lowercased
 
 
 def test_resolve_user_bare_handle_gets_at_prefixed(monkeypatch):
@@ -339,9 +339,9 @@ def test_resolve_user_falls_back_to_getUpdates_when_getChat_fails(monkeypatch):
             "result": [{
                 "message": {
                     "from": {
-                        "id": 256113222,
-                        "username": "Arian_Hamdi",
-                        "first_name": "Arian",
+                        "id": 222333444,
+                        "username": "Bob_Example",
+                        "first_name": "Bob",
                     },
                     "chat": {"id": -100, "type": "supergroup"},
                 },
@@ -349,8 +349,8 @@ def test_resolve_user_falls_back_to_getUpdates_when_getChat_fails(monkeypatch):
         }, 200, "")
 
     monkeypatch.setattr(team_setup, "_http_json", fake_http)
-    out = team_setup._resolve_user("token", "@arian_hamdi")
-    assert out == (256113222, "arian_hamdi")
+    out = team_setup._resolve_user("token", "@bob_example")
+    assert out == (222333444, "bob_example")
 
 
 def test_resolve_user_case_insensitive_username_match(monkeypatch):

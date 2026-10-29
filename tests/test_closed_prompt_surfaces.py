@@ -20,7 +20,7 @@ from aipager.state import (
     MAX_CLOSED_PROMPT_SURFACES, SessionRegistry, Status, TrackedSession,
 )
 
-CHAT = 256113222
+CHAT = 222333444
 NAME = "claude-closedprompt"
 
 

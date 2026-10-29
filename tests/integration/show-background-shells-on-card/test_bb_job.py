@@ -14,7 +14,7 @@ from aipager.session_monitor import SessionMonitor
 from aipager.state import AGENTS_LINE_EDIT_INTERVAL
 from tests.footer_text import as_md, unfooter
 
-CHAT = 256113222
+CHAT = 222333444
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
 #: The answer's status block for one shell of the job: a count, never

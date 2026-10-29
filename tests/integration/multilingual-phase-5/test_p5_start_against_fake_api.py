@@ -8,7 +8,7 @@ the existing owner's offer card; entrypoints.md "start never waits for
 descriptions or offers; stop cancels them" and "a fake-Telegram daemon run
 never lists them in ``unknown_methods``".
 
-The bot runs in legacy single-chat mode: the configured chat 256113222
+The bot runs in legacy single-chat mode: the configured chat 222333444
 (pinned by the suite's conftest) is the one served private chat. The
 description task's wait goes through the documented ``bot_descriptions._sleep``
 seam; asyncio itself is never patched.
@@ -28,7 +28,7 @@ from aipager.i18n import persist
 from tests.e2e.fake_telegram.server import FakeBotApiThread
 
 TOKEN = "7000000007:AAFakeP5StartTail0123456789abcdefg"
-CHAT = 256113222
+CHAT = 222333444
 DESC = ("getMyDescription", "setMyDescription", "getMyShortDescription",
         "setMyShortDescription")
 

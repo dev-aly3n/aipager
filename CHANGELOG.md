@@ -1980,11 +1980,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   App also greys out Compact with a reason when there is no context to
   compact.
 - **A session no longer shows its internal name after being killed.** It would
-  reappear in the finished list as something like `Jkhk__d256113222` instead of
-  the `Jkhk` you named it — the trailing part is a private tag aipager adds so
-  two chats can each have a session called the same thing. The name shown is
-  now always the one you chose. This affected any session aipager adopted
-  rather than started itself, not only killed ones.
+  reappear in the finished list as something like `frontend__d222333444`
+  instead of the `frontend` you named it — the trailing part is a private tag
+  aipager adds so two chats can each have a session called the same thing.
+  The name shown is now always the one you chose. This affected any session
+  aipager adopted rather than started itself, not only killed ones.
 - **Waking a session you hadn't touched in a while no longer claims it's
   stuck.** Send a message to a session that had been idle for a day or more and
   the daemon would answer, within the same second, with "still working — quiet
@@ -3097,9 +3097,9 @@ modes. Existing installs migrate automatically (see *Changed*).
 
 ### Changed
 - **`aipager config` add-user accepts `@handle` or numeric id.**
-  Paste either `12345` or `@arian_hamdi` (or bare `arian_hamdi`)
+  Paste either `12345` or `@bob_example` (or bare `bob_example`)
   in the manual flow — the wizard resolves via Telegram's
-  `getChat` and shows `✓ Resolved @arian_hamdi → id=12345`.
+  `getChat` and shows `✓ Resolved @bob_example → id=12345`.
   Non-private chats (channels, bots) are rejected with a clear
   message.
 - **Label is now optional in the add-user flow.** The prompt

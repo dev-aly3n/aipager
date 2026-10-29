@@ -28,7 +28,7 @@ from aipager.bot.flood_budget import (
 )
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 INTERVAL = config.TYPING_INDICATOR_INTERVAL
 MIN = 60.0
 SKIP_CARD = rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT)

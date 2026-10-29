@@ -33,7 +33,7 @@ from aipager.bot.flood import MUTE
 from aipager.bot.held import HELD
 from aipager.state import Status, TrackedSession
 
-CHAT = 256113222        # the operator's private chat, as pinned by conftest
+CHAT = 222333444        # the operator's private chat, as pinned by conftest
 MINUTES_45 = 2700.0
 
 

@@ -32,7 +32,7 @@ from aipager.bot import flood_state
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 BAN = 34212.0        # the real 2026-09-15 retry_after
 
 

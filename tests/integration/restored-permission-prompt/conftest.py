@@ -42,7 +42,7 @@ from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 OWNER = 12345
 # A name no live session can have: a harness named like the operator's own
 # session deleted that session's real policy snapshot (2026-09-28).

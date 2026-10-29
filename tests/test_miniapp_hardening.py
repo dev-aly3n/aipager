@@ -248,7 +248,7 @@ def test_unreachable_url_publishes_no_button(mk_bot, run_async, monkeypatch):
     monkeypatch.setattr("aipager.miniapp.tunnel.probe_public_url",
                         AsyncMock(return_value=False))
     monkeypatch.setattr(type(bot), "_miniapp_button_chats",
-                        lambda self: [256113222], raising=False)
+                        lambda self: [222333444], raising=False)
 
     run_async(bot.publish_miniapp_button("https://dead-tunnel.example/"))
 
@@ -269,7 +269,7 @@ def test_reachable_url_still_publishes_the_button(mk_bot, run_async, monkeypatch
     monkeypatch.setattr("aipager.miniapp.tunnel.probe_public_url",
                         AsyncMock(return_value=True))
     monkeypatch.setattr(type(bot), "_miniapp_button_chats",
-                        lambda self: [256113222], raising=False)
+                        lambda self: [222333444], raising=False)
 
     run_async(bot.publish_miniapp_button("https://live-tunnel.example/"))
 

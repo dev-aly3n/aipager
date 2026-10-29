@@ -20,7 +20,7 @@ import pytest
 
 from aipager import config, doctor, status
 
-CHAT = 256113222
+CHAT = 222333444
 
 
 def _write(chats, *, written_at=None, version=1) -> Path:

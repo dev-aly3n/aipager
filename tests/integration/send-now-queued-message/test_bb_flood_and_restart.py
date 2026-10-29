@@ -21,7 +21,7 @@ from aipager.bot.lifecycle import LifecycleMixin
 from aipager.dtach.launcher import _validate_name
 from aipager.miniapp.launch import validate_session_name
 
-CHAT = 256113222
+CHAT = 222333444
 CHORD = [b"\x18", b"\x13"]
 DELETE_WINDOW = 10.0
 

@@ -14,7 +14,7 @@ import asyncio
 from aipager import preferences as prefs
 from aipager import state as state_mod
 
-CHAT = 256113222
+CHAT = 222333444
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
 

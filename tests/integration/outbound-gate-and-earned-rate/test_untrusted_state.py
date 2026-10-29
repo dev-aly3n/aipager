@@ -30,7 +30,7 @@ from aipager import config
 from aipager.bot import flood_state
 from aipager.bot.flood import MUTE
 
-CHAT = 256113222
+CHAT = 222333444
 
 
 def _install(limiter):

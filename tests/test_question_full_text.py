@@ -15,7 +15,7 @@ from aipager.bot import question_form
 from aipager.bot.transport import TELEGRAM_MAX_TEXT_LEN
 from aipager.state import Status, TrackedSession
 
-CHAT = 256113222  # tests/conftest.py pins config.CHAT_ID to this
+CHAT = 222333444  # tests/conftest.py pins config.CHAT_ID to this
 
 QUESTION = ("Both rows read \"🤖 pipeline-runner\" while the agents keep working; "
             "which of these should the card show for an agent that has no label "

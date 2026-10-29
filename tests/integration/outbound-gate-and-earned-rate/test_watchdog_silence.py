@@ -39,7 +39,7 @@ from aipager.session_monitor import (
 )
 from aipager.state import Status, TrackedSession
 
-CHAT = 256113222
+CHAT = 222333444
 BAN = 34212.0
 
 

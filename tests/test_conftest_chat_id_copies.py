@@ -37,4 +37,4 @@ def test_every_import_time_copy_is_pinned():
 def test_the_copies_read_the_pin_during_a_test():
     import importlib
     for name in CHAT_ID_COPIES:
-        assert importlib.import_module(name).CHAT_ID == "256113222", name
+        assert importlib.import_module(name).CHAT_ID == "222333444", name

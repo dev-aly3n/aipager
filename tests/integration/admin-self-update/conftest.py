@@ -31,7 +31,7 @@ import pytest
 from aipager import claude_resolve, install_source, self_update
 from aipager.state import SessionRegistry, Status
 
-OPERATOR = 256113222          # conftest pins config.CHAT_ID to this
+OPERATOR = 222333444          # conftest pins config.CHAT_ID to this
 DM = OPERATOR
 STRANGER = 999_001
 TERMINAL = {"done", "failed", "cancelled", "restart_scheduled"}

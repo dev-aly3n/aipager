@@ -24,7 +24,7 @@ from aipager.bot import flood_state
 from aipager.bot.flood import MUTE
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 OTHER = 111222333
 DAY = 86400.0
 HOUR = 3600.0

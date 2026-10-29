@@ -38,7 +38,7 @@ from aipager.dtach import hook_reply, inject
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 # The single chat the suite pins (tests/conftest.py); a private chat's id is
 # its person's id.
-DM = 256113222
+DM = 222333444
 GROUP = -100
 ADMIN = 555
 # A name no live session can have.

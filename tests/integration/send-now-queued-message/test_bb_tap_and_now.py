@@ -17,7 +17,7 @@ from aipager import preferences as prefs
 from aipager.dtach import inject
 from aipager.team import Role, Team, User as TeamUser
 
-CHAT = 256113222
+CHAT = 222333444
 OTHER_CHAT = -1009990001
 CHORD = [b"\x18", b"\x13"]
 DELETE_WINDOW = 10.0

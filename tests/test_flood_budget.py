@@ -203,7 +203,7 @@ def test_a_private_chat_is_paced_like_a_group(run_async):
 
     async def _drive():
         for _ in range(6):
-            await _acquire(limiter, call, chat_id=256113222)
+            await _acquire(limiter, call, chat_id=222333444)
 
     run_async(_drive())
     stamps = [t for _e, _c, t in call.stamps]
@@ -426,7 +426,7 @@ def test_a_group_is_additionally_capped_at_twenty_calls_in_any_minute(run_async)
     window count goes over twenty.
     """
     group = _sequential_stamps(run_async, -1001, 60)
-    private = _sequential_stamps(run_async, 256113222, 60)
+    private = _sequential_stamps(run_async, 222333444, 60)
     assert _max_in_window(group, 60.0) <= 20, group
     assert _max_in_window(private, 60.0) > 20
     # Still ordered, and still under the per-chat burst.
@@ -1346,7 +1346,7 @@ def test_is_group_chat_reads_negative_ids_and_at_names_as_groups():
     private floor instead of its 20/min budget."""
     assert is_group_chat(-1001234567890) is True
     assert is_group_chat("@somechannel") is True
-    assert is_group_chat(256113222) is False
+    assert is_group_chat(222333444) is False
     assert is_group_chat(None) is False
 
 

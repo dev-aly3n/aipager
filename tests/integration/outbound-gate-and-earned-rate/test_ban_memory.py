@@ -40,7 +40,7 @@ import aipager.bot.rich_message as rm
 from aipager import config
 from aipager.bot.flood import MUTE
 
-CHAT = 256113222
+CHAT = 222333444
 
 #: The real ladder from the 2026-09-15 journal, in order. The third and
 #: fourth are 9.5 hours each.

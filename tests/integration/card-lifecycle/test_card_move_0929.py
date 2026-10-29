@@ -16,7 +16,7 @@ import asyncio
 
 from aipager import preferences as prefs
 
-CHAT = 256113222
+CHAT = 222333444
 PREFIX = "[via Telegram · @owner]\n"
 
 

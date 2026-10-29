@@ -43,7 +43,7 @@ from aipager.state import Status, TrackedSession
 # `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
 _FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
 
-PRIVATE = 256113222   # what conftest's _pin_single_chat_config pins CHAT_ID to
+PRIVATE = 222333444   # what conftest's _pin_single_chat_config pins CHAT_ID to
 GROUP = -1001
 
 

@@ -25,7 +25,7 @@ from aipager import config
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.state import Status, TrackedSession
 
-MUTED_CHAT = 256113222        # the chat `_pin_single_chat_config` pins
+MUTED_CHAT = 222333444        # the chat `_pin_single_chat_config` pins
 OTHER_CHAT = -1009999999
 BAN = 34212.0                 # the real 2026-09-15 retry_after
 

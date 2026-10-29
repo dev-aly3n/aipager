@@ -55,6 +55,6 @@ def test_the_chat_language_never_reaches_a_reason(tmp_path):
     with every chat set to Persian, then Russian, the same bytes."""
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     for code in ("fa", "ru"):
-        for chat in (555, -1001, 256113222):
+        for chat in (555, -1001, 222333444):
             preferences.set_ui_language(chat, code)
         assert _corpus(tmp_path) == golden, code

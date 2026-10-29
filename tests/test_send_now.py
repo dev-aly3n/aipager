@@ -26,7 +26,7 @@ from aipager.dtach import inject
 from aipager.state import SessionRegistry, Status, TrackedSession
 from aipager.team import Role, Team, User as TeamUser
 
-CHAT = 256113222
+CHAT = 222333444
 NAME = "claude-dev"
 PREFIX = "[via Telegram · @owner]\n"
 

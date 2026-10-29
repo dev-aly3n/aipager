@@ -38,7 +38,7 @@ from aipager.bot.flood_budget import (
 # `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
 _FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
 
-PRIVATE = 256113222
+PRIVATE = 222333444
 GROUP = -1001234567890
 
 
@@ -1037,7 +1037,7 @@ def test_the_backoff_multiplies_the_card_interval(limiter):
 
 
 @pytest.mark.parametrize("chat_id,expected", [
-    (-1001234567890, True), (-100, True), (256113222, False),
+    (-1001234567890, True), (-100, True), (222333444, False),
     ("@channelname", True), (None, False),
 ])
 def test_group_chats_are_recognised_by_id_shape(chat_id, expected):

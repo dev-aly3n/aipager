@@ -220,7 +220,7 @@ def test_status_says_working_with_a_true_seconds_clock(
 
 # ---- the busy card status line and the settled card -------------------------------
 
-def _card_sess(age, unit, chat=256113222):
+def _card_sess(age, unit, chat=222333444):
     s = TrackedSession(name="claude-x1", label="x1", status=Status.BUSY)
     s.scope_kind = "dm"
     s.scope_chat_id = chat
@@ -255,7 +255,7 @@ def test_the_live_card_moves_in_30s_steps_after_10_minutes(age, clock):
 
 def test_decay_off_keeps_true_seconds_on_a_long_turn():
     from aipager.bot.animation import build_stream_card
-    prefs.set_preference(256113222, "card_age_decay", False)
+    prefs.set_preference(222333444, "card_age_decay", False)
     status = _status_of(build_stream_card(_card_sess(1425.3, "s"), "Working"))
     assert status.startswith("⏳ **x1** · Working · 23:45")
 

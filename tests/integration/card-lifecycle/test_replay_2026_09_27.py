@@ -31,7 +31,7 @@ import asyncio
 
 from aipager import preferences as prefs
 
-CHAT = 256113222
+CHAT = 222333444
 PREFIX = "[via Telegram · @owner]\n"
 
 #: Every Telegram call the replay made on main 2f5c364 (measured by running

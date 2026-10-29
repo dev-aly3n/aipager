@@ -24,7 +24,7 @@ from aipager import preferences as prefs
 from aipager import state as state_mod
 from aipager.bot.flood import MUTE
 
-CHAT = 256113222
+CHAT = 222333444
 TAP_SETTLE = 2.0
 
 

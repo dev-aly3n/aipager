@@ -32,7 +32,7 @@ from aipager.session_monitor import (
 from aipager.state import Status, TrackedSession
 from tests.footer_text import as_md
 
-CHAT = 256113222
+CHAT = 222333444
 MIN = 60.0
 HOUR = 3600.0
 EPS = 1e-3

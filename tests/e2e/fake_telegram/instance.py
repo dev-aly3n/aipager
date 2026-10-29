@@ -18,7 +18,9 @@ about the operator's real install on the same machine:
   this instance's folder exactly, or a dtach attached to one of its
   session sockets (see :func:`pid_references`).
 
-Test ids are fake and never the operator's real chat id.
+Test ids are fake and never the operator's real chat id (checked by
+hash, :func:`tests.neutral_names.is_real_chat_id`, so the id itself is not
+in the repo).
 """
 
 from __future__ import annotations
@@ -42,6 +44,7 @@ import yaml
 from tests.e2e.fake_telegram import updates as U
 from tests.e2e.fake_telegram.redaction import redact
 from tests.e2e.fake_telegram.server import FakeBotApi, FakeBotApiThread
+from tests.neutral_names import is_real_chat_id
 
 BOT_ID = 7000000001
 BOT_USERNAME = "aipager_fake_bot"
@@ -51,8 +54,6 @@ GROUP_ID = -4000000001
 SUPERGROUP_ID = -1004000000001
 GROUP_TITLE = "aipager test group"
 ALICE, BOB, CAROL, DAVE = 900000001, 900000002, 900000003, 900000004
-#: The operator's real DM id. No test id may ever equal it.
-REAL_CHAT_ID = 256113222
 
 MEMBERS = {
     ALICE: ("alice", "owner"),
@@ -153,7 +154,7 @@ def build_config(claude_path: str, members: dict | None = None, *,
     group with alice=owner, bob=user, carol=read_only, dave=admin."""
     members = MEMBERS if members is None else members
     ids = {dm_id, group_id, *members}
-    assert REAL_CHAT_ID not in ids and -REAL_CHAT_ID not in ids, (
+    assert not any(is_real_chat_id(i) for i in ids), (
         "a test id equals the operator's real chat id")
     owner_id = next(uid for uid, (_n, role) in members.items() if role == "owner")
     return {

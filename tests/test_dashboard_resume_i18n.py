@@ -11,7 +11,7 @@ from aipager import i18n, preferences
 from aipager.bot import dashboard
 from aipager.state import Status, TrackedSession
 
-CHAT = 256113222
+CHAT = 222333444
 MARKS = ("\u200f", "\u2068", "\u2069")
 _CODE = re.compile(r"<code\b[^>]*>.*?</code>|<pre\b[^>]*>.*?</pre>", re.S)
 

@@ -38,7 +38,7 @@ from aipager import config, policy_snapshot
 from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 # A name no live session can have (live ones are claude-<project dir>, and
 # no project here is called "bgshell_harness"): a harness named like the
 # operator's own session deleted that session's real policy snapshot

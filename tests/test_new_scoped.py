@@ -23,16 +23,16 @@ def test_new_builds_suffixed_name_in_group(mk_bot, mk_update, run_async, monkeyp
     bot._maybe_update_bot_name = AsyncMock()
     bot._update_bot_commands = AsyncMock()
 
-    update = mk_update("/new jim", chat_id=-4152307515)
+    update = mk_update("/new api", chat_id=-4100000001)
     run_async(bot._handle_new_cmd(update, MagicMock()))
 
     # launch_session got the short disambiguated name
-    assert captured["name"] == "jim__g4152307515"
+    assert captured["name"] == "api__g4100000001"
     # registry has the full disambiguated name + correct label/scope
-    sess = bot.registry.get("claude-jim__g4152307515")
+    sess = bot.registry.get("claude-api__g4100000001")
     assert sess is not None
-    assert sess.label == "jim"
-    assert sess.scope_chat_id == -4152307515
+    assert sess.label == "api"
+    assert sess.scope_chat_id == -4100000001
     assert sess.scope_kind == "group"
 
 
@@ -43,9 +43,9 @@ def test_new_in_dm_uses_d_prefix(mk_bot, mk_update, run_async, monkeypatch):
     bot._maybe_update_bot_name = AsyncMock()
     bot._update_bot_commands = AsyncMock()
 
-    update = mk_update("/new dev", chat_id=256113222)
+    update = mk_update("/new dev", chat_id=222333444)
     run_async(bot._handle_new_cmd(update, MagicMock()))
-    sess = bot.registry.get("claude-dev__d256113222")
+    sess = bot.registry.get("claude-dev__d222333444")
     assert sess is not None and sess.label == "dev" and sess.scope_kind == "dm"
 
 
@@ -56,19 +56,19 @@ def test_new_same_label_two_scopes_coexist(mk_bot, mk_update, run_async, monkeyp
     bot._maybe_update_bot_name = AsyncMock()
     bot._update_bot_commands = AsyncMock()
 
-    run_async(bot._handle_new_cmd(mk_update("/new jim", chat_id=111), MagicMock()))
-    run_async(bot._handle_new_cmd(mk_update("/new jim", chat_id=-222), MagicMock()))
+    run_async(bot._handle_new_cmd(mk_update("/new api", chat_id=111), MagicMock()))
+    run_async(bot._handle_new_cmd(mk_update("/new api", chat_id=-222), MagicMock()))
     # Two distinct registry entries, no collision
-    assert bot.registry.get("claude-jim__d111") is not None
-    assert bot.registry.get("claude-jim__g222") is not None
+    assert bot.registry.get("claude-api__d111") is not None
+    assert bot.registry.get("claude-api__g222") is not None
     # Scoped lookup resolves each independently
-    assert bot.registry.find_by_label("jim", 111).scope_chat_id == 111
-    assert bot.registry.find_by_label("jim", -222).scope_chat_id == -222
+    assert bot.registry.find_by_label("api", 111).scope_chat_id == 111
+    assert bot.registry.find_by_label("api", -222).scope_chat_id == -222
 
 
 def test_session_system_prompt_none_when_legacy(mk_bot):
     bot = mk_bot()  # scopes=None
-    assert bot._session_system_prompt(256113222, "x") is None
+    assert bot._session_system_prompt(222333444, "x") is None
 
 
 def test_session_system_prompt_returns_roster(mk_bot, tmp_path, monkeypatch):
@@ -77,16 +77,16 @@ def test_session_system_prompt_returns_roster(mk_bot, tmp_path, monkeypatch):
                   members=(Member(id=1, label="alice", role="owner"),))
     bot = mk_bot(scopes=[scope])
     bot.policy = load_policy()
-    body = bot._session_system_prompt(-100, "jim")
+    body = bot._session_system_prompt(-100, "api")
     assert body is not None
-    assert "# Session: jim" in body and "**alice** (owner" in body
+    assert "# Session: api" in body and "**alice** (owner" in body
     # files written under tmp
-    assert (tmp_path / "group-100" / "jim" / "SESSION.md").exists()
+    assert (tmp_path / "group-100" / "api" / "SESSION.md").exists()
 
 
 def test_new_passes_system_prompt_extra(mk_bot, mk_update, run_async, monkeypatch, tmp_path):
     monkeypatch.setattr(ss, "SESSIONS_ROOT", tmp_path)
-    scope = Scope(chat_id=-4152307515, kind="group", label="dev",
+    scope = Scope(chat_id=-4100000001, kind="group", label="dev",
                   members=(Member(id=1, label="alice", role="owner"),))
     bot = mk_bot(scopes=[scope])
     bot.policy = load_policy()
@@ -100,6 +100,6 @@ def test_new_passes_system_prompt_extra(mk_bot, mk_update, run_async, monkeypatc
     bot._mark_driver = MagicMock()
     bot._maybe_update_bot_name = AsyncMock()
     bot._update_bot_commands = AsyncMock()
-    upd = mk_update("/new jim", chat_id=-4152307515, user_id=1)  # member
+    upd = mk_update("/new api", chat_id=-4100000001, user_id=1)  # member
     run_async(bot._handle_new_cmd(upd, MagicMock()))
-    assert "# Session: jim" in (captured.get("system_prompt_extra") or "")
+    assert "# Session: api" in (captured.get("system_prompt_extra") or "")

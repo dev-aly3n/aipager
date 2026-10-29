@@ -208,14 +208,14 @@ def test_every_session_callback_fits_the_64_byte_cap(mk_bot, run_async):
 
     bot = mk_bot()
     # A label at the practical maximum, plus the scope suffix a DM adds.
-    name = "claude-" + ("w" * 40) + "__d256113222"
+    name = "claude-" + ("w" * 40) + "__d222333444"
     sess = bot.registry.get_or_create(name)
     sess.label = "w" * 40
 
     for verb in ("menu", "restart", "restart-confirm", "restart-cancel",
                  "rename", "rename-cancel", "delete", "delete-confirm",
                  "delete-cancel", "diff", "menu-close"):
-        cb = sp.session_cb(bot, 256113222, sess, verb)
+        cb = sp.session_cb(bot, 222333444, sess, verb)
         assert len(cb.encode()) <= 64, (
             f"{verb} produced {len(cb.encode())} bytes: {cb!r}")
 

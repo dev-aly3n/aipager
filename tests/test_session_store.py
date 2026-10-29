@@ -12,7 +12,7 @@ from aipager.scope import Member, Scope
 
 def _scope():
     return Scope(
-        chat_id=-4152307515, kind="group", label="dev",
+        chat_id=-4100000001, kind="group", label="dev",
         members=(
             Member(id=1, label="alice", role="owner"),
             Member(id=2, label="bob", role="user", deny_tools=("Bash",)),
@@ -22,14 +22,14 @@ def _scope():
 
 
 def test_session_folder_path():
-    p = ss.session_folder(-4152307515, "group", "jim")
-    assert p.name == "jim"
-    assert p.parent.name == "group-4152307515"
+    p = ss.session_folder(-4100000001, "group", "api")
+    assert p.name == "api"
+    assert p.parent.name == "group-4100000001"
 
 
 def test_build_session_md_roster():
-    md = ss.build_session_md(_scope(), load_policy(), "jim")
-    assert "# Session: jim" in md
+    md = ss.build_session_md(_scope(), load_policy(), "api")
+    assert "# Session: api" in md
     assert "**alice** (owner — can call any tool)" in md
     # Operator decision 2026-09-26: the built-in user role denies every
     # code-running tool (and SendMessage, the worktree tools), so bob's
@@ -44,15 +44,15 @@ def test_build_session_md_roster():
 
 def test_write_session_files(tmp_path, monkeypatch):
     monkeypatch.setattr(ss, "SESSIONS_ROOT", tmp_path)
-    body = ss.write_session_files(_scope(), load_policy(), "jim")
-    folder = tmp_path / "group-4152307515" / "jim"
+    body = ss.write_session_files(_scope(), load_policy(), "api")
+    folder = tmp_path / "group-4100000001" / "api"
     assert (folder / "SESSION.md").read_text() == body
     meta = json.loads((folder / ".aipager" / "meta.json").read_text())
-    assert meta["scope_chat_id"] == -4152307515
+    assert meta["scope_chat_id"] == -4100000001
     assert meta["scope_kind"] == "group"
     assert meta["members"] == [1, 2, 3]
 
 
 def test_dm_scope_folder():
-    p = ss.session_folder(256113222, "dm", "t1")
-    assert p.parent.name == "dm-256113222"
+    p = ss.session_folder(222333444, "dm", "t1")
+    assert p.parent.name == "dm-222333444"

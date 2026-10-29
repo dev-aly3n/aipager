@@ -411,18 +411,18 @@ def test_resume_callback_resolves_label_for_suffixed_name(
     # Suffixed names (label__d<chat_id>) must resolve to the registry
     # label, not the prefix-stripped internal name — mode picker stores correct label.
     bot = mk_bot()
-    sess = TrackedSession(name="claude-newName__d1921747733",
+    sess = TrackedSession(name="claude-newName__d3334445556",
                           label="newName", status=Status.GONE)
     sess.claude_session_id = "UUID-2"
     sess.gone_at = 1234.0
     bot.registry._sessions[sess.name] = sess
     bot._do_resume = AsyncMock()
-    update, query = mk_query("claude-newName__d1921747733:resume")
+    update, query = mk_query("claude-newName__d3334445556:resume")
     run_async(bot._handle_callback(update, MagicMock()))
     # Mode picker shown, not direct resume
     bot._do_resume.assert_not_awaited()
     # Pending entry should store the registry label
-    assert bot._resume_mode_pending.get("claude-newName__d1921747733") == "newName"
+    assert bot._resume_mode_pending.get("claude-newName__d3334445556") == "newName"
 
 
 def test_resume_page_edits_picker(mk_bot, mk_query, run_async):

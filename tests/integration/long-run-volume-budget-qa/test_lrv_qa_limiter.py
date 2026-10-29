@@ -24,7 +24,7 @@ from aipager.bot.flood_budget import (
     rate_limit_args,
 )
 
-CHAT = 256113222
+CHAT = 222333444
 OTHER = 111222333
 SHARE = config.FLOOD_HOURLY_MAX - config.FLOOD_HOURLY_ESSENTIAL_RESERVE  # 1080
 DAY = 86400.0

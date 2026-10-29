@@ -112,9 +112,9 @@ def test_mute_holds_for_retry_after_then_lifts_on_the_clock(clock):
 def test_int_and_str_chat_ids_land_on_one_entry(clock):
     """The legacy path hands over ``config.CHAT_ID`` as a str, the rich path
     an int — both must hit the same mute."""
-    MUTE.mute("256113222", 600)
-    assert MUTE.is_muted(256113222)
-    assert MUTE.is_muted("256113222")
+    MUTE.mute("222333444", 600)
+    assert MUTE.is_muted(222333444)
+    assert MUTE.is_muted("222333444")
 
 
 def test_one_warning_when_a_mute_starts_one_info_when_it_lifts(clock, caplog):

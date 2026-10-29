@@ -19,7 +19,7 @@ from aipager.bot import lifecycle as lifecycle_mod
 from aipager.session_monitor import ORPHAN_CARD_GRACE_SECONDS, orphan_card_due
 from aipager.state import SessionRegistry, Status
 
-CHAT = 256113222
+CHAT = 222333444
 PREFIX = "[via Telegram · @owner]\n"
 
 

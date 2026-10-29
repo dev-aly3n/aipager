@@ -179,7 +179,7 @@ def test_the_post_reply_hook_returns_before_the_grace_ends(bot, monkeypatch, run
 # ---- end to end against the fake Bot API -------------------------------------------------------
 
 TOKEN = "7000000017:AAFakeP5GraceTail0123456789abcdefgh"
-CHAT = 256113222        # the suite's configured chat (legacy single-chat mode)
+CHAT = 222333444        # the suite's configured chat (legacy single-chat mode)
 
 
 @pytest.fixture
