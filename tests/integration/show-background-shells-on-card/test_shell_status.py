@@ -492,7 +492,7 @@ def test_end_for_an_unknown_id_changes_nothing(replay, vloop):
 
     _run(vloop, scenario())
     card = _only_card(r)
-    assert "✅ `TaskStop`" in card["text"]
+    assert "✅ `TaskStop: a1234`" in card["text"]
     assert f"⏳ `shell: {DESC} (" in card["text"]
     assert "1 shell running" in _pin(r)
 

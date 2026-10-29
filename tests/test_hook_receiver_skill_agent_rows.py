@@ -128,8 +128,7 @@ def test_a_malformed_input_gives_the_bare_name(tool, inp):
 # ---- fall-through ---------------------------------------------------------
 
 @pytest.mark.parametrize("tool", [
-    "UnknownTool", "TodoWrite", "ToolSearch", "SendMessage", "Monitor",
-    "Workflow", "mcp__server__do_thing",
+    "UnknownTool", "ExitPlanMode", "mcp__server__do_thing",
 ])
 def test_other_tools_keep_the_bare_name(tool):
     assert hr._summarize_tool(tool, {"skill": "design", "description": "x",
