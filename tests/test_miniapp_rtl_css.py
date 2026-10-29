@@ -200,6 +200,33 @@ _UPDATES_CARD_ADDED = {
 }
 
 
+#: A session waiting for its own background agents or shells (roadmap
+#: 8.121, status ``tasks``) looks like a working one: each busy rule is
+#: followed by its ``tasks`` twin, and the tile's state word may be cut.
+_TASKS_ADDED = {
+    ("", ".tile-busy"): [
+        ["", ".tile-tasks", [
+            ["background", "radial-gradient(130% 95% at 0% 0%, var(--lamp-work-soft) 0%, "
+                           "transparent 62%), var(--surface)"],
+            ["border-color", "color-mix(in srgb, var(--lamp-work) 32%, var(--line))"]]],
+    ],
+    ("", ".tile-busy .tile-state"): [
+        ["", ".tile-tasks .tile-state", [
+            ["background", "var(--lamp-work-soft)"], ["color", "var(--ink)"],
+            ["max-width", "100%"], ["overflow", "hidden"], ["text-overflow", "ellipsis"]]],
+    ],
+    ("", ".status-busy::before"): [
+        ["", ".status-tasks", [["background", "var(--lamp-work-soft)"], ["color", "var(--ink)"]]],
+        ["", ".status-tasks::before", [["background", "var(--lamp-work)"]]],
+    ],
+    ("", ".d-state-row .status-busy::before"): [
+        ["", ".d-state-row .status-tasks::before", [
+            ["background", "var(--lamp-work)"],
+            ["box-shadow", "0 0 0 3px var(--lamp-work-soft)"]]],
+    ],
+}
+
+
 def _expected_now(golden: list) -> list:
     out = []
     for ctx, sel, props in golden:
@@ -211,6 +238,7 @@ def _expected_now(golden: list) -> list:
             out.extend(_APPEARANCE_ADDED)
         out.extend(_UPDATES_CARD_ADDED.get((ctx, sel), []))
         out.extend(_APPEARANCE_SECTION_ADDED.get((ctx, sel), []))
+        out.extend(_TASKS_ADDED.get((ctx, sel), []))
     return out
 
 

@@ -135,14 +135,14 @@ def _waiting_line(n: int, tr) -> str:
 
 
 def test_the_words_after_a_count_agree_with_one_and_twenty_one(mk_bot, run_async, monkeypatch):
-    """The predicate after a counted phrase sits outside its Plural, so it
-    must read right for every n: "1 агент ещё работают" (a plural verb
-    after a singular subject) was the review's rev-iter1-001."""
+    """The words around a count are inside its Plural, so they read right
+    for every n: "1 агент ещё работают" (a plural verb after a singular
+    subject) was the review's rev-iter1-001. Since roadmap 8.121 the line
+    says what the session waits for, one whole Plural per count."""
     preferences.set_ui_language(i18n_surfaces.CHAT, "ru")
     ru = i18n.get("ru")
     for n in (1, 2, 5, 21):
-        agents = _form("card.agents_typed", n, types="Explore")
-        assert _waiting_line(n, ru) == f"🔄 **x1** · {agents} ещё в работе", n
+        assert _waiting_line(n, ru) == f"🔄 **x1** · {_form('jobwait.agents', n)}", n
     for n in (1, 21):
         assert "работают" not in _working_header(n, ru)
         assert "работают" not in _waiting_line(n, ru)
@@ -150,10 +150,10 @@ def test_the_words_after_a_count_agree_with_one_and_twenty_one(mk_bot, run_async
 
 def test_the_waiting_line_reads_in_the_sessions_language(mk_bot, run_async, monkeypatch):
     """With no ``tr`` given, the whole waiting line reads in the session
-    chat's language, the agents phrase included: ``_agent_phrase`` resolves
-    the language itself (the phase 1 stand-ins take one argument)."""
+    chat's language, what it waits for included: ``_status_line`` resolves
+    the language itself."""
     preferences.set_ui_language(i18n_surfaces.CHAT, "ru")
     sess = i18n_surfaces._sess()
     sess.active_subagents = {"a0": {"type": "Explore", "started_at": i18n_surfaces.NOW}}
     line = animation._status_line(sess, "Working", waiting=True)
-    assert line == f"🔄 **x1** · {_form('card.agents_typed', 1, types='Explore')} ещё в работе"
+    assert line == f"🔄 **x1** · {_form('jobwait.agents', 1)}"

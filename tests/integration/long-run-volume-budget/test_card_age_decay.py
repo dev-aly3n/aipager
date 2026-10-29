@@ -164,7 +164,7 @@ def test_e_a_tool_row_waits_for_the_tier_and_a_state_change_does_not(
         edits = rich_http.edits()
         assert len(edits) == before + 1, "the state change waited for the tier"
         assert edits[-1][0] - t1 < 1.0
-        assert "still working" in _status(edits[-1][1])
+        assert "waiting for" in _status(edits[-1][1])
 
         # 3. a second state change 4 s later: no early edit — nothing
         # before the 10 s bypass gap has passed; then it takes the next
@@ -178,7 +178,7 @@ def test_e_a_tool_row_waits_for_the_tier_and_a_state_change_does_not(
         await asyncio.sleep(3 * MIN)
         later = rich_http.edits()[before:]
         assert later[1][0] - t1 >= 10.0 - EPS
-        assert "still working" not in _status(later[1][1])
+        assert "waiting for" not in _status(later[1][1])
         gaps = _gaps(later[1:])
         assert gaps and min(gaps) >= 30.0 - EPS, gaps
 
@@ -356,7 +356,7 @@ def test_r_agent_rows_and_the_waiting_frame_count_in_minutes_when_slow(
 
     waiting = _one_render(mk_bot, vbot, vloop, rich_http, age=2 * HOUR,
                           agents=[12 * MIN], waiting=True)
-    assert re.search(r"still working · 2:00:00$", _status(waiting)), waiting
+    assert re.search(r"waiting for 1 agent · 2:00:00$", _status(waiting)), waiting
 
 
 def test_r_under_ten_minutes_the_counters_read_exactly_as_today(

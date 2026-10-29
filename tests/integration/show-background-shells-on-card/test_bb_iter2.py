@@ -301,13 +301,15 @@ def test_bb_swept_agent_card_not_finished_as_agent_lost(replay, vloop,
 def test_bb_swept_agent_card_still_waits_on_the_shell(replay, vloop,
                                                       monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
-    assert "1 shell still working" in out["card"]
+    # The card's last edit may predate the sweep (its edits keep their
+    # tier), so it may still name the agent; it still waits on the shell.
+    assert "1 shell · " in out["card"].splitlines()[-1]
 
 
 def test_bb_swept_agent_pin_still_counts_the_shell(replay, vloop,
                                                    monkeypatch):
     out = _agent_swept(replay, vloop, monkeypatch, wake=False)
-    assert out["pin"] == "💤 aipager_boss (idle, 1 shell running)"
+    assert out["pin"] == "🔄 aipager_boss (waiting for 1 shell)"
 
 
 def test_bb_swept_agent_sends_no_notice(replay, vloop, monkeypatch):

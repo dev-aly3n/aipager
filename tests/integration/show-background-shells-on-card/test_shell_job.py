@@ -82,7 +82,7 @@ def test_turn_end_with_running_shell_is_an_interim(replay, vloop):
     card = _only_card(r)
     assert card["stop"] is True
     assert "Done" not in card["text"]
-    assert "1 shell still working" in card["text"]
+    assert "waiting for 1 shell" in card["text"]
     assert 1 in r.chat.answers.values()
 
 
@@ -100,7 +100,7 @@ def test_waiting_card_says_a_shell_is_still_working(replay, vloop):
         return alone
 
     alone = _run(vloop, scenario())
-    assert "🔄 **aipager_boss** · 1 shell still working · " in alone
+    assert "🔄 **aipager_boss** · waiting for 1 shell · " in alone
     assert "finishing up" not in alone
 
 
@@ -120,7 +120,7 @@ def test_waiting_card_names_agents_and_shells(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert ("· 1 agent (ship-reviewer), 1 shell still working ·"
+    assert ("· waiting for 1 agent and 1 shell ·"
             in _only_card(r)["text"])
 
 
@@ -244,7 +244,7 @@ def test_continuation_that_launches_a_shell_waits_again(replay, vloop):
     _run(vloop, scenario())
     card = _only_card(r)
     assert card["stop"] is True
-    assert "1 shell still working" in card["text"]
+    assert "waiting for 1 shell" in card["text"]
     assert "⏳ `shell: second run (" in card["text"]
 
 
@@ -320,7 +320,7 @@ def test_message_popped_while_continuation_shell_runs_stays_in_the_job(
     assert not [c for c in r.chat.cards.values()
                 if not c["stop"] and not c["deleted"]]
     (now,) = r.chat.live_cards()
-    assert "1 shell still working" in r.chat.cards[now]["text"]
+    assert "waiting for 1 shell" in r.chat.cards[now]["text"]
     assert r.chat.reactions[3][-1] == "👍"
     assert 3 in r.chat.answers.values()
 
@@ -384,7 +384,7 @@ def test_agent_stop_while_shell_runs_keeps_waiting_past_grace(
     _run(vloop, scenario())
     card = _only_card(r)
     assert card["stop"] is True
-    assert "1 shell still working" in card["text"]
+    assert "waiting for 1 shell" in card["text"]
 
 
 def test_silent_agent_dropped_while_shell_runs_keeps_the_job_waiting(
@@ -424,7 +424,7 @@ def test_silent_agent_dropped_while_shell_runs_keeps_the_job_waiting(
     agent_dropped, waiting = _run(vloop, scenario())
     assert agent_dropped is True
     assert waiting["stop"] is True
-    assert "1 shell still working" in waiting["text"]
+    assert "waiting for 1 shell" in waiting["text"]
     assert "lost" not in waiting["text"]
     card = _only_card(r)
     assert card["stop"] is False
@@ -473,7 +473,7 @@ def test_new_prompt_carrying_the_shell_stays_inside_the_job(replay, vloop):
     _run(vloop, scenario())
     live = r.chat.live_cards()
     assert len(live) == 1 and r.chat.cards[live[0]]["reply_to"] == 5
-    assert "1 shell still working" in r.chat.cards[live[0]]["text"]
+    assert "waiting for 1 shell" in r.chat.cards[live[0]]["text"]
 
 
 def test_new_turn_without_a_live_card_drops_shells_from_the_job(replay,

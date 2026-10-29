@@ -211,14 +211,11 @@
 {"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 Перезапустить сейчас"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Перезапустить сейчас"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "Подождать ещё {mins} мин"}
-{"k": "card.agents", "src": "263711d4", "v": {"few": "{n} агента", "many": "{n} агентов", "one": "{n} агент", "other": "{n} агента"}}
-{"k": "card.agents_typed", "src": "af56f555", "v": {"few": "{n} агента ({types})", "many": "{n} агентов ({types})", "one": "{n} агент ({types})", "other": "{n} агента ({types})"}}
 {"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Сжимает переписку{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Разрешение отклонено"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} отклонил(а)"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Отклонено в терминале"}
 {"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Завершена в терминале"}
-{"k": "card.finishing", "src": "1bfd382d", "v": "почти готово"}
 {"k": "card.fold", "src": "2061ab43", "v": {"few": "▸ использовано {n} инструмента", "many": "▸ использовано {n} инструментов", "one": "▸ использован {n} инструмент", "other": "▸ использовано {n} инструмента"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} агента)", "many": "({n} агентов)", "one": "({n} агент)", "other": "({n} агента)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"few": "✅ <i>раньше: {n} инструмента</i>", "many": "✅ <i>раньше: {n} инструментов</i>", "one": "✅ <i>раньше: {n} инструмент</i>", "other": "✅ <i>раньше: {n} инструмента</i>"}}
@@ -241,7 +238,6 @@
 {"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "фоновая команда: {label} (ещё работает)"}
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "фоновая команда: {label} - остановлена ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "запускается"}
-{"k": "card.shells", "src": "9b747b65", "v": {"few": "{n} фоновые команды", "many": "{n} фоновых команд", "one": "{n} фоновая команда", "other": "{n} фоновые команды"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Остановлена"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} остановил(а)"}
@@ -264,7 +260,6 @@
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Ждёт твоего ответа"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Работает"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
-{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} ещё в работе"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram обновил эту группу. aipager переехал вместе с ней, ничего делать не нужно."}
 {"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "Разговор ещё работает в фоновой задаче Claude Code {job}: останови её командой {stop_command} или открой командой {attach_command}, потом попробуй снова."}
 {"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Не удалось остановить фоновую задачу Claude Code {job}: {error}"}
@@ -321,6 +316,10 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "Запусти новую командой /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Нажми на сессию на клавиатуре, чтобы общаться с ней."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code прямо из Telegram"}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"few": "ждёт {n} агентов", "many": "ждёт {n} агентов", "one": "ждёт {n} агента", "other": "ждёт {n} агента"}}
+{"k": "jobwait.both", "src": "4f90f011", "v": "ждёт: {agents} и {shells}"}
+{"k": "jobwait.finishing", "src": "1bfd382d", "v": "почти готово"}
+{"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"few": "ждёт {n} фоновые команды", "many": "ждёт {n} фоновых команд", "one": "ждёт {n} фоновую команду", "other": "ждёт {n} фоновой команды"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Назад"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Команды"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "завершить"}
@@ -1154,6 +1153,8 @@
 {"k": "ui.conn.reconnecting", "src": "6b160044", "v": "переподключение…"}
 {"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Сессия входа истекла. Открой страницу снова через {command} в Telegram."}
 {"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Нет связи с сервером. Проверь туннель."}
+{"k": "ui.count.agents", "src": "263711d4", "v": {"few": "{n} агента", "many": "{n} агентов", "one": "{n} агент", "other": "{n} агента"}}
+{"k": "ui.count.shells", "src": "9b747b65", "v": {"few": "{n} фоновые команды", "many": "{n} фоновых команд", "one": "{n} фоновая команда", "other": "{n} фоновые команды"}}
 {"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "работает {n} мин"}
 {"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Последний ответ"}
 {"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Настройки сессии"}
@@ -1389,6 +1390,10 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "работает"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "завершена"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "готова"}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"few": "ждёт {n} агентов", "many": "ждёт {n} агентов", "one": "ждёт {n} агента", "other": "ждёт {n} агента"}}
+{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "ждёт: {agents} и {shells}"}
+{"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "почти готово"}
+{"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"few": "ждёт {n} фоновые команды", "many": "ждёт {n} фоновых команд", "one": "ждёт {n} фоновую команду", "other": "ждёт {n} фоновой команды"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "неизвестно"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "ждёт тебя"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "В фоновом режиме Claude Code"}
@@ -1397,6 +1402,10 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Ждёт тебя ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "Готова"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Готова, последняя активность {age}"}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"few": "Ждёт {n} агентов", "many": "Ждёт {n} агентов", "one": "Ждёт {n} агента", "other": "Ждёт {n} агента"}}
+{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "Ждёт: {agents} и {shells}"}
+{"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "Почти готово"}
+{"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"few": "Ждёт {n} фоновые команды", "many": "Ждёт {n} фоновых команд", "one": "Ждёт {n} фоновую команду", "other": "Ждёт {n} фоновой команды"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Пока нет данных"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Работает"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Работает ({clock})"}

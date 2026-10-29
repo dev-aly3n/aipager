@@ -211,14 +211,11 @@
 {"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 Перезапустити зараз"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Перезапустити зараз"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "Зачекати ще {mins} хв"}
-{"k": "card.agents", "src": "263711d4", "v": {"few": "{n} агенти", "many": "{n} агентів", "one": "{n} агент", "other": "{n} агента"}}
-{"k": "card.agents_typed", "src": "af56f555", "v": {"few": "{n} агенти ({types})", "many": "{n} агентів ({types})", "one": "{n} агент ({types})", "other": "{n} агента ({types})"}}
 {"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Стискає розмову{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · Дозвіл відхилено"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} відхилив(-ла)"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Відхилено в терміналі"}
 {"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Завершена в терміналі"}
-{"k": "card.finishing", "src": "1bfd382d", "v": "майже готово"}
 {"k": "card.fold", "src": "2061ab43", "v": {"few": "▸ використано {n} інструменти", "many": "▸ використано {n} інструментів", "one": "▸ використано {n} інструмент", "other": "▸ використано {n} інструменти"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"few": "({n} агенти)", "many": "({n} агентів)", "one": "({n} агент)", "other": "({n} агента)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"few": "✅ <i>раніше: {n} інструменти</i>", "many": "✅ <i>раніше: {n} інструментів</i>", "one": "✅ <i>раніше: {n} інструмент</i>", "other": "✅ <i>раніше: {n} інструменти</i>"}}
@@ -241,7 +238,6 @@
 {"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "фонова команда: {label} (ще працює)"}
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "фонова команда: {label} - зупинена ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "запускається"}
-{"k": "card.shells", "src": "9b747b65", "v": {"few": "{n} фонові команди", "many": "{n} фонових команд", "one": "{n} фонова команда", "other": "{n} фонові команди"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Зупинена"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} зупинив(-ла)"}
@@ -264,7 +260,6 @@
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Чекає на твою відповідь"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Працює"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
-{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} ще в роботі"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram оновив цю групу. aipager переїхав разом із нею, нічого робити не потрібно."}
 {"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "Розмова ще працює у фоновому завданні Claude Code {job}: зупини його командою {stop_command} або відкрий командою {attach_command}, потім спробуй ще раз."}
 {"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Не вдалося зупинити фонове завдання Claude Code {job}: {error}"}
@@ -321,6 +316,10 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "Запусти нову командою /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Натисни на сесію на клавіатурі, щоб спілкуватися з нею."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code просто з Telegram"}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"few": "чекає на {n} агентів", "many": "чекає на {n} агентів", "one": "чекає на {n} агента", "other": "чекає на {n} агента"}}
+{"k": "jobwait.both", "src": "4f90f011", "v": "чекає: {agents} і {shells}"}
+{"k": "jobwait.finishing", "src": "1bfd382d", "v": "майже готово"}
+{"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"few": "чекає на {n} фонові команди", "many": "чекає на {n} фонових команд", "one": "чекає на {n} фонову команду", "other": "чекає на {n} фонової команди"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Назад"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Команди"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "завершити"}
@@ -1154,6 +1153,8 @@
 {"k": "ui.conn.reconnecting", "src": "6b160044", "v": "перепідключення…"}
 {"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Сесія входу закінчилася. Відкрий сторінку знову через {command} у Telegram."}
 {"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Немає зв'язку із сервером. Перевір тунель."}
+{"k": "ui.count.agents", "src": "263711d4", "v": {"few": "{n} агенти", "many": "{n} агентів", "one": "{n} агент", "other": "{n} агента"}}
+{"k": "ui.count.shells", "src": "9b747b65", "v": {"few": "{n} фонові команди", "many": "{n} фонових команд", "one": "{n} фонова команда", "other": "{n} фонові команди"}}
 {"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "працює {n} хв"}
 {"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Остання відповідь"}
 {"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Налаштування сесії"}
@@ -1389,6 +1390,10 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "працює"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "завершена"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "готова"}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"few": "чекає на {n} агентів", "many": "чекає на {n} агентів", "one": "чекає на {n} агента", "other": "чекає на {n} агента"}}
+{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "чекає: {agents} і {shells}"}
+{"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "майже готово"}
+{"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"few": "чекає на {n} фонові команди", "many": "чекає на {n} фонових команд", "one": "чекає на {n} фонову команду", "other": "чекає на {n} фонової команди"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "невідомо"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "чекає на тебе"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "У фоновому режимі Claude Code"}
@@ -1397,6 +1402,10 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Чекає на тебе ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "Готова"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Готова, остання активність {age}"}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"few": "Чекає на {n} агентів", "many": "Чекає на {n} агентів", "one": "Чекає на {n} агента", "other": "Чекає на {n} агента"}}
+{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "Чекає: {agents} і {shells}"}
+{"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "Майже готово"}
+{"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"few": "Чекає на {n} фонові команди", "many": "Чекає на {n} фонових команд", "one": "Чекає на {n} фонову команду", "other": "Чекає на {n} фонової команди"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Поки немає даних"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Працює"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Працює ({clock})"}

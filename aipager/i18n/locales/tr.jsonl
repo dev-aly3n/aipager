@@ -211,14 +211,11 @@
 {"k": "btn.upd.restart", "src": "3d234ba0", "v": "🔄 Şimdi yeniden başlat"}
 {"k": "btn.upd.restart_now", "src": "af2c3d8e", "v": "Şimdi yeniden başlat"}
 {"k": "btn.upd.wait", "src": "060c561a", "v": "{mins} dk daha bekle"}
-{"k": "card.agents", "src": "263711d4", "v": {"one": "{n} ajan", "other": "{n} ajan"}}
-{"k": "card.agents_typed", "src": "af56f555", "v": {"one": "{n} ajan ({types})", "other": "{n} ajan ({types})"}}
 {"k": "card.compacting", "src": "43a60b9a", "v": "🔄 <b>{session}</b> · Konuşma sıkıştırılıyor{dots}"}
 {"k": "card.denied", "src": "bdf5a852", "v": "🚫 <b>{session}</b> · İzin reddedildi"}
 {"k": "card.denied_by", "src": "b2af9d18", "v": "🚫 <b>{session}</b> · {person} reddetti"}
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Terminalde reddedildi"}
 {"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Terminalde sonlandırıldı"}
-{"k": "card.finishing", "src": "1bfd382d", "v": "neredeyse bitti"}
 {"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} araç kullanıldı", "other": "▸ {n} araç kullanıldı"}}
 {"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} ajan)", "other": "({n} ajan)"}}
 {"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>daha önce {n} araç kullanıldı</i>", "other": "✅ <i>daha önce {n} araç kullanıldı</i>"}}
@@ -241,7 +238,6 @@
 {"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "arka plan komutu: {label} (hâlâ çalışıyor)"}
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "arka plan komutu: {label} - durduruldu ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "başlıyor"}
-{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} arka plan komutu", "other": "{n} arka plan komutu"}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Durduruldu"}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} durdurdu"}
@@ -264,7 +260,6 @@
 {"k": "card.verb.waiting", "src": "33d30632", "v": "Yanıtını bekliyor"}
 {"k": "card.verb.working", "src": "3b4dfc97", "v": "Çalışıyor"}
 {"k": "card.waiting.state", "src": "921fa931", "v": "🔄 **{session}** · {phrase}"}
-{"k": "card.waiting.working", "src": "237a8ad3", "v": "🔄 **{session}** · {agents} hâlâ çalışıyor"}
 {"k": "chatmove.notice", "src": "01364acb", "v": "Telegram bu grubu yükseltti. aipager da onunla birlikte taşındı, yapman gereken bir şey yok."}
 {"k": "cli.session.bg_busy", "src": "e8f1ee8a", "v": "Sohbet hâlâ Claude Code arka plan işi {job} içinde çalışıyor: işi {stop_command} ile durdur ya da {attach_command} ile aç, sonra yeniden dene."}
 {"k": "cli.session.bg_stop_failed", "src": "1f4af338", "v": "Claude Code arka plan işi {job} durdurulamadı: {error}"}
@@ -321,6 +316,10 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "/new ile bir tane başlat."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Konuşmak için klavyede bir oturuma dokun."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Telegram üzerinden Claude Code"}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"one": "{n} ajanı bekliyor", "other": "{n} ajanı bekliyor"}}
+{"k": "jobwait.both", "src": "4f90f011", "v": "bekliyor: {agents} ve {shells}"}
+{"k": "jobwait.finishing", "src": "1bfd382d", "v": "neredeyse bitti"}
+{"k": "jobwait.shells", "src": "7cdd1b1e", "v": {"one": "{n} arka plan komutunu bekliyor", "other": "{n} arka plan komutunu bekliyor"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Geri"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Komutlar ›"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "Sonlandır"}
@@ -1154,6 +1153,8 @@
 {"k": "ui.conn.reconnecting", "src": "6b160044", "v": "yeniden bağlanıyor…"}
 {"k": "ui.conn.session_expired", "src": "c1c71ef8", "v": "Giriş oturumunun süresi doldu. Telegram'da {command} ile yeniden aç."}
 {"k": "ui.conn.unreachable", "src": "eb8937f2", "v": "Sunucuya ulaşılamıyor. Tüneli kontrol et."}
+{"k": "ui.count.agents", "src": "263711d4", "v": {"one": "{n} ajan", "other": "{n} ajan"}}
+{"k": "ui.count.shells", "src": "9b747b65", "v": {"one": "{n} arka plan komutu", "other": "{n} arka plan komutu"}}
 {"k": "ui.daemon.uptime", "src": "18bb02cb", "v": "{n} dk'dır açık"}
 {"k": "ui.detail.latest_reply", "src": "455aaef0", "v": "Son yanıt"}
 {"k": "ui.detail.session_settings", "src": "ed40d944", "v": "Oturum ayarları"}
@@ -1389,6 +1390,10 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "çalışıyor"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "bitti"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "hazır"}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"one": "{n} ajanı bekliyor", "other": "{n} ajanı bekliyor"}}
+{"k": "ui.state.tasks_both", "src": "4f90f011", "v": "bekliyor: {agents} ve {shells}"}
+{"k": "ui.state.tasks_finishing", "src": "1bfd382d", "v": "neredeyse bitti"}
+{"k": "ui.state.tasks_shells", "src": "7cdd1b1e", "v": {"one": "{n} arka plan komutunu bekliyor", "other": "{n} arka plan komutunu bekliyor"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "bilinmiyor"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "seni bekliyor"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "Claude Code arka planında"}
@@ -1397,6 +1402,10 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Seni bekliyor ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "Hazır"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Hazır, son etkinlik {age}"}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"one": "{n} ajanı bekliyor", "other": "{n} ajanı bekliyor"}}
+{"k": "ui.state_line.tasks_both", "src": "4ec2ebef", "v": "Bekliyor: {agents} ve {shells}"}
+{"k": "ui.state_line.tasks_finishing", "src": "08e3ab13", "v": "Neredeyse bitti"}
+{"k": "ui.state_line.tasks_shells", "src": "c6934058", "v": {"one": "{n} arka plan komutunu bekliyor", "other": "{n} arka plan komutunu bekliyor"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Henüz veri yok"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Çalışıyor"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Çalışıyor ({clock})"}

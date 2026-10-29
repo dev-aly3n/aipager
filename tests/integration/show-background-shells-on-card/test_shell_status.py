@@ -110,7 +110,7 @@ def test_pin_counts_a_running_shell(replay, vloop):
 
     working, idle = _run(vloop, scenario())
     assert working == "⚙️ aipager_boss (working, 1 shell running)"
-    assert idle == "💤 aipager_boss (idle, 1 shell running)"
+    assert idle == "🔄 aipager_boss (waiting for 1 shell)"
     assert _pin(r) == "💤 aipager_boss (idle)"
 
 
@@ -134,7 +134,7 @@ def test_pin_counts_agents_and_shells(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    assert _pin(r) == "💤 aipager_boss (idle, 2 agents, 2 shells running)"
+    assert _pin(r) == "🔄 aipager_boss (waiting for 2 agents and 2 shells)"
 
 
 # ── the answer line ─────────────────────────────────────────────────────────
@@ -236,7 +236,7 @@ def test_shell_past_max_age_closes_the_job_with_a_notice(replay, vloop,
         return early
 
     early = _run(vloop, scenario())
-    assert early == "💤 aipager_boss (idle, 1 shell running)"
+    assert early == "🔄 aipager_boss (waiting for 1 shell)"
     assert _pin(r) == "💤 aipager_boss (idle)"
     card = _only_card(r)
     assert card["stop"] is False

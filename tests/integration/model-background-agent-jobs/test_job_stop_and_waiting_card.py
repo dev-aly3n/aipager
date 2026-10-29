@@ -46,21 +46,23 @@ def test_waiting_header_plural_agent_count():
 
 def test_waiting_status_never_says_finished():
     """Contract change ("status-line-at-card-bottom"): the waiting frame's
-    status line reads "N agent(s) … still working" — the old header's
-    "waiting on background work" phrasing folded into it when the header
-    and footer were unified into one bottom line."""
+    status line says what it waits for ("waiting for 1 agent", roadmap
+    8.121: the words every surface uses) — the old header's "waiting on
+    background work" phrasing folded into it when the header and footer
+    were unified into one bottom line."""
     sess = _waiting_sess()
     out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
     assert "Finished" not in out
-    assert "still working" in out
+    assert "waiting for 1 agent" in out
     assert out.splitlines()[-1].startswith("🔄")
 
 
-def test_waiting_header_shows_types_for_one_to_three_distinct():
+def test_waiting_line_names_the_count_not_the_types():
+    """Roadmap 8.121: the line says how many agents it waits for, as the
+    bar and /status do; each agent's type is on its own row above."""
     sess = _waiting_sess(n_agents=2, types=("Explore", "Plan"), elapsed_s=10)
     out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
-    assert "Explore" in out
-    assert "Plan" in out
+    assert out.splitlines()[-1] == "🔄 **hiva** · waiting for 2 agents · 0:10"
 
 
 def test_waiting_header_omits_types_beyond_three_distinct():
@@ -74,26 +76,26 @@ def test_waiting_header_omits_types_beyond_three_distinct():
 def test_waiting_header_elapsed_under_60s_reads_zero_minutes_clock():
     sess = _waiting_sess(elapsed_s=45)
     out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
-    assert re.search(r"still working · 0:4[0-9]$", out), out
+    assert re.search(r"waiting for 1 agent · 0:4[0-9]$", out), out
 
 
 def test_waiting_header_elapsed_at_60s_boundary_reads_one_minute_clock():
     sess = _waiting_sess(elapsed_s=60)
     out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
-    assert re.search(r"still working · 1:0[0-9]$", out), out
+    assert re.search(r"waiting for 1 agent · 1:0[0-9]$", out), out
 
 
 def test_waiting_header_elapsed_just_under_60s_boundary_reads_0_59():
     sess = _waiting_sess(elapsed_s=59)
     out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
-    assert re.search(r"still working · 0:59$", out), out
+    assert re.search(r"waiting for 1 agent · 0:59$", out), out
 
 
 def test_waiting_status_omits_elapsed_when_busy_started_at_falsy():
     sess = _waiting_sess()
     sess.busy_started_at = 0.0
     out = unfooter(animation.build_stream_card(sess, "Verb", waiting=True))
-    assert "still working" in out
+    assert out.splitlines()[-1] == "🔄 **hiva** · waiting for 1 agent"
 
 
 def test_non_waiting_render_has_no_waiting_text():

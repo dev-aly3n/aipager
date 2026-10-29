@@ -339,16 +339,31 @@ def flood_backoff_lines(backoffs: list[dict]) -> list[str]:
     ]
 
 
+def _count(record: dict | None, key: str) -> int:
+    """A non-negative int count from a saved ``job_wait`` record, 0 when
+    missing or not a count."""
+    value = (record or {}).get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return 0
+    return value
+
+
 def _gather_sessions() -> tuple[list[dict], set[str]]:
     """Returns (session_dicts, live_names).
 
     Each session_dict has: name, label, status, model, context_pct,
-    cost_usd, queue_depth, waiting_kind, waiting_summary.
+    cost_usd, queue_depth, waiting_kind, waiting_summary, job_agents,
+    job_shells.
 
     ``status`` is ``IDLE``, ``BUSY``, ``WAITING`` (a permission or a
     question waits on a person; ``waiting_kind`` is ``permission`` or
     ``question`` and ``waiting_summary`` says which, when known, else both
-    are None) or ``GONE``.
+    are None), ``TASKS`` (roadmap 8.121: Claude's own turn ended, but the
+    background agents or shells its job started still run; counted as
+    working, ``job_agents`` and ``job_shells`` say how many, both 0 while
+    it is finishing up and 0 on every other row) or ``GONE``. Checked in
+    that order after GONE: WAITING, TASKS, BUSY (the waiting card keeps
+    its ``busy_msg_id``), IDLE.
     """
     state = _read_state()
     persisted = state.get("sessions", {}) or {}
@@ -369,11 +384,16 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             # 8.118). The daemon saves its live status; a file written
             # before it did falls back to the card below.
             status = "WAITING"
+        elif isinstance(sess.get("job_wait"), dict):
+            # Waiting for its job's background agents or shells (roadmap
+            # 8.121): the daemon saves the record only in that state.
+            status = "TASKS"
         elif busy_msg_id:
             status = "BUSY"
         else:
             status = "IDLE"
         waiting = status == "WAITING"
+        job_wait = sess.get("job_wait") if status == "TASKS" else None
         sl = _read_statusline(name) if is_alive else {}
         ctx = sl.get("context_window", {}) or {}
         cost = sl.get("cost", {}) or {}
@@ -388,6 +408,8 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             "queue_depth": len(sess.get("pending_queue") or []),
             "waiting_kind": (sess.get("waiting_kind") or None) if waiting else None,
             "waiting_summary": (sess.get("waiting_summary") or None) if waiting else None,
+            "job_agents": _count(job_wait, "agents"),
+            "job_shells": _count(job_wait, "shells"),
         })
         seen_names.add(name)
 
@@ -406,6 +428,8 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
             "queue_depth": 0,
             "waiting_kind": None,
             "waiting_summary": None,
+            "job_agents": 0,
+            "job_shells": 0,
         })
 
     # Stable order: live first (alphabetical by label), then gone
@@ -418,6 +442,7 @@ def _gather_sessions() -> tuple[list[dict], set[str]]:
 _STATUS_STYLE = {
     "IDLE": ("ok", "✓"),
     "BUSY": ("step", "⚙"),
+    "TASKS": ("step", "↻"),
     "WAITING": ("warn", "?"),
     "GONE": ("warn", "⚠"),
 }
@@ -440,6 +465,21 @@ def waiting_text(row: dict) -> str:
     return text
 
 
+def tasks_text(row: dict) -> str:
+    """What a TASKS row waits for: ``waiting for 2 agents``, ``waiting for
+    1 shell``, ``waiting for 2 agents and 1 shell``, or ``finishing up``
+    while nothing is left running; ``""`` for any other row. The chat's
+    own words (``job_wait.phrase``) in English: the CLI is never
+    translated. Imported here, so a listing with no such row never loads
+    the bot."""
+    if row.get("status") != "TASKS":
+        return ""
+    from aipager import i18n
+    from aipager.bot import job_wait
+    return job_wait.phrase(i18n.get("en"), _count(row, "job_agents"),
+                           _count(row, "job_shells"), kind="text")
+
+
 def render_sessions_rich(sessions: list[dict]) -> None:
     """Render the session list as a rich Table to console (TTY path)."""
     from rich.table import Table
@@ -458,6 +498,8 @@ def render_sessions_rich(sessions: list[dict]) -> None:
         if waiting_text(s):
             # Free text (a command, a question): never read as markup.
             metrics_parts.append(rich_escape(waiting_text(s)))
+        if tasks_text(s):
+            metrics_parts.append(tasks_text(s))
         if s["model"]:
             # Claude Code's display name, any text: never read as markup.
             metrics_parts.append(rich_escape(s["model"]))
@@ -485,6 +527,8 @@ def render_sessions_plain(sessions: list[dict]) -> None:
         parts = [s["label"], s["status"]]
         if waiting_text(s):
             parts.append(rich_escape(waiting_text(s)))
+        if tasks_text(s):
+            parts.append(tasks_text(s))
         if s["model"]:
             parts.append(rich_escape(s["model"]))
         if s["context_pct"] is not None:

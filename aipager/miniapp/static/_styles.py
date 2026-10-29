@@ -613,6 +613,11 @@ CSS = """
     border-color: color-mix(in srgb, var(--lamp-work) 32%, var(--line));
     background: radial-gradient(130% 95% at 0% 0%, var(--lamp-work-soft) 0%, transparent 62%), var(--surface);
   }
+  /* Waiting for its own background agents or shells is working too. */
+  .tile-tasks {
+    border-color: color-mix(in srgb, var(--lamp-work) 32%, var(--line));
+    background: radial-gradient(130% 95% at 0% 0%, var(--lamp-work-soft) 0%, transparent 62%), var(--surface);
+  }
   .tile-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s2); }
   .tile-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 0; }
   .tile-state {
@@ -626,6 +631,14 @@ CSS = """
     white-space: nowrap;
   }
   .tile-busy .tile-state { color: var(--ink); background: var(--lamp-work-soft); }
+  /* "waiting for 2 agents and 1 shell" may not fit a narrow tile. */
+  .tile-tasks .tile-state {
+    color: var(--ink);
+    background: var(--lamp-work-soft);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .tile-age { font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-3); white-space: nowrap; }
   .tile-label, .tile-project, .tile-meta {
     display: block;
@@ -769,6 +782,8 @@ CSS = """
   .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .status-busy { color: var(--ink); background: var(--lamp-work-soft); }
   .status-busy::before { background: var(--lamp-work); }
+  .status-tasks { color: var(--ink); background: var(--lamp-work-soft); }
+  .status-tasks::before { background: var(--lamp-work); }
   .status-waiting { color: var(--need-ink); background: var(--need-soft); }
   .status-gone { color: var(--ink-3); }
   .d-state-row { display: flex; align-items: center; gap: var(--s2); margin-top: 2px; min-width: 0; }
@@ -778,6 +793,7 @@ CSS = """
   .d-state-row .status { gap: 0; padding: 0; font-size: 0; line-height: 0; background: none; }
   .d-state-row .status::before { width: 8px; height: 8px; background: var(--lamp-rest); }
   .d-state-row .status-busy::before { background: var(--lamp-work); box-shadow: 0 0 0 3px var(--lamp-work-soft); }
+  .d-state-row .status-tasks::before { background: var(--lamp-work); box-shadow: 0 0 0 3px var(--lamp-work-soft); }
   .d-state-row .status-waiting::before { background: var(--lamp-need); box-shadow: 0 0 0 3px var(--need-soft); }
   .d-state-row .status-gone::before { background: var(--lamp-out); }
   .d-title .pill { margin-top: var(--s2); }

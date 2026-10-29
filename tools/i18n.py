@@ -115,6 +115,9 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"card\.[a-z0-9_.]+", "card", "chars", 160, ""),
     (r"log\.[a-z0-9_.]+", "message", "chars", 200, ""),
     (r"agents\.[a-z0-9_.]+", "message", "chars", 200, ""),
+    # What an idle session waits for (aipager/bot/job_wait.py): a state
+    # word on the pinned bar, /status and the busy card's last line.
+    (r"jobwait\.[a-z0-9_.]+", "label", "chars", 60, ""),
     # The resume card's default mode button wraps a whole mode label
     # (whose own budget is 40 cells) and has a row of its own: it gets the
     # label's budget.
