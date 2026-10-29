@@ -2247,7 +2247,13 @@ class SessionOpsMixin:
         _clear_turn_open(sess.name)
         sess.turn_sender_id = None
         # The job ends, background agents included: every open prompt
-        # with it (roadmap 8.120), and their buttons type nothing.
+        # with it (roadmap 8.120), and their buttons type nothing. Their
+        # own messages lose their buttons below (live round 2, H4).
+        closed_records = [rec for _where, _perm, rec in sess.open_prompt_records()
+                          if isinstance(rec, dict)]
+        closed_records += [rec for rec in sess.extra_prompts
+                           if isinstance(rec, dict)
+                           and not any(rec is r for r in closed_records)]
         sess.close_all_prompts()
         sess.pending_permission = None
         sess.status = Status.IDLE
@@ -2272,6 +2278,7 @@ class SessionOpsMixin:
         sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
+        await self._show_prompts_closed(sess, closed_records)
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
         return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by,

@@ -794,6 +794,35 @@ class NotifyMixin:
             if base is not None:  # none, or taken off already
                 await self._show_unclocked(sess, rec, base)
 
+    async def _show_prompts_closed(self, sess: TrackedSession, records) -> None:
+        """Prompt messages whose prompt a Stop's Escapes closed (Claude's
+        own, an agent's: every prompt goes with the turn) show no answer
+        buttons, as a prompt answered in the terminal: one with a clock
+        line loses it (:meth:`_drop_clock_lines`, Claude Code did not
+        refuse it), any other loses its buttons alone. Their surfaces are
+        marked closed already, so a late tap types nothing. The busy
+        card's inline prompt goes with the card's own settle. Never
+        raises."""
+        if self._app is None:
+            return
+        for rec in records or ():
+            if not isinstance(rec, dict):
+                continue
+            base = rm_refusal.take_unclocked_text(rec)
+            if base is not None:
+                await self._show_unclocked(sess, rec, base)
+                continue
+            msg_id = rec.get("msg_id")
+            if not (isinstance(msg_id, int) and msg_id > 0):
+                continue  # never sent (a muted chat): nothing to edit
+            try:
+                await self._app.bot.edit_message_reply_markup(
+                    chat_id=rec.get("chat_id") or resolve_chat_id(sess),
+                    message_id=msg_id, reply_markup=None)
+            except Exception:  # noqa: BLE001 - its taps type nothing anyway
+                log.debug("[%s] closed prompt message's buttons not removed",
+                          sess.label, exc_info=True)
+
     async def _show_unclocked(self, sess: TrackedSession, rec: dict,
                               base: str, keyboard=None) -> None:
         """Prompt message record *rec* shows *base*, its text without the
