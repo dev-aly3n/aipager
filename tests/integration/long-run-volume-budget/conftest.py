@@ -36,7 +36,7 @@ from aipager import config
 from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 
 #: The REAL ``_post``, captured before conftest's autouse
 #: ``_block_real_telegram_http`` swaps in its refusing stub.

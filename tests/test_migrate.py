@@ -38,15 +38,15 @@ def paths(tmp_path, monkeypatch):
 
 
 def test_migrate_personal(paths, monkeypatch):
-    monkeypatch.setattr(config, "CHAT_ID", "256113222")
-    paths["config_env"].write_text("CLAUDE_TG_BOT_TOKEN=TOK\nCLAUDE_TG_CHAT_ID=256113222\n")
+    monkeypatch.setattr(config, "CHAT_ID", "222333444")
+    paths["config_env"].write_text("CLAUDE_TG_BOT_TOKEN=TOK\nCLAUDE_TG_CHAT_ID=222333444\n")
 
     assert migrate.migrate_to_v2() is True
     scopes, token = load_scopes(paths["aipager"])
     assert token == "TOK"
     assert len(scopes) == 1
     s = scopes[0]
-    assert s.kind == "dm" and s.chat_id == 256113222
+    assert s.kind == "dm" and s.chat_id == 222333444
     assert len(s.members) == 1
     assert s.members[0].role == "admin"   # admin, NOT owner (silent migration)
     # policy.yaml seeded
@@ -60,10 +60,10 @@ def test_migrate_personal(paths, monkeypatch):
 def test_migrate_team(paths):
     paths["team"].write_text(textwrap.dedent("""\
         mode: team
-        group_id: -4152307515
+        group_id: -4100000001
         users:
-          - {id: 1, label: aly3n, role: admin}
-          - {id: 2, label: arian, role: developer}
+          - {id: 1, label: alice, role: admin}
+          - {id: 2, label: bob, role: developer}
         rules:
           deny_tools: [Bash]
     """))
@@ -71,10 +71,10 @@ def test_migrate_team(paths):
     scopes, _ = load_scopes(paths["aipager"])
     assert len(scopes) == 1
     g = scopes[0]
-    assert g.kind == "group" and g.chat_id == -4152307515
+    assert g.kind == "group" and g.chat_id == -4100000001
     assert g.deny_tools == ("Bash",)
     roles = {m.label: m.role for m in g.members}
-    assert roles == {"aly3n": "admin", "arian": "user"}  # developer→user
+    assert roles == {"alice": "admin", "bob": "user"}  # developer→user
     # team.yaml backed up + retained
     assert paths["team"].exists()
     assert list(paths["team"].parent.glob("team.yaml.bak.*"))
@@ -106,7 +106,7 @@ def test_migrate_no_token_is_noop(paths, monkeypatch):
 # ---- retire_v1 (Phase C) -----------------------------------------------
 
 def test_retire_v1_renames_when_v2_clean(paths, monkeypatch):
-    monkeypatch.setattr(config, "CHAT_ID", "256113222")
+    monkeypatch.setattr(config, "CHAT_ID", "222333444")
     paths["config_env"].write_text("CLAUDE_TG_BOT_TOKEN=TOK\n")
     paths["team"].write_text(
         "mode: team\ngroup_id: -1\nusers:\n  - {id: 1, label: a, role: admin}\n")

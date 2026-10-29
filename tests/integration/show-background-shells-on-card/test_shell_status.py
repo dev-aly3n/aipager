@@ -21,7 +21,7 @@ from aipager.session_monitor import SessionMonitor, resolve_bg_shell_max_track
 from aipager.state import AGENTS_LINE_EDIT_INTERVAL, BG_AGENTS_SETTLE_SECONDS, BG_SHELLS_CAP
 from tests.footer_text import unfooter
 
-CHAT = 256113222
+CHAT = 222333444
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
 EM = "—"

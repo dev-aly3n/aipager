@@ -32,7 +32,7 @@ from aipager import config, status
 from aipager.bot import flood_state
 from aipager.bot.flood import MUTE
 
-CHAT = 256113222
+CHAT = 222333444
 WINDOW = config.FLOOD_SUCCESS_WINDOW_SECONDS
 CEILING = config.TELEGRAM_PRIVATE_MAX_RATE
 FLOOR = config.FLOOD_MIN_RATE
@@ -221,11 +221,11 @@ def test_a_non_finite_mute_deadline_is_clamped_not_trusted(qa_clock, bad):
 
 CORRUPT_DOCUMENTS = {
     "nan_literal": '{"version": 1, "written_at": 1.0, "chats": '
-                   '[{"chat_id": 256113222, "rate": NaN}]}',
+                   '[{"chat_id": 222333444, "rate": NaN}]}',
     "infinity_literal": '{"version": 1, "written_at": 1.0, "chats": '
-                        '[{"chat_id": 256113222, "rate": Infinity}]}',
+                        '[{"chat_id": 222333444, "rate": Infinity}]}',
     "truncated_mid_object": '{"version": 1, "written_at": 1.0, "chats": '
-                            '[{"chat_id": 2561132',
+                            '[{"chat_id": 2223334',
     "truncated_mid_array": '{"version": 1, "written_at": 1.0, "chats": [',
     "empty": "",
     "not_an_object_list": "[1, 2, 3]",

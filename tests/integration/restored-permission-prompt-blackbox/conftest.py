@@ -41,7 +41,7 @@ from aipager import config, policy_snapshot
 from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 NAME = "claude-rppbb_harness"
 LABEL = "rppbb"
 PREFIX = "[via Telegram · @owner]\n"

@@ -452,7 +452,7 @@ def test_ensure_marker_counts_the_configured_chat(bot):
     prefs.set_ui_language(9001, "en")
     persist.note_prior_run()
     language_launch.ensure_marker(bot)
-    assert 256113222 in persist.launch_marker()["people"]
+    assert 222333444 in persist.launch_marker()["people"]
 
 
 def test_ensure_marker_never_counts_a_group(bot):

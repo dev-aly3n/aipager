@@ -31,7 +31,7 @@ from aipager.bot.flood_budget import FloodSkipped
 from aipager.scope import Scope
 from aipager.state import SessionRegistry, Status
 
-CHAT = 256113222
+CHAT = 222333444
 GROUP = -1001234567890
 PINNED = 9999
 GAP = config.PINNED_MIN_EDIT_GAP

@@ -27,7 +27,7 @@ from aipager.policy import load_policy
 from pathlib import Path
 from tests.footer_text import as_md
 
-CHAT = 256113222
+CHAT = 222333444
 HOUR = 3600.0
 EPS = 1e-3
 

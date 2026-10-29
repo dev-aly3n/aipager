@@ -1,4 +1,5 @@
-"""No real person's name, handle, machine or session name in the repo.
+"""No real person's name, handle, machine or session name, and no real
+chat id, in the repo.
 
 The repo is public. Examples use neutral names (``@alice``, ``bob``,
 sessions ``frontend`` / ``backend``, ``/home/alice``), and a name copied
@@ -17,6 +18,14 @@ is checked as the pair joined with ``-``: written ``a-b``, ``a_b``,
 separator (``a--b``) between them are not paired. A longer word that only starts with a
 name (the author handle in the git metadata, say) is a different word and
 passes.
+
+A chat id is any whole run of digits inside a run (``d…`` and ``g…`` scope
+suffixes, ``name__d…`` labels, ``group-…`` folders, ``-…`` group ids),
+failing when the SHA-256 of its digits, or of what follows a leading
+``100`` (a group's ``-100…`` supergroup form), is in :data:`BANNED_IDS`.
+Any other longer or shorter number that holds those digits is a different
+number and passes, and so do digits split by a separator (``1_000``):
+a cut-down copy of a real id is not caught, so review fixtures by hand.
 """
 
 from __future__ import annotations
@@ -28,7 +37,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.neutral_names import BANNED, as_renamed, owner_handle, sha
+import pytest
+
+from tests.neutral_names import BANNED, BANNED_IDS, as_renamed, id_forms, owner_handle, sha
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -36,6 +47,8 @@ ROOT = Path(__file__).resolve().parent.parent
 _RUN = re.compile(r"[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*")
 #: The words of one letters-and-digits piece, split at a case change.
 _WORD = re.compile(r"[A-Z]+(?![a-z])[0-9]*|[A-Z]?[a-z]+[0-9]*|[0-9]+")
+#: Every whole run of digits in a run: the chat id candidates.
+_DIGITS = re.compile(r"[0-9]+")
 
 _SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache",
               ".ruff_cache", "build", "dist"}
@@ -47,6 +60,8 @@ def _hash(word: str) -> str:
 
 @functools.lru_cache(maxsize=None)
 def _is_banned(word: str) -> bool:
+    if word.isdigit():
+        return any(_hash(d) in BANNED_IDS for d in id_forms(word))
     return _hash(word) in BANNED
 
 
@@ -64,6 +79,7 @@ def _words(run: str) -> list[str]:
             flat.extend(split)
     words.extend(f"{a}-{b}" for a, b in zip(pieces, pieces[1:]))
     words.extend(f"{a}-{b}" for a, b in zip(flat, flat[1:]))
+    words.extend(_DIGITS.findall(run))
     return words
 
 
@@ -145,8 +161,9 @@ def _caught(text: str) -> bool:
 
 def test_no_tracked_file_names_a_real_person():
     hits = offenders(ROOT, _tracked_files())
-    assert hits == [], ("a real name is back; use a neutral one (@alice, "
-                        "frontend, /home/alice):\n  " + "\n  ".join(hits[:50]))
+    assert hits == [], ("a real name or chat id is back; use a neutral one "
+                        "(@alice, frontend, /home/alice, 222333444, -4100000001):"
+                        "\n  " + "\n  ".join(hits[:50]))
 
 
 def test_the_scan_reads_the_whole_tree():
@@ -221,3 +238,78 @@ def test_a_hit_the_line_pass_cannot_place_still_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(sys.modules[__name__], "_banned_words", lambda run: [])
     assert offenders(tmp_path, ["bad.py"]) == [
         "(a banned word was found but could not be placed)"]
+
+
+@pytest.fixture
+def standin_ids(monkeypatch, request):
+    """Arm the scan with stand-in chat ids (hashed here) in place of the
+    real ones, a DM id and a group id of the real ones' digit counts."""
+    monkeypatch.setattr(sys.modules[__name__], "BANNED_IDS",
+                        frozenset({_hash("123456789"), _hash("4000000999")}))
+    _is_banned.cache_clear()
+    request.addfinalizer(_is_banned.cache_clear)
+
+
+def test_a_chat_id_is_caught_in_every_form(standin_ids):
+    for text in ("123456789", "chat 123456789.", "CHAT_ID = '123456789'",
+                 "d123456789", "claude-api__d123456789", "api__d123456789",
+                 "-4000000999", "g4000000999", "group-4000000999",
+                 "claude-api__g4000000999", '{"chat_id": -4000000999}',
+                 "x123456789y", "/tmp/d123456789/x", "-1004000000999",
+                 "100123456789"):
+        assert _caught(text), text
+    for text in ("1234567890", "0123456789", "12345678", "23456789",
+                 "123_456_789", "-40000009990", "222333444", "-4100000001",
+                 "1014000000999", "2004000000999"):
+        assert not _caught(text), text
+
+
+def test_offenders_places_a_chat_id(tmp_path, standin_ids):
+    (tmp_path / "ok.py").write_text("CHAT = 222333444\n", encoding="utf-8")
+    (tmp_path / "bad.py").write_text('x = 1\nNAME = "api__g4000000999"\n',
+                                     encoding="utf-8")
+    assert offenders(tmp_path, ["ok.py", "bad.py"]) == ["bad.py:2: g4000000999"]
+    assert offenders(tmp_path, ["ok.py"]) == []
+
+
+def test_the_real_ids_are_armed_and_the_fakes_pass():
+    """Five id hashes, none of them a fake the tree uses instead."""
+    assert len(BANNED_IDS) == 5
+    for fake in ("222333444", "4100000001", "333444555", "3334445556", "111333555",
+                 "900000001", "4000000001", "1004000000001"):
+        assert not _is_banned(fake), fake
+
+
+#: The last commit with the operator's ids in clear text.
+_BEFORE = "76b3684e"
+
+
+def _at_commit(rel: str) -> str:
+    try:
+        res = subprocess.run(["git", "show", f"{_BEFORE}:{rel}"], cwd=ROOT,
+                             capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        pytest.skip("git is not available")
+    if res.returncode != 0:
+        pytest.skip(f"{_BEFORE} is not in this checkout")
+    return res.stdout.decode()
+
+
+def test_the_operator_ids_hash_to_the_ones_armed():
+    """A wrong hash would quietly disarm the scan and the harness tripwire:
+    rebuild both from the commit before they left the tree."""
+    from tests.neutral_names import OPERATOR_IDS
+    dm = re.search(r"^REAL_CHAT_ID = ([0-9]+)$",
+                   _at_commit("tests/e2e/fake_telegram/instance.py"), re.M)
+    group = re.search(r"group -([0-9]+) \u2192", _at_commit("aipager/scope.py"))
+    assert dm and group
+    assert (sha(dm.group(1)), sha(group.group(1))) == OPERATOR_IDS
+
+
+def test_as_renamed_renames_a_chat_id_as_a_whole_number(monkeypatch):
+    from tests import neutral_names
+    monkeypatch.setattr(neutral_names, "_ID_RENAMES",
+                        {_hash("123456789"): b"999888777"})
+    old = b'"x__d123456789" -123456789 1234567890 0123456789 123456789'
+    assert as_renamed(old) == (
+        b'"x__d999888777" -999888777 1234567890 0123456789 999888777')

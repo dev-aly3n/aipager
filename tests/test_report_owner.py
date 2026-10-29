@@ -14,7 +14,7 @@ from aipager.bot import report_flow
 from aipager.scope import Member, Scope
 from aipager.team import Role as TeamRole, Team, User as TeamUser
 
-OWNER = 256113222  # tests/conftest.py pins config.CHAT_ID to this
+OWNER = 222333444  # tests/conftest.py pins config.CHAT_ID to this
 
 
 def _dm(chat_id, role="owner", member_id=None):

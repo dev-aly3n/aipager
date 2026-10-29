@@ -36,7 +36,7 @@ from aipager.session_monitor import SessionMonitor
 from aipager.state import Status
 from tests.card_tasks import drain_card_tasks
 
-CHAT = 256113222          # the chat `_pin_single_chat_config` pins
+CHAT = 222333444          # the chat `_pin_single_chat_config` pins
 BAN = 600.0
 
 

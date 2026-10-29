@@ -30,7 +30,7 @@ from aipager.bot import flood_state
 from aipager.bot.flood import MUTE
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 UNSEEN = -1009988776
 WINDOW = config.FLOOD_SUCCESS_WINDOW_SECONDS
 CEILING = config.TELEGRAM_PRIVATE_MAX_RATE

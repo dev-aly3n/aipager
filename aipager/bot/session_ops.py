@@ -888,7 +888,7 @@ def _reply_fmt_time(date) -> str:
 
 def _reply_attribution_clause(date, author: str | None) -> str:
     """``"sent 21:40, by you"`` / ``"sent 21:40, from Telegram user
-    256113222"`` / ``"sent 21:40"`` (no attribution available)."""
+    222333444"`` / ``"sent 21:40"`` (no attribution available)."""
     t = _reply_fmt_time(date)
     if not author:
         return f"sent {t}" if t else ""

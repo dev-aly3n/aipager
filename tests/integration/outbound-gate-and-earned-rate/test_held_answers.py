@@ -28,7 +28,7 @@ from aipager.bot.held import (
 )
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 BAN = 34212.0
 
 

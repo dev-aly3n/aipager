@@ -536,9 +536,9 @@ def test_get_or_create_derives_a_label_without_the_scope_suffix():
     discovery re-creates the entry through `get_or_create` — which is the
     only path that has to DERIVE a label. It kept the disambiguator, so
     the session then showed up in the gone list as
-    "Jkhk__d256113222" instead of "Jkhk"."""
+    "frontend__d222333444" instead of "frontend"."""
     reg = SessionRegistry()
-    assert reg.get_or_create("claude-Jkhk__d256113222").label == "Jkhk"
+    assert reg.get_or_create("claude-frontend__d222333444").label == "frontend"
     assert reg.get_or_create("claude-dev").label == "dev"
     assert reg.get_or_create("claude-my__thing").label == "my__thing"
 
@@ -548,8 +548,8 @@ def test_get_or_create_never_rewrites_an_existing_label():
     chosen label — or one already stored — must survive being looked up
     again, however odd it looks."""
     reg = SessionRegistry()
-    sess = reg.get_or_create("claude-Jkhk__d256113222")
+    sess = reg.get_or_create("claude-frontend__d222333444")
     sess.label = "renamed__d999"          # deliberately suffix-shaped
-    again = reg.get_or_create("claude-Jkhk__d256113222")
+    again = reg.get_or_create("claude-frontend__d222333444")
     assert again is sess
     assert again.label == "renamed__d999"

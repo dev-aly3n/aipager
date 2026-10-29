@@ -27,7 +27,7 @@ import pytest
 from aipager import preferences as prefs
 from aipager.dtach import inject
 
-CHAT = 256113222
+CHAT = 222333444
 CTRL_X = b"\x18"
 CTRL_S = b"\x13"
 ESC = b"\x1b"

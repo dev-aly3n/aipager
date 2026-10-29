@@ -34,7 +34,7 @@ from aipager import policy_snapshot as ps
 from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS, Status
 
 NAME = "claude-x"
-SCOPE_CHAT = 256113222  # the stamped scope id
+SCOPE_CHAT = 222333444  # the stamped scope id
 # The messages come from the chat the session is stamped into: the target
 # is per chat since 2026-09-30 (F11), so a message from any OTHER chat is
 # (rightly) never routed to it. The stamping still changes the sender

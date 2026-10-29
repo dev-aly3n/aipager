@@ -25,7 +25,7 @@ from aipager import config, doctor, status
 from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 MIN = 60.0
 
 

@@ -28,7 +28,7 @@ from aipager.bot.flood_budget import (
 )
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 TOTAL = config.FLOOD_HOURLY_MAX                                     # 1200
 SHARE = config.FLOOD_HOURLY_MAX - config.FLOOD_HOURLY_ESSENTIAL_RESERVE  # 1080
 ORNAMENT = rate_limit_args(priority=PRIORITY_ORNAMENT)

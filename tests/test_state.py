@@ -438,14 +438,14 @@ def test_scope_fields_round_trip(tmp_state_file):
     r1 = SessionRegistry()
     r1.transition("claude-jim", Status.IDLE)
     sess = r1.get("claude-jim")
-    sess.scope_chat_id = -4152307515
+    sess.scope_chat_id = -4100000001
     sess.scope_kind = "group"
     r1.save()
 
     r2 = SessionRegistry()
     r2.load()
     s2 = r2.get("claude-jim")
-    assert s2.scope_chat_id == -4152307515
+    assert s2.scope_chat_id == -4100000001
     assert s2.scope_kind == "group"
 
 
@@ -453,7 +453,7 @@ def test_backfill_scope_from_chat_id_dm(tmp_state_file, monkeypatch):
     """Legacy session (no scope_chat_id) backfills from config.CHAT_ID."""
     from aipager import config
     monkeypatch.setattr(config, "SCOPES", None, raising=False)
-    monkeypatch.setattr(config, "CHAT_ID", "256113222")
+    monkeypatch.setattr(config, "CHAT_ID", "222333444")
     r1 = SessionRegistry()
     r1.transition("claude-jim", Status.IDLE)
     r1.save()
@@ -467,7 +467,7 @@ def test_backfill_scope_from_chat_id_dm(tmp_state_file, monkeypatch):
     r2 = SessionRegistry()
     r2.load()
     s2 = r2.get("claude-jim")
-    assert s2.scope_chat_id == 256113222
+    assert s2.scope_chat_id == 222333444
     assert s2.scope_kind == "dm"   # positive → dm
 
 
@@ -531,9 +531,9 @@ def test_find_by_label_prefers_a_live_session_over_a_gone_twin(tmp_state_file):
     ``include_gone`` lookup — the Mini App's per-session settings included
     — landed on the dead twin and the change never applied."""
     r = SessionRegistry()
-    _mk(r, "claude-fable", "shop_api", 256113222, status=Status.GONE)
-    _mk(r, "claude-shop_api", "shop_api", 256113222)
-    live = r.find_by_label("shop_api", 256113222, include_gone=True)
+    _mk(r, "claude-fable", "shop_api", 222333444, status=Status.GONE)
+    _mk(r, "claude-shop_api", "shop_api", 222333444)
+    live = r.find_by_label("shop_api", 222333444, include_gone=True)
     assert live is not None and live.name == "claude-shop_api"
     unscoped = r.find_by_label("shop_api", None, include_gone=True)
     assert unscoped is not None and unscoped.name == "claude-shop_api"
@@ -571,7 +571,7 @@ def test_find_by_label_grandfathered_flat(tmp_state_file):
     """A flat-named, unstamped (scope 0) session matches any scope."""
     r = SessionRegistry()
     _mk(r, "claude-tim", "tim", 0)
-    assert r.find_by_label("tim", 256113222).name == "claude-tim"
+    assert r.find_by_label("tim", 222333444).name == "claude-tim"
 
 
 def test_live_labels_scoped(tmp_state_file):

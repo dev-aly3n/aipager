@@ -18,7 +18,7 @@ import pytest
 
 from aipager import config
 
-CHAT = 256113222
+CHAT = 222333444
 DAY = 86400.0
 MINUTE = 60.0
 

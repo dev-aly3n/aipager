@@ -54,7 +54,7 @@ _FIXED_RATE = _config.TELEGRAM_PRIVATE_MAX_RATE
 
 _REAL_POST = rm._post
 
-PRIVATE = 256113222          # the chat `_pin_single_chat_config` pins
+PRIVATE = 222333444          # the chat `_pin_single_chat_config` pins
 GROUP = -1001234567890
 
 

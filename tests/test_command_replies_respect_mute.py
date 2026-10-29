@@ -224,10 +224,10 @@ def test_send_text_resolves_the_chat_from_keyword_or_first_positional(run_async,
 
 def test_the_legacy_str_chat_id_hits_the_same_mute_as_the_int(run_async, clock):
     """``config.CHAT_ID`` is a str; the rich path mutes by int. One entry."""
-    MUTE.mute(256113222, BAN)
+    MUTE.mute(222333444, BAN)
     tg = MagicMock()
     tg.send_message = AsyncMock()
-    assert run_async(send_text(tg, "256113222", "t")) is MUTED
+    assert run_async(send_text(tg, "222333444", "t")) is MUTED
     tg.send_message.assert_not_awaited()
 
 
@@ -487,21 +487,21 @@ def test_pinned_dashboard_muted_remembers_nothing_and_retries_after_the_lift(
     skipped as "redundant"."""
     # dashboard.py keeps its own import-time copy of CHAT_ID, empty on a
     # runner with no .env; pin it like conftest pins config.CHAT_ID.
-    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "256113222")
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "222333444")
     bot = mk_bot()
     bot._app.bot.pin_chat_message = AsyncMock()
     bot._app.bot.edit_message_text = AsyncMock()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY,
-                          scope_chat_id=256113222)
+                          scope_chat_id=222333444)
     bot.registry._sessions["claude-jim"] = sess
-    MUTE.mute(256113222, BAN)  # the str CHAT_ID above lands on this int entry
+    MUTE.mute(222333444, BAN)  # the str CHAT_ID above lands on this int entry
 
     with caplog.at_level(logging.DEBUG):
         run_async(bot.refresh_pinned())
     bot._app.bot.send_message.assert_not_awaited()
     bot._app.bot.pin_chat_message.assert_not_awaited()
     assert not bot.registry.pinned_msg_ids
-    assert bot._pinned[256113222].shown is None
+    assert bot._pinned[222333444].shown is None
     assert not any(r.exc_info for r in caplog.records), \
         "a skipped send is not an error: " + str(
             [r.getMessage() for r in caplog.records if r.exc_info])
@@ -510,16 +510,16 @@ def test_pinned_dashboard_muted_remembers_nothing_and_retries_after_the_lift(
     bot._app.bot.send_message.return_value = MagicMock(message_id=77)
     run_async(bot.refresh_pinned())
     bot._app.bot.send_message.assert_awaited_once()
-    assert bot.registry.pinned_msg_ids == {256113222: 77}
-    shown = bot._pinned[256113222].shown
+    assert bot.registry.pinned_msg_ids == {222333444: 77}
+    shown = bot._pinned[222333444].shown
 
     # And an edit of the existing pinned bar during a later mute records
     # nothing either, so the next refresh tries again.
-    MUTE.mute(256113222, BAN)
+    MUTE.mute(222333444, BAN)
     sess.status = Status.IDLE
     run_async(bot.refresh_pinned())
     bot._app.bot.edit_message_text.assert_not_awaited()
-    assert bot._pinned[256113222].shown == shown
+    assert bot._pinned[222333444].shown == shown
 
 
 # ── the seam's markup helper + the settings "Close" tap ──────────────────────

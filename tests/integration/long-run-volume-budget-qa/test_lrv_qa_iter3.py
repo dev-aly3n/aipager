@@ -47,7 +47,7 @@ from aipager.state import Status
 
 _h = sys.modules["_lrv_qa_harness"]
 
-CHAT = 256113222
+CHAT = 222333444
 PINNED = 9999
 BAN = 25429
 MIN = 60.0

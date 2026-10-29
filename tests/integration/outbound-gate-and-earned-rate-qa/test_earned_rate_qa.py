@@ -22,7 +22,7 @@ from aipager.bot.flood_budget import (
     rate_limit_args,
 )
 
-CHAT = 256113222          # a PRIVATE chat: no sustained window before 8.29
+CHAT = 222333444          # a PRIVATE chat: no sustained window before 8.29
 BAN = 34212.0
 WINDOW = config.FLOOD_SUCCESS_WINDOW_SECONDS
 #: The slow regime's window: every window after a 429 is one since 8.30 R5.

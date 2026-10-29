@@ -16,7 +16,7 @@ import asyncio
 from aipager import preferences as prefs
 from tests.card_tasks import drain_card_tasks
 
-CHAT = 256113222
+CHAT = 222333444
 
 
 def _held_close(bot, monkeypatch):

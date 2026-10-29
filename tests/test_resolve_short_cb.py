@@ -284,7 +284,7 @@ def test_forty_char_label_permission_prompt_allow_deny_allow_always_stop_all_fir
     # exists on THIS machine, not from a hermetic test default.
     test_chat_id = 100
     sess = TrackedSession(
-        name=f"claude-{long_label}__d256113222", label=long_label,
+        name=f"claude-{long_label}__d222333444", label=long_label,
         status=Status.INTERACTIVE, scope_chat_id=test_chat_id,
     )
     assert len(sess.name.encode()) == 64  # the exact boundary case

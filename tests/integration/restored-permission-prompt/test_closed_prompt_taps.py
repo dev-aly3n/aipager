@@ -26,7 +26,7 @@ from aipager import session_monitor
 from aipager.state import Status
 
 LABEL = "shop_api"
-CHAT = 256113222
+CHAT = 222333444
 TUID = "toolu_01Restored"
 
 

@@ -22,7 +22,7 @@ from aipager.team import Role as TeamRole, Team, User as TeamUser
 SECRET_LABEL = "zebra-canary-label"
 SECRET_SESSION = "claude-okapi-canary"
 GROUP_ID = -1009876543210
-OWNER = 256113222
+OWNER = 222333444
 
 
 def _sess(name, status):

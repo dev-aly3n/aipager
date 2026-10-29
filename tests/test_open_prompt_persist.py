@@ -21,7 +21,7 @@ import pytest
 from aipager import state
 from aipager.state import SessionRegistry, Status
 
-CHAT = 256113222
+CHAT = 222333444
 NAME = "claude-openprompt"
 HOOK = {"addr": "/nonexistent/aipager-reply-x.sock", "request_id": "req-1"}
 SUGGESTION = {"type": "addRules", "behavior": "allow",

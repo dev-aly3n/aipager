@@ -20,7 +20,7 @@ import pytest
 from aipager import preferences as prefs
 from aipager.bot import session_parity
 
-CHAT = 256113222
+CHAT = 222333444
 LINE_TEXT = "⏳ Queued - Claude will read it after the current step"
 BUTTON_TEXT = "⚡ Send now"
 DELETE_WINDOW = 10.0

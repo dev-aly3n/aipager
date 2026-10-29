@@ -62,7 +62,7 @@ _CHAT_MIGRATIONS_KEY = "chat_migrations"
 def scope_suffix(chat_id: int, kind: str) -> str:
     """Internal socket/name suffix that disambiguates same-labeled
     sessions across scopes: ``<kind[0]><abs(chat_id)>`` (e.g. the DM
-    chat 256113222 → ``d256113222``; group -4152307515 → ``g4152307515``).
+    chat 222333444 → ``d222333444``; group -4100000001 → ``g4100000001``).
     The leading ``-`` of a group id is encoded by the ``g`` prefix, so
     the result is filesystem-safe. The full chat_id (not a truncation)
     is used so the suffix is collision-free.
@@ -81,7 +81,7 @@ _SCOPE_SUFFIX_RE = re.compile(r"__[dg]\d+$")
 def strip_scope_suffix(name: str) -> str:
     """Undo :func:`scope_suffix`'s contribution to a disambiguated name.
 
-    ``"Jkhk__d256113222"`` → ``"Jkhk"``; ``"my__thing"`` (no suffix) and
+    ``"frontend__d222333444"`` → ``"frontend"``; ``"my__thing"`` (no suffix) and
     ``"my__dabc"`` (not digits) are returned unchanged. Only a trailing
     suffix is removed, so ``"my__thing__d123"`` → ``"my__thing"``.
     """

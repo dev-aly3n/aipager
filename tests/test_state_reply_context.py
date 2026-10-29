@@ -30,12 +30,12 @@ def test_save_serializes_msg_map_key_as_chat_colon_msg_not_tuple_repr(tmp_state_
     tuple repr "(chat_id, msg_id)" that a naive ``str(k)`` would produce."""
     r = SessionRegistry()
     r.transition("claude-jim", Status.IDLE)
-    r.track_message(1234, "claude-jim", 256113222)
+    r.track_message(1234, "claude-jim", 222333444)
     r.save()
     raw = json.loads(tmp_state_file.read_text())
-    assert "256113222:1234" in raw["msg_map"]
-    assert "(256113222, 1234)" not in raw["msg_map"]
-    assert raw["msg_map"]["256113222:1234"] == "claude-jim"
+    assert "222333444:1234" in raw["msg_map"]
+    assert "(222333444, 1234)" not in raw["msg_map"]
+    assert raw["msg_map"]["222333444:1234"] == "claude-jim"
 
 
 def test_save_serializes_negative_group_chat_id_correctly(tmp_state_file):

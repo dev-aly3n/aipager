@@ -17,7 +17,7 @@ from aipager import preferences as prefs
 from aipager import session_monitor, state
 from aipager.session_monitor import INTERACTIVE_TIMEOUT_SECONDS, SessionMonitor
 
-CHAT = 256113222
+CHAT = 222333444
 NAME = "claude-rppbb_harness"
 MARKER = "[Request interrupted by user for tool use]"
 

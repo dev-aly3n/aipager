@@ -22,6 +22,7 @@ import pytest
 import yaml
 
 from aipager import claude_resolve, scope
+from tests import neutral_names
 from tests.e2e.fake_telegram import instance as fti
 from tests.e2e.fake_telegram import standin_claude
 from tests.e2e.faketg import conftest as ftc
@@ -58,27 +59,52 @@ def test_config_ids_roles_and_loads(tmp_path):
     assert scope.load_miniapp(p)["enabled"] is False
     assert scope.load_claude_path(p) == "/x/claude"
     every_id = [fti.DM_ID, fti.GROUP_ID, fti.SUPERGROUP_ID, *fti.MEMBERS]
-    assert fti.REAL_CHAT_ID not in every_id and -fti.REAL_CHAT_ID not in every_id
+    assert not any(neutral_names.is_real_chat_id(i) for i in every_id)
 
 
-@pytest.mark.parametrize("bad", ["member", "dm", "group"])
-def test_config_refuses_the_operators_real_chat_id(bad):
+#: A stand-in for a real chat id: the tripwire is armed with its hash, so
+#: the real ids (hashes only, tests/neutral_names.py) never appear here.
+_STANDIN_REAL = 123456789
+
+
+@pytest.mark.parametrize("bad", ["member", "dm", "group", "dm-negative", "group-positive",
+                                 "supergroup"])
+def test_config_refuses_the_operators_real_chat_id(bad, monkeypatch):
+    monkeypatch.setattr(neutral_names, "BANNED_IDS",
+                        frozenset({neutral_names.sha(str(_STANDIN_REAL))}))
+    fti.build_config("/x/claude")  # armed, the fakes still pass
     members = dict(fti.MEMBERS)
     kw = {}
     if bad == "member":
-        members[fti.REAL_CHAT_ID] = ("op", "user")
+        members[_STANDIN_REAL] = ("op", "user")
     elif bad == "dm":
-        kw["dm_id"] = fti.REAL_CHAT_ID
+        kw["dm_id"] = _STANDIN_REAL
+    elif bad == "dm-negative":
+        kw["dm_id"] = -_STANDIN_REAL
+    elif bad == "group":
+        kw["group_id"] = -_STANDIN_REAL
+    elif bad == "supergroup":
+        kw["group_id"] = -int(f"100{_STANDIN_REAL}")
     else:
-        kw["group_id"] = -fti.REAL_CHAT_ID
+        kw["group_id"] = _STANDIN_REAL
     with pytest.raises(AssertionError, match="real chat id"):
         fti.build_config("/x/claude", members, **kw)
+
+
+def test_the_tripwire_holds_the_operators_ids_and_no_fake():
+    """Armed with the operator's real ids (the DM and the group), and none
+    of the fakes the suite uses in their place is one of them."""
+    assert set(neutral_names.OPERATOR_IDS) <= neutral_names.BANNED_IDS
+    assert len(neutral_names.OPERATOR_IDS) == 2
+    for fake in (222333444, -4100000001, "222333444", fti.DM_ID, fti.GROUP_ID,
+                 fti.SUPERGROUP_ID, *fti.MEMBERS):
+        assert not neutral_names.is_real_chat_id(fake), fake
 
 
 def _env(root, mode="standin", base=None, **extra):
     base_env = {
         "PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": fti.real_home(),
-        "CLAUDE_CODE_OAUTH_TOKEN": "x", "CLAUDE_TG_CHAT_ID": "256113222",
+        "CLAUDE_CODE_OAUTH_TOKEN": "x", "CLAUDE_TG_CHAT_ID": "222333444",
         "CLAUDE_TG_BOT_TOKEN": "1:real", "AIPAGER_SOCKET_PATH": "/run/x.sock",
         "CREDENTIALS_DIRECTORY": "/run/credentials/aipager.service",
         "OBSERVER_BOTS": "a:b", "MINIAPP_ENABLED": "1", "XDG_RUNTIME_DIR": "/run/user/1",
@@ -124,7 +150,7 @@ def test_standin_env_drops_every_real_claude_from_path(root, tmp_path):
     (lambda e, r: e.update(PATH="/usr/bin:" + e["PATH"]), "shim folder is not first"),
     (lambda e, r: e.update(HOME=fti.real_home()), "HOME"),
     (lambda e, r: e.update(AIPAGER_INSTANCE_DIR="/tmp"), "AIPAGER_INSTANCE_DIR"),
-    (lambda e, r: e.update(CLAUDE_TG_CHAT_ID="256113222"), "CLAUDE_TG_CHAT_ID"),
+    (lambda e, r: e.update(CLAUDE_TG_CHAT_ID="222333444"), "CLAUDE_TG_CHAT_ID"),
     (lambda e, r: e.pop("OBSERVER_BOTS"), "OBSERVER_BOTS"),
     (lambda e, r: e.update(CREDENTIALS_DIRECTORY="/run/c"), "CREDENTIALS_DIRECTORY"),
     (lambda e, r: e.update(AIPAGER_TELEGRAM_API_BASE="https://api.telegram.org"), "API base"),
@@ -283,7 +309,7 @@ def test_opt_in_and_credential_skips(monkeypatch):
 
 
 def test_harness_names_are_recognised():
-    names = ["claude-ft1__g4000000001", "claude-x__d900000002", "claude-real__d256113222",
+    names = ["claude-ft1__g4000000001", "claude-x__d900000002", "claude-real__d222333444",
              "claude-ft12", "claude-ft8r", "claude-ftp-sync", "claude-ftx", "claude-dev",
              "claude-1000"]
     assert ftc.harness_names_in(names) == sorted([

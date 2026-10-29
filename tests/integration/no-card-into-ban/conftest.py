@@ -178,5 +178,5 @@ def _pin_keyboard_chat(monkeypatch):
     CI — these modules' own copies are ``""`` and the keyboard goes to a
     chat no mute covers. Pinned per module, the way the suite pins
     ``notify.FINISH_CARD_GRACE_SECONDS``."""
-    monkeypatch.setattr("aipager.bot.keyboards.CHAT_ID", "256113222")
-    monkeypatch.setattr("aipager.bot.lifecycle.CHAT_ID", "256113222")
+    monkeypatch.setattr("aipager.bot.keyboards.CHAT_ID", "222333444")
+    monkeypatch.setattr("aipager.bot.lifecycle.CHAT_ID", "222333444")

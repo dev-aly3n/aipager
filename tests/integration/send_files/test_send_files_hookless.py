@@ -30,7 +30,7 @@ from test_send_files_finish import (  # noqa: I001 (the sibling test module)
     _audit_records, _bot, _default_transcript, _pic, _rich_ids,
 )
 
-CHAT = 256113222          # the chat `_pin_single_chat_config` pins
+CHAT = 222333444          # the chat `_pin_single_chat_config` pins
 NAME = "claude-dev"
 SID = "5b1d7363-0000-0000-0000-000000000001"
 

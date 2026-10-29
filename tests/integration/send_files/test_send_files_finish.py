@@ -23,7 +23,7 @@ from aipager.bot.flood import MUTE
 from aipager.bot.held import HELD
 from aipager.state import Status
 
-CHAT = 256113222          # the chat `_pin_single_chat_config` pins
+CHAT = 222333444          # the chat `_pin_single_chat_config` pins
 TRIGGER = 11
 
 

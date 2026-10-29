@@ -35,7 +35,7 @@ from aipager.session_monitor import (
 from aipager.state import SessionRegistry, Status
 from tests.footer_text import unfooter
 
-CHAT = 256113222
+CHAT = 222333444
 
 
 def _run(vloop, coro):

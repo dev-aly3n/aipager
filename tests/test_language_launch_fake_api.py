@@ -22,7 +22,7 @@ from aipager.i18n import persist
 from tests.e2e.fake_telegram.server import FakeBotApiThread
 
 TOKEN = "7000000017:AAFakeGraceTail0123456789abcdefghij"
-CHAT = 256113222                       # the chat tests/conftest.py pins
+CHAT = 222333444                       # the chat tests/conftest.py pins
 
 
 @pytest.fixture

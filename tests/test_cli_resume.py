@@ -294,7 +294,7 @@ def test_picker_out_of_range_number_keeps_looping(monkeypatch):
 def test_picker_passes_full_name_for_scoped_session(monkeypatch):
     """The picker knows the record — it must not re-resolve a short label."""
     monkeypatch.setattr(cli_resume, "_gone_history", lambda: [{
-        "name": "claude-ddd__d447759837", "label": "ddd",
+        "name": "claude-ddd__d333444555", "label": "ddd",
         "claude_session_id": "X", "gone_at": 1000.0,
     }])
     called = {}
@@ -302,13 +302,13 @@ def test_picker_passes_full_name_for_scoped_session(monkeypatch):
                         lambda label: (called.setdefault("label", label), 0)[1])
     monkeypatch.setattr("builtins.input", lambda *a: "1")
     cli_resume._resume_picker_loop()
-    assert called["label"] == "ddd__d447759837"
+    assert called["label"] == "ddd__d333444555"
 
 
 # ---- scope-suffixed session resolution -----------------------------------
 
 _DDD = {
-    "name": "claude-ddd__d447759837", "label": "ddd",
+    "name": "claude-ddd__d333444555", "label": "ddd",
     "claude_session_id": "1d86b6ee-2927-4009-aa63-7ba50119d0c8",
     "cwd": "/home/aipager", "gone_at": time.time() - 3600.0, "skip_perms": True,  # recent gone_at: load() ages out older ones (8.12)
 }
@@ -317,7 +317,7 @@ _DDD = {
 def test_resume_one_resolves_scope_suffixed_session_by_short_label(
     monkeypatch, capsys,
 ):
-    """Production regression: `aipager resume ddd` for claude-ddd__d447759837.
+    """Production regression: `aipager resume ddd` for claude-ddd__d333444555.
 
     The socket and the label handed to dtach must both carry the scope
     suffix — resuming under the bare label would create a second, orphan
@@ -331,11 +331,11 @@ def test_resume_one_resolves_scope_suffixed_session_by_short_label(
     rc = cli_resume._resume_one("ddd")
 
     assert rc == 0
-    assert launch.await_args.args[0] == "ddd__d447759837"
+    assert launch.await_args.args[0] == "ddd__d333444555"
     assert launch.await_args.kwargs["mode"] == "full"
     out = capsys.readouterr().out
-    assert "ddd__d447759837" in out
-    assert "/tmp/claude-dtach-ddd__d447759837.sock" in out
+    assert "ddd__d333444555" in out
+    assert "/tmp/claude-dtach-ddd__d333444555.sock" in out
 
 
 def test_resume_one_already_running_guard_uses_suffixed_socket(
@@ -346,7 +346,7 @@ def test_resume_one_already_running_guard_uses_suffixed_socket(
 
     def _is_socket(self):
         seen.append(str(self))
-        return str(self) == "/tmp/claude-dtach-ddd__d447759837.sock"
+        return str(self) == "/tmp/claude-dtach-ddd__d333444555.sock"
 
     monkeypatch.setattr("pathlib.Path.is_socket", _is_socket)
     monkeypatch.setattr(cli_resume, "_gone_history", lambda: [dict(_DDD)])
@@ -358,7 +358,7 @@ def test_resume_one_already_running_guard_uses_suffixed_socket(
     assert rc == 1
     assert "already running" in capsys.readouterr().err
     launch.assert_not_awaited()
-    assert "/tmp/claude-dtach-ddd__d447759837.sock" in seen
+    assert "/tmp/claude-dtach-ddd__d333444555.sock" in seen
 
 
 def test_resume_one_force_full_works_with_suffixed_session(monkeypatch):
@@ -370,7 +370,7 @@ def test_resume_one_force_full_works_with_suffixed_session(monkeypatch):
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
     assert cli_resume._resume_one("ddd", force_full=True) == 0
-    assert launch.await_args.args[0] == "ddd__d447759837"
+    assert launch.await_args.args[0] == "ddd__d333444555"
     assert launch.await_args.kwargs["mode"] == "full"
 
 
@@ -415,8 +415,8 @@ def test_resume_one_full_name_resolves_exactly(monkeypatch):
     launch = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
 
-    assert cli_resume._resume_one("ddd__d447759837") == 0
-    assert launch.await_args.args[0] == "ddd__d447759837"
+    assert cli_resume._resume_one("ddd__d333444555") == 0
+    assert launch.await_args.args[0] == "ddd__d333444555"
 
 
 def test_resume_one_running_scoped_session_reports_already_running(
@@ -428,7 +428,7 @@ def test_resume_one_running_scoped_session_reports_already_running(
     monkeypatch.setattr(cli_resume, "_all_records", lambda: [dict(_DDD)])
     monkeypatch.setattr(
         "pathlib.Path.is_socket",
-        lambda self: str(self) == "/tmp/claude-dtach-ddd__d447759837.sock",
+        lambda self: str(self) == "/tmp/claude-dtach-ddd__d333444555.sock",
     )
 
     rc = cli_resume._resume_one("ddd")

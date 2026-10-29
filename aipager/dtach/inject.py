@@ -1513,7 +1513,7 @@ async def launch_session(
     if not is_relaunch and name.lower() in _RESERVED:
         return False, f"'{name}' is a reserved command name"
     # The internal name may carry a scope disambiguator suffix
-    # (e.g. "jim__d256113222"), so the cap is generous; the
+    # (e.g. "api__d222333444"), so the cap is generous; the
     # user-facing label is validated separately at the /new layer.
     if len(name) > 64:
         return False, "Name too long (max 64 chars)"

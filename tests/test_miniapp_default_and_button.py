@@ -189,7 +189,7 @@ def test_a_group_target_is_never_held(monkeypatch):
 
     monkeypatch.setattr("aipager.config.CHAT_ID", "-100123456")
     assert daemon._is_private_target() is False
-    monkeypatch.setattr("aipager.config.CHAT_ID", "256113222")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "222333444")
     assert daemon._is_private_target() is True
     monkeypatch.setattr("aipager.config.CHAT_ID", "")
     assert daemon._is_private_target() is False

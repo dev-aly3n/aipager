@@ -270,13 +270,13 @@ def test_author_you_when_from_user_matches_bot_id(mk_bot):
 def test_author_telegram_user_uses_numeric_id_not_a_label(mk_bot):
     bot = mk_bot()
     sess = _sess(last_msg_id=999)
-    other = _user(256113222)
+    other = _user(222333444)
     other.label = "should-never-appear"
     msg = _msg(reply_to_message=_reply_to(message_id=1, text="hi", from_user=other))
     ctx = bot._build_reply_context(msg, sess, bot_id=BOT_ID, allow_file=False)
-    assert "Telegram user 256113222" in ctx
+    assert "Telegram user 222333444" in ctx
     assert "should-never-appear" not in ctx
-    assert "from Telegram user 256113222" in ctx  # "from", not "by"
+    assert "from Telegram user 222333444" in ctx  # "from", not "by"
 
 
 def test_author_none_when_from_user_absent_drops_attribution(mk_bot):

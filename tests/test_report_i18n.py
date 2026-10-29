@@ -16,7 +16,7 @@ from aipager.cli import report as cli_report
 from aipager.i18n import Plural
 from aipager.report import schema, send, wording
 
-OWNER = 256113222        # tests/conftest.py pins config.CHAT_ID to this
+OWNER = 222333444        # tests/conftest.py pins config.CHAT_ID to this
 GROUP = -1001
 RLM = "\u200f"
 

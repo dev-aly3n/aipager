@@ -19,7 +19,7 @@ import pytest
 
 from aipager import preferences as prefs
 
-CHAT = 256113222
+CHAT = 222333444
 #: An INSTANT line waits for the 30/s overall bucket only; the watcher reads
 #: Claude's queue every 0.25 s.
 INSTANT_SLACK = 0.5

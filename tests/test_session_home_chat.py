@@ -234,7 +234,7 @@ def test_dm_parity_personal_mode_leaves_new_sessions_unstamped(mk_bot):
     bot = mk_bot()                            # scopes=None: personal mode
     t = bot.registry.get_or_create("claude-x")
     assert t.scope_chat_id == 0
-    assert resolve_chat_id(t) == "256113222"  # config.CHAT_ID, as before
+    assert resolve_chat_id(t) == "222333444"  # config.CHAT_ID, as before
 
 
 # ---- 8.76: a typed internal name from another chat is unknown ----------
@@ -458,7 +458,7 @@ def test_dm_parity_personal_mode_still_adopts_a_typed_name(mk_bot, typed, run_as
     for name in ("_card_for_injected", "_react", "_maybe_update_bot_name",
                  "_update_bot_commands", "_send_busy_and_animate"):
         setattr(bot, name, AsyncMock())
-    u = _update("/scratch hi", user_id=12345, chat_id=256113222)
+    u = _update("/scratch hi", user_id=12345, chat_id=222333444)
     run_async(bot._handle_message(u, None))
     assert [n for n, _ in typed] == ["claude-scratch"]
 

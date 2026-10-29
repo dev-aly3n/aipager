@@ -37,7 +37,7 @@ from aipager.bot.held import HELD
 from aipager.flood_policy import typing_interval
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 MIN = 60.0
 HOUR = 3600.0
 EPS = 1e-3

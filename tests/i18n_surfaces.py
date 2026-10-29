@@ -32,7 +32,7 @@ from aipager.i18n.locales import LOCALES
 from tests.footer_text import unfooter
 
 #: The pinned single chat of the test config (``_pin_single_chat_config``).
-CHAT = 256113222
+CHAT = 222333444
 #: The group of ``tests/test_separate_permission_prompt._World``.
 GROUP = -1001
 #: Bob, a member of that group.

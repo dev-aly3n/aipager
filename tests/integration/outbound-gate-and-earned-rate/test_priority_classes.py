@@ -28,7 +28,7 @@ from aipager.bot.flood_budget import (
     rate_limit_args,
 )
 
-CHAT = 256113222
+CHAT = 222333444
 
 
 # ── the declaration itself ───────────────────────────────────────────────────

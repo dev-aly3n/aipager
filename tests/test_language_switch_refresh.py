@@ -12,7 +12,7 @@ import pytest
 from aipager.i18n import locales
 from tests.test_language_setting import tap
 
-CHAT = 256113222  # the pinned single chat (_pin_single_chat_config)
+CHAT = 222333444  # the pinned single chat (_pin_single_chat_config)
 MARK = "⟦"
 
 

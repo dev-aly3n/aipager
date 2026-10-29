@@ -32,7 +32,7 @@ import aipager.bot.rich_message as rm
 from aipager import preferences as prefs
 from tests.footer_text import unfooter
 
-CHAT = 256113222
+CHAT = 222333444
 DESC = "run the tests"
 IDLE = "💤 frontend (idle)"
 WORKING = "⚙️ frontend (working"

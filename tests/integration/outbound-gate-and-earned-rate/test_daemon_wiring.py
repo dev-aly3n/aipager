@@ -32,7 +32,7 @@ from aipager.bot.held import HELD
 from aipager.session_monitor import SessionMonitor
 from aipager.state import SessionRegistry, Status, TrackedSession
 
-CHAT = 256113222
+CHAT = 222333444
 BAN = 34212.0
 
 

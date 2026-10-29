@@ -26,7 +26,7 @@ from aipager.bot import send_now
 from aipager import preferences as prefs
 from aipager.bot.flood import MUTE
 
-CHAT = 256113222
+CHAT = 222333444
 #: How late a due line may land because it waits for its token.
 BUDGET_SLACK = 2.5
 #: Quiet time after turn 1 starts, so the card's first calls have left the

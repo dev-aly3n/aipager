@@ -17,7 +17,7 @@ from aipager.bot import outbox
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.rich_message import RichMessageFloodBanned
 
-CHAT = 256113222          # the chat `_pin_single_chat_config` pins
+CHAT = 222333444          # the chat `_pin_single_chat_config` pins
 
 
 @pytest.fixture

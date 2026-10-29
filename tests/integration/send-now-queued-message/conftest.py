@@ -40,7 +40,7 @@ from aipager import config, policy_snapshot
 from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
-CHAT = 256113222
+CHAT = 222333444
 #: A name no live session on a developer's machine can carry, so nothing
 #: here can ever meet a real session's socket.
 NAME = "claude-sendnow_harness"

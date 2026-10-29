@@ -20,8 +20,11 @@ import pytest
 
 from tests.e2e.fake_telegram import instance as H
 from tests.integration.fake_telegram_e2e.conftest import PYTHON, REAL_HOME, REPO, scrubbed_env
+from tests.neutral_names import is_real_chat_id
 
-REAL_CHAT_ID = "256113222"
+#: The operator's chat id as the operator's environment would carry it (a
+#: stand-in; the real one is only a hash, tests/neutral_names.py).
+OPERATOR_CHAT_ID = "222333444"
 BASE_URL = "http://127.0.0.1:41234"
 
 
@@ -49,7 +52,7 @@ def test_fake_token_shape():
 
 def test_no_fake_id_equals_the_real_chat():
     ids = {H.DM_ID, H.GROUP_ID, H.SUPERGROUP_ID, H.ALICE, H.BOB, H.CAROL, H.DAVE}
-    assert int(REAL_CHAT_ID) not in ids
+    assert not any(is_real_chat_id(i) for i in ids)
 
 
 # ---- make_root ------------------------------------------------------------------------------
@@ -108,7 +111,7 @@ DIRTY = {
     "LANG": "C.UTF-8",
     "CLAUDE_CODE_OAUTH_TOKEN": "dummy-not-a-secret",
     "CLAUDE_TG_BOT_TOKEN": "1:dummy-not-a-real-token-xxxxxx",
-    "CLAUDE_TG_CHAT_ID": REAL_CHAT_ID,
+    "CLAUDE_TG_CHAT_ID": OPERATOR_CHAT_ID,
     "CLAUDE_CONFIG_DIR": "/home/alice/.claude",
     "ANTHROPIC_API_KEY": "dummy-not-a-secret",
     "AIPAGER_SOCKET_PATH": "/tmp/aipager.sock",
@@ -182,7 +185,7 @@ def test_daemon_env_strips_operator_setting(denv, key):
 
 
 def test_daemon_env_no_value_from_the_operator_leaks(denv):
-    leaked = [k for k, v in denv[0].items() if "dummy" in v or v == REAL_CHAT_ID]
+    leaked = [k for k, v in denv[0].items() if "dummy" in v or v == OPERATOR_CHAT_ID]
     assert leaked == []
 
 
@@ -315,7 +318,9 @@ def test_build_yaml_has_fake_token(built):
 
 
 def test_build_yaml_never_names_the_real_chat(built):
-    assert REAL_CHAT_ID not in Path(built[0].yaml_path).read_text()
+    text = Path(built[0].yaml_path).read_text()
+    assert OPERATOR_CHAT_ID not in text
+    assert not any(is_real_chat_id(n) for n in re.findall(r"[0-9]+", text))
 
 
 def test_build_settings_model_haiku(built):

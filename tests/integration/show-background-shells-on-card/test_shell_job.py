@@ -19,7 +19,7 @@ from aipager.session_monitor import SessionMonitor
 from aipager.state import JOB_CONTINUATION_GRACE_SECONDS
 from tests.footer_text import unfooter
 
-CHAT = 256113222
+CHAT = 222333444
 DESC = "run the tests"
 DONE = f'Background command "{DESC}" completed (exit code 0)'
 

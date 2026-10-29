@@ -44,7 +44,7 @@ from aipager.report import endpoint, store
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry
 
-OWNER = 256113222             # the root conftest pins config.CHAT_ID to this
+OWNER = 222333444             # the root conftest pins config.CHAT_ID to this
 OTHER_OWNER = 31337
 STRANGER = 999_001
 GROUP = -100777

@@ -24,7 +24,7 @@ from aipager.state import Status
 
 # The harness's (conftest.py; a hyphenated directory is no package).
 LABEL = "shop_api"
-CHAT = 256113222
+CHAT = 222333444
 TUID = "toolu_01Restored"
 RESTORED = f"[{LABEL}] permission prompt restored after restart - waiting "
 

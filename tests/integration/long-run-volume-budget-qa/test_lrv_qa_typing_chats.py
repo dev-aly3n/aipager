@@ -18,7 +18,7 @@ from aipager import config
 from aipager.bot.flood import MUTE
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 OTHER = 111222333
 INTERVAL = config.TYPING_INDICATOR_INTERVAL
 EPS = 1e-6

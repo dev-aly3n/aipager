@@ -19,7 +19,7 @@ import pytest
 from aipager import preferences as prefs
 from aipager.bot import send_now as sn
 
-CHAT = 256113222
+CHAT = 222333444
 #: How late a due line may land because it waits for its token.
 BUDGET_SLACK = 2.5
 SETTLE = 8.0

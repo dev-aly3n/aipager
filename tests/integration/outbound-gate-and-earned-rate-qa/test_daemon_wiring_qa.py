@@ -38,7 +38,7 @@ from aipager.bot.held import HELD, HELD_ANSWER_MAX_AGE_SECONDS
 from aipager.session_monitor import CARD_STALE_SECONDS, SessionMonitor
 from aipager.state import SessionRegistry, Status, TrackedSession
 
-CHAT = 256113222
+CHAT = 222333444
 BAN = 34212.0
 
 

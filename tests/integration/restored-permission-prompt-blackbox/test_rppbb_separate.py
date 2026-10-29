@@ -16,8 +16,8 @@ from aipager import preferences as prefs
 from aipager import state
 from aipager.state import Status
 
-CHAT = 256113222
-OTHER_CHAT = 256113999
+CHAT = 222333444
+OTHER_CHAT = 222333999
 NAME = "claude-rppbb_harness"
 LABEL = "rppbb"
 

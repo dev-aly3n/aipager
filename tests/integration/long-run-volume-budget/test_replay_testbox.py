@@ -34,7 +34,7 @@ from aipager.bot.flood_budget import (
 )
 from aipager.state import Status
 
-CHAT = 256113222
+CHAT = 222333444
 T = 12_240.0                       # 3 h 24 min of virtual time
 HOUR = 3600.0
 BACKEND_MSG = 1000

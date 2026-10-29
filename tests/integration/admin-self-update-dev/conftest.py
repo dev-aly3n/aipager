@@ -28,7 +28,7 @@ from aipager.bot import update_flow
 from aipager.install_source import InstallSource
 from aipager.state import SessionRegistry, Status, TrackedSession
 
-OPERATOR_ID = 256113222  # tests/conftest.py pins config.CHAT_ID to this
+OPERATOR_ID = 222333444  # tests/conftest.py pins config.CHAT_ID to this
 UNIT_CGROUP = "/user.slice/user-1000.slice/user@1000.service/app.slice/aipager.service"
 
 
