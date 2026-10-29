@@ -795,10 +795,11 @@ const GRID_FIXTURES = {
   ]),
   detail_tasks: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
   detail_tasks_recount: () => gridOf([row("tasker", "tasks", { job_agents: 2, job_shells: 0 })]),
-  // Consecutive polls while the agents end one by one (2, 1, none left).
+  // Consecutive polls while the agents end one by one (2, 1, none left),
+  // then one of the shells-only row's two shells ends.
   grid_tasks_recount: () => gridOf([
     row("tasker", "tasks", { job_agents: 2, job_shells: 0 }),
-    row("server", "tasks", { job_agents: 0, job_shells: 1 }),
+    row("server", "tasks", { job_agents: 0, job_shells: 2 }),
     row("echo", "idle"),
   ]),
   grid_empty_then_expired: () => gridOf([]),
@@ -3330,8 +3331,10 @@ function driveGridTasksRecount() {
     if (tileLabel(tile) !== "tasker") fail("first tile: " + tileLabel(tile));
     if (tileWord(tile) !== "waiting for 2 agents")
       fail("first poll tile word: " + JSON.stringify(tileWord(tile)));
-    if (tileWord(tiles()[1]) !== "waiting for 1 shell")
-      fail("shells-only tile word: " + JSON.stringify(tileWord(tiles()[1])));
+    const shellTile = tiles()[1];
+    if (tileLabel(shellTile) !== "server") fail("second tile: " + tileLabel(shellTile));
+    if (tileWord(shellTile) !== "waiting for 2 shells")
+      fail("shells-only tile word: " + JSON.stringify(tileWord(shellTile)));
     if (pulseText() !== "2 working, 1 resting")
       fail("first poll pulse: " + JSON.stringify(pulseText()));
     const steps = [[1, "waiting for 1 agent"], [0, "finishing up"]];
@@ -3348,7 +3351,19 @@ function driveGridTasksRecount() {
       if (pulseText() !== "2 working, 1 resting")
         fail(agents + " agents left, pulse: " + JSON.stringify(pulseText()));
     });
-    console.log("ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up");
+    // Only the shells-only row's shell count moves (2 to 1).
+    data = clone(data);
+    data.sessions[1].job_shells = 1;
+    api.renderGrid(data);
+    if (tiles()[1] !== shellTile) fail("a shell recount rebuilt the tile instead of updating it");
+    if (tileWord(shellTile) !== "waiting for 1 shell")
+      fail("1 shell left, tile word: " + JSON.stringify(tileWord(shellTile)));
+    if (tileLamp(shellTile).className !== "lamp lamp-work")
+      fail("1 shell left, lamp: " + tileLamp(shellTile).className);
+    if (pulseText() !== "2 working, 1 resting")
+      fail("1 shell left, pulse: " + JSON.stringify(pulseText()));
+    console.log("ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up, "
+      + "2 shells, 1 shell");
     process.exit(0);
   }, 10);
 }

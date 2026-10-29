@@ -1758,7 +1758,8 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
     ("grid_tasks", "ok: grid -> waiting for its tasks reads its counts, lit, counted working"),
     ("detail_tasks", "ok: session page -> Waiting for 2 agents, working, lit ring"),
     ("grid_tasks_recount",
-     "ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up"),
+     "ok: grid -> a recount moves the tile word 2 agents, 1 agent, finishing up, "
+     "2 shells, 1 shell"),
     ("detail_tasks_recount",
      "ok: session page -> the state line follows the counts to Finishing up"),
     ("grid_keyed", "ok: a changed poll reuses the tile and moves its ring"),
@@ -1807,17 +1808,6 @@ _GRID_MUTANTS = [
         '    if (d.status === "tasks") { return tasksLine(d); }',
         "",
         "detail_tasks", id="tasks-state-line"),
-    # The counts are in both change checks, so a tile follows an agent
-    # ending (2, 1, finishing up) even when nothing else on the row moved.
-    pytest.param(
-        '              pctOf(s), s.cost_usd, s.project, s.job_agents, s.job_shells].join("|");',
-        '              pctOf(s), s.cost_usd, s.project].join("|");',
-        "grid_tasks_recount", id="tasks-counts-in-grid-signature"),
-    pytest.param(
-        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
-        '               s.job_agents, s.job_shells].join("|");',
-        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");',
-        "grid_tasks_recount", id="tasks-counts-in-tile-signature"),
     pytest.param(
         '    if (m) { return tn("ui.state.tasks_shells", m); }',
         "",
@@ -1896,6 +1886,51 @@ def test_the_grid_harness_detects_a_broken_mechanism(node_bin, tmp_path, old, ne
     assert proc.returncode != 0, (
         f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
     )
+
+
+# The counts are in both change checks, so a tile follows an agent ending
+# (2, 1, finishing up) or a shell ending (2 shells, 1 shell) even when
+# nothing else on the row moved. Each count is dropped on its own from each
+# check, and the scenario must fail on the stale tile word it names, not on
+# a crash.
+_GRID_SIG = '              pctOf(s), s.cost_usd, s.project, s.job_agents, s.job_shells].join("|");'
+_TILE_SIG = ('    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
+             '               s.job_agents, s.job_shells].join("|");')
+_AGENTS_STALE = 'FAIL: 1 agents left, tile word: "waiting for 2 agents"'
+_SHELLS_STALE = 'FAIL: 1 shell left, tile word: "waiting for 2 shells"'
+_COUNT_SIGNATURE_MUTANTS = [
+    pytest.param(
+        _GRID_SIG,
+        '              pctOf(s), s.cost_usd, s.project].join("|");',
+        _AGENTS_STALE, id="tasks-counts-in-grid-signature"),
+    pytest.param(
+        _TILE_SIG,
+        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");',
+        _AGENTS_STALE, id="tasks-counts-in-tile-signature"),
+    pytest.param(
+        _GRID_SIG,
+        '              pctOf(s), s.cost_usd, s.project, s.job_agents].join("|");',
+        _SHELLS_STALE, id="tasks-shells-in-grid-signature"),
+    pytest.param(
+        _TILE_SIG,
+        '    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project,\n'
+        '               s.job_agents].join("|");',
+        _SHELLS_STALE, id="tasks-shells-in-tile-signature"),
+]
+
+
+@pytest.mark.parametrize("old, new, reason", _COUNT_SIGNATURE_MUTANTS)
+def test_the_grid_harness_detects_a_count_missing_from_a_change_check(
+        node_bin, tmp_path, old, new, reason):
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, "grid_tasks_recount")
+    assert proc.returncode != 0, (
+        f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
+    )
+    assert reason in proc.stderr, f"failed for another reason\nstderr: {proc.stderr}"
 
 
 def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):
