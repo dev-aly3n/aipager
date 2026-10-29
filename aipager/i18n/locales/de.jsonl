@@ -234,6 +234,7 @@
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} Tool genutzt · {clock}", "other": "🤖 {agent} · {n} Tools genutzt · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (läuft noch)"}
+{"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · gestoppt ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "Agent"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
 {"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 {n} Datei wird gesendet", "other": "📎 {n} Dateien werden gesendet"}}
@@ -950,8 +951,8 @@
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "Antworte auf eine Nachricht von {session} (oder erwähne {bot}), um mit ihr zu sprechen."}
 {"k": "status.talk_group_unnamed", "src": "19fd8063", "v": "Antworte auf eine Nachricht von {session} (oder erwähne den Bot), um mit ihr zu sprechen."}
 {"k": "status.waiting_answer", "src": "e5832740", "v": "{session} wartet auf deine Antwort."}
-{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "Die Hintergrund-Agenten von {session} konnten nicht gestoppt werden. Tippe noch einmal auf Stoppen."}
-{"k": "stop.dialog_open", "src": "5ed4da00", "v": "{session} hat im Terminal einen Dialog offen. Beantworte ihn dort und tippe dann noch einmal auf Stoppen."}
+{"k": "stop.agents_not_stopped", "src": "0e2fd6c2", "v": "Die Hintergrund-Agenten von {session} konnten nicht gestoppt werden. Tippe noch einmal auf „Stoppen“."}
+{"k": "stop.dialog_open", "src": "5ed4da00", "v": "{session} hat im Terminal einen Dialog offen. Beantworte ihn dort und tippe dann noch einmal auf „Stoppen“."}
 {"k": "toast.already_answered", "src": "3d131a46", "v": "schon beantwortet"}
 {"k": "toast.always_degraded", "src": "038f4355", "v": "Keine Regel „Immer erlauben“ für diesen Befehl: nur dieses Mal erlaubt [{session}]"}
 {"k": "toast.answered", "src": "3834d72e", "v": "✅ {verb}"}

@@ -234,6 +234,7 @@
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"few": "🤖 {agent} · {n} инструмента · {clock}", "many": "🤖 {agent} · {n} инструментов · {clock}", "one": "🤖 {agent} · {n} инструмент · {clock}", "other": "🤖 {agent} · {n} инструмента · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (ещё работает)"}
+{"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · остановлен ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "агент"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
 {"k": "card.row.sending_files", "src": "d10352ba", "v": {"few": "📎 Отправка: {n} файла", "many": "📎 Отправка: {n} файлов", "one": "📎 Отправка: {n} файл", "other": "📎 Отправка: {n} файла"}}

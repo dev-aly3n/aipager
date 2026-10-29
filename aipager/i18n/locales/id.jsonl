@@ -234,6 +234,7 @@
 {"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} alat · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (masih berjalan)"}
+{"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · dihentikan ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agen"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
 {"k": "card.row.sending_files", "src": "d10352ba", "v": {"other": "📎 Mengirim {n} file"}}
