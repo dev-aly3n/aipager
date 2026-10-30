@@ -218,7 +218,7 @@ docker run -d --restart=unless-stopped --name aipager \
 
 Mount the folders you want Claude to edit under `/workspace`. The `~/.claude` mount carries your Claude credentials and conversation history: run `claude` on the host once to log in, or `docker exec -it aipager claude` to log in inside the container.
 
-Tags: `latest`, `1.3`, `1.3.10` (semver track + minor track).
+Tags: `latest`, `1.4`, `1.4.0` (semver track + minor track).
 
 ### Nix
 

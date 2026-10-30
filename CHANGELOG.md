@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-30
+
 ### Changed
 - **Sessions now know how Telegram shows their answers.** Every session aipager starts is told that its answers appear in Telegram as rich text: real tables instead of ones drawn with characters, and images and files sent as files (with Claude Code 2.1.301 or newer). A running session gets this on its next start or restart.
 
