@@ -18,6 +18,7 @@ guessing: Sentry hanging, a sender bug, a tap racing the outcome."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 
 import httpx
@@ -26,10 +27,21 @@ import pytest
 from aipager.report import wording
 
 SENT_PREFIX = "Sent. Reference "
-TAP_DEADLINE = 2.0   # seconds a tap's handler may take while Sentry hangs
+# "A handler returns while Sentry hangs" is checked without a wall clock (a
+# loaded CI runner can stall a correct handler for seconds): it returns while
+# Sentry still holds the send (FakeNet.released is 0), within MAX_TURNS turns
+# of the event loop. A handler that waits for the send, even with a timeout,
+# lets the loop turn thousands of times in 10 ms; one that does not wait
+# takes a few turns however slow the runner is. The limit also trips on a
+# tap that waits a millisecond or more for other work off the loop (a
+# to_thread save, a paced sleep): move such work out of the tap's handler
+# too. HANDLER_DEADLINE only stops a handler that waits from hanging the test.
+HOLD = 30.0              # seconds
+HANDLER_DEADLINE = 10.0  # seconds
+MAX_TURNS = 100
 
 
-async def _wait(pred, timeout=5.0):
+async def _wait(pred, timeout=15.0):
     loop = asyncio.get_running_loop()
     end = loop.time() + timeout
     while loop.time() < end and not pred():
@@ -40,19 +52,41 @@ async def _wait(pred, timeout=5.0):
 def _hanging(h, use_net):
     """Sentry accepts the connection and then hangs until the gate opens."""
     gate = threading.Event()
-    return use_net(h.FakeNet(gate=gate)), gate
+    return use_net(h.FakeNet(gate=gate, hold=HOLD)), gate
 
 
-async def _tap_returns(d, cid, mid, *, user=None) -> bool:
-    """True when the Send tap's handlers finished within the deadline."""
+async def _loop_turns(coro):
+    """Await *coro*; return its result and how many times the event loop
+    turned meanwhile."""
+    turns = 0
+
+    async def _count():
+        nonlocal turns
+        while True:
+            await asyncio.sleep(0)
+            turns += 1
+    counter = asyncio.create_task(_count())
+    try:
+        result = await coro
+    finally:
+        counter.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await counter
+    return result, turns
+
+
+async def _tap_returns(d, fake, cid, mid, *, user=None) -> bool:
+    """True when the Send tap's handlers finished while Sentry still held
+    the send, without waiting for it (see MAX_TURNS)."""
     kw = {"user": user} if user is not None else {}
     try:
-        await asyncio.wait_for(d.tap("_:rp:send", chat=cid, message_id=mid,
-                                     settle_rounds=0, wait_outcome=False, **kw),
-                               TAP_DEADLINE)
+        _, turns = await _loop_turns(asyncio.wait_for(
+            d.tap("_:rp:send", chat=cid, message_id=mid, settle_rounds=0,
+                  wait_outcome=False, **kw),
+            HANDLER_DEADLINE))
     except asyncio.TimeoutError:
         return False
-    return True
+    return fake.released == 0 and turns <= MAX_TURNS
 
 
 def _in_flight(bot, h, d, fake, gate, during):
@@ -62,8 +96,8 @@ def _in_flight(bot, h, d, fake, gate, during):
     async def go():
         cid, mid = await h.open_card(bot, d)
         try:
-            returned = await _tap_returns(d, cid, mid)
-            await _wait(lambda: len(fake.posts) >= 1)
+            returned = await _tap_returns(d, fake, cid, mid)
+            assert await _wait(lambda: len(fake.posts) >= 1), "the send never reached Sentry"
             result = await during(cid, mid, returned)
         finally:
             gate.set()
@@ -90,9 +124,10 @@ def test_group_update_is_answered_while_a_send_hangs(make_bot, drive, h, run_asy
     d = drive(bot)
 
     async def during(cid, mid, returned):
-        await asyncio.wait_for(d.command("/help", user=h.ADMIN, chat=h.GROUP), TAP_DEADLINE)
-        return len(bot.tg.sent(h.GROUP))
-    assert run_async(_in_flight(bot, h, d, fake, gate, during)) == 1
+        await asyncio.wait_for(d.command("/help", user=h.ADMIN, chat=h.GROUP), HANDLER_DEADLINE)
+        return len(bot.tg.sent(h.GROUP)), fake.released
+    # One answer, and Sentry still held the send when it came.
+    assert run_async(_in_flight(bot, h, d, fake, gate, during)) == (1, 0)
 
 
 def test_owner_dm_update_is_answered_while_a_send_hangs(bot, drive, h, run_async, use_net):
@@ -101,9 +136,10 @@ def test_owner_dm_update_is_answered_while_a_send_hangs(bot, drive, h, run_async
 
     async def during(cid, mid, returned):
         before = len(bot.tg.sent(h.OWNER))
-        await asyncio.wait_for(d.command("/help"), TAP_DEADLINE)
-        return len(bot.tg.sent(h.OWNER)) - before
-    assert run_async(_in_flight(bot, h, d, fake, gate, during)) == 1
+        await asyncio.wait_for(d.command("/help"), HANDLER_DEADLINE)
+        return len(bot.tg.sent(h.OWNER)) - before, fake.released
+    # One answer, and Sentry still held the send when it came.
+    assert run_async(_in_flight(bot, h, d, fake, gate, during)) == (1, 0)
 
 
 def test_card_says_sending_while_sentry_hangs(bot, drive, h, run_async, use_net):
@@ -151,7 +187,7 @@ def test_taps_during_background_send_send_once(bot, drive, h, run_async, use_net
 
     async def during(cid, mid, returned):
         for _ in range(extra_taps):
-            await _tap_returns(d, cid, mid)
+            await _tap_returns(d, fake, cid, mid)
     run_async(_in_flight(bot, h, d, fake, gate, during))
     assert len(fake.posts) == 1
 
@@ -162,7 +198,7 @@ def test_second_tap_during_background_send_returns_at_once(bot, drive, h, run_as
     d = drive(bot)
 
     async def during(cid, mid, returned):
-        return await _tap_returns(d, cid, mid)
+        return await _tap_returns(d, fake, cid, mid)
     assert run_async(_in_flight(bot, h, d, fake, gate, during)) is True
 
 
@@ -172,7 +208,7 @@ def test_second_tap_during_background_send_says_already_sending(bot, drive, h, r
     d = drive(bot)
 
     async def during(cid, mid, returned):
-        await _tap_returns(d, cid, mid)
+        await _tap_returns(d, fake, cid, mid)
         await h.settle()
     run_async(_in_flight(bot, h, d, fake, gate, during))
     assert "Already sending." in bot.tg.toast_texts()
@@ -203,7 +239,7 @@ def test_stranger_tap_during_background_send_sends_nothing_more(make_bot, drive,
     d = drive(bot)
 
     async def during(cid, mid, returned):
-        await _tap_returns(d, cid, mid, user=h.ADMIN)
+        await _tap_returns(d, fake, cid, mid, user=h.ADMIN)
     run_async(_in_flight(bot, h, d, fake, gate, during))
     assert len(fake.posts) == 1
 
