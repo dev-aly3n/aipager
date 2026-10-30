@@ -293,14 +293,19 @@ def key_doc(**changes) -> bytes:
 
 class FakeNet:
     """GitHub's key file and Sentry's envelope endpoint, recorded, with the
-    thread each request ran on."""
+    thread each request ran on. With a *gate*, Sentry holds each POST until
+    the gate opens or *hold* seconds pass; ``released`` counts the held
+    POSTs that got past it (opened or timed out)."""
 
     def __init__(self, doc: bytes | None = None, sentry_status: int = 200,
-                 sentry_error: Exception | None = None, gate: threading.Event | None = None):
+                 sentry_error: Exception | None = None, gate: threading.Event | None = None,
+                 hold: float = 5.0):
         self.doc = key_doc() if doc is None else doc
         self.sentry_status = sentry_status
         self.sentry_error = sentry_error
         self.gate = gate
+        self.hold = hold
+        self.released = 0
         self.requests: list[httpx.Request] = []
         self.threads: list[threading.Thread] = []
 
@@ -311,7 +316,8 @@ class FakeNet:
             return httpx.Response(200, content=self.doc)
         if request.method == "POST":
             if self.gate is not None:
-                self.gate.wait(5)
+                self.gate.wait(self.hold)
+                self.released += 1
             if self.sentry_error is not None:
                 raise self.sentry_error
             return httpx.Response(self.sentry_status, json={"id": "x"})
@@ -546,7 +552,7 @@ class Driver:
         return query
 
 
-OUTCOME_DEADLINE = 5.0
+OUTCOME_DEADLINE = 15.0  # generous: only a send that never edits its outcome in waits it out
 
 
 async def wait_for_outcome(bot, chat_id, message_id, *, deadline=OUTCOME_DEADLINE):
