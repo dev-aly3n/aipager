@@ -13,7 +13,10 @@ Partitions:
 - the session: IDLE (control) / BUSY / INTERACTIVE / IDLE with work in
   flight (a background agent's tool call still running after the turn's
   Stop) / IDLE with the job's own entry busy (``job_busy``);
-- the park's age: 0 s / 2.9 s / 3.1 s / 60 s (boundaries of the 3 s window);
+- the park's age: 0 s / 2.9 s / 3.1 s / 60 s (boundaries of the 3 s window),
+  against a frozen wall clock (``session_ops._now_wall``, see
+  ``_frozen_wall``): on the real clock a slow runner aged a 2.9 s park past
+  the window between the setup and the check;
 - the entry: the core, the "Bring it back now" button, Restart, the Mini
   App's Bring it back (all unforced) / forced (Stop and bring back);
 - for the message gate's automatic bring-back: a young park whose job
@@ -49,6 +52,15 @@ def _kit():
 
 
 qa = _kit()
+
+#: The frozen wall clock: years before the real time, so a park-age reader
+#: that still used ``time.time()`` would see every park here as settled.
+WALL = 1_700_000_000.0
+
+
+@pytest.fixture(autouse=True)
+def _frozen_wall(monkeypatch):
+    monkeypatch.setattr(session_ops, "_now_wall", lambda: WALL)
 
 
 def _tp(stack):
@@ -88,13 +100,13 @@ def _state(stack, state):
         assert stack.sess.work_in_flight(time.monotonic()), "precondition: work in flight"
     else:
         assert stack.sess.status == Status.IDLE, "precondition: idle"
-    stack.sess.parked_since = time.time() - 60
+    stack.sess.parked_since = WALL - 60
 
 
 def _parked(stack, *, age=60.0, state="idle"):
     qa.park_and_tick(stack)
     _state(stack, state)
-    stack.sess.parked_since = time.time() - age
+    stack.sess.parked_since = WALL - age
     assert stack.sess.parked_job == stack.ids.JOB, "precondition: parked"
 
 
@@ -254,17 +266,15 @@ def _before_stop(stack):
     return out
 
 
-@pytest.mark.parametrize("age, low, high", [
-    pytest.param(1.0, 1.5, 2.1, id="age_1s_waits_about_2s"),
-    pytest.param(2.9, 0.0, 0.3, id="age_2_9s_waits_a_moment"),
-])
-def test_the_gate_waits_out_a_young_park_once(stop_marks, mk_update, age, low, high):
+@pytest.mark.parametrize("age", [pytest.param(1.0, id="age_1s_waits_2s"),
+                                 pytest.param(2.9, id="age_2_9s_waits_0_1s")])
+def test_the_gate_waits_out_a_young_park_once(stop_marks, mk_update, age):
     stack = stop_marks
     _parked(stack, age=age)
     stack.message(mk_update, "carry on", msg_id=41)
     stack.run_spawned()
     waits = _before_stop(stack)
-    assert len(waits) == 1 and low < waits[0] <= high, waits
+    assert waits == pytest.approx([claude_jobs.PARK_SETTLE_SECONDS - age], abs=1e-6), waits
 
 
 @pytest.mark.parametrize("age", [pytest.param(1.0, id="age_1s"),

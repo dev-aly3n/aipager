@@ -100,10 +100,12 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # Seams: tests replace THESE module attributes, never ``asyncio.sleep`` /
-# ``asyncio.create_task`` themselves. ``aipager.bot.session_ops.asyncio`` IS
-# the global asyncio module, so patching through it reaches every coroutine
-# in the process and has hung this suite twice (CLAUDE.md). Both default
-# to the real functions; production behaviour is unchanged.
+# ``asyncio.create_task`` / ``time.time`` themselves.
+# ``aipager.bot.session_ops.asyncio`` IS the global asyncio module, so
+# patching through it reaches every coroutine in the process and has hung
+# this suite twice (CLAUDE.md). All three (``_sleep``, ``_spawn``,
+# ``_now_wall``) default to the real functions; production behaviour is
+# unchanged.
 _sleep = asyncio.sleep
 #: How long a busy mode switch ("Stop & switch") waits after its Escapes
 #: before the hard kill, for Claude Code to write the interrupt record
@@ -122,6 +124,8 @@ _HALT_WAIT_POLL = 0.25
 _HALT_JOB_LEFT = frozenset({"bg_stop_failed", "already_restarting",
                             "bg_no_conversation", "not_live"})
 _spawn = asyncio.create_task
+#: The wall clock a park's age is read against (``_park_settles_in``).
+_now_wall = time.time
 
 #: How long aipager remembers the Claude Code session id its own /kill
 #: ended, so that process's SessionEnd is not announced (the operator
@@ -3843,7 +3847,7 @@ class SessionOpsMixin:
         from aipager import claude_jobs
         if sess.parked_since <= 0:
             return 0.0
-        age = time.time() - sess.parked_since
+        age = _now_wall() - sess.parked_since
         if age < 0:
             age = (time.monotonic() - sess.park_changed_at
                    if sess.park_changed_at > 0 else 0.0)
