@@ -215,6 +215,11 @@ def _talk_at_once(api, code, predicate):
         bot = TelegramBot(SessionRegistry())
         await asyncio.wait_for(bot.start(), 30)
         try:
+            # start() can return before the first getUpdates on a slow
+            # runner, and Telegram drops whatever came before it; the first
+            # message is the one the first poll can see.
+            assert await asyncio.to_thread(api.polling_started.wait, 30), \
+                "the bot never polled"
             sender = api.user(CHAT, "owner", "Owner")
             sender["language_code"] = code
             since = api.calls()[-1].seq if api.calls() else 0
