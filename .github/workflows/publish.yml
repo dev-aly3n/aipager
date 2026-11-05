@@ -75,3 +75,31 @@ jobs:
           git config user.email "dev.aly3n@gmail.com"
           git commit -m "aipager ${version}" -- Formula/aipager.rb
           git push
+
+  # Tell aipager.run that a release is out, so the site syncs its docs and
+  # version from this tag at once instead of on its 6-hourly schedule. The
+  # site's workflow (sync-aipager.yml, repository_dispatch type
+  # aipager-release) polls PyPI itself before syncing, so this does not wait.
+  # needs: publish, so the site is never told about a failed publish.
+  # SITE_DISPATCH_TOKEN: fine-grained PAT limited to dev-aly3n/aipager-fe
+  # (Contents: read and write). Until it is set, the job skips and the tag
+  # still passes.
+  notify-site:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions: {}
+    env:
+      HAS_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN != '' }}
+    steps:
+      - name: Skip until the site token is configured
+        if: env.HAS_TOKEN != 'true'
+        run: echo "SITE_DISPATCH_TOKEN is not set - not notifying the site"
+
+      - name: Notify the site
+        if: env.HAS_TOKEN == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          gh api -X POST repos/dev-aly3n/aipager-fe/dispatches \
+            -f event_type=aipager-release \
+            -f "client_payload[version]=${GITHUB_REF_NAME#v}"
