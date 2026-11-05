@@ -1803,11 +1803,24 @@ class HookReceiver:
                 sess_ref.claude_session_id = stem
             self.registry.mark_dirty()
             log.debug("[%s] Stored transcript_path: %s", session_name, transcript_path)
-        # SessionStart payload also carries the session's cwd. Claude
-        # organizes transcripts by encoded-cwd, so we need it later to
-        # launch `claude --resume` from the right place.
+        # The session's folder: the one its claude was started in, where a
+        # restart, a resume or a mode switch starts it again (its project:
+        # CLAUDE.md, .claude settings, memory, transcripts). Every event
+        # carries a cwd, but it is Claude's CURRENT folder, which follows
+        # a `cd` in a Bash call; taking it from any event moved a session
+        # into whatever folder Claude last went to (once its own memory
+        # folder under ~/.claude). So it is taken only when none is known
+        # yet (a session aipager did not start, an old registry), or from
+        # the SessionStart of a new process, before anything moved it: the
+        # session's own claude ("startup") or a linked job's worker
+        # ("fork", D4). A launch from aipager records its folder itself;
+        # "resume", "clear" and "compact" can fire inside a running
+        # process, after a `cd`.
         cwd = msg.get("cwd", "")
-        if cwd and cwd != sess_ref.cwd and adopt_ids:
+        new_process = (event == "SessionStart" and not hook_agent_id
+                       and msg.get("source") == ("fork" if bg_job else "startup"))
+        if (cwd and isinstance(cwd, str) and cwd != sess_ref.cwd and adopt_ids
+                and (not sess_ref.cwd or new_process)):
             sess_ref.cwd = cwd
             self.registry.mark_dirty()
 

@@ -232,6 +232,87 @@ def test_scratchpad_exemption_does_not_hide_a_second_token():
 
 
 # ===========================================================================
+# The project component after the root (bug report 2026-11-05): a session
+# launched in a folder with "claude" in its path gets a scratchpad whose
+# project name holds the word, and every command naming it was halted.
+# ===========================================================================
+
+MEM_SCRATCH = ("/tmp/claude-1000/-home-alice--claude-projects--home-alice-memory/"
+               "c08cff63-47a1-49ef-9267-1200167fc25e/scratchpad")
+
+ALLOWED_PROJECT_NAMES = [
+    # The report's command, with the path made up.
+    f"D={MEM_SCRATCH}; ls $D",
+    f"cd {MEM_SCRATCH} && curl -s https://rdap.example/domain/x.com > rdap.json",
+    f'cat "{MEM_SCRATCH}/out.txt"',
+    "ls /tmp/claude-1000/-home-alice-claude-tools/",
+    "ls /tmp/claude-1000/-home-alice-claude-tools",
+    "ls /tmp/claude-1000/-home-alice-claude",
+    # A long folder name: cut by Claude Code, with a hash after it.
+    "ls /tmp/claude-1000/-home-alice-" + "claude-x" * 30 + "-1k2j3h/s/scratchpad",
+    # Folder names ending in a flag spelling.
+    "ls /tmp/claude-1000/-home-alice--resume/u/scratchpad",
+    "ls /tmp/claude-1000/-home-alice--mcp-config/u/scratchpad",
+    "ls /tmp/claude-1000/-home-alice--system-prompt/u/scratchpad",
+    "ls /tmp/claude-1000/-",
+]
+
+BLOCKED_PROJECT_NAMES = [
+    # Not a Claude Code project name: no leading "-", a dot, a glob.
+    "ls /tmp/claude-1000/claude/x",
+    "ls /tmp/claude-1000/a-claude/x",
+    "cat /tmp/claude-1000/.claude/x",
+    "ls /tmp/claude-1000/-x.claude/y",
+    "ls /tmp/claude-1000/-a-claude*/",
+    "ls /tmp/claude-1000/-a-claude?/",
+    "ls /tmp/claude-1000/-a-claude[0-9]/",
+    "ls /tmp/claude-1000/-a-claude~",
+    # Only the one component right after the root.
+    "ls /tmp/claude-1000/-a/-b-claude/x",
+    f"ls {OWN_SCRATCH}/-claude",
+    # Out of the project folder again, into the config dir.
+    f"cat {MEM_SCRATCH}/../../../../home/alice/.claude/settings.json",
+    "cat /tmp/claude-1000/-a-claude/../../../home/alice/.claude/x",
+    "cat /tmp/claude-1000/-a-claude/../claude-policy-claude-x.json",
+    # A second, separate token.
+    "ls /tmp/claude-1000/-a-claude; claude -p hi",
+    f"cd {MEM_SCRATCH} && claude -p hi",
+    f"ls {MEM_SCRATCH} --resume x",
+    # Look-alike roots with a project name after them.
+    "ls /tmp/claude-1000x/-a-claude/",
+    "ls /var/tmp/claude-1000/-a-claude/",
+    "ls /tmp//claude-1000/-a-claude/",
+]
+
+
+@pytest.mark.parametrize("cmd", ALLOWED_PROJECT_NAMES)
+def test_project_name_after_the_root_is_allowed(cmd):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+
+
+@pytest.mark.parametrize("cmd", BLOCKED_PROJECT_NAMES)
+def test_other_names_after_the_root_still_blocked(cmd):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+
+
+def test_the_reported_command_was_blocked_by_the_project_name_alone():
+    """The reproduction, pinned: with only the root normalised (the old
+    rule), the project name's "claude" is what matched."""
+    import re
+    cmd = ALLOWED_PROJECT_NAMES[0]
+    old_root_only = re.sub(r"(?<![\w.~/-])/tmp/claude-\d+(?=/)", "/tmp/x", cmd)
+    assert re.search(r"\bclaude\b", old_root_only)
+    assert "claude" not in safety.normalize_scratchpad(cmd)
+
+
+def test_operator_patterns_see_the_project_name():
+    """An operator's own pattern still sees the command as typed,
+    project name included."""
+    custom = (r"claude-projects",)
+    assert bash_violation(f"ls {MEM_SCRATCH}", DENY_BASH_PATTERNS + custom) is not None
+
+
+# ===========================================================================
 # 8.49 — the snapshot a no-note UserPromptSubmit leaves behind
 # ===========================================================================
 

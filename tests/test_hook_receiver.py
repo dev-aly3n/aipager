@@ -192,6 +192,76 @@ def test_cwd_capture(receiver, run_async):
     assert registry.get("claude-jim").cwd == "/home/user/proj"
 
 
+# The session folder is where its claude was started: an event's cwd is
+# Claude's CURRENT folder, which a `cd` in a Bash call moves. Taking it
+# from every event made a restart start Claude in whatever folder it had
+# last gone to (bug report 2026-11-05: its own memory folder).
+
+@pytest.mark.parametrize("event,extra", [
+    ("PostToolUse", {"tool_name": "Bash", "tool_input": {"command": "cd /home/user/.claude"}}),
+    ("PreToolUse", {"tool_name": "Read", "tool_input": {"file_path": "/x"}}),
+    ("UserPromptSubmit", {"prompt": "hi"}),
+    ("Stop", {}),
+    ("Notification", {"notification_type": "idle_prompt"}),
+    ("SessionStart", {"source": "resume"}),
+    ("SessionStart", {"source": "clear"}),
+    ("SessionStart", {"source": "compact"}),
+], ids=["post-bash-cd", "pre-read", "prompt", "stop", "notification",
+        "start-resume", "start-clear", "start-compact"])
+def test_a_later_event_does_not_move_the_session_folder(receiver, run_async, event, extra):
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name=event, session="claude-jim",
+          cwd="/home/user/.claude/projects/-home-user/memory", **extra)
+    assert registry.get("claude-jim").cwd == "/home/user/proj"
+
+
+def test_a_new_process_start_sets_the_session_folder(receiver, run_async):
+    """A claude started anew under the session's name (in a terminal, not
+    by aipager) names its own folder in its startup SessionStart."""
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name="SessionStart", source="startup",
+          session="claude-jim", cwd="/home/user/other")
+    assert registry.get("claude-jim").cwd == "/home/user/other"
+
+
+def test_an_agents_startup_event_does_not_move_the_session_folder(receiver, run_async):
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name="SessionStart", source="startup",
+          agent_id="a1", session="claude-jim", cwd="/home/user/other")
+    assert registry.get("claude-jim").cwd == "/home/user/proj"
+
+
+def test_a_start_source_on_another_event_does_not_move_the_folder(receiver, run_async):
+    """Only a SessionStart is a process starting, whatever else a
+    datagram says."""
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name="UserPromptSubmit", source="startup",
+          prompt="hi", session="claude-jim", cwd="/home/user/other")
+    assert registry.get("claude-jim").cwd == "/home/user/proj"
+
+
+def test_an_own_fork_start_does_not_move_the_folder(receiver, run_async):
+    """"fork" is a linked job worker's start; the session's own claude
+    starts with "startup"."""
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name="SessionStart", source="fork",
+          session="claude-jim", cwd="/home/user/other")
+    assert registry.get("claude-jim").cwd == "/home/user/proj"
+
+
+@pytest.mark.parametrize("cwd", [None, 5, ["/x"]])
+def test_a_cwd_that_is_no_path_is_ignored(receiver, run_async, cwd):
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="SessionStart", source="startup",
+          session="claude-jim", cwd=cwd)
+    assert registry.get("claude-jim").cwd == ""
+
+
 # ---- per-event branches --------------------------------------------------
 
 def test_permission_request_transitions_to_interactive(receiver, run_async):

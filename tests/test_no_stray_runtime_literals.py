@@ -31,8 +31,8 @@ ALLOWED = {
     ("safety.py", "/tmp/claude-dtach-*"),
     ("safety.py", "/tmp/claude-bgjob-*"),
     ("safety.py", "/tmp/claude-exit-*"),
-    # Claude Code's own scratchpad root, not an aipager file.
-    ("safety.py", "(?<![\\w.~/-])/tmp/claude-\\d+(?=/|[\\s;&|()<>'\\\"`]|$)"),
+    # Claude Code's own scratchpad root and project folder name, not an aipager file.
+    ("safety.py", "(?<![\\w.~/-])/tmp/claude-\\d+(?:/-[A-Za-z0-9-]*)?(?=/|[\\s;&|()<>'\\\"`]|$)"),
     # Claude Code's per-user temp folders (every session's scratchpad), which
     # a members' root folder may not be in; not an aipager file, and not
     # moved by AIPAGER_INSTANCE_DIR.

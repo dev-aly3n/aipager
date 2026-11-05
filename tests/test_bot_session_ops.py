@@ -975,6 +975,41 @@ def test_kill_and_relaunch_core_success_restores_state_and_transitions_idle(
     assert launch.await_args.kwargs["cwd"] == "/home/user/project"
 
 
+def test_a_restart_after_claude_moved_folder_starts_in_the_launch_folder(
+    mk_bot, run_async, monkeypatch,
+):
+    """Bug report 2026-11-05: Claude `cd`'d into its own memory folder,
+    the next events named it as their cwd, and every restart then started
+    Claude there (another project, another scratchpad name)."""
+    import json as _json
+
+    from aipager.dtach import hook_receiver as hr
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.claude_session_id = "uuid-1"
+    sess.cwd = "/home/user/project"
+    bot.registry._sessions["claude-jim"] = sess
+    recv = hr.HookReceiver(bot.registry, AsyncMock())
+    moved = "/home/user/.claude/projects/-home-user/memory"
+    for fields in ({"hook_event_name": "PostToolUse", "tool_name": "Bash",
+                    "tool_input": {"command": f"cd {moved}"}},
+                   {"hook_event_name": "Stop"}):
+        run_async(recv._on_datagram(_json.dumps(
+            {"session": "claude-jim", "cwd": moved, **fields}).encode()))
+    assert sess.cwd == "/home/user/project"
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_mode="full", interrupt_first=False,
+    ))
+    assert outcome.ok is True
+    assert launch.await_args.kwargs["cwd"] == "/home/user/project"
+
+
 def test_kill_and_relaunch_core_keeps_the_launch_model(mk_bot, run_async, monkeypatch):
     """A mode switch or restart starts the session with the model it was
     started with (or last switched to), not Claude Code's default."""

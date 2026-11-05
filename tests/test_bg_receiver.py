@@ -221,12 +221,14 @@ def test_an_own_hook_while_parked_keeps_the_ids(rx):
 
 
 def test_an_own_hook_adopts_the_ids_when_not_parked(rx):
+    """The ids, not the folder: an event's cwd is Claude's current folder,
+    which a `cd` moves (the session folder is where it was started)."""
     registry, recv, notify, send = rx
     sess = _known(registry)
     send(hook_event_name="Notification", notification_type="idle_prompt",
          session=NAME, transcript_path=JOB_TP, cwd="/home/alice/elsewhere")
     assert sess.claude_session_id == JOB_SID
-    assert sess.cwd == "/home/alice/elsewhere"
+    assert sess.cwd == "/home/alice/app"
 
 
 def test_a_linked_hook_adopts_the_jobs_ids(rx):
@@ -235,7 +237,30 @@ def test_a_linked_hook_adopts_the_jobs_ids(rx):
     send(hook_event_name="UserPromptSubmit", session=NAME, bg_job=JOB,
          transcript_path=JOB_TP, cwd="/home/alice/app2", prompt="go on")
     assert (sess.claude_session_id, sess.transcript_path) == (JOB_SID, JOB_TP)
+    assert sess.cwd == "/home/alice/app"
+
+
+def test_a_linked_workers_start_gives_the_jobs_folder(rx):
+    """The worker is a new process: its fork SessionStart names the folder
+    it was started in, before anything moved it."""
+    registry, recv, notify, send = rx
+    sess = _known(registry, parked=JOB)
+    send(hook_event_name="SessionStart", source="fork", session=NAME,
+         bg_job=JOB, transcript_path=JOB_TP, cwd="/home/alice/app2")
     assert sess.cwd == "/home/alice/app2"
+    send(hook_event_name="PostToolUse", session=NAME, bg_job=JOB,
+         transcript_path=JOB_TP, cwd="/home/alice/app2/sub", tool_name="Bash",
+         tool_input={"command": "cd sub"})
+    assert sess.cwd == "/home/alice/app2"
+
+
+def test_a_linked_workers_startup_does_not_move_the_folder(rx):
+    """A linked worker's process start is its "fork"."""
+    registry, recv, notify, send = rx
+    sess = _known(registry, parked=JOB)
+    send(hook_event_name="SessionStart", source="startup", session=NAME,
+         bg_job=JOB, transcript_path=JOB_TP, cwd="/home/alice/app2")
+    assert sess.cwd == "/home/alice/app"
 
 
 def test_a_linked_fork_start_does_not_close_the_files_turn(rx):
