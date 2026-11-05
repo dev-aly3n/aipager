@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ bcc4dd7 -->
+<!-- i18n-source: README.md @ 6074a97 -->
 
 <h3>Claude 只是又多了一个聊天。</h3>
 
