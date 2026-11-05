@@ -290,8 +290,9 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     # of these paths via Bash would exfiltrate the bot token / scopes.
     # (~/.claude/** is covered by the \bclaude\b pattern below — keep that
     # in mind before ever narrowing it. The one thing it does NOT see is a
-    # session's own scratchpad root, which bash_violation normalises away
-    # first — see normalize_scratchpad.)
+    # session's own scratchpad root and the project folder name right after
+    # it, which bash_violation normalises away first — see
+    # normalize_scratchpad.)
     r"\.config/aipager\b",
     r"\.local/share/aipager\b",
     r"\.local/state/aipager\b",
@@ -1214,10 +1215,24 @@ _SHAPE_PATH_PROTECTED_WRITE = reason_shape("{tool}", "write", "to", "protected",
 # those, as the Read tool can. A glob
 # (``/tmp/claude-1*``), a look-alike (``claude-1000x``, ``claude-dtach-…``,
 # aipager's ``claude-policy-…``), another tmp dir, or a relative spelling
-# does not qualify and still meets the full pattern set; so does anything
-# AFTER the root (``…/../../home/u/.claude`` still contains ``.claude``).
+# does not qualify and still meets the full pattern set.
+#
+# The ``<project>`` component right after the root is exempted with it.
+# Claude Code names it after the session's launch folder with every
+# character outside ``[A-Za-z0-9]`` turned into ``-`` (a long one is cut
+# and gets ``-<hash>``), so for an absolute folder it starts with ``-``
+# and holds only letters, digits and ``-``. A folder whose path has the
+# word ``claude`` in it (``~/.claude/projects/...`` gives
+# ``-home-alice--claude-projects-...``) otherwise put ``claude`` into
+# every command naming the scratchpad and halted all of them; a name
+# ending in ``--resume`` or ``--mcp-config`` did the same. Only that one
+# whole component qualifies: one that does not start with ``-``, holds a
+# ``.``, or is a glob is left as typed. It cannot hold ``/`` or ``.``, so
+# it never leads anywhere but a child of the root, and anything AFTER it
+# (``…/../../home/u/.claude``, a second ``claude`` token) still meets
+# the patterns.
 _SCRATCHPAD_ROOT_RE = re.compile(
-    r"(?<![\w.~/-])/tmp/claude-\d+(?=/|[\s;&|()<>'\"`]|$)"
+    r"(?<![\w.~/-])/tmp/claude-\d+(?:/-[A-Za-z0-9-]*)?(?=/|[\s;&|()<>'\"`]|$)"
 )
 _SCRATCHPAD_PLACEHOLDER = "/tmp/session-scratchpad"
 
