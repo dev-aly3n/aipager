@@ -1230,7 +1230,10 @@ _SHAPE_PATH_PROTECTED_WRITE = reason_shape("{tool}", "write", "to", "protected",
 # ``.``, or is a glob is left as typed. It cannot hold ``/`` or ``.``, so
 # it never leads anywhere but a child of the root, and anything AFTER it
 # (``…/../../home/u/.claude``, a second ``claude`` token) still meets
-# the patterns.
+# the patterns. Like the rest of this pattern set it is a text check, not
+# a sandbox: a shell expansion that cuts the name out of such a path
+# (``x=/tmp/claude-1000/-claude; ${x#*/-}``) gets past it, as quoting
+# (``c""laude``) already does; the built-in restricted roles have no Bash.
 _SCRATCHPAD_ROOT_RE = re.compile(
     r"(?<![\w.~/-])/tmp/claude-\d+(?:/-[A-Za-z0-9-]*)?(?=/|[\s;&|()<>'\"`]|$)"
 )

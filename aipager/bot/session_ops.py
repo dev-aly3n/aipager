@@ -1916,10 +1916,10 @@ class SessionOpsMixin:
         sess.mode_launch_unchecked = True
         sess.launch_model = model or ""
         if cwd:
-            # The hook receiver stamps cwd on the first statusLine event,
-            # but the operator picked this one explicitly — record it now
-            # so the session page and the directory picker show the truth
-            # before the first hook arrives.
+            # The session's folder is the one it is started in (the hook
+            # receiver takes a hook's cwd only while none is known, or from
+            # a new process's start): record it now, so the session page
+            # and the directory picker show it before the first hook.
             sess.cwd = cwd
         if scope_chat_id is not None:
             sess.scope_chat_id = scope_chat_id

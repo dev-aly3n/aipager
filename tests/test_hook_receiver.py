@@ -234,6 +234,26 @@ def test_an_agents_startup_event_does_not_move_the_session_folder(receiver, run_
     assert registry.get("claude-jim").cwd == "/home/user/proj"
 
 
+def test_a_start_source_on_another_event_does_not_move_the_folder(receiver, run_async):
+    """Only a SessionStart is a process starting, whatever else a
+    datagram says."""
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name="UserPromptSubmit", source="startup",
+          prompt="hi", session="claude-jim", cwd="/home/user/other")
+    assert registry.get("claude-jim").cwd == "/home/user/proj"
+
+
+def test_an_own_fork_start_does_not_move_the_folder(receiver, run_async):
+    """"fork" is a linked job worker's start; the session's own claude
+    starts with "startup"."""
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim").cwd = "/home/user/proj"
+    _send(recv, run_async, hook_event_name="SessionStart", source="fork",
+          session="claude-jim", cwd="/home/user/other")
+    assert registry.get("claude-jim").cwd == "/home/user/proj"
+
+
 @pytest.mark.parametrize("cwd", [None, 5, ["/x"]])
 def test_a_cwd_that_is_no_path_is_ignored(receiver, run_async, cwd):
     registry, recv, _ = receiver

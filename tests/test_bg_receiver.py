@@ -254,6 +254,15 @@ def test_a_linked_workers_start_gives_the_jobs_folder(rx):
     assert sess.cwd == "/home/alice/app2"
 
 
+def test_a_linked_workers_startup_does_not_move_the_folder(rx):
+    """A linked worker's process start is its "fork"."""
+    registry, recv, notify, send = rx
+    sess = _known(registry, parked=JOB)
+    send(hook_event_name="SessionStart", source="startup", session=NAME,
+         bg_job=JOB, transcript_path=JOB_TP, cwd="/home/alice/app2")
+    assert sess.cwd == "/home/alice/app"
+
+
 def test_a_linked_fork_start_does_not_close_the_files_turn(rx):
     """The fork's SessionStart: a turn that was running goes on in the
     job, so the files turn stays open (an own start closes it)."""
