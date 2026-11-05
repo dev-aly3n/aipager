@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-05
+
 ### Fixed
 - **Commands that name a session's scratch folder are no longer refused when the session's folder has "claude" in its path.** Claude Code names a session's scratch folder after the folder the session was started in, so a session started in, say, `~/.claude/projects/...` or `~/claude-tools` got a scratch folder path with the word "claude" in it. aipager's safety check took that for a nested Claude Code and refused every command that mentioned the scratch folder, stopping the turn. The folder name is now exempt like the rest of the scratch folder path; a real `claude` command and paths into `~/.claude` are still refused.
 - **A restarted session now starts in the folder it was started in.** aipager took a session's folder from Claude's current folder, which moves when Claude runs `cd`, so a restart, a resume or a mode switch could start Claude in whatever folder it had last gone into: another project, with that folder's instructions, settings and memory instead of the session's own. A session's folder now changes only when its Claude is started anew; a session already started in the wrong folder needs one fresh start (or a new session in the right folder).
