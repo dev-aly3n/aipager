@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>Claude ist einfach ein Chat mehr.</h3>
 
@@ -352,7 +352,7 @@ Schick `/update`: Es prüft aipager und Claude Code und installiert, was neu ist
 
 <br>
 
-Das Menü **Modell** der Tastatur und die Mini App bieten die Familien-Aliase von Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) und feste Modelle wie `claude-opus-5-5` und `claude-sonnet-5-5` an. Über die API von Anthropic zeigt ein Alias auf das neueste Modell seiner Familie. Auf Bedrock und Vertex kann derselbe Alias je nach Angebot deines Anbieters auf einen älteren Stand zeigen; schick `/model <full-id>`, um ein genaues Modell zu wählen.
+Das Menü **Modell** der Tastatur und die Mini App bieten die Familien-Aliase von Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) an, dazu `opus[1m]`, also Opus mit 1M Kontext. Über die API von Anthropic zeigt ein Alias auf das neueste Modell seiner Familie. Auf Bedrock und Vertex kann derselbe Alias je nach Angebot deines Anbieters auf einen älteren Stand zeigen; schick `/model <full-id>`, um ein genaues Modell zu wählen.
 
 </details>
 

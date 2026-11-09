@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>O Claude vira mais um chat.</h3>
 
@@ -352,7 +352,7 @@ Mande `/update`: ele confere o aipager e o Claude Code e instala o que for novo,
 
 <br>
 
-O menu **Modelo** do teclado e o Mini App oferecem os apelidos de família do Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) e modelos fixos como `claude-opus-5-5` e `claude-sonnet-5-5`. Na API da Anthropic, um apelido aponta para o modelo mais novo da família. No Bedrock e no Vertex o mesmo apelido pode apontar para uma versão mais antiga, conforme o que o seu provedor oferece; mande `/model <full-id>` para escolher um modelo exato.
+O menu **Modelo** do teclado e o Mini App oferecem os apelidos de família do Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), além de `opus[1m]`, o Opus com o contexto de 1M. Na API da Anthropic, um apelido aponta para o modelo mais novo da família. No Bedrock e no Vertex o mesmo apelido pode apontar para uma versão mais antiga, conforme o que o seu provedor oferece; mande `/model <full-id>` para escolher um modelo exato.
 
 </details>
 

@@ -6,7 +6,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>أصبح Claude مجرد دردشة أخرى.</h3>
 
@@ -386,7 +386,7 @@ aipager doctor                            # التحقق من التثبيت
 
 <br>
 
-قائمة **النموذج** في لوحة المفاتيح وMini App يعرضان الأسماء المستعارة لعائلات Claude Code (`sonnet` و`opus` و`haiku` و`fable` و`opusplan`) ونماذج ثابتة مثل `claude-opus-5-5` و`claude-sonnet-5-5`. في Anthropic API يشير الاسم المستعار إلى أحدث نموذج في عائلته. وفي Bedrock وVertex قد يشير الاسم نفسه إلى إصدار أقدم، بحسب ما يقدمه مزوّدك؛ ولاختيار نموذج بعينه: إرسال &lrm;`/model <full-id>`&lrm;.
+قائمة **النموذج** في لوحة المفاتيح وMini App يعرضان الأسماء المستعارة لعائلات Claude Code (`sonnet` و`opus` و`haiku` و`fable` و`opusplan`)، ومعها `opus[1m]`، أي Opus مع سياق &lrm;1M. في Anthropic API يشير الاسم المستعار إلى أحدث نموذج في عائلته. وفي Bedrock وVertex قد يشير الاسم نفسه إلى إصدار أقدم، بحسب ما يقدمه مزوّدك؛ ولاختيار نموذج بعينه: إرسال &lrm;`/model <full-id>`&lrm;.
 
 </details>
 

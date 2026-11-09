@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>Claude artık sohbetlerinden biri.</h3>
 
@@ -352,7 +352,7 @@ Bir terminali ayıran minik bir program. Terminal kapandığında ya da SSH kopt
 
 <br>
 
-Klavyedeki **Model** menüsü ve Mini App, Claude Code'un aile takma adlarını (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) ve `claude-opus-5-5`, `claude-sonnet-5-5` gibi sabit modelleri sunar. Anthropic API'sinde bir takma ad, ailesinin en yeni modelini gösterir. Bedrock ve Vertex'te aynı takma ad, sağlayıcının sunduğuna göre daha eski bir sürümü gösterebilir; belirli bir modeli seçmek için `/model <full-id>` gönder.
+Klavyedeki **Model** menüsü ve Mini App, Claude Code'un aile takma adlarını (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) ve 1M bağlam pencereli Opus olan `opus[1m]` adını sunar. Anthropic API'sinde bir takma ad, ailesinin en yeni modelini gösterir. Bedrock ve Vertex'te aynı takma ad, sağlayıcının sunduğuna göre daha eski bir sürümü gösterebilir; belirli bir modeli seçmek için `/model <full-id>` gönder.
 
 </details>
 

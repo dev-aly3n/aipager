@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>Claude jadi satu chat lagi.</h3>
 
@@ -352,7 +352,7 @@ Kirim `/update`: perintah ini memeriksa aipager dan Claude Code dan memasang yan
 
 <br>
 
-Menu **Model** di keyboard dan Mini App menawarkan alias keluarga Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) dan model tetap seperti `claude-opus-5-5` dan `claude-sonnet-5-5`. Di API Anthropic, setiap alias mengarah ke model terbaru dalam keluarganya. Di Bedrock dan Vertex alias yang sama bisa mengarah ke versi yang lebih lama, tergantung apa yang ditawarkan penyedia layananmu; kirim `/model <full-id>` untuk memilih model yang persis.
+Menu **Model** di keyboard dan Mini App menawarkan alias keluarga Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), ditambah `opus[1m]`, yaitu Opus dengan jendela konteks 1M. Di API Anthropic, setiap alias mengarah ke model terbaru dalam keluarganya. Di Bedrock dan Vertex alias yang sama bisa mengarah ke versi yang lebih lama, tergantung apa yang ditawarkan penyedia layananmu; kirim `/model <full-id>` untuk memilih model yang persis.
 
 </details>
 

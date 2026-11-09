@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>Claude giờ chỉ là thêm một cuộc chat.</h3>
 
@@ -352,7 +352,7 @@ Gửi `/update`: nó kiểm tra aipager và Claude Code rồi cài bản mới, 
 
 <br>
 
-Menu **Mô hình** trên bàn phím và Mini App đưa ra các bí danh theo họ của Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) và các mô hình cố định như `claude-opus-5-5` và `claude-sonnet-5-5`. Trên API của Anthropic, một bí danh trỏ tới mô hình mới nhất trong họ của nó. Trên Bedrock và Vertex, cùng bí danh đó có thể trỏ tới một bản cũ hơn, tùy vào những gì nhà cung cấp của bạn có; hãy gửi `/model <full-id>` để chọn đúng một mô hình.
+Menu **Mô hình** trên bàn phím và Mini App đưa ra các bí danh theo họ của Claude Code (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`), cùng với `opus[1m]`, tức Opus với ngữ cảnh 1M. Trên API của Anthropic, một bí danh trỏ tới mô hình mới nhất trong họ của nó. Trên Bedrock và Vertex, cùng bí danh đó có thể trỏ tới một bản cũ hơn, tùy vào những gì nhà cung cấp của bạn có; hãy gửi `/model <full-id>` để chọn đúng một mô hình.
 
 </details>
 

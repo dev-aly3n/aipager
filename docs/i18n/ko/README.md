@@ -4,7 +4,7 @@
 
 # aipager
 
-<!-- i18n-source: README.md @ 6074a97 -->
+<!-- i18n-source: README.md @ 4790100 -->
 
 <h3>이제 Claude도 채팅 하나예요.</h3>
 
@@ -352,7 +352,7 @@ aipager는 내 채팅에서 보이는 것만 내 봇 token으로 Telegram에 보
 
 <br>
 
-키보드의 **모델** 메뉴와 Mini App은 Claude Code의 계열 별칭(`sonnet`, `opus`, `haiku`, `fable`, `opusplan`)과 `claude-opus-5-5`, `claude-sonnet-5-5` 같은 고정 모델을 보여 줘요. Anthropic API에서 별칭은 그 계열의 최신 모델을 가리켜요. Bedrock과 Vertex에서는 제공자가 가진 버전에 따라 같은 별칭이 더 오래된 버전을 가리킬 수 있어요. 정확한 모델을 고르려면 `/model <full-id>`를 보내세요.
+키보드의 **모델** 메뉴와 Mini App은 Claude Code의 계열 별칭(`sonnet`, `opus`, `haiku`, `fable`, `opusplan`)과 1M 컨텍스트의 Opus인 `opus[1m]`을 보여 줘요. Anthropic API에서 별칭은 그 계열의 최신 모델을 가리켜요. Bedrock과 Vertex에서는 제공자가 가진 버전에 따라 같은 별칭이 더 오래된 버전을 가리킬 수 있어요. 정확한 모델을 고르려면 `/model <full-id>`를 보내세요.
 
 </details>
 
