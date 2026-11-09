@@ -287,13 +287,20 @@ def _at_base(rel):
 
 def test_claude_facing_golden_is_byte_identical():
     rel = "tests/golden/claude_facing.json"
-    assert (ROOT / rel).read_bytes() == _at_base(rel)
+    # The aliases-only model list (2026-11-09) changed its model rows, and
+    # only those.
+    from tests.i18n_surfaces import without_model_rows
+    assert (without_model_rows(json.loads((ROOT / rel).read_bytes()))
+            == without_model_rows(json.loads(_at_base(rel))))
 
 
 def test_english_goldens_change_only_in_the_justified_surfaces():
     rel = "tests/golden/english_surfaces.json"
-    before = json.loads(_at_base(rel))
-    after = json.loads((ROOT / rel).read_text())
+    # The aliases-only model list (2026-11-09) changed the model rows, and
+    # only those.
+    from tests.i18n_surfaces import without_model_rows
+    before = without_model_rows(json.loads(_at_base(rel)))
+    after = without_model_rows(json.loads((ROOT / rel).read_text()))
     changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
     # The main keyboard lost its App button (2026-10-12), and only that.
     from tests.i18n_surfaces import (AGENTS_TREE_CARD_SURFACES, AGENTS_TREE_NEW_SURFACES,

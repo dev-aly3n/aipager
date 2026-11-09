@@ -334,11 +334,11 @@ entry sends a canned prompt or slash command:
 - **Models** - quick model switches for the active session. There
   are the family aliases (`sonnet`, `opus`, `haiku`, `fable`,
   `opusplan`), which always mean the latest model in that family, and
-  pinned models (`claude-opus-5-5`, `claude-opus-5-5[1m]` with the 1M
-  context window, `claude-sonnet-5-5`, `claude-fable-5-1`,
-  `claude-haiku-5-5`). The Mini App's launch and session pickers use
-  the same list. Any other model is typed by name on `/new`'s model
-  step or in the Mini App, as Claude Code or your provider writes it:
+  `opus[1m]`, Opus with the 1M context window. The Mini App's launch
+  and session pickers use the same list. Any other model, an exact
+  version such as `claude-opus-5-5` included, is typed by name on
+  `/new`'s model step or in the Mini App, as Claude Code or your
+  provider writes it:
   up to 128 characters of letters, digits and `. _ - : / @ ~ ,`, with
   `[1m]` allowed at the end ([providers](troubleshooting.md#using-an-api-key-a-gateway-or-another-provider)).
   A switch is refused while the session is working or a

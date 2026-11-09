@@ -151,7 +151,7 @@ def test_injects_exactly_slash_model_into_the_named_session(
 
 def test_a_listed_label_is_injected_as_its_model_id(server, run_async, monkeypatch):
     """The picker sends the row's label; the PTY must get the id the
-    shared list maps it to — including the 1M-context variant."""
+    shared list maps it to, including the 1M-context alias."""
     async def _run():
         _mk_session(server, "dev")
         send = _pty(monkeypatch)
@@ -159,10 +159,10 @@ def test_a_listed_label_is_injected_as_its_model_id(server, run_async, monkeypat
         try:
             from aipager.config import MODEL_CHOICES
             label = next(lbl for lbl, cmd in MODEL_CHOICES
-                         if cmd == "/model claude-opus-5-5[1m]")
+                         if cmd == "/model opus[1m]")
             resp = await _post(client, "dev", {"model": label})
             assert resp.status == 200, await resp.text()
-            assert send.await_args.args[1] == "/model claude-opus-5-5[1m]"
+            assert send.await_args.args[1] == "/model opus[1m]"
         finally:
             await client.close()
     run_async(_run())

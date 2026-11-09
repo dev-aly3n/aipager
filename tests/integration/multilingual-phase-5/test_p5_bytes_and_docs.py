@@ -49,6 +49,7 @@ from tests.i18n_surfaces import (
     updates_card_change_only,
     without_appearance_section,
     without_mode_labels,
+    without_model_rows,
 )
 
 REPO = Path(__file__).resolve().parents[3]
@@ -79,16 +80,29 @@ def now(rel):
 
 # ---- Claude-facing and English goldens ---------------------------------------------------
 
+#: Goldens that list the model rows: the aliases-only list (2026-11-09)
+#: changed those rows and nothing else (``without_model_rows``).
+MODEL_ROW_GOLDENS = {"tests/golden/claude_facing.json",
+                     "tests/integration/multilingual-phase-4/base_english.json"}
+
+
+def _same_but_model_rows(rel):
+    if rel not in MODEL_ROW_GOLDENS:
+        return now(rel) == at_base(rel)
+    return (without_model_rows(json.loads(now(rel)))
+            == without_model_rows(json.loads(at_base(rel))))
+
+
 @pytest.mark.parametrize("rel", ["tests/golden/claude_facing.json",
                                  "tests/golden/safety_reasons.json"])
 def test_what_claude_reads_is_byte_identical(rel):
-    assert now(rel) == at_base(rel)
+    assert _same_but_model_rows(rel)
 
 
 @pytest.mark.parametrize("rel", ["tests/integration/multilingual-phase-4/base_english.json",
                                  "tests/integration/multilingual-phase-4/base_page_english.json"])
 def test_the_english_mini_app_goldens_are_byte_identical(rel):
-    assert now(rel) == at_base(rel)
+    assert _same_but_model_rows(rel)
 
 
 #: CSS rules a later feature changed on purpose: the folder picker's
@@ -147,7 +161,10 @@ CHANGED_SINCE = {"agents_line", "language.list"}
 
 def test_every_english_surface_of_the_base_is_unchanged():
     rel = "tests/golden/english_surfaces.json"
-    base, cur = _surfaces(at_base(rel)), _surfaces(now(rel))
+    # The aliases-only model list (2026-11-09) changed the model rows,
+    # and only those.
+    base = without_model_rows(_surfaces(at_base(rel)))
+    cur = without_model_rows(_surfaces(now(rel)))
     kept = {k: v for k, v in base.items()
             if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES
             | NO_KEYBOARD_APP_SURFACES | AGENTS_TREE_CARD_SURFACES | APPEARANCE_SURFACES

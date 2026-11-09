@@ -349,7 +349,7 @@ Send `/update`: it checks aipager and Claude Code and installs what is new, and 
 
 <br>
 
-The keyboard's **Model** menu and the Mini App offer Claude Code's family aliases (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) and pinned models such as `claude-opus-5-5` and `claude-sonnet-5-5`. On the Anthropic API an alias resolves to the latest model in its family. On Bedrock and Vertex the same alias may resolve to an older snapshot, depending on what your provider offers; send `/model <full-id>` to pick an exact model.
+The keyboard's **Model** menu and the Mini App offer Claude Code's family aliases (`sonnet`, `opus`, `haiku`, `fable`, `opusplan`) plus `opus[1m]`, Opus with the 1M context window. On the Anthropic API an alias resolves to the latest model in its family. On Bedrock and Vertex the same alias may resolve to an older snapshot, depending on what your provider offers; send `/model <full-id>` to pick an exact model.
 
 </details>
 

@@ -24,17 +24,40 @@ from aipager.state import Status, TrackedSession
 
 # ===== the shared list ======================================================
 
-_REQUIRED_MODELS = {
-    "opus", "sonnet", "haiku", "fable",
-    "claude-opus-5-5", "claude-opus-5-5[1m]", "claude-sonnet-5-5",
-    "claude-fable-5-1", "claude-haiku-5-5",
+_REQUIRED_MODELS = {"opus", "sonnet", "haiku", "fable", "opusplan", "opus[1m]"}
+# Claude Code's own alias list (2.1.282 to 2.1.321): each resolves to the
+# newest model of its family, so the list never needs a new row.
+_CLAUDE_CODE_ALIASES = {"sonnet", "opus", "haiku", "fable", "best",
+                        "sonnet[1m]", "opus[1m]", "fable[1m]", "opusplan"}
+# The pinned rows the list carried until it went aliases-only, with the
+# model each launched.
+_DROPPED_ROWS = {
+    "Opus 5.5": "claude-opus-5-5",
+    "Opus 5.5 1M": "claude-opus-5-5[1m]",
+    "Sonnet 5.5": "claude-sonnet-5-5",
+    "Fable 5.1": "claude-fable-5-1",
+    "Haiku 5.5": "claude-haiku-5-5",
 }
 
 
-def test_the_catalog_carries_every_current_model():
+def test_the_catalog_carries_every_family():
     models = {model for _label, model, _hint in config.MODEL_CATALOG}
     missing = _REQUIRED_MODELS - models
     assert not missing, f"missing from the shared model list: {sorted(missing)}"
+
+
+def test_the_catalog_lists_only_aliases():
+    """A pinned version goes stale when a model ships (2.1.321 moved
+    `fable` to claude-fable-5-2 while the list still pinned 5.1)."""
+    pinned = [model for _label, model, _hint in config.MODEL_CATALOG
+              if model not in _CLAUDE_CODE_ALIASES]
+    assert not pinned, f"not a Claude Code alias: {pinned}"
+
+
+@pytest.mark.parametrize("label", sorted(_DROPPED_ROWS))
+def test_a_dropped_row_keeps_its_model_for_a_chat_that_chose_it(label):
+    assert config.RETIRED_MODEL_LABELS.get(label) == _DROPPED_ROWS[label]
+    assert label not in {lbl for lbl, _m, _h in config.MODEL_CATALOG}
 
 
 def test_the_telegram_default_keyboard_is_built_from_the_catalog():
@@ -53,8 +76,7 @@ def test_labels_are_unique_case_insensitively():
 
 def test_no_hint_carries_a_version_number():
     """An alias resolves to the latest of its family, so a version in a
-    hint goes stale on the next release. Versions live in the pinned
-    rows' LABELS only."""
+    hint goes stale on the next release."""
     for label, model, hint in config.MODEL_CATALOG:
         assert not re.search(r"\d", hint), f"{label!r} hint has a digit: {hint!r}"
         if model.startswith("claude-"):

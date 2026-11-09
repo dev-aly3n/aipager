@@ -929,23 +929,21 @@ MODELS_BUTTON = "Model \u203a"
 # (both through MODEL_CHOICES + model_hint()). Rows are
 # (label, model, hint).
 #
-# Aliases resolve to the latest of their family, so their hints say what
-# the family is FOR and never name a version — a baked-in version
-# would be wrong on the next release. The pinned rows carry their version
-# in the label only and have no hint. Names checked against the installed
-# Claude Code's own model table (`claude --help` and its binary); `[1m]`
-# is its 1M-context suffix ("append [1m] to the model name").
+# Aliases only: Claude Code resolves each to the newest model of its
+# family, so the list needs no change when a model ships (Claude Code
+# has no command that lists models, and aipager never asks the API with
+# a person's sign-in). Hints say what the family is FOR and never name a
+# version. `opus[1m]` is in Claude Code's own alias list (2.1.321:
+# sonnet, opus, haiku, fable, best, sonnet[1m], opus[1m], fable[1m],
+# opusplan); `[1m]` is its 1M-context suffix. Any other model, a pinned
+# version included, can still be typed by name (launch.validate_model).
 MODEL_CATALOG: tuple[tuple[str, str, str], ...] = (
     ("Sonnet", "sonnet", "Balanced - the everyday default"),
     ("Opus", "opus", "Most capable - deep reasoning, hardest problems"),
     ("Haiku", "haiku", "Fastest and cheapest - quick edits and lookups"),
     ("Fable", "fable", "Newest family alias"),
     ("OpusPlan", "opusplan", "Opus for planning, Sonnet to execute"),
-    ("Opus 5.5", "claude-opus-5-5", ""),
-    ("Opus 5.5 1M", "claude-opus-5-5[1m]", ""),
-    ("Sonnet 5.5", "claude-sonnet-5-5", ""),
-    ("Fable 5.1", "claude-fable-5-1", ""),
-    ("Haiku 5.5", "claude-haiku-5-5", ""),
+    ("Opus 1M", "opus[1m]", "Opus with the long context window"),
 )
 #: Pinned rows taken off MODEL_CATALOG, by label, with the model each one
 #: launched. `/settings` -> New sessions stores the LABEL a chat picked, so
@@ -954,6 +952,11 @@ MODEL_CATALOG: tuple[tuple[str, str, str], ...] = (
 RETIRED_MODEL_LABELS: dict[str, str] = {
     "Sonnet 5": "claude-sonnet-5",
     "Haiku 4.5": "claude-haiku-4-5",
+    "Opus 5.5": "claude-opus-5-5",
+    "Opus 5.5 1M": "claude-opus-5-5[1m]",
+    "Sonnet 5.5": "claude-sonnet-5-5",
+    "Fable 5.1": "claude-fable-5-1",
+    "Haiku 5.5": "claude-haiku-5-5",
 }
 _DEFAULT_MODELS: list[tuple[str, str]] = [
     (label, f"/model {model}") for label, model, _hint in MODEL_CATALOG

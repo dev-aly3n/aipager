@@ -40,7 +40,7 @@
  "aipager/cli/report.py": 3,
  "aipager/cli/resume.py": 38,
  "aipager/cli/session.py": 13,
- "aipager/config.py": 31,
+ "aipager/config.py": 33,
  "aipager/doctor.py": 221,
  "aipager/dtach/__init__.py": 1,
  "aipager/dtach/enforce.py": 4,

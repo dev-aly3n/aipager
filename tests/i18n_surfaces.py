@@ -271,6 +271,35 @@ _MODE_LABEL_UNDO = (
 )
 
 
+#: The model rows the shared list (config.MODEL_CATALOG) changed when it
+#: went aliases-only (2026-11-09): every pinned version row went and an
+#: "Opus 1M" alias row came. See :func:`without_model_rows`.
+MODEL_ROWS_CHANGED = frozenset({"Opus 5.5", "Opus 5.5 1M", "Sonnet 5.5", "Fable 5.1",
+                                "Haiku 5.5", "Opus 1M"})
+
+
+def _is_model_row(value):
+    if isinstance(value, str):
+        return value in MODEL_ROWS_CHANGED or (
+            value.startswith("[btn] ") and value[6:] in MODEL_ROWS_CHANGED)
+    return isinstance(value, dict) and value.get("label") in MODEL_ROWS_CHANGED
+
+
+def without_model_rows(value):
+    """*value* (a golden's string, list or dict) without the model rows
+    the aliases-only list changed (:data:`MODEL_ROWS_CHANGED`): a button
+    label, a ``[btn]`` line, a Mini App ``{"label", "hint"}`` row or a
+    Claude-facing ``model.<label>`` key. Applied to both sides of a
+    comparison with an older golden: what is left equal proves nothing
+    else changed."""
+    if isinstance(value, list):
+        return [without_model_rows(v) for v in value if not _is_model_row(v)]
+    if isinstance(value, dict):
+        return {k: without_model_rows(v) for k, v in value.items()
+                if not (k.startswith("model.") and k[6:] in MODEL_ROWS_CHANGED)}
+    return value
+
+
 def without_mode_labels(value):
     """*value* (a string, or lists and dicts of them) with the English mode
     labels and the sentences around them read as before 2026-10-10, on

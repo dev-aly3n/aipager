@@ -589,24 +589,8 @@
      "label": "OpusPlan"
     },
     {
-     "hint": "",
-     "label": "Opus 5.5"
-    },
-    {
-     "hint": "",
-     "label": "Opus 5.5 1M"
-    },
-    {
-     "hint": "",
-     "label": "Sonnet 5.5"
-    },
-    {
-     "hint": "",
-     "label": "Fable 5.1"
-    },
-    {
-     "hint": "",
-     "label": "Haiku 5.5"
+     "hint": "Opus with the long context window",
+     "label": "Opus 1M"
     }
    ],
    "schema": [
