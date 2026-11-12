@@ -40,9 +40,9 @@ log = logging.getLogger(__name__)
 # The first rich message read in a run logs its block types (names only,
 # never content) at debug level: the live check of the shape.
 _shape_logged = False
-# Same for the first highlight from a rich message, at info level while
-# Bot API 10.4 is new: whether ``rich_texts`` holds one item per block
-# decides how a highlight across paragraphs is joined. Types only.
+# Same for the first highlight from a rich message (types only). Seen
+# live on 2026-11-12: ``rich_texts`` holds one item per block, with a
+# block's bold and italic runs nested inside its item.
 _quote_shape_logged = False
 
 # Nesting deeper than this is ignored: a guard against a pathological
@@ -244,7 +244,8 @@ def _shape(value, depth: int = 0):
 
 def quote_text(quote) -> str:
     """The highlighted part of a reply: ``TextQuote.text``, or the plain
-    text of its ``rich_texts`` when it was chosen from a rich message."""
+    text of its ``rich_texts`` when it was chosen from a rich message, one
+    line per block it spans."""
     if quote is None:
         return ""
     value = getattr(quote, "text", None)
@@ -255,8 +256,12 @@ def quote_text(quote) -> str:
         rich_texts = _extra(quote, "rich_texts")
         if rich_texts is not None and not _quote_shape_logged:
             _quote_shape_logged = True
-            log.info("highlight from a rich message: rich_texts shape %s",
-                     _shape(rich_texts))
+            log.debug("highlight from a rich message: rich_texts shape %s",
+                      _shape(rich_texts))
+        if isinstance(rich_texts, list):
+            # One item per paragraph or list item: a line break between
+            # them, as Telegram itself shows the quote.
+            return "\n".join(rich_text_plain(item, 1) for item in rich_texts).strip()
         return rich_text_plain(rich_texts).strip()
     except Exception:
         return ""

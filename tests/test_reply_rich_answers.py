@@ -284,11 +284,11 @@ def test_the_first_rich_message_logs_its_shape_once_without_content(monkeypatch,
 
 def test_the_first_rich_highlight_logs_its_type_tree_once_without_content(monkeypatch, caplog):
     monkeypatch.setattr(rich_read, "_quote_shape_logged", False)
-    caplog.set_level("INFO", logger="aipager.bot.rich_read")
+    caplog.set_level("DEBUG", logger="aipager.bot.rich_read")
     quote = {"text": "", "position": 0,
              "rich_texts": ["secret ", [{"type": "bold", "text": "words"}, "x"]]}
     assert rich_read.quote_text(_update(_answer([_para("x")]), quote=quote).message.quote) \
-        == "secret wordsx"
+        == "secret \nwordsx"
     rich_read.quote_text(_update(_answer([_para("x")]), quote=quote).message.quote)
     lines = [r.getMessage() for r in caplog.records if r.name == "aipager.bot.rich_read"]
     assert lines == ["highlight from a rich message: rich_texts shape ['s', ['bold', 's']]"]
@@ -315,8 +315,50 @@ def test_quote_text_prefers_text_then_rich_texts():
                                                 "rich_texts": ["rich"]}).message
     assert rich_read.quote_text(msg.quote) == "typed"
     msg = _update(_answer([_para("x")]), quote={"text": "", "position": 0,
-                                                "rich_texts": ["ri", {"type": "bold", "text": "ch"}]}).message
+                                                "rich_texts": [["ri", {"type": "bold", "text": "ch"}]]}).message
     assert rich_read.quote_text(msg.quote) == "rich"
+
+
+# The shape seen live on 2026-11-12 (type tree [['bold','s'], 'bold', 's',
+# 's', 's', ['bold','s']]): a bold-led paragraph, a bold-only paragraph,
+# three list items and another bold-led paragraph, one item per block.
+_LIVE_RICH_TEXTS = [
+    [{"type": "bold", "text": "What changed:"}, " replies work."],
+    {"type": "bold", "text": "Checks:"},
+    "The suite passed.",
+    "Each guard was broken on purpose.",
+    "The reviewer approved.",
+    [{"type": "bold", "text": "One open question:"}, " a highlight across"],
+]
+
+
+def test_a_highlight_across_blocks_gives_one_line_per_block():
+    msg = _update(_answer([_para("x")]), quote={"text": "", "position": 0,
+                                                "rich_texts": _LIVE_RICH_TEXTS}).message
+    assert rich_read.quote_text(msg.quote).split("\n") == [
+        "What changed: replies work.",
+        "Checks:",
+        "The suite passed.",
+        "Each guard was broken on purpose.",
+        "The reviewer approved.",
+        "One open question: a highlight across",
+    ]
+
+
+@pytest.mark.parametrize("rich_texts, want", [
+    pytest.param([["plain ", {"type": "bold", "text": "bold"}, " plain"]],
+                 "plain bold plain", id="bold-inside-one-paragraph"),
+    pytest.param([[{"type": "bold", "text": "Lead:"}, " rest"]],
+                 "Lead: rest", id="live-single-item"),
+    pytest.param(["just words"], "just words", id="lone-string"),
+    pytest.param("not a list", "not a list", id="bare-string"),
+    pytest.param({"type": "bold", "text": "one"}, "one", id="bare-object"),
+    pytest.param([], "", id="empty"),
+])
+def test_a_highlight_inside_one_block_has_no_line_break(rich_texts, want):
+    msg = _update(_answer([_para("x")]), quote={"text": "", "position": 0,
+                                                "rich_texts": rich_texts}).message
+    assert rich_read.quote_text(msg.quote) == want
 
 
 def test_a_newer_ptb_attribute_is_read_too():
@@ -361,7 +403,7 @@ def test_a_reply_to_a_rich_answer_writes_its_full_text_file(mk_bot, tmp_path, mo
 def test_a_highlight_from_a_rich_answer_shows_the_highlight(mk_bot):
     bot = mk_bot()
     quote = {"text": "", "position": 4, "is_manual": True,
-             "rich_texts": ["step ", {"type": "bold", "text": "three"}]}
+             "rich_texts": [["step ", {"type": "bold", "text": "three"}]]}
     msg = _update(_answer([_para("The step three failed.")]), quote=quote).message
     ctx = bot._build_reply_context(msg, _sess(), bot_id=BOT_ID, allow_file=False)
     assert "step three" in ctx
