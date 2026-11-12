@@ -282,6 +282,18 @@ def test_the_first_rich_message_logs_its_shape_once_without_content(monkeypatch,
     assert "secret" not in lines[0]
 
 
+def test_the_first_rich_highlight_logs_its_type_tree_once_without_content(monkeypatch, caplog):
+    monkeypatch.setattr(rich_read, "_quote_shape_logged", False)
+    caplog.set_level("INFO", logger="aipager.bot.rich_read")
+    quote = {"text": "", "position": 0,
+             "rich_texts": ["secret ", [{"type": "bold", "text": "words"}, "x"]]}
+    assert rich_read.quote_text(_update(_answer([_para("x")]), quote=quote).message.quote) \
+        == "secret wordsx"
+    rich_read.quote_text(_update(_answer([_para("x")]), quote=quote).message.quote)
+    lines = [r.getMessage() for r in caplog.records if r.name == "aipager.bot.rich_read"]
+    assert lines == ["highlight from a rich message: rich_texts shape ['s', ['bold', 's']]"]
+
+
 # ---- message_text / quote_text ----------------------------------------------
 
 def test_message_text_prefers_text_then_caption_then_rich():

@@ -40,6 +40,10 @@ log = logging.getLogger(__name__)
 # The first rich message read in a run logs its block types (names only,
 # never content) at debug level: the live check of the shape.
 _shape_logged = False
+# Same for the first highlight from a rich message, at info level while
+# Bot API 10.4 is new: whether ``rich_texts`` holds one item per block
+# decides how a highlight across paragraphs is joined. Types only.
+_quote_shape_logged = False
 
 # Nesting deeper than this is ignored: a guard against a pathological
 # shape, far beyond anything Telegram sends.
@@ -224,6 +228,20 @@ def message_text(msg) -> str:
         return ""
 
 
+def _shape(value, depth: int = 0):
+    """The type tree of a ``RichText`` value with every text left out:
+    ``"s"`` for a string, a list for an array, the ``type`` of an object."""
+    if depth > 6:
+        return "..."
+    if isinstance(value, str):
+        return "s"
+    if isinstance(value, list):
+        return [_shape(v, depth + 1) for v in value[:20]]
+    if isinstance(value, dict):
+        return str(value.get("type"))
+    return type(value).__name__
+
+
 def quote_text(quote) -> str:
     """The highlighted part of a reply: ``TextQuote.text``, or the plain
     text of its ``rich_texts`` when it was chosen from a rich message."""
@@ -232,7 +250,13 @@ def quote_text(quote) -> str:
     value = getattr(quote, "text", None)
     if isinstance(value, str) and value:
         return value
+    global _quote_shape_logged
     try:
-        return rich_text_plain(_extra(quote, "rich_texts")).strip()
+        rich_texts = _extra(quote, "rich_texts")
+        if rich_texts is not None and not _quote_shape_logged:
+            _quote_shape_logged = True
+            log.info("highlight from a rich message: rich_texts shape %s",
+                     _shape(rich_texts))
+        return rich_text_plain(rich_texts).strip()
     except Exception:
         return ""
