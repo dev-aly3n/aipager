@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **The model menu no longer needs an update when a new model comes out.** The Models keyboard and the Mini App's pickers now list only Claude Code's family names (Sonnet, Opus, Haiku, Fable, OpusPlan), which always mean the newest model of their family, plus Opus 1M, Opus with the 1M context window. The rows for exact versions (Opus 5.5, Opus 5.5 1M, Sonnet 5.5, Fable 5.1, Haiku 5.5) are gone: they went out of date as soon as a newer model came out. A chat that picked one of them as its default for new sessions keeps it, and any exact version can still be typed by name in `/new` or the Mini App.
 
+### Fixed
+- **Replying to one of Claude's answers shows Claude that answer again.** Since answers moved to Telegram's rich format, a reply to an older answer reached Claude as "a reply to a non-text message" with nothing to read, and a part you highlighted in an answer was lost. Claude now gets the answer's text, or the part you highlighted.
+
 ## [1.4.1] - 2026-11-05
 
 ### Fixed

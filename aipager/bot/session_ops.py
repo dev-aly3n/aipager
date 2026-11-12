@@ -28,7 +28,7 @@ from aipager import i18n, invisible, perm_modes
 from aipager.config import RESUME_GUARD_SECONDS
 from aipager.i18n import Command, Msg, Safe, Span
 from aipager.dtach import inject
-from aipager.bot import card_rows, reactions, stop_text
+from aipager.bot import card_rows, reactions, rich_read, stop_text
 from aipager.bot.sibling_text import shown
 from aipager.miniapp import sessions as _mini_sessions
 
@@ -1773,7 +1773,9 @@ class SessionOpsMixin:
         """
         reply_to = getattr(msg, "reply_to_message", None)
         quote = getattr(msg, "quote", None)
-        quote_text = getattr(quote, "text", None) if quote else None
+        # A part highlighted in a rich message (Claude's answers) comes
+        # with an empty ``text`` and the words in ``rich_texts``.
+        quote_text = rich_read.quote_text(quote) if quote else None
 
         if quote and quote_text:
             fragment = quote_text[:1000]
@@ -1812,7 +1814,9 @@ class SessionOpsMixin:
         if is_latest:
             return ""
 
-        text = reply_to.text or reply_to.caption
+        # Claude's answers are rich messages: no text or caption, the words
+        # are in ``rich_message``.
+        text = rich_read.message_text(reply_to)
         if not text:
             return _nontext_context(
                 getattr(reply_to, "date", None), _reply_author(reply_to, bot_id),
@@ -3326,7 +3330,7 @@ class SessionOpsMixin:
             if cand.last_msg_id == reply_to.message_id:
                 return cand
         return self._guess_session_from_text(
-            reply_to.text or reply_to.caption or "", scope,
+            rich_read.message_text(reply_to), scope,
         )
 
     async def _switch_session(self, update: Update, target_label: str) -> None:
