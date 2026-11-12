@@ -32,6 +32,18 @@ jobs:
       - uses: actions/checkout@v4
       - name: Stage the recipe where snapcraft expects it
         run: mkdir -p snap && cp packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      # action-build installs LXD once and fails the build when the Snap
+      # Store drops that download (1.4.2: "cannot install snap base
+      # core26 ... EOF"). With LXD already here it only refreshes it, and
+      # a failed refresh does not stop it.
+      - name: Install LXD, retrying a Snap Store hiccup
+        run: |
+          for i in 1 2 3 4 5; do
+            sudo snap install lxd && exit 0
+            echo "snap install lxd failed (attempt $i of 5), retrying in 30 s"
+            sleep 30
+          done
+          exit 1
       - uses: snapcore/action-build@v1
         id: build
       - uses: actions/upload-artifact@v4
