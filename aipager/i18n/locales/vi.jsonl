@@ -131,6 +131,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} đã chuyển sang Chế độ Hỏi từ Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} đã chuyển sang Chế độ Auto từ Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} đã chuyển sang Chế độ Toàn quyền từ Mini App"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude đang làm việc - hãy xóa cuộc trò chuyện khi việc này xong."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "Hãy trả lời yêu cầu đang mở trước, rồi xóa cuộc trò chuyện."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude vẫn đang hoàn tất công việc - hãy xóa cuộc trò chuyện khi xong."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Hãy trả lời yêu cầu đang mở trước, rồi đổi chế độ."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude đang làm việc - hãy đổi mô hình khi việc này xong."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Phiên này hiện không chạy."}
@@ -766,6 +769,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Đã gửi ngay cho Claude"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "Hủy"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Hủy"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 Xóa cuộc trò chuyện"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 Xóa"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Đóng"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Xóa"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Thay đổi (diff)"}
@@ -776,6 +781,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Khởi động lại"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Tiếp tục"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Đã hủy."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "Đã hủy xóa cuộc trò chuyện của [<b>{session}</b>]."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 Xóa cuộc trò chuyện trong <b>{session}</b>?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude bắt đầu một cuộc trò chuyện mới và quên cuộc này."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "Cuộc trò chuyện cũ vẫn được lưu trên máy tính, nhưng không thể tiếp tục nó từ đây."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} đã gửi {command} đến {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "Đã hủy xóa [<b>{session}</b>]."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ Xóa [<b>{session}</b>] khỏi danh sách phiên? Việc này không thể hoàn tác."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "Không có phiên đã kết thúc nào để xóa."}
@@ -1036,6 +1046,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager đang gõ một tin nhắn, thử lại sau giây lát"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Phiên đó đã kết thúc rồi."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} đã ở {mode}."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "Bạn không được phép xóa cuộc trò chuyện của phiên này."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Bạn không được phép xóa phiên này."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Bạn không được phép kết thúc phiên này."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Bạn không được phép đổi tên phiên này."}
@@ -1043,9 +1054,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Bạn không được phép tiếp tục phiên này."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Hiện không thể tiếp tục phiên đó."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Bạn không được phép gửi tin nhắn đến phiên này."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "Không xóa được cuộc trò chuyện của {session} - hãy thử lại."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} không dừng - hãy thử lại"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ Đã kết thúc {session}"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} đã kết thúc {session}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} đã thay đổi từ lúc hiển thị - nếu vẫn muốn, hãy chạm 🧹 Xóa cuộc trò chuyện lần nữa."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} đã làm việc mới - nếu vẫn muốn, hãy chạm ⏹ Kết thúc phiên lần nữa"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} đã làm việc mới - nếu vẫn muốn, hãy chạm 🔄 Khởi động lại lần nữa"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} đã làm việc mới - nếu vẫn muốn, hãy chạm nút đổi lần nữa"}

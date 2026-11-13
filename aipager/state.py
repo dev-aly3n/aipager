@@ -3933,7 +3933,7 @@ def _load_keyboard_labels(raw: object) -> dict[int, list[str]]:
 #: card a record may name, and the newest records kept (also on disk).
 CARD_OWNER_KINDS = frozenset({
     "end", "restart", "delete", "mode", "ask",
-    "stop", "rename", "diff", "resume",
+    "stop", "rename", "diff", "resume", "clear",
 })
 MAX_CARD_OWNERS = 4096
 

@@ -131,6 +131,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 Mini App에서 {session} 세션을 확인 모드로 바꿨어요"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 Mini App에서 {session} 세션을 자동 모드로 바꿨어요"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 Mini App에서 {session} 세션을 전체 권한 모드로 바꿨어요"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude가 작업 중이에요. 이 작업이 끝나면 대화를 지우세요."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "열려 있는 요청에 먼저 답한 다음 대화를 지우세요."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude가 아직 작업을 마무리하고 있어요. 끝나면 대화를 지우세요."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "열려 있는 요청에 먼저 답한 다음 모드를 바꾸세요."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude가 작업 중이에요. 이 작업이 끝나면 모델을 바꾸세요."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "이 세션은 지금 실행 중이 아니에요."}
@@ -766,6 +769,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ 지금 Claude에게 보냈어요"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "취소"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ 취소"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 대화 지우기"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 지우기"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ 닫기"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ 삭제"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 변경 사항 (diff)"}
@@ -776,6 +781,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 재시작"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ 재개"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ 취소했어요."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "[<b>{session}</b>] 대화 지우기를 취소했어요."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 <b>{session}</b> 세션의 대화를 지울까요?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude가 새 대화를 시작하고 이 대화는 잊어요."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "이전 대화는 컴퓨터에 저장된 채로 남지만, 여기서 다시 이어갈 수는 없어요."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} 님이 {session} 세션에 {command} 명령을 보냈어요"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "[<b>{session}</b>] 삭제를 취소했어요."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ [<b>{session}</b>] 세션을 목록에서 지울까요? 되돌릴 수 없어요."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "삭제할 종료된 세션이 없어요."}
@@ -1036,6 +1046,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager가 메시지를 입력하는 중이에요. 잠시 후 다시 시도해 주세요"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "그 세션은 이미 종료됐어요."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} 세션은 이미 {mode}예요."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "이 세션의 대화를 지울 권한이 없어요."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "이 세션을 삭제할 권한이 없어요."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "이 세션을 종료할 권한이 없어요."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "이 세션의 이름을 바꿀 권한이 없어요."}
@@ -1043,9 +1054,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "이 세션을 재개할 권한이 없어요."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "그 세션은 지금 재개할 수 없어요."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "이 세션에 메시지를 보낼 권한이 없어요."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "{session} 세션의 대화를 지우지 못했어요. 다시 시도해 주세요."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} 세션이 멈추지 않았어요. 다시 시도해 주세요"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} 종료됨"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} 님이 {session} 세션을 종료했어요"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} 세션이 이 화면이 표시된 뒤에 바뀌었어요. 그래도 지우려면 🧹 대화 지우기를 다시 누르세요."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 종료하려면 ⏹ 세션 종료를 다시 누르세요"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 재시작하려면 🔄 재시작을 다시 누르세요"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} 세션이 새 작업을 시작했어요. 그래도 바꾸려면 전환 버튼을 다시 누르세요"}

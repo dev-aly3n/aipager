@@ -88,6 +88,21 @@ MODE_PROMPT_OPEN_REASON = Msg("app.reason.mode_prompt_open",
                                    "a question or permission prompt")
 QUEUE_EMPTY_REASON = Msg("app.reason.queue_empty", "Nothing queued to clear.",
                          note="Clear queue: no queued messages")
+# Clear conversation (/clear) from a confirm, the Mini App's or the chat ⋮
+# menu's: refused, never held for later, while the session cannot take it.
+# Shared by the Mini App route's 409 bodies and the chat's pop-ups.
+CLEAR_BUSY_REASON = Msg("app.reason.clear_busy",
+                        "Claude is working - clear the conversation when this turn ends.",
+                        note="Why a session's conversation can't be cleared now")
+CLEAR_PROMPT_OPEN_REASON = Msg("app.reason.clear_prompt_open",
+                               "Answer the open prompt first, then clear the conversation.",
+                               note="Clear conversation is refused while the session shows a "
+                                    "question or permission prompt")
+CLEAR_WAITING_REASON = Msg("app.reason.clear_waiting",
+                           "Claude is still finishing its work - clear the conversation when "
+                           "it's done.",
+                           note="Its background agents run, a model check runs, or someone "
+                                "else's message is still on its way")
 # Switching a running session's model (roadmap 8.35). Shared verbatim by
 # the detail payload's `model_switch` entry, the Mini App route's 409 body
 # and the chat's own refusal (bot/session_ops.model_switch_refusal), so
@@ -782,6 +797,9 @@ def build_timeline(sess: "TrackedSession", now: float | None = None) -> list[dic
 
 
 __all__ = [
+    "CLEAR_BUSY_REASON",
+    "CLEAR_PROMPT_OPEN_REASON",
+    "CLEAR_WAITING_REASON",
     "MODEL_SWITCH_BUSY_REASON",
     "MODEL_SWITCH_NOT_LIVE_REASON",
     "MODEL_SWITCH_PENDING_REASON",

@@ -131,6 +131,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} 已从 Mini App 切换到询问模式"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} 已从 Mini App 切换到自动模式"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} 已从 Mini App 切换到完全访问模式"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude 正在工作，请在这次任务结束后再清空对话。"}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "请先回答打开的请求，再清空对话。"}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude 还在收尾工作，请等它完成后再清空对话。"}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "请先回答打开的请求，再切换模式。"}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude 正在工作，请在这次任务结束后再更换模型。"}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "这个会话现在没有运行。"}
@@ -766,6 +769,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ 已立即发送给 Claude"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "取消"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ 取消"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 清空对话"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 清空"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ 关闭"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ 删除"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 改动（diff）"}
@@ -776,6 +781,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 重启"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ 恢复"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ 已取消。"}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "已取消清空 [<b>{session}</b>] 的对话。"}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 要清空 <b>{session}</b> 的对话吗？"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude 会开始一段新对话，并忘掉这段对话。"}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "旧对话仍保存在电脑上，但无法从这里恢复。"}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} 已把 {command} 发送到 {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "已取消删除 [<b>{session}</b>]。"}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ 要从会话列表中移除 [<b>{session}</b>] 吗？此操作无法撤销。"}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "没有可删除的已结束会话。"}
@@ -1036,6 +1046,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager 正在输入一条消息，请稍后再试"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "那个会话已经结束了。"}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} 已经是 {mode}。"}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "你无权清空这个会话的对话。"}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "你无权删除这个会话。"}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "你无权结束这个会话。"}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "你无权重命名这个会话。"}
@@ -1043,9 +1054,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "你无权恢复这个会话。"}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "那个会话现在无法恢复。"}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "你无权向这个会话发送消息。"}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "无法清空 {session} 的对话，请重试。"}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} 没有停止，请重试"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ 已结束 {session}"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} 结束了 {session}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} 在这条消息显示后已有变化，如果仍需要，请再点一次 🧹 清空对话"}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} 已开始新的任务，如果仍需要，请再点一次 ⏹ 结束会话"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} 已开始新的任务，如果仍需要，请再点一次 🔄 重启"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} 已开始新的任务，如果仍需要，请再点一次切换按钮"}

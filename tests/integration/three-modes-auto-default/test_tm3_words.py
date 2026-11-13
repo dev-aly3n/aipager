@@ -300,7 +300,10 @@ def test_english_goldens_change_only_in_the_justified_surfaces():
     # only those.
     from tests.i18n_surfaces import without_model_rows
     before = without_model_rows(json.loads(_at_base(rel)))
-    after = without_model_rows(json.loads((ROOT / rel).read_text()))
+    # A live session's ⋮ menu gained a Clear conversation row
+    # (2026-11-13), and only that.
+    from tests.i18n_surfaces import without_clear_rows
+    after = without_clear_rows(without_model_rows(json.loads((ROOT / rel).read_text())))
     changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
     # The main keyboard lost its App button (2026-10-12), and only that.
     from tests.i18n_surfaces import (AGENTS_TREE_CARD_SURFACES, AGENTS_TREE_NEW_SURFACES,

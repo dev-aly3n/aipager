@@ -178,6 +178,31 @@ def without_appearance_row(value):
     return [v for v in value if v != "🎨 Appearance"]
 
 
+#: The surfaces that draw a live session's ⋮ menu, which gained one
+#: "🧹 Clear conversation" row (2026-11-13) and nothing else (see
+#: :func:`without_clear_rows`).
+CLEAR_CONVERSATION_SURFACES = frozenset({"sess.menu", "sess.restart", "sess.taps"})
+_CLEAR_ROW = "🧹 Clear conversation"
+
+
+def without_clear_row(value):
+    """*value* (a surface's list of texts) without the "🧹 Clear
+    conversation" rows goldens recorded on older bases do not have."""
+    return [v for v in value if v != _CLEAR_ROW]
+
+
+def without_clear_rows(surfaces: dict) -> dict:
+    """*surfaces* (a whole golden, recorded now) as goldens recorded before
+    2026-11-13 have it: each of :data:`CLEAR_CONVERSATION_SURFACES` without
+    its Clear conversation rows, every other surface as it is. Fails when
+    one of them has no such row: the exemption must be real."""
+    out = dict(surfaces)
+    for k in CLEAR_CONVERSATION_SURFACES:
+        assert _CLEAR_ROW in out[k], k
+        out[k] = without_clear_row(out[k])
+    return out
+
+
 def with_keyboard_app_removed(value):
     """*value* (a keyboard surface's list of texts) without the "📱 App"
     button older goldens recorded on the main keyboard."""

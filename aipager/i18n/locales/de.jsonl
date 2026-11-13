@@ -131,6 +131,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} ist über die Mini App in den Fragen-Modus gewechselt"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} ist über die Mini App in den Auto-Modus gewechselt"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} ist über die Mini App in den Vollzugriff-Modus gewechselt"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude arbeitet: Leere die Unterhaltung, wenn diese Aufgabe fertig ist."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "Beantworte zuerst die offene Anfrage, dann leere die Unterhaltung."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude schließt seine Arbeit noch ab: Leere die Unterhaltung, wenn alles fertig ist."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Beantworte zuerst die offene Anfrage, dann wechsle den Modus."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude arbeitet: Wechsle das Modell, wenn diese Aufgabe fertig ist."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Die Sitzung läuft nicht."}
@@ -766,6 +769,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Sofort an Claude gesendet"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "Abbrechen"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Abbrechen"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 Unterhaltung leeren"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 Leeren"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Schließen"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Löschen"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Änderungen (diff)"}
@@ -776,6 +781,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Neu starten"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Fortsetzen"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Abgebrochen."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "Leeren der Unterhaltung in [<b>{session}</b>] abgebrochen."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 Unterhaltung in <b>{session}</b> leeren?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude beginnt eine neue Unterhaltung und vergisst diese."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "Die alte Unterhaltung bleibt auf dem Computer gespeichert, lässt sich aber von hier aus nicht fortsetzen."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} hat {command} an {session} gesendet"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "Löschen von [<b>{session}</b>] abgebrochen."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ [<b>{session}</b>] aus der Sitzungsliste entfernen? Das lässt sich nicht rückgängig machen."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "Keine beendeten Sitzungen zum Löschen."}
@@ -1036,6 +1046,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager tippt gerade eine Nachricht ein, versuch es gleich noch einmal"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Diese Sitzung ist schon beendet."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} ist schon im {mode}."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "Du darfst die Unterhaltung dieser Sitzung nicht leeren."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Du darfst diese Sitzung nicht löschen."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Du darfst diese Sitzung nicht beenden."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Du darfst diese Sitzung nicht umbenennen."}
@@ -1043,9 +1054,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Du darfst diese Sitzung nicht fortsetzen."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Diese Sitzung lässt sich gerade nicht fortsetzen."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Du darfst nicht an diese Sitzung senden."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "Die Unterhaltung in {session} ließ sich nicht leeren: Versuch es noch einmal."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} hat nicht gestoppt: Versuch es noch einmal"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} beendet"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} hat {session} beendet"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} hat sich geändert, seit das angezeigt wurde: Tippe noch einmal auf „🧹 Unterhaltung leeren“, wenn du es noch willst."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} hat eine neue Aufgabe angefangen: Tippe noch einmal auf „⏹ Sitzung beenden“, um sie zu beenden"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} hat eine neue Aufgabe angefangen: Tippe noch einmal auf „🔄 Neu starten“, um sie neu zu starten"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} hat eine neue Aufgabe angefangen: Wenn du den Wechsel noch willst, tippe noch einmal auf den Button"}
