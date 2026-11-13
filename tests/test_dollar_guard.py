@@ -4,7 +4,7 @@ Telegram's rich Markdown reads ``$...$`` as a LaTeX formula. Seen live
 on 2026-11-12: an answer with "$10 of Up and $10 of Down ... +$5.64"
 showed "10ofUpand10ofDown,andUpwon.Wallet1made+" as one italic formula.
 Claude Code writes for a terminal, where ``$`` is never math, so every
-``$`` outside code and URLs goes out escaped as ``\\$``.
+``$`` outside code and link addresses goes out escaped as ``\\$``.
 """
 from __future__ import annotations
 
@@ -88,15 +88,26 @@ def test_code_is_left_alone(text, want):
 
 
 @pytest.mark.parametrize("text, want", [
-    pytest.param("see https://x.test/a?p=$1 for $2",
-                 "see https://x.test/a?p=$1 for \\$2", id="bare-url"),
     pytest.param("<https://x.test/$a> costs $3",
                  "<https://x.test/$a> costs \\$3", id="autolink"),
-    pytest.param("www.x.test/$a and $4", "www.x.test/$a and \\$4", id="www"),
     pytest.param("[pay $5](https://x.test/$p)", "[pay \\$5](https://x.test/$p)", id="link"),
-    pytest.param("ftp://x.test/$f", "ftp://x.test/$f", id="ftp"),
+    pytest.param("[a](https://x/$1) and [b](https://y/$2) for $3",
+                 "[a](https://x/$1) and [b](https://y/$2) for \\$3", id="two-links"),
 ])
-def test_urls_gain_no_backslash(text, want):
+def test_link_addresses_gain_no_backslash(text, want):
+    assert escape_dollars(text) == want
+
+
+@pytest.mark.parametrize("text, want", [
+    pytest.param("Link: https://example.com/?a=$1 costs $2.",
+                 "Link: https://example.com/?a=\\$1 costs \\$2.", id="live-2026-11-13"),
+    pytest.param("see https://x.test,$5 or $6", "see https://x.test,\\$5 or \\$6", id="right-after"),
+    pytest.param("www.x.test/$a and $4", "www.x.test/\\$a and \\$4", id="www"),
+    pytest.param("ftp://x.test/$f", "ftp://x.test/\\$f", id="ftp"),
+    pytest.param("(see https://x/$1) $2", "(see https://x/\\$1) \\$2", id="in-parentheses"),
+])
+def test_a_bare_address_in_prose_is_escaped(text, want):
+    """Telegram ends a bare link before a ``$``: left bare, it opens a formula."""
     assert escape_dollars(text) == want
 
 
@@ -183,15 +194,11 @@ def test_a_fence_belongs_to_the_quote_it_opened_in(text, want):
     assert escape_dollars(text) == want
 
 
-def test_a_dollar_written_right_after_a_url_counts_as_part_of_it():
-    """Documented trade: GitHub's autolinks take ",$5" into the address."""
-    assert escape_dollars("see https://x.test,$5 or $6") == "see https://x.test,$5 or \\$6"
-
-
 def test_a_hostile_line_is_escaped_quickly():
     """It runs on the event loop for every rich send and card edit."""
     for text in ("$" * 50000, "\\" * 30000 + "$", "`$" * 20000, "https://" + "$" * 40000,
-                 "<a:" + "$" * 40000, "<code>$" * 20000, "<code" + " " * 40000 + "$",
+                 "<a:" + "$" * 40000, "](" * 30000 + "$", "](" + "$" * 40000,
+                 "<code>$" * 20000, "<code" + " " * 40000 + "$",
                  "<pre>$\n" * 20000, "<footer>" * 20000 + "$", "> " * 30000 + "```$",
                  "> " * 30000 + "x $", "1. " * 20000 + "$", " \t" * 30000 + "$"):
         t0 = time.perf_counter()
@@ -210,6 +217,14 @@ def _capture(monkeypatch):
 
     monkeypatch.setattr(rm, "_post", _fake_post)
     return seen
+
+
+def test_an_image_address_turned_into_link_text_is_escaped(monkeypatch, run_async):
+    """media_guard turns ``![](url)`` into ``[url](url)``: the address
+    becomes text there, so the escape must run after it."""
+    seen = _capture(monkeypatch)
+    run_async(rm.send_rich_message(1, "![](https://x/$1) $2"))
+    assert seen[0][1]["rich_message"]["markdown"] == "[https://x/\\$1](https://x/$1) \\$2"
 
 
 def test_a_rich_send_carries_escaped_dollars(monkeypatch, run_async):

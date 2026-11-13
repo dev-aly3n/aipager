@@ -341,8 +341,9 @@ async def send_rich_message(
         "chat_id": chat_id,
         # Every rich payload is built here or in edit_message_text_rich:
         # neutralise media blocks so no text makes Telegram fetch a URL,
-        # and keep each `$` a dollar sign, not the edge of a formula.
-        "rich_message": {"markdown": neutralize_media(escape_dollars(markdown)),
+        # then keep each `$` a dollar sign, not the edge of a formula (in
+        # that order: an image's address can become a link's text).
+        "rich_message": {"markdown": escape_dollars(neutralize_media(markdown)),
                          "is_rtl": is_rtl},
     }
     if reply_to_message_id is not None:
@@ -511,8 +512,9 @@ async def edit_message_text_rich(
         "message_id": message_id,
         # Every rich payload is built here or in edit_message_text_rich:
         # neutralise media blocks so no text makes Telegram fetch a URL,
-        # and keep each `$` a dollar sign, not the edge of a formula.
-        "rich_message": {"markdown": neutralize_media(escape_dollars(markdown)),
+        # then keep each `$` a dollar sign, not the edge of a formula (in
+        # that order: an image's address can become a link's text).
+        "rich_message": {"markdown": escape_dollars(neutralize_media(markdown)),
                          "is_rtl": is_rtl},
     }
     if reply_markup is not None:

@@ -8,7 +8,8 @@ variable or a price, never a formula, so a sentence with two amounts
 italic formula with its spaces gone and its dollar signs lost.
 
 :func:`escape_dollars` runs on every rich payload in ``rich_message``
-(beside ``neutralize_media``) and turns each ``$`` into ``\\$``: rich
+(after ``neutralize_media``, whose image-to-link rewrite can put an
+address into a link's text) and turns each ``$`` into ``\\$``: rich
 Markdown follows GitHub Flavored Markdown, where a backslash before ASCII
 punctuation shows that character as itself. It leaves alone the places
 where a backslash would be shown or would change an address:
@@ -20,10 +21,12 @@ where a backslash would be shown or would change an address:
 - the inside of ``<footer>`` (Markdown is not parsed there: aipager's
   footer lines are already HTML, see ``footer.py``), ``<pre>`` and
   ``<code>``;
-- URLs: ``<scheme:...>`` autolinks and bare ``http(s)://``, ``ftp://`` and
-  ``www.`` addresses, up to the next blank. A ``$`` written straight
-  after an address with no space ("see https://x.test,$5") counts as part
-  of it, as GitHub's autolinks take it, and stays unescaped;
+- link addresses that are not text: a ``<scheme:...>`` autolink (no
+  backslash escape works inside one) and the destination of an inline
+  link ``[text](address)``. A bare address in prose is escaped like the
+  rest: Telegram ends a bare link before a ``$`` (seen live on 2026-11-13:
+  "https://example.com/?a=$1 costs $2." linked only "...?a=" and drew
+  "1 costs" as a formula, closed even by the escaped ``\\$`` after it);
 - a ``$`` already escaped (an odd number of backslashes before it), so
   escaping twice gives the same text as escaping once.
 
@@ -56,12 +59,12 @@ from aipager.bot.media_guard import _code_spans
 _PREFIX = re.compile(r"^[ \t]*(?:>[ \t]*)*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?")
 _FENCE = re.compile(r"`{3,}|~{3,}")
 
-# Text a backslash must not enter: an autolink, a bare URL. Linear: each
-# alternative is one class repeat with a fixed prefix.
+# Addresses a backslash must not enter: an autolink, an inline link's
+# destination. Linear: each alternative is one class repeat after a fixed
+# prefix, and the destination's class stops at the next parenthesis.
 _URL = re.compile(
     r"<[A-Za-z][A-Za-z0-9+.\-]{1,31}:[^\s<>]*>"
-    r"|(?:https?|ftp)://[^\s<>]*"
-    r"|www\.[^\s<>]*"
+    r"|\]\([^\s()]*\)"
 )
 
 # Inline HTML whose inside is left as written, open and close on one line
@@ -154,8 +157,8 @@ def _escape_line(line: str, block: str | None) -> tuple[str, str | None]:
 
 
 def escape_dollars(markdown: str) -> str:
-    """*markdown* with every ``$`` outside code, raw HTML blocks and URLs
-    escaped as ``\\$``.
+    """*markdown* with every ``$`` escaped as ``\\$``, outside code, raw
+    HTML blocks and link addresses.
 
     Idempotent, and a no-op on text without ``$``.
     """
