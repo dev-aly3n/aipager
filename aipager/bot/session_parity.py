@@ -886,6 +886,9 @@ async def _handle_clear_confirm(bot: "TelegramBot", query, sess, turn: int, chat
         await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION) if reason == "not_live"
                                else person.text(TOAST_NOT_FOUND_NAMED, session=label))
         await _redraw_menu(bot, query, chat_id, sess)
+    elif reason == "already_cleared":
+        await bot._safe_answer(query, person.text(TOAST_MOVED_ON_CLEAR, session=label))
+        await _redraw_menu(bot, query, chat_id, sess)
     elif reason == "prompt_open":
         await bot._safe_answer(query, say(person, CLEAR_PROMPT_OPEN_REASON))
     elif reason == "waiting":

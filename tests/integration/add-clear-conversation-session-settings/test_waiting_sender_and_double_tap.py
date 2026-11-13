@@ -128,12 +128,12 @@ def test_confirm_by_the_writer_themself_still_clears(run_async, pending):
 
 # ---- fast double tap, no SessionEnd in between --------------------------------
 
-@pytest.mark.xfail(strict=True,
-                   reason="review rev-iter1-001: double tap before SessionEnd types /clear twice")
 def test_fast_double_tap_without_session_end_types_clear_once(run_async, dm):
     """Error guessing: two taps on the same confirm land before Claude Code's
     SessionEnd(clear) arrives. The session stays IDLE and alive throughout."""
     verb = _confirm_verb(run_async, dm.bot, TAPPER)
     _tap(run_async, dm.bot, verb, user=TAPPER)
-    _tap(run_async, dm.bot, verb, user=TAPPER)
+    second = _tap(run_async, dm.bot, verb, user=TAPPER)
     assert len(_cleared(dm)) == 1
+    assert _toasts(second) == [
+        "dev changed since this was shown - tap 🧹 Clear conversation again to clear it."]

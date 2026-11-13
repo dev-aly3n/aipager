@@ -2660,6 +2660,13 @@ class MiniAppServer:
             return web.json_response({
                 "error": reason, "detail": say(tr, refused),
             }, status=409)
+        if reason == "already_cleared":
+            # A clear from a confirm already went in on this turn.
+            from aipager.bot.session_parity import TOAST_MOVED_ON_CLEAR
+            return web.json_response({
+                "error": reason,
+                "detail": tr.text(TOAST_MOVED_ON_CLEAR, session=outcome.label),
+            }, status=409)
         if reason == "parked":
             return _parked_response(tr, outcome.label)
         if reason == "needs_admin":

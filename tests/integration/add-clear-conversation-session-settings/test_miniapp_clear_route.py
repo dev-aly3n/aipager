@@ -444,3 +444,17 @@ def test_session_actions_places_clear_after_rename_and_before_kill():
     keys = list(session_actions("idle", resumable=True, can_act=True, is_admin=True,
                                 queue_depth=2, context_pct=50))
     assert keys == [k for k in CANONICAL if k in keys] and "clear" in keys
+
+
+# ---- a confirmed clear goes in once per turn ---------------------------------
+
+def test_a_second_clear_before_the_turn_moves_on_types_nothing(server, run_async, pty):
+    """Two Mini App clears (or one here and a chat confirm) before Claude
+    Code's SessionEnd for the first: /clear is typed once, and the second
+    is told the session changed."""
+    _mk_session(server, "dev")
+    assert _post(server, run_async)[0] == 200
+    status, body = _post(server, run_async)
+    assert [c.args[:2] for c in pty.typed.await_args_list] == [("claude-dev", "/clear")]
+    assert (status, body["error"]) == (409, "already_cleared")
+    assert "dev" in body["detail"]

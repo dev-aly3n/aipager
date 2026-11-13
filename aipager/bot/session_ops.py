@@ -491,7 +491,8 @@ class ClearOutcome:
     Code background job), ``"prompt_open"`` (a dialog is open),
     ``"waiting"`` (its background agents, a model check or another
     sender's message are still going), ``"needs_admin"`` (the sender may
-    not send ``/clear``), ``"send_failed"``, ``"sent"``. ``was_busy``:
+    not send ``/clear``), ``"already_cleared"`` (a confirm's clear was
+    already typed on this turn), ``"send_failed"``, ``"sent"``. ``was_busy``:
     a turn ran when it was typed (the keyboard's 👀 rather than 👌).
     """
 
@@ -4416,14 +4417,26 @@ class SessionOpsMixin:
         if hold is not None:
             if await hold():
                 return ClearOutcome(ok=False, reason="held", label=label)
-        else:
+        marks: dict[str, int] | None = None
+        if hold is None:
             reason = self._clear_wait_reason(sess, driver_user_id)
             if reason:
                 return ClearOutcome(ok=False, reason=reason, label=label)
+            # A confirm clears a conversation once. Its turn moves on only
+            # when Claude Code's SessionEnd for the clear arrives, so a
+            # second tap (or the Mini App and a chat confirm) before that
+            # would type /clear twice. Checked and marked with no await in
+            # between, so two taps at once cannot both pass.
+            marks = self.__dict__.setdefault("_clear_sent_turn", {})
+            if marks.get(sess.name) == sess.turn_key:
+                return ClearOutcome(ok=False, reason="already_cleared", label=label)
+            marks[sess.name] = sess.turn_key
         was_busy = sess.status == Status.BUSY
         ok = await self._inject_prompt(sess, CLEAR_COMMAND, msg_id=msg_id,
                                        chat_id=chat_id,
                                        driver_user_id=driver_user_id)
+        if not ok and marks is not None and marks.get(sess.name) == sess.turn_key:
+            del marks[sess.name]       # nothing typed: a retry may clear
         if ok:
             if not was_busy:
                 # Ran, so its note is no queued message: let it expire

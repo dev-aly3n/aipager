@@ -788,3 +788,60 @@ def test_clear_card_owner_survives_registry_reload(cbot, run_async):
     fresh = SessionRegistry()
     fresh.load()
     assert fresh.card_owners[(G, card)]["kind"] == "clear"
+
+
+# ---- a confirm clears once per turn ---------------------------------------
+
+def test_core_second_confirm_clear_on_the_same_turn_is_refused(mk_bot, run_async, typed):
+    """Its turn moves on only with Claude Code's SessionEnd for the clear:
+    a second confirm before that must not type /clear again."""
+    bot = mk_bot()
+    sess = _live(bot)
+    assert _core(bot, sess, run_async).reason == "sent"
+    again = _core(bot, sess, run_async)
+    assert (again.ok, again.reason) == (False, "already_cleared")
+    assert typed == [("claude-dev", "/clear")]
+
+
+def test_core_two_confirms_at_once_type_clear_once(mk_bot, run_async, typed):
+    import asyncio
+    bot = mk_bot()
+    sess = _live(bot)
+
+    async def both():
+        return await asyncio.gather(
+            bot._clear_session_core(sess, driver_user_id=1, chat_id=None),
+            bot._clear_session_core(sess, driver_user_id=2, chat_id=None))
+
+    reasons = sorted(o.reason for o in run_async(both()))
+    assert reasons == ["already_cleared", "sent"]
+    assert typed == [("claude-dev", "/clear")]
+
+
+def test_core_a_confirm_clear_that_typed_nothing_can_be_retried(mk_bot, run_async, monkeypatch):
+    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
+    bot = mk_bot()
+    sess = _live(bot)
+    bot._inject_prompt = AsyncMock(side_effect=[False, True])
+    assert _core(bot, sess, run_async).reason == "send_failed"
+    assert _core(bot, sess, run_async).reason == "sent"
+
+
+def test_core_a_new_turn_may_be_cleared_again(mk_bot, run_async, typed):
+    bot = mk_bot()
+    sess = _live(bot)
+    assert _core(bot, sess, run_async).reason == "sent"
+    sess.turn_key += 1          # SessionEnd(clear) moved the turn on
+    assert _core(bot, sess, run_async).reason == "sent"
+    assert typed == [("claude-dev", "/clear"), ("claude-dev", "/clear")]
+
+
+def test_core_the_keyboards_clear_is_not_limited_per_turn(mk_bot, run_async, typed):
+    """The Commands keyboard's Clear (with its hold) keeps today's
+    behaviour: each tap types /clear."""
+    bot = mk_bot()
+    sess = _live(bot)
+    hold = AsyncMock(return_value=False)
+    assert _core(bot, sess, run_async, hold=hold).reason == "sent"
+    assert _core(bot, sess, run_async, hold=hold).reason == "sent"
+    assert len(typed) == 2
