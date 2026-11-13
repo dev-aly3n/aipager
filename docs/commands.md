@@ -40,7 +40,12 @@ frequent commands: `new`, `status`, `stop`, `now`, `resume`, `mode`,
 `settings`, `language`, `help` (and `app` with the Mini App on, in a private chat only). `kill`, `restart`,
 `rename`, `delete`, `diff`, `clearqueue`, `perms`, `whoami` and `update`
 are not in the menu but work when typed; the session actions are also in
-`/status` → `⋮`.
+`/status` → `⋮`. Clearing a conversation is deliberately not in the menu
+under any name, so one tap there can never wipe one: use `/status` → `⋮`
+→ `🧹 Clear conversation` (with a confirm) or Commands → Clear on the
+keyboard. A typed `/clear` clears nothing: aipager reads it as a session
+name (`⚠️ Unknown session: clear`). `clear` and `reset` are reserved
+session names.
 
 **Commands that act on a session** (`/stop`, `/mode`, `/kill`, `/restart`,
 `/rename`, `/delete`, `/diff`) follow one rule:
@@ -191,7 +196,7 @@ Tiếng Việt, each listed in its own name.
 - **Chats.** The app shows one chat at a time. If you belong to more than one chat (your DM and a group, say), a row of chat names at the top switches between them; the app opens on your own DM and remembers your last choice on that phone. Everything below is for the chosen chat, with your role in it. With one chat the row is not shown. See [groups](groups.md).
 - **Sessions.** One sentence sums up the chat, for example "1 needs you, 2 working, 3 resting", with what has been spent beneath it. Each live session is a tile with a context ring, its folder, model and cost; working ones glow in the accent colour. A session whose turn ended while the agents it started in the background still run counts as working and glows too, and its tile says how many it waits for ("waiting for 2 agents"). Finished sessions rest on a collapsible **Finished** shelf. The **+** button starts a new session.
 - **Needs you.** A session waiting on a permission prompt or a question sits in an amber tray at the top, showing what it is asking. A session in Claude Code's background whose job waits on a permission prompt sits there too, since you can answer it from the chat; its page also offers Bring it back. **Answer in chat** re-sends that prompt, with its buttons, to the bottom of the chat, the same as the pinned bar's **Answer** button, and you answer it there. If it was the only session waiting, the app closes so the prompt is right in front of you; otherwise it stays open and says "Sent to the chat". It needs the right to prompt the session, and a copy tapped after the prompt was answered or replaced says "already answered".
-- **A session's page.** The header shows the context ring, the state ("Working for 3:12", "Waiting for 2 agents", "Needs you (permission)", "Resting, last active 5m ago", "In Claude Code's background", "Finished") and a one-tap **Bring it back** (for a session in Claude Code's background), **Stop** (while working, waiting for its agents, or waiting for you) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before. A session whose conversation moved into Claude Code's background (see [troubleshooting](troubleshooting.md#a-session-moved-to-claude-codes-background)) offers Bring it back, Stop, Rename, Kill and Restart; when the background job is still working, Bring it back, Restart and Resume ask on the page itself, **Stop and bring back** or **Leave it**, and the chat reads `↩️ x1 is back from Claude Code's background.` once it is back.
+- **A session's page.** The header shows the context ring, the state ("Working for 3:12", "Waiting for 2 agents", "Needs you (permission)", "Resting, last active 5m ago", "In Claude Code's background", "Finished") and a one-tap **Bring it back** (for a session in Claude Code's background), **Stop** (while working, waiting for its agents, or waiting for you) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before. A session whose conversation moved into Claude Code's background (see [troubleshooting](troubleshooting.md#a-session-moved-to-claude-codes-background)) offers Bring it back, Stop, Rename, Kill and Restart; when the background job is still working, Bring it back, Restart and Resume ask on the page itself, **Stop and bring back** or **Leave it**, and the chat reads `↩️ x1 is back from Claude Code's background.` once it is back. A resting session's ⋮ menu also offers **Clear conversation**: it asks on the page first, then types Claude Code's `/clear` into the session, the same as `⋮` → `🧹 Clear conversation` in the chat (see [Clear confirmation](#clear-confirmation)), and the chat reads `🧹 /clear sent to [x1] from the Mini App`.
 - **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**. For a member whose role lacks `can_manage`, "where" offers only the chat's [root folder](groups.md#root-folders) and the folders directly inside it (the root folder is the default, and New folder creates inside the one picked); a folder outside it is refused with the reason, and Resume, Restart and the mode switch of a session working outside it answer "This session works outside your folder ~/..., so your role can't resume, restart or switch it. Ask an admin."
 - **Settings.** **App language** first: your own language for aipager's text in the app and your private chat (English, Spanish, Russian, Portuguese (Brazil), Chinese (Simplified), French, German, Korean, Arabic, Indonesian, Ukrainian, Italian, Turkish, Persian or Vietnamese; Automatic follows your Telegram app's language, see [Languages](#languages)). Anyone can change their own, it is never posted in a chat, and it does not change your Claude sessions. Then the chat's preferences (in a group only an admin can change them; in your own private chat you can, whatever your role, the same as `/settings` there) and, for an admin, **Updates**, which mirrors [`/update`](#update). For the owner in their private chat, **Report a problem** opens its own page: write a note, check the report, send it and see its reference without leaving the app (see [problem reports](problem-reports.md#how-to-send-one)).
 
@@ -330,7 +335,9 @@ entry sends a canned prompt or slash command:
   (`/compact`, `/clear`, etc.), injected instantly. A command or
   template names the session it went to (`🧹 /clear sent to x1`).
   Clear is refused while the session works (`⚠️ Can't clear while
-  session is busy`).
+  session is busy`). The same clear is in `/status` → `⋮` →
+  `🧹 Clear conversation`, behind a confirm (see
+  [Clear confirmation](#clear-confirmation)).
 - **Models** - quick model switches for the active session. There
   are the family aliases (`sonnet`, `opus`, `haiku`, `fable`,
   `opusplan`), which always mean the latest model in that family, and
@@ -776,6 +783,38 @@ After `⏹ End` the message says `⏹ Ended jim` above this chat's remaining
 sessions. A confirm tapped after the session started new work is refused
 (`jim moved on to new work - …`), and so is one for a session of the same
 name started since.
+
+### Clear confirmation
+
+`⋮` → `🧹 Clear conversation` (a live session's menu) always confirms:
+
+```
+🧹 Clear the conversation in jim?
+Claude starts a new conversation and forgets this one.
+
+The old conversation stays saved on the computer, but it can't be resumed from here.
+
+  [🧹 Clear]  [Cancel]
+```
+
+`🧹 Clear` types Claude Code's `/clear` into that session, the same way
+Commands → Clear does, and the message becomes `🧹 /clear sent to jim`
+(in a group, `🧹 /clear sent to jim by @alice`). Then the chat reads
+`🔴 jim · Session cleared` as Claude Code starts the new conversation.
+Resume and Restart bring back the new conversation; the old one is reached
+only from Claude Code in the terminal (`claude --resume`).
+
+Anyone who may send messages to the session may clear it; when Clear is
+not on the Commands keyboard (`keyboard.json`), only the `owner` and
+`admin` roles may. In a group the confirm answers only the person who
+opened it. It is refused while Claude works (`⚠️ Can't clear while session
+is busy`), while a question or permission prompt is open (`Answer the open
+prompt first, then clear the conversation.`), while its background agents
+still run or someone else's message is still on its way (`Claude is still
+finishing its work - …`), and while the session is in Claude Code's
+background. A confirm tapped after the session started new work, or after
+the conversation was already cleared, is refused (`jim changed since this
+was shown - …`) and shows the menu again.
 
 ### Voice install (when extra isn't installed)
 
