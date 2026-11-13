@@ -264,9 +264,27 @@ def _parked(server, sess, pty):
     sess.parked_job = "x"
 
 
+def _model_hold(server, sess, pty):
+    """A message held behind a typed /model still waits to go out
+    (state knob: ``model_hold`` with a non-empty ``pending_queue``)."""
+    sess.model_hold = True
+    sess.pending_queue = [("hello", 7)]
+
+
+def _model_check(server, sess, pty):
+    """A typed /model may still be checking its model: both windows open,
+    no statusline report of another model yet."""
+    sess.model_check_until = time.monotonic() + 60
+    sess.model_switch_pending_until = time.monotonic() + 60
+
+
 def _typing_fails(server, sess, pty):
     pty.typed.return_value = False
 
+
+WAITING_BODY = {"error": "waiting",
+                "detail": "Claude is still finishing its work - clear the conversation "
+                          "when it's done."}
 
 REFUSALS = [
     (_gone, 409, {"error": "not_live", "detail": "Session isn't running."}),
@@ -280,10 +298,12 @@ REFUSALS = [
                               "when it's done."}),
     (_parked, 409, {"error": "parked",
                     "detail": "Bring dev back from Claude Code's background first."}),
+    (_model_hold, 409, WAITING_BODY),
+    (_model_check, 409, WAITING_BODY),
     (_typing_fails, 400, {"error": "send_failed", "detail": "Couldn't send /clear."}),
 ]
 REFUSAL_IDS = ["gone", "dead-socket", "busy", "prompt-open", "background-agents",
-               "parked", "send-failed"]
+               "parked", "model-hold", "model-check", "send-failed"]
 
 
 @pytest.mark.parametrize("arrange, status, body", REFUSALS, ids=REFUSAL_IDS)

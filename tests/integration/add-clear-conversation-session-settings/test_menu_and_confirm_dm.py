@@ -394,13 +394,27 @@ def _parked(dm):
     dm.sess.parked_job = "x"
 
 
+def _model_hold(dm):
+    dm.sess.model_hold = True
+    dm.sess.pending_queue = [("hello", 7)]
+
+
+def _model_check(dm):
+    dm.sess.model_check_until = time.monotonic() + 60
+    dm.sess.model_switch_pending_until = time.monotonic() + 60
+
+
+WAITING = "Claude is still finishing its work - clear the conversation when it's done."
+
 STAYS = [
     (_open_dialog, "Answer the open prompt first, then clear the conversation."),
     (_background_agent,
      "Claude is still finishing its work - clear the conversation when it's done."),
     (_parked, "Bring dev back from Claude Code's background first."),
+    (_model_hold, WAITING),
+    (_model_check, WAITING),
 ]
-STAYS_IDS = ["dialog-open", "background-agents", "parked"]
+STAYS_IDS = ["dialog-open", "background-agents", "parked", "model-hold", "model-check"]
 
 
 @pytest.mark.parametrize("arrange, toast", STAYS, ids=STAYS_IDS)
