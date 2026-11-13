@@ -845,3 +845,35 @@ def test_core_the_keyboards_clear_is_not_limited_per_turn(mk_bot, run_async, typ
     assert _core(bot, sess, run_async, hold=hold).reason == "sent"
     assert _core(bot, sess, run_async, hold=hold).reason == "sent"
     assert len(typed) == 2
+
+
+def test_core_a_clear_mark_lapses_when_no_session_end_comes(mk_bot, run_async, typed):
+    """A lost SessionEnd must not block clearing for good: the mark lapses."""
+    from aipager.bot import session_ops
+    bot = mk_bot()
+    sess = _live(bot)
+    assert _core(bot, sess, run_async).reason == "sent"
+    turn, at = bot._clear_sent_turn[sess.name]
+    bot._clear_sent_turn[sess.name] = (turn, at - session_ops._CLEAR_MARK_SECONDS - 1)
+    assert _core(bot, sess, run_async).reason == "sent"
+    assert len(typed) == 2
+
+
+def test_core_a_clear_mark_is_still_held_just_inside_its_time(mk_bot, run_async, typed):
+    from aipager.bot import session_ops
+    bot = mk_bot()
+    sess = _live(bot)
+    assert _core(bot, sess, run_async).reason == "sent"
+    turn, at = bot._clear_sent_turn[sess.name]
+    bot._clear_sent_turn[sess.name] = (turn, at - session_ops._CLEAR_MARK_SECONDS + 5)
+    assert _core(bot, sess, run_async).reason == "already_cleared"
+
+
+def test_core_a_clear_whose_typing_raised_can_be_retried(mk_bot, run_async, monkeypatch):
+    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
+    bot = mk_bot()
+    sess = _live(bot)
+    bot._inject_prompt = AsyncMock(side_effect=[OSError("pty gone"), True])
+    with pytest.raises(OSError):
+        _core(bot, sess, run_async)
+    assert _core(bot, sess, run_async).reason == "sent"

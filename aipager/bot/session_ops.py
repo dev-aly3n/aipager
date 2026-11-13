@@ -119,6 +119,10 @@ _INTERRUPT_SETTLE_SECONDS = 0.5
 #: How long a safety halt waits for a bring-back already running before
 #: it stops a Claude Code background job itself, and how often it looks.
 _HALT_WAIT_SECONDS = 30.0
+# How long a confirm's /clear keeps a second confirm on the same turn from
+# typing it again: the SessionEnd for the clear normally moves the turn on
+# within a second; one that never comes must not block clearing for good.
+_CLEAR_MARK_SECONDS = 30.0
 _HALT_WAIT_POLL = 0.25
 #: A safety halt's bring-back outcomes that leave the background job
 #: running (the stop never happened, or failed).
@@ -4417,7 +4421,8 @@ class SessionOpsMixin:
         if hold is not None:
             if await hold():
                 return ClearOutcome(ok=False, reason="held", label=label)
-        marks: dict[str, int] | None = None
+        marks: dict[str, tuple[int, float]] | None = None
+        mine: tuple[int, float] | None = None
         if hold is None:
             reason = self._clear_wait_reason(sess, driver_user_id)
             if reason:
@@ -4426,16 +4431,26 @@ class SessionOpsMixin:
             # when Claude Code's SessionEnd for the clear arrives, so a
             # second tap (or the Mini App and a chat confirm) before that
             # would type /clear twice. Checked and marked with no await in
-            # between, so two taps at once cannot both pass.
+            # between, so two taps at once cannot both pass. The mark
+            # lapses after _CLEAR_MARK_SECONDS, in case no SessionEnd comes.
             marks = self.__dict__.setdefault("_clear_sent_turn", {})
-            if marks.get(sess.name) == sess.turn_key:
+            now = time.monotonic()
+            last = marks.get(sess.name)
+            if (last is not None and last[0] == sess.turn_key
+                    and now - last[1] < _CLEAR_MARK_SECONDS):
                 return ClearOutcome(ok=False, reason="already_cleared", label=label)
-            marks[sess.name] = sess.turn_key
+            mine = (sess.turn_key, now)
+            marks[sess.name] = mine
         was_busy = sess.status == Status.BUSY
-        ok = await self._inject_prompt(sess, CLEAR_COMMAND, msg_id=msg_id,
-                                       chat_id=chat_id,
-                                       driver_user_id=driver_user_id)
-        if not ok and marks is not None and marks.get(sess.name) == sess.turn_key:
+        try:
+            ok = await self._inject_prompt(sess, CLEAR_COMMAND, msg_id=msg_id,
+                                           chat_id=chat_id,
+                                           driver_user_id=driver_user_id)
+        except BaseException:
+            if marks is not None and marks.get(sess.name) is mine:
+                del marks[sess.name]   # nothing known typed: a retry may clear
+            raise
+        if not ok and marks is not None and marks.get(sess.name) is mine:
             del marks[sess.name]       # nothing typed: a retry may clear
         if ok:
             if not was_busy:
