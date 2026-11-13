@@ -1371,6 +1371,9 @@ _RESERVED = {
     # `aipager session` subcommand verbs (see cli/session.py) — these are
     # matched before the name is treated as a session at all.
     "ls", "list",
+    # Claude Code's /clear and its alias: never a `/` menu entry, so a
+    # session may not be named after them (one tap would look like a clear).
+    "clear", "reset",
 }
 
 

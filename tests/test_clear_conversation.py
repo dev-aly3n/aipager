@@ -310,3 +310,35 @@ def test_typed_clear_types_nothing_into_a_live_session(mk_bot, mk_update, run_as
     run_async(bot._handle_message(update, MagicMock()))
     sent.assert_not_awaited()
     assert update.message.reply_text.await_args.args[0] == "⚠️ Unknown session: clear"
+
+
+# ---- never in Telegram's "/" menu; never a session name -------------------
+
+@pytest.mark.parametrize("group", [False, True], ids=["private", "group"])
+@pytest.mark.parametrize("labels", [set(), {"x1", "frontend"}], ids=["none", "two"])
+def test_no_bot_command_clears_a_conversation(labels, group, monkeypatch):
+    """One tap on a `/` menu entry must never wipe a conversation: no
+    `clear` (nor `clearqueue`), no `reset`, under any name."""
+    from aipager.bot.lifecycle import LifecycleMixin
+
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    names = [c.command for c in LifecycleMixin._command_list(labels, group=group)]
+    assert names, "the menu itself must not be empty"
+    assert not [n for n in names if "clear" in n or n == "reset"], names
+
+
+@pytest.mark.parametrize("name", ["clear", "reset", "Clear", "RESET"])
+def test_clear_and_reset_are_reserved_session_names(name):
+    from aipager.dtach.inject import _RESERVED
+    from aipager.miniapp.launch import validate_session_name
+
+    assert {"clear", "reset"} <= _RESERVED
+    clean, err = validate_session_name(name)
+    assert clean == ""
+    assert err
+
+
+def test_a_name_that_only_starts_with_clear_is_still_free():
+    from aipager.miniapp.launch import validate_session_name
+
+    assert validate_session_name("clearview") == ("clearview", "")

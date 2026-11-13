@@ -1979,10 +1979,11 @@ APP_JS = r"""
   // drift - this list went stale once already, missing every command
   // added after it was written.
   var RENAME_RESERVED = {
-    "app": true, "clearqueue": true, "delete": true, "diff": true,
+    "app": true, "clear": true, "clearqueue": true, "delete": true, "diff": true,
     "help": true, "kill": true, "language": true, "list": true, "ls": true,
     "mode": true, "new": true,
-    "now": true, "perms": true, "rename": true, "restart": true, "resume": true,
+    "now": true, "perms": true, "rename": true, "reset": true, "restart": true,
+    "resume": true,
     "settings": true, "start": true, "status": true, "stop": true,
     "update": true, "whoami": true
   };
