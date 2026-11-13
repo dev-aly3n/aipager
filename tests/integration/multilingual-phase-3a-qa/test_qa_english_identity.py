@@ -21,6 +21,10 @@ MODE_LABEL_SCENARIOS = {"mode_replies", "new_flow_cards"}
 #: (recorded on this branch and reviewed; the base golden stays as it was).
 THREE_MODES = json.loads(Path(__file__).with_name("three_modes_scenarios.json")
                          .read_text(encoding="utf-8"))
+#: The scenario whose live session's ⋮ menu gained one "🧹 Clear
+#: conversation" row (2026-11-13), above Rename, and nothing else.
+CLEAR_ROW_SCENARIOS = {"session_commands"}
+CLEAR_ROW = "[btn] 🧹 Clear conversation"
 
 
 def test_the_golden_has_every_scenario(golden):
@@ -32,8 +36,18 @@ def test_the_golden_has_every_scenario(golden):
 def test_an_english_chat_reads_what_it_read_before(golden, scenario_out, name):
     """Byte for byte, but for the mode labels, which name the mode as a
     mode since 2026-10-10 (operator): ``mode_replies`` and
-    ``new_flow_cards`` show them."""
+    ``new_flow_cards`` show them; and for the one Clear conversation row
+    the live session's ⋮ menu in ``session_commands`` has since
+    2026-11-13."""
     got, want = scenario_out(name, "en"), golden["scenarios"][name]
+    assert CLEAR_ROW not in want
+    if name in CLEAR_ROW_SCENARIOS:
+        assert got.count(CLEAR_ROW) == 1
+        at = got.index(CLEAR_ROW)
+        assert got[at + 1] == "[btn] ✏️ Rename"
+        got = got[:at] + got[at + 1:]
+    else:
+        assert CLEAR_ROW not in got
     if name in MODE_LABEL_SCENARIOS:
         assert got != want
         assert sorted(THREE_MODES) == sorted(MODE_LABEL_SCENARIOS)

@@ -127,6 +127,9 @@ MIRRORS = [
     # A sixteenth, with Claude Code background jobs (2026-10-24): a finished
     # session brought back from Claude Code's background.
     ("_mirror_session_brought_back", (SCOPE_CHAT, "dev")),
+    # A seventeenth, with Clear conversation (2026-11-13): the line a
+    # conversation cleared from the Mini App posts in the chat.
+    ("_mirror_session_conversation_cleared", (SCOPE_CHAT, "dev")),
 ]
 
 _KWARGS = {"_mirror_session_preference_change": {"reset": False}}
@@ -160,11 +163,12 @@ def test_no_mirror_sends_anything_into_a_muted_chat(
     assert gated_bot.calls == []
 
 
-def test_the_thirteen_names_are_all_present(server):
-    """If a mirror is renamed or a fourteenth appears, the row above stops
-    covering the surface it claims to cover."""
+def test_the_seventeen_names_are_all_present(server):
+    """If a mirror is renamed or an eighteenth appears, the rows above stop
+    covering the surface they claim to cover."""
     found = {n for n in dir(server) if n.startswith("_mirror_")}
     assert found == {name for name, _args in MIRRORS}
+    assert len(MIRRORS) == len(found) == 17
 
 
 # ===== the same four, end to end through the Mini App's HTTP routes ======
