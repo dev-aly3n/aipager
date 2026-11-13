@@ -60,6 +60,7 @@ from aipager.bot.flood_budget import (
     FloodSkipped,
     rate_limit_args as _rate_limit_args,
 )
+from aipager.bot.dollar_guard import escape_dollars
 from aipager.bot.media_guard import neutralize_media
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 from aipager.report import counters as report_counters
@@ -339,8 +340,9 @@ async def send_rich_message(
     payload: dict = {
         "chat_id": chat_id,
         # Every rich payload is built here or in edit_message_text_rich:
-        # neutralise media blocks so no text makes Telegram fetch a URL.
-        "rich_message": {"markdown": neutralize_media(markdown),
+        # neutralise media blocks so no text makes Telegram fetch a URL,
+        # and keep each `$` a dollar sign, not the edge of a formula.
+        "rich_message": {"markdown": neutralize_media(escape_dollars(markdown)),
                          "is_rtl": is_rtl},
     }
     if reply_to_message_id is not None:
@@ -508,8 +510,9 @@ async def edit_message_text_rich(
         "chat_id": chat_id,
         "message_id": message_id,
         # Every rich payload is built here or in edit_message_text_rich:
-        # neutralise media blocks so no text makes Telegram fetch a URL.
-        "rich_message": {"markdown": neutralize_media(markdown),
+        # neutralise media blocks so no text makes Telegram fetch a URL,
+        # and keep each `$` a dollar sign, not the edge of a formula.
+        "rich_message": {"markdown": neutralize_media(escape_dollars(markdown)),
                          "is_rtl": is_rtl},
     }
     if reply_markup is not None:

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Dollar amounts in answers no longer turn into a math formula.** Telegram draws text between two `$` signs as a formula, so an answer such as "bought $10 of Up and $10 of Down" showed the words between the amounts as run-together italic letters with the dollar signs gone. Every `$` now shows as written; code is left as it is.
+
 ## [1.4.2] - 2026-11-12
 
 ### Changed
