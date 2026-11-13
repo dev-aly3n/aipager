@@ -14,13 +14,14 @@ inserted as they are).
 
 from __future__ import annotations
 
-from aipager.i18n import Msg, Plural, Safe
+from aipager.i18n import Command, Msg, Plural, Safe
 from aipager.miniapp.phrase import say
 from aipager.state import STOP_END_JOB, STOP_KILL_AGENTS
 
-__all__ = ["compacted", "deleted", "folder_created", "killed", "model_switched",
-           "perms_switched", "queue_cleared", "renamed", "restarted", "resumed",
-           "session_created", "session_setting_changed", "setting_changed", "stopped"]
+__all__ = ["compacted", "conversation_cleared", "deleted", "folder_created", "killed",
+           "model_switched", "perms_switched", "queue_cleared", "renamed", "restarted",
+           "resumed", "session_created", "session_setting_changed", "setting_changed",
+           "stopped"]
 
 _CREATED = Msg("app.mirror.created", "🚀 {session} created from the Mini App · {mode}",
                eg={"session": "x1", "mode": "Ask mode"},
@@ -78,6 +79,10 @@ _COMPACTED = Msg("app.mirror.compacted", "📦 Compact triggered for [{session}]
                  eg={"session": "x1"},
                  note="Posted in the chat after a Mini App action. Compact is /compact (shrink "
                       "the context)")
+_CONVERSATION_CLEARED = Msg(
+    "app.mirror.conversation_cleared", "🧹 {command} sent to [{session}] from the Mini App",
+    eg={"command": "/clear", "session": "x1"},
+    note="Posted in the chat after a Mini App action: Clear conversation; {command} is /clear")
 _MODEL = Msg("app.mirror.model", "🔄 [{session}] → {model} from the Mini App",
              eg={"session": "x1", "model": "claude-opus-5"},
              note="Posted in the chat after a Mini App action: the session's model was switched")
@@ -166,6 +171,10 @@ def queue_cleared(tr, label: str, dropped: int) -> str:
 
 def compacted(tr, label: str) -> str:
     return tr.text(_COMPACTED, session=label)
+
+
+def conversation_cleared(tr, label: str) -> str:
+    return tr.text(_CONVERSATION_CLEARED, command=Command("/clear"), session=label)
 
 
 def model_switched(tr, label: str, model: str) -> str:

@@ -69,6 +69,7 @@ HTML_BODY = """\
   <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8 1c0 1.7-2.4 2.1-2.4 3.6"/><circle cx="12" cy="17.2" r="1" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/></symbol>
   <symbol id="i-clearqueue" viewBox="0 0 24 24"><path d="M4 6.5h11M4 11.5h8M4 16.5h6"/><path d="M15 14l5 5M20 14l-5 5"/></symbol>
+  <symbol id="i-clear" viewBox="0 0 24 24"><path d="M14.5 4.5l5 5-9 9H6l-2.5-2.5a1.5 1.5 0 0 1 0-2.1z"/><path d="M9.5 9.5l5 5M10.5 18.5H20"/></symbol>
   <symbol id="i-compact" viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M10 14l-6 6M14 10l6-6"/></symbol>
   <symbol id="i-resume" viewBox="0 0 24 24"><path d="M8 5.8v12.4a1 1 0 0 0 1.5.9l9.6-6.2a1 1 0 0 0 0-1.7L9.5 4.9A1 1 0 0 0 8 5.8z"/></symbol>
   <symbol id="i-rename" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4zM13.5 6.5l4 4"/></symbol>

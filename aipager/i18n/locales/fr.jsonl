@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Votre rôle ne permet pas de lancer une session dans le dossier personnel ni au-dessus. Choisissez un dossier de projet : créez-en un avec « Nouveau dossier », ou demandez à un admin de lancer la session."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} messages en attente de [{session}] supprimés depuis la Mini App", "one": "🧹 {n} message en attente de [{session}] supprimé depuis la Mini App", "other": "🧹 {n} messages en attente de [{session}] supprimés depuis la Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Compactage de la conversation de [{session}] lancé depuis la Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} envoyé à [{session}] depuis la Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} créée depuis la Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} créée depuis la Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] supprimée depuis la Mini App"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Ouvrir {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude veut utiliser un outil."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "La ramener"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Effacer la conversation"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Vider la file d'attente"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Compacter maintenant"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Supprimer"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Passer en Mode Accès complet"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Réessayer"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Attendre 10 min de plus"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Effacer la conversation de {session} ?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude commence une nouvelle conversation et oublie celle-ci, et l'ancienne reste enregistrée sur l'ordinateur mais ne peut pas être reprise d'ici."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Supprimer {session} ?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Cela retire la session de votre liste. Sa conversation enregistrée reste sur le disque."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Terminer {session} ?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Le diff n'est pas disponible."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Elle était déjà terminée."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Revenue de l'arrière-plan de Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude commence une nouvelle conversation."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "File d'attente vidée."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Compactage…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Supprimée."}

@@ -540,16 +540,21 @@ class MiniAppServer:
             "/api/sessions/{label}/resume", self._handle_session_resume,
         )
         app.router.add_delete("/api/sessions/{label}", self._handle_session_delete)
-        # Five more session-menu actions (design.md: perms switch, clear
-        # queue, compact, restart, rename). Same five-step shape as the
-        # four routes above; perms additionally requires _may_use_full_access
-        # when the switch targets Full access.
+        # Six more session-menu actions (design.md: perms switch, clear
+        # queue, compact, clear conversation, restart, rename). Same
+        # five-step shape as the four routes above; perms additionally
+        # requires _may_use_full_access when the switch targets Full access.
         app.router.add_post("/api/sessions/{label}/perms", self._handle_session_perms)
         app.router.add_post(
             "/api/sessions/{label}/clearqueue", self._handle_session_clearqueue,
         )
         app.router.add_post(
             "/api/sessions/{label}/compact", self._handle_session_compact,
+        )
+        # Clear conversation: types Claude Code's /clear (in-app confirm
+        # first), through the same core as the chat's Commands -> Clear.
+        app.router.add_post(
+            "/api/sessions/{label}/clear", self._handle_session_clear,
         )
         app.router.add_post(
             "/api/sessions/{label}/restart", self._handle_session_restart,
@@ -2609,6 +2614,68 @@ class MiniAppServer:
         # distinction, straight from _compact_session_core.
         return web.json_response({"status": outcome.reason, "label": outcome.label})
 
+    async def _handle_session_clear(self, request):
+        """Clear conversation: ``/clear`` typed into the session, refused
+        (409) while it cannot take it now (never queued: the page asked
+        before this request, so it must not run later unseen)."""
+        from aiohttp import web
+
+        from aipager.bot.session_ops import CLEAR_COMMAND
+        from aipager.bot.transport import NEEDS_ADMIN_REPLY
+        from aipager.miniapp.sessions import (
+            CLEAR_BUSY_REASON, CLEAR_PROMPT_OPEN_REASON, CLEAR_WAITING_REASON,
+        )
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/clear",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session clear rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session clear rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._clear_session_core(
+            sess, driver_user_id=user_id, chat_id=scope_chat_id)
+        tr = self._viewer_tr(request, user_id)
+        reason = outcome.reason
+        if reason in ("not_live", "missing"):
+            return web.json_response({
+                "error": "not_live", "detail": tr.text(_NOT_RUNNING),
+            }, status=409)
+        refused = {
+            "busy": CLEAR_BUSY_REASON,
+            "prompt_open": CLEAR_PROMPT_OPEN_REASON,
+            "waiting": CLEAR_WAITING_REASON,
+        }.get(reason)
+        if refused is not None:
+            return web.json_response({
+                "error": reason, "detail": say(tr, refused),
+            }, status=409)
+        if reason == "parked":
+            return _parked_response(tr, outcome.label)
+        if reason == "needs_admin":
+            # Clear is off the Commands keyboard: /clear needs an admin's role.
+            return web.json_response({
+                "error": "forbidden", "detail": say(tr, NEEDS_ADMIN_REPLY),
+            }, status=403)
+        if reason != "sent":
+            return web.json_response({
+                "error": "send_failed",
+                "detail": tr.text(_SEND_FAILED, command=Command(CLEAR_COMMAND)),
+            }, status=400)
+
+        await self._mirror_session_conversation_cleared(scope_chat_id, outcome.label)
+        return web.json_response({"status": "sent", "label": outcome.label})
+
     async def _handle_session_restart(self, request):
         from aiohttp import web
 
@@ -2939,6 +3006,15 @@ class MiniAppServer:
             )
         except Exception:
             log.debug("miniapp: session-compacted mirror failed", exc_info=True)
+
+    async def _mirror_session_conversation_cleared(self, scope_chat_id, label) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=chat_lines.conversation_cleared(_chat_tr(scope_chat_id), label),
+            )
+        except Exception:
+            log.debug("miniapp: conversation-cleared mirror failed", exc_info=True)
 
     async def _mirror_session_model(self, scope_chat_id, label, model) -> None:
         try:

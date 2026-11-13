@@ -1649,8 +1649,9 @@ APP_JS = r"""
   // `data.actions` comes from sessions.session_actions: render exactly
   // the keys given, disable an unavailable one and show its reason.
   // Stop/Resume/Clear-queue/Compact are one tap (recoverable);
-  // Kill/Delete/Perms/Restart go through the centred confirm modal, out
-  // of double-tap reach. Rename uses the same modal with a text field.
+  // Clear conversation/Kill/Delete/Perms/Restart go through the centred
+  // confirm modal, out of double-tap reach. Rename uses the same modal
+  // with a text field.
   var overlayCloser = null;   // set while the menu OR the modal is open
   var confirmAction = null;   // {label, action} awaiting confirmation
   var confirmRun = null;      // or a plain callback (Reset to defaults)
@@ -1661,26 +1662,27 @@ APP_JS = r"""
     stop: "ui.btn.action.stop", kill: "ui.btn.action.kill", resume: "ui.btn.action.resume",
     delete: "ui.btn.action.delete", clearqueue: "ui.btn.action.clearqueue",
     compact: "ui.btn.action.compact", restart: "ui.btn.action.restart",
-    rename: "ui.btn.action.rename", bringback: "ui.btn.action.bringback"
+    rename: "ui.btn.action.rename", bringback: "ui.btn.action.bringback",
+    clear: "ui.btn.action.clear"
     // perms: one item per mode the session is not in (data.modes).
   };
   // Path segment per action; Delete is the DELETE verb on the resource.
   var ACTION_PATHS = {
     stop: "stop", kill: "kill", resume: "resume", delete: "",
     clearqueue: "clearqueue", compact: "compact", perms: "perms",
-    restart: "restart", rename: "rename", bringback: "bringback"
+    restart: "restart", rename: "rename", bringback: "bringback", clear: "clear"
   };
   var ACTION_METHODS = {
     stop: "POST", kill: "POST", resume: "POST", delete: "DELETE",
     clearqueue: "POST", compact: "POST", perms: "POST", restart: "POST",
-    rename: "POST", bringback: "POST"
+    rename: "POST", bringback: "POST", clear: "POST"
   };
-  var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };
+  var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true, clear: true };
   // Mirrors sessions._CANONICAL_ACTION_ORDER: six control items, then
-  // four confirm-modal ones; the divider falls between the groups.
+  // five confirm-modal ones; the divider falls between the groups.
   var ACTION_ORDER = [
     "bringback", "stop", "clearqueue", "compact", "resume", "rename",
-    "kill", "perms", "restart", "delete"
+    "clear", "kill", "perms", "restart", "delete"
   ];
 
   // The perms slot's items: every mode the session is not in, in the
@@ -1755,7 +1757,7 @@ APP_JS = r"""
   var ACTION_SUCCESS_NOTICE = {
     stop: "ui.done.stop", resume: "ui.done.resume", clearqueue: "ui.done.clearqueue",
     compact: "ui.done.compact", perms: "ui.done.perms", restart: "ui.done.restart",
-    bringback: "ui.done.bringback"
+    bringback: "ui.done.bringback", clear: "ui.done.clear"
   };
 
   // A Claude Code background job still working on the conversation: ask
@@ -1919,6 +1921,17 @@ APP_JS = r"""
           : "ui.confirm.perms_leave_full_body"),
         confirmLabel: t(busy ? "ui.btn.stop_and_switch" : "ui.btn.switch"),
         cancelLabel: t(busy ? "ui.btn.not_now" : "ui.btn.cancel")
+      });
+      return;
+    }
+    if (action === "clear") {
+      // Summary first: what happens to the conversation, then the button.
+      openConfirm({
+        label: label,
+        action: action,
+        title: t("ui.confirm.clear", { session: label }),
+        body: t("ui.confirm.clear_body"),
+        confirmLabel: t(ACTION_TITLES.clear)
       });
       return;
     }

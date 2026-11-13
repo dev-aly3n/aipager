@@ -60,7 +60,7 @@
  "aipager/migrate.py": 2,
  "aipager/miniapp/auth.py": 9,
  "aipager/miniapp/cli.py": 25,
- "aipager/miniapp/server.py": 24,
+ "aipager/miniapp/server.py": 25,
  "aipager/miniapp/static/__init__.py": 1,
  "aipager/miniapp/static/_app.py": 1,
  "aipager/miniapp/static/_shell.py": 2,

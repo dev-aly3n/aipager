@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Sua função não pode iniciar uma sessão na pasta pessoal nem numa pasta acima dela. Escolha uma pasta de projeto: crie uma com “Nova pasta” ou peça a um admin para iniciar a sessão."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} mensagens da fila de [{session}] apagadas pelo Mini App", "one": "🧹 {n} mensagem da fila de [{session}] apagada pelo Mini App", "other": "🧹 {n} mensagens da fila de [{session}] apagadas pelo Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 A compactação da conversa de [{session}] começou pelo Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} enviado para [{session}] pelo Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} criada pelo Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} criada pelo Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] excluída pelo Mini App"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Abrir {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "O Claude quer usar uma ferramenta."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Trazer de volta"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Limpar conversa"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Limpar a fila"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Compactar agora"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Excluir"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Mudar para Modo Acesso total"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Tentar de novo"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Esperar mais 10 min"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Limpar a conversa de {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "O Claude começa uma conversa nova e esquece esta; a antiga continua salva no computador, mas não dá para continuá-la daqui."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Excluir {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Isso tira a sessão da sua lista. A conversa salva continua no disco."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Encerrar {session}?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "O diff não está disponível."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Já estava encerrada."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "De volta do segundo plano do Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "O Claude está começando uma conversa nova."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Fila limpa."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Compactando…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Excluída."}

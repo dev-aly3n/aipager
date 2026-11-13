@@ -671,6 +671,189 @@ def test_compact_rate_limited(server, run_async):
     run_async(_run())
 
 
+# ===== Clear conversation =====================================================
+
+CLEAR_LINE = "🧹 /clear sent to [dev] from the Mini App"
+
+
+def _clear_seams(monkeypatch, *, alive=True, typed_ok=True):
+    """The session's socket and what reaches Claude, never real."""
+    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=alive))
+    send_text = AsyncMock(return_value=typed_ok)
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", send_text)
+    return send_text
+
+
+def _post_clear(server, run_async, label="dev", user=ADMIN_ID):
+    """POST /api/sessions/<label>/clear: (status, json body)."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await client.post(f"/api/sessions/{label}/clear", headers=_hdr(user))
+            return resp.status, await resp.json()
+        finally:
+            await client.close()
+    return run_async(_run())
+
+
+def test_clear_idle_returns_sent_types_clear_and_posts_one_line(
+        server, run_async, monkeypatch):
+    _mk_session(server, "dev", status=Status.IDLE)
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (200, {"status": "sent", "label": "dev"})
+    send_text.assert_awaited_once()
+    assert send_text.await_args.args[:2] == ("claude-dev", "/clear")
+    send = server.bot._app.bot.send_message
+    send.assert_awaited_once()
+    assert send.await_args.kwargs == {"chat_id": SCOPE_CHAT_ID, "text": CLEAR_LINE}
+
+
+def test_clear_user_role_may_clear(server, run_async, monkeypatch):
+    _mk_session(server, "dev", status=Status.IDLE)
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async, user=DEVELOPER_ID)
+    assert (status, body["status"]) == (200, "sent")
+    send_text.assert_awaited_once()
+
+
+def _assert_refused(server, send_text):
+    send_text.assert_not_awaited()
+    server.bot._app.bot.send_message.assert_not_awaited()
+
+
+def test_clear_foreign_label_returns_404(server, run_async, monkeypatch):
+    _mk_session(server, "dev", scope_chat_id=FOREIGN_SCOPE_CHAT_ID)
+    send_text = _clear_seams(monkeypatch)
+    status, _ = _post_clear(server, run_async)
+    assert status == 404
+    _assert_refused(server, send_text)
+
+
+def test_clear_unknown_label_returns_404(server, run_async, monkeypatch):
+    send_text = _clear_seams(monkeypatch)
+    status, _ = _post_clear(server, run_async, label="nope")
+    assert status == 404
+    _assert_refused(server, send_text)
+
+
+def test_clear_readonly_member_gets_403(server, run_async, monkeypatch):
+    _mk_session(server, "dev", status=Status.IDLE)
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async, user=READONLY_ID)
+    assert (status, body) == (403, {"error": "forbidden"})
+    _assert_refused(server, send_text)
+
+
+def test_clear_rate_limited(server, run_async, monkeypatch):
+    send_text = _clear_seams(monkeypatch)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            for i in range(35):
+                _mk_session(server, f"dev{i}", status=Status.BUSY)
+                resp = await client.post(f"/api/sessions/dev{i}/clear", headers=_hdr(ADMIN_ID))
+                if resp.status == 429:
+                    return await resp.json()
+            return None
+        finally:
+            await client.close()
+    assert run_async(_run()) == {"error": "too_many_requests"}, (
+        "clear route accepted unbounded writes")
+    send_text.assert_not_awaited()
+
+
+def test_clear_not_live_returns_409(server, run_async, monkeypatch):
+    _mk_session(server, "dev", status=Status.GONE)
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (409, {"error": "not_live", "detail": "Session isn't running."})
+    _assert_refused(server, send_text)
+
+
+def test_clear_dead_socket_returns_409(server, run_async, monkeypatch):
+    _mk_session(server, "dev", status=Status.IDLE)
+    send_text = _clear_seams(monkeypatch, alive=False)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (409, {"error": "not_live", "detail": "Session isn't running."})
+    _assert_refused(server, send_text)
+
+
+def test_clear_busy_returns_409(server, run_async, monkeypatch):
+    sess = _mk_session(server, "dev", status=Status.BUSY)
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (409, {
+        "error": "busy",
+        "detail": "Claude is working - clear the conversation when this turn ends."})
+    _assert_refused(server, send_text)
+    assert sess.pending_queue == []     # refused, never queued
+
+
+def test_clear_prompt_open_returns_409(server, run_async, monkeypatch):
+    sess = _mk_session(server, "dev", status=Status.INTERACTIVE)
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (409, {
+        "error": "prompt_open",
+        "detail": "Answer the open prompt first, then clear the conversation."})
+    _assert_refused(server, send_text)
+    assert sess.pending_queue == []
+
+
+def test_clear_background_agents_returns_409(server, run_async, monkeypatch):
+    sess = _mk_session(server, "dev", status=Status.IDLE)
+    sess.job_continuation_active = True
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (409, {
+        "error": "waiting",
+        "detail": "Claude is still finishing its work - clear the conversation when it's done."})
+    _assert_refused(server, send_text)
+
+
+def test_clear_parked_returns_409(server, run_async, monkeypatch):
+    sess = _mk_session(server, "dev", status=Status.IDLE)
+    sess.parked_job = "job-1"
+    send_text = _clear_seams(monkeypatch)
+    status, body = _post_clear(server, run_async)
+    assert status == 409
+    assert body == {"error": "parked",
+                    "detail": "Bring dev back from Claude Code's background first."}
+    _assert_refused(server, send_text)
+
+
+def test_clear_role_may_not_send_clear_returns_403(server, run_async, monkeypatch):
+    """Clear off the Commands keyboard: a `user` role may not send /clear."""
+    _mk_session(server, "dev", status=Status.IDLE)
+    send_text = _clear_seams(monkeypatch)
+    server.bot._command_map = {}
+    status, body = _post_clear(server, run_async, user=DEVELOPER_ID)
+    assert (status, body) == (403, {"error": "forbidden",
+                                     "detail": "That command needs an admin."})
+    _assert_refused(server, send_text)
+
+
+def test_clear_send_failed_returns_400(server, run_async, monkeypatch):
+    _mk_session(server, "dev", status=Status.IDLE)
+    _clear_seams(monkeypatch, typed_ok=False)
+    status, body = _post_clear(server, run_async)
+    assert (status, body) == (400, {"error": "send_failed",
+                                    "detail": "Couldn't send /clear."})
+    server.bot._app.bot.send_message.assert_not_awaited()
+
+
+@pytest.mark.parametrize("status", [Status.BUSY, Status.INTERACTIVE, Status.GONE],
+                         ids=["busy", "waiting", "gone"])
+def test_clear_refusal_posts_no_chat_line(server, run_async, monkeypatch, status):
+    _mk_session(server, "dev", status=status)
+    send_text = _clear_seams(monkeypatch)
+    code, _ = _post_clear(server, run_async)
+    assert code == 409
+    _assert_refused(server, send_text)
+
+
 # ===== Restart ================================================================
 
 def test_restart_busy_session_hard_kills_never_ctrl_c(server, run_async, monkeypatch):

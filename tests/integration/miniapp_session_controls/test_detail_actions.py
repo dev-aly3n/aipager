@@ -118,6 +118,8 @@ def test_idle_status_yields_only_kill_key(server, run_async):
                 "kill": {"available": True, "reason": None},
                 "compact": {"available": True, "reason": None},
                 "rename": {"available": True, "reason": None},
+                # Clear conversation (2026-11-13): idle only.
+                "clear": {"available": True, "reason": None},
                 "perms": {"available": True, "reason": None},
                 "restart": {"available": True, "reason": None},
             }
@@ -240,6 +242,7 @@ def test_readonly_member_sees_kill_present_but_unavailable(server, run_async):
                 "kill": {"available": False, "reason": NO_PERMISSION_REASON},
                 "compact": {"available": False, "reason": NO_PERMISSION_REASON},
                 "rename": {"available": False, "reason": NO_PERMISSION_REASON},
+                "clear": {"available": False, "reason": NO_PERMISSION_REASON},
                 "perms": {"available": False, "reason": NO_PERMISSION_REASON},
                 "restart": {"available": False, "reason": NO_PERMISSION_REASON},
             }

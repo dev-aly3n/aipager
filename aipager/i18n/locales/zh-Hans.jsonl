@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "你的角色不能在主文件夹或其上级文件夹中启动会话。请选择一个项目文件夹：用“新建文件夹”创建一个，或请管理员启动会话。"}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 已从 Mini App 删除 [{session}] 的 {n} 条排队消息"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 已从 Mini App 开始压缩 [{session}] 的对话"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 已从 Mini App 把 {command} 发送到 [{session}]"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 已从 Mini App 创建 {session} · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 已从 Mini App 创建 {session} · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ 已从 Mini App 删除 [{session}]"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "打开 {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude 想使用一个工具。"}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "带回来"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "清空对话"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "清空队列"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "立即压缩"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "删除"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "切换到完全访问模式"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "重试"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "再等 10 分钟"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "要清空 {session} 的对话吗？"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude 会开始一段新对话，并忘掉这段对话；旧对话仍保存在电脑上，但无法从这里恢复。"}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "要删除 {session} 吗？"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "会话会从你的列表中移除。它保存的对话仍留在磁盘上。"}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "要结束 {session} 吗？"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "无法查看改动。"}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "之前已经关闭了。"}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "已从 Claude Code 后台回来了。"}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude 正在开始一段新对话。"}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "已清空。"}
 {"k": "ui.done.compact", "src": "399fec37", "v": "正在压缩对话…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "已删除。"}

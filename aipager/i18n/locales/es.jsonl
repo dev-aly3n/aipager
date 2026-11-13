@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Tu rol no puede crear una sesión en la carpeta personal ni en una carpeta superior. Elige una carpeta de proyecto: crea una con «Nueva carpeta» o pide a un admin que cree la sesión."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 Se borraron {n} mensajes en cola de [{session}] desde la Mini App", "one": "🧹 Se borró {n} mensaje en cola de [{session}] desde la Mini App", "other": "🧹 Se borraron {n} mensajes en cola de [{session}] desde la Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Se empezó a compactar la conversación de [{session}] desde la Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} enviado a [{session}] desde la Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} creada desde la Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} creada desde la Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] eliminada desde la Mini App"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Abrir {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude quiere usar una herramienta."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Traerla de vuelta"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Borrar conversación"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Vaciar la cola"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Compactar ahora"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Eliminar"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Cambiar a Modo Acceso total"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Reintentar"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Esperar 10 min más"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "¿Borrar la conversación de {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude empieza una conversación nueva y olvida esta; la anterior queda guardada en la computadora, pero no se puede continuar desde aquí."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "¿Eliminar {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Esto quita la sesión de tu lista. Su conversación guardada se queda en el disco."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "¿Terminar {session}?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "El diff no está disponible."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Ya estaba terminada."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "De vuelta del segundo plano de Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude está empezando una conversación nueva."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Cola vaciada."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Compactando…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Eliminada."}

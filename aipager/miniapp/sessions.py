@@ -344,15 +344,16 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
 # Canonical, stable emission order (design.md): the server always builds
 # the ``actions`` dict by walking this tuple, so key order in the JSON
 # response never depends on set/dict iteration order. The client's own
-# ACTION_ORDER (static/_app.py) is the same ten keys in the same order —
-# the first six are the "session control" menu group, the last four are
-# "destructive/disruptive" (confirm-modal) — so filtering this tuple by
-# presence is exactly what produces the client's grouped rendering.
+# ACTION_ORDER (static/_app.py) is the same eleven keys in the same order —
+# the first six are the "session control" menu group, the last five are
+# "destructive/disruptive" (confirm-modal; Clear conversation first) — so
+# filtering this tuple by presence is exactly what produces the client's
+# grouped rendering.
 # ``bringback`` (a session parked on a Claude Code background job) comes
 # first: it is the one thing such a session is waiting for.
 _CANONICAL_ACTION_ORDER = (
     "bringback", "stop", "clearqueue", "compact", "resume", "rename",
-    "kill", "perms", "restart", "delete",
+    "clear", "kill", "perms", "restart", "delete",
 )
 
 # Which keys are even relevant for a given status, before any
@@ -361,11 +362,14 @@ _CANONICAL_ACTION_ORDER = (
 # offering it at idle would only ever 409. `compact` excludes `waiting`
 # on purpose: the terminal is displaying an open permission/question
 # prompt, and typing `/compact` there risks being read as input to that
-# prompt rather than a new turn.
+# prompt rather than a new turn. `clear` (Clear conversation, /clear) is
+# idle only: a confirmed clear is refused, never queued, while a turn runs,
+# a prompt is open, its background agents run or it is parked, so anywhere
+# else it would only ever 409.
 _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
     "busy": frozenset({"stop", "clearqueue", "compact", "rename", "perms", "restart"}),
     "waiting": frozenset({"stop", "clearqueue", "rename", "perms", "restart"}),
-    "idle": frozenset({"kill", "compact", "rename", "perms", "restart"}),
+    "idle": frozenset({"kill", "compact", "rename", "clear", "perms", "restart"}),
     "gone": frozenset({"resume", "rename", "delete"}),
     # Waiting for its own background agents (roadmap 8.121):
     # Claude's prompt is free, so the idle set, plus Stop (the stop route

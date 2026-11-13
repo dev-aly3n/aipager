@@ -412,6 +412,19 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
   menu_grouping_divider: fullDetailFor("busy", { isAdmin: true, queueDepth: 3 }),
 });
 
+// Clear conversation (sessions._STATUS_ACTION_KEYS["idle"] gains `clear`):
+// its own fixtures, so every other idle scenario keeps its exact menu.
+function clearDetail() {
+  const detail = fullDetailFor("idle", { isAdmin: true });
+  detail.actions = Object.assign({}, detail.actions,
+                                 { clear: { available: true, reason: null } });
+  return detail;
+}
+Object.assign(SESSION_DETAIL_FIXTURES, {
+  clear_idle: clearDetail(),
+  clear_refused: clearDetail(),
+});
+
 // ---- running-session model picker (roadmap 8.35) ---------------------
 // Mirrors aipager.miniapp.sessions.MODEL_SWITCH_BUSY_REASON (em dash kept,
 // see NO_TRANSCRIPT_REASON).
@@ -523,6 +536,7 @@ const FIXTURES = {
     : { status: "switched", label: "dev", mode: "full" },
   "/api/sessions/dev/clearqueue": { status: "cleared", label: "dev", dropped: 3 },
   "/api/sessions/dev/compact": { status: "queued", label: "dev" },
+  "/api/sessions/dev/clear": { status: "sent", label: "dev" },
   "/api/sessions/dev/restart": { status: "restarted", label: "dev" },
   "/api/session-options": {
     models: [
@@ -1715,6 +1729,74 @@ function driveRenameServerConflict() {
       process.exit(0);
     }, 20);
   }, 10);
+}
+
+// ---- scenario: Clear conversation (in-app confirm, then one POST) -------
+function driveClear(okMessage, refused) {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Clear conversation");
+    if (item.disabled) fail("clear must be available on an idle session");
+    // The first item of the confirm group: right after the divider, which
+    // sits after Rename.
+    const kids = menu.children;
+    const at = kids.indexOf(item);
+    if (!kids[at - 1] || kids[at - 1].className !== "menu-divider")
+      fail("Clear conversation is not right after the divider: " +
+           JSON.stringify(kids.map(c => c.className)));
+    if (!kids[at - 2] || kids[at - 2].className.indexOf("act-rename") === -1)
+      fail("the divider before Clear conversation does not follow Rename: " +
+           JSON.stringify(kids.map(c => c.className)));
+    if (!kids[at + 1] || kids[at + 1].className.indexOf("act-kill") === -1)
+      fail("Kill does not follow Clear conversation: " +
+           JSON.stringify(kids.map(c => c.className)));
+
+    const before = fetchCalls.length;
+    item.click();
+    if (fetchCalls.length !== before)
+      fail("choosing Clear conversation issued a request before confirming");
+    if (!modalIsOpen()) fail("choosing Clear conversation did not open the confirm modal");
+    if (byId["confirm-title"].textContent !== "Clear the conversation in dev?")
+      fail("clear's confirm title: " + JSON.stringify(byId["confirm-title"].textContent));
+    const body = "Claude starts a new conversation and forgets this one, and the old one " +
+                 "stays saved on the computer but can't be resumed from here.";
+    if (byId["confirm-body"].textContent !== body)
+      fail("clear's confirm body: " + JSON.stringify(byId["confirm-body"].textContent));
+    if (byId["confirm-ok"].textContent !== "Clear conversation")
+      fail("clear's confirm button: " + JSON.stringify(byId["confirm-ok"].textContent));
+    if (!byId["confirm-cancel"].focused) fail("the clear confirm must focus Cancel");
+
+    if (refused) {
+      POST_STATUS_OVERRIDE = {
+        path: "/api/sessions/dev/clear", method: "POST", status: 409,
+        body: { error: "busy",
+                detail: "Claude is working - clear the conversation when this turn ends." },
+      };
+    }
+    byId["confirm-ok"].click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1)
+      fail("confirming Clear conversation sent " + sent.length + " requests, expected one");
+    if (!sent.find(f => f.method === "POST" && /\/api\/sessions\/dev\/clear$/.test(f.url)))
+      fail("confirming Clear conversation sent no POST /api/sessions/dev/clear");
+
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      const want = refused ? "clear the conversation when this turn ends"
+        : "Claude is starting a new conversation.";
+      if (notice.indexOf(want) === -1)
+        fail("the notice after Clear conversation: " + JSON.stringify(notice));
+      console.log(okMessage);
+      process.exit(0);
+    }, 20);
+  }, 10);
+}
+function driveClearIdle() {
+  driveClear("ok: clear -> menu -> confirm -> one POST /api/sessions/dev/clear", false);
+}
+function driveClearRefused() {
+  driveClear("ok: clear refused -> the notice shows the server's reason", true);
 }
 
 // ---- scenario: the menu divider sits between the two groups -------------
@@ -3259,6 +3341,8 @@ const DRIVERS = {
   rename_client_side_invalid: driveRenameClientSideInvalid,
   rename_server_conflict: driveRenameServerConflict,
   menu_grouping_divider: driveMenuGroupingDivider,
+  clear_idle: driveClearIdle,
+  clear_refused: driveClearRefused,
 };
 
 // ===== the lantern grid (roadmap 8.44) =================================

@@ -719,7 +719,8 @@ def test_the_action_menu_icons_are_inline_svg_symbols():
     order = re.search(r"var ACTION_ORDER = \[([^\]]*)\]", INDEX_HTML)
     assert order, "ACTION_ORDER not found"
     keys = re.findall(r'"(\w+)"', order.group(1))
-    assert len(keys) == 10, keys
+    # Clear conversation (2026-11-13) made it eleven.
+    assert len(keys) == 11, keys
     symbols = set(re.findall(r'<symbol id="i-([\w-]+)"', INDEX_HTML))
     missing = [k for k in keys if k not in symbols]
     assert not missing, f"actions with no icon: {missing}"
@@ -903,9 +904,10 @@ def test_the_harness_detects_clearqueue_gaining_a_confirmation(node_bin, tmp_pat
     scenario's own single-POST assertion must catch it."""
     from aipager.miniapp.static import SOURCE_INDEX_HTML
 
-    old = "var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };"
+    old = ("var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true, "
+           "clear: true };")
     new = ("var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, "
-           "restart: true, clearqueue: true };")
+           "restart: true, clear: true, clearqueue: true };")
     assert old in SOURCE_INDEX_HTML, "CONFIRM_ACTIONS declaration not found — page changed shape"
     broken = SOURCE_INDEX_HTML.replace(old, new, 1)
     assert broken != SOURCE_INDEX_HTML, "mutation was a no-op"
@@ -916,6 +918,46 @@ def test_the_harness_detects_clearqueue_gaining_a_confirmation(node_bin, tmp_pat
     assert proc.returncode != 0, (
         "harness passed a page where Clear queue now asks for confirmation"
     )
+
+
+def test_clear_conversation_asks_in_app_before_posting(node_bin, tmp_path):
+    """Clear conversation sits first after the divider, opens the in-app
+    confirm (title, body, Cancel focused) and sends nothing until its
+    button is tapped; then exactly one POST, and the done notice."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "clear_idle")
+    assert proc.returncode == 0, (
+        f"clear_idle scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: clear -> menu -> confirm -> one POST /api/sessions/dev/clear" \
+        in proc.stdout, proc.stdout
+
+
+def test_clear_conversation_refused_shows_the_servers_reason(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "clear_refused")
+    assert proc.returncode == 0, (
+        f"clear_refused scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: clear refused -> the notice shows the server's reason" in proc.stdout, \
+        proc.stdout
+
+
+def test_the_harness_detects_clear_losing_its_confirmation(node_bin, tmp_path):
+    """Guard the guard: Clear conversation wipes a conversation, so it must
+    keep its confirm; a page that drops it from CONFIRM_ACTIONS must fail
+    the scenario (it would POST on the first tap)."""
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    old = ("var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true, "
+           "clear: true };")
+    new = "var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };"
+    assert old in SOURCE_INDEX_HTML, "CONFIRM_ACTIONS declaration not found — page changed shape"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    proc = _drive_controls(node_bin, tmp_path, broken, "clear_idle", name="broken-clear.html")
+    assert proc.returncode != 0, "harness passed a page where Clear conversation asks nothing"
 
 
 def test_compact_busy_queues_acts_without_confirmation(node_bin, tmp_path):

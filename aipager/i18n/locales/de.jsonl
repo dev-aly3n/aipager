@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Deine Rolle kann keine Sitzung im Home-Ordner oder einem Ordner darüber starten. Wähle einen Projektordner: Lege einen mit „Neuer Ordner“ an oder bitte einen Admin, die Sitzung zu starten."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"one": "🧹 {n} Nachricht aus der Warteschlange von [{session}] über die Mini App gelöscht", "other": "🧹 {n} Nachrichten aus der Warteschlange von [{session}] über die Mini App gelöscht"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Komprimieren der Unterhaltung von [{session}] über die Mini App gestartet"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} über die Mini App an [{session}] gesendet"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} über die Mini App erstellt · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} über die Mini App erstellt · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] über die Mini App gelöscht"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "{session} öffnen"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude möchte ein Tool nutzen."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Zurückholen"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Unterhaltung leeren"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Warteschlange leeren"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Jetzt komprimieren"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Löschen"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Zum Vollzugriff-Modus wechseln"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Erneut versuchen"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Noch 10 Min. warten"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Unterhaltung in {session} leeren?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude beginnt eine neue Unterhaltung und vergisst diese; die alte bleibt auf dem Computer gespeichert, lässt sich aber von hier aus nicht fortsetzen."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "{session} löschen?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Die Sitzung verschwindet aus deiner Liste. Die gespeicherte Unterhaltung bleibt auf der Festplatte."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "{session} beenden?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff nicht verfügbar."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "War schon beendet."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Aus dem Hintergrund von Claude Code zurück."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude beginnt eine neue Unterhaltung."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Warteschlange geleert."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Wird komprimiert…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Gelöscht."}

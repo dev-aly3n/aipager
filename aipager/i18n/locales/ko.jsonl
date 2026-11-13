@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "지금 역할로는 홈 폴더나 그 위의 폴더에서 세션을 시작할 수 없어요. 프로젝트 폴더를 골라 주세요. “새 폴더”로 만들거나 관리자에게 세션을 시작해 달라고 하세요."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 Mini App에서 [{session}] 세션의 대기 중인 메시지 {n}개를 삭제했어요"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Mini App에서 [{session}] 세션의 대화 압축을 시작했어요"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 Mini App에서 [{session}] 세션에 {command} 명령을 보냈어요"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Mini App에서 {session} 세션을 만들었어요 · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Mini App에서 {session} 세션을 만들었어요 · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ Mini App에서 [{session}] 세션을 삭제했어요"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "{session} 열기"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude가 도구를 쓰려고 해요."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "다시 가져오기"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "대화 지우기"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "대기열 비우기"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "지금 압축"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "삭제"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "전체 권한 모드로 전환"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "다시 시도"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "10분 더 기다리기"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "{session} 세션의 대화를 지울까요?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude가 새 대화를 시작하고 이 대화는 잊어요. 이전 대화는 컴퓨터에 저장된 채로 남지만, 여기서 다시 이어갈 수는 없어요."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "{session} 세션을 삭제할까요?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "세션을 목록에서 지워요. 저장된 대화는 디스크에 남아요."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "{session} 세션을 종료할까요?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "변경 사항을 볼 수 없어요."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "이미 닫혀 있었어요."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Claude Code 백그라운드에서 돌아왔어요."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude가 새 대화를 시작하고 있어요."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "비웠어요."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "대화를 압축하는 중…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "삭제했어요."}

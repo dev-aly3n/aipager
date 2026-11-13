@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Твоя роль не может запускать сессию в домашней папке или выше. Выбери папку проекта: создай её кнопкой «Новая папка» или попроси админа запустить сессию."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 Из очереди [{session}] удалено {n} сообщения через Mini App", "many": "🧹 Из очереди [{session}] удалено {n} сообщений через Mini App", "one": "🧹 Из очереди [{session}] удалено {n} сообщение через Mini App", "other": "🧹 Из очереди [{session}] удалено {n} сообщения через Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Сжатие переписки [{session}] запущено через Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} отправлено в [{session}] через Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Сессия {session} создана через Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Сессия {session} создана через Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] удалена через Mini App"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Открыть {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude хочет использовать инструмент."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Вернуть"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Очистить переписку"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Очистить очередь"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Сжать сейчас"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Удалить"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Включить режим «Полный доступ»"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Повторить"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Подождать ещё 10 мин"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Очистить переписку в {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude начнёт новую переписку и забудет эту; старая останется сохранённой на компьютере, но продолжить её отсюда нельзя."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Удалить {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Сессия пропадёт из твоего списка. Сохранённая переписка останется на диске."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Завершить {session}?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff недоступен."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Уже была завершена."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Вернулась из фонового режима Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude начинает новую переписку."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Очередь очищена."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Сжимаю переписку…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Удалено."}

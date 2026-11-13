@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Твоя роль не може запускати сесію в домашній папці або вище. Вибери папку проєкту: створи її кнопкою «Нова папка» або попроси адміна запустити сесію."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 З черги [{session}] видалено {n} повідомлення через Mini App", "many": "🧹 З черги [{session}] видалено {n} повідомлень через Mini App", "one": "🧹 З черги [{session}] видалено {n} повідомлення через Mini App", "other": "🧹 З черги [{session}] видалено {n} повідомлення через Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Стиснення розмови [{session}] запущено через Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} надіслано в [{session}] через Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Сесію {session} створено через Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Сесію {session} створено через Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] видалено через Mini App"}
@@ -1120,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Відкрити {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude хоче використати інструмент."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Повернути"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Очистити розмову"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Очистити чергу"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Стиснути зараз"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Видалити"}
@@ -1155,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Увімкнути режим «Повний доступ»"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Повторити"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Зачекати ще 10 хв"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Очистити розмову в {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude почне нову розмову й забуде цю; стара залишиться збереженою на комп'ютері, але продовжити її звідси не можна."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Видалити {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Сесія зникне з твого списку. Збережена розмова залишиться на диску."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Завершити {session}?"}
@@ -1209,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff недоступний."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Уже була завершена."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Повернулася з фонового режиму Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude починає нову розмову."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Чергу очищено."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Стискаю розмову…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Видалено."}
