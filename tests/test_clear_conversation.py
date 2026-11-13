@@ -652,6 +652,32 @@ def test_clearok_without_digits_is_not_handled(mk_bot, run_async, typed, verb):
     query.answer.assert_not_awaited()
 
 
+@pytest.mark.parametrize("verb", ["clearok", "clearokX", "clearok7a"])
+def test_clearok_without_digits_is_not_claimed_for_an_unknown_session(mk_bot, run_async, verb):
+    """Not a Clear confirm at all: left to the other dispatchers (False),
+    never answered "Session not found" here."""
+    from aipager.bot import session_parity
+
+    bot = mk_bot()
+    query = _query()
+    handled = run_async(session_parity.handle_callback(
+        bot, _cb_update(DM_CHAT, 12345), query, "claude-nope", verb))
+    assert handled is False
+    query.answer.assert_not_awaited()
+
+
+def test_clearok_with_digits_is_claimed_for_an_unknown_session(mk_bot, run_async):
+    """Control for the test above: a real confirm verb is this module's."""
+    from aipager.bot import session_parity
+
+    bot = mk_bot()
+    query = _query()
+    handled = run_async(session_parity.handle_callback(
+        bot, _cb_update(DM_CHAT, 12345), query, "claude-nope", "clearok7"))
+    assert handled is True
+    assert _toast_list(query) == ["Session not found"]
+
+
 # ---- gates and card ownership in a group -----------------------------------
 
 from tests.test_group_attribution_senders import (  # noqa: E402
