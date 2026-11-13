@@ -55,6 +55,7 @@ from aipager.bot import (
 from aipager.bot import session_ops as session_ops_mod
 from aipager.bot.session_ops import (
     BG_BUSY_QUESTION,
+    CLEAR_COMMAND,
     BG_HELD_NOTICE,
     BG_REFUSED_PARKED,
     bg_outcome_html,
@@ -3183,13 +3184,14 @@ class CommandHandlersMixin:
             await reply_text(update.message, tr.text(NO_ACTIVE))
             return
 
-        if not await inject.is_alive(sess.name):
-            await reply_text(update.message, tr.text(SESSION_MISSING, name=sess.name))
+        # /clear is destructive: the one clear path, the ⋮ menu's and the
+        # Mini App's too (refused while the session works).
+        if command_text == CLEAR_COMMAND:
+            await self._send_clear_command(update, sess, tr)
             return
 
-        # /clear is destructive — refuse while session is actively working
-        if command_text == "/clear" and sess.status == Status.BUSY:
-            await reply_text(update.message, tr.text(CANT_CLEAR_BUSY))
+        if not await inject.is_alive(sess.name):
+            await reply_text(update.message, tr.text(SESSION_MISSING, name=sess.name))
             return
 
         # /model follows the Mini App picker's rule exactly (roadmap 8.35
@@ -3281,8 +3283,7 @@ class CommandHandlersMixin:
             else:
                 # The model line above names it already.
                 await reply_text(update.message, _sent_to_line(
-                    "🧹" if command_text == "/clear" else "↪️",
-                    command_text, sess.label, tr))
+                    "↪️", command_text, sess.label, tr))
             log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
             if is_model_switch:
@@ -3300,6 +3301,36 @@ class CommandHandlersMixin:
                 await self._reply_needs_admin(update)
             else:
                 await reply_text(update.message, tr.text(SEND_FAILED, session=sess.label))
+
+    async def _send_clear_command(self, update: Update, sess, tr) -> None:
+        """Commands -> Clear: ``/clear`` into the chat's target, through the
+        shared core (:meth:`_clear_session_core`), held behind an open
+        dialog like any message, and answered as before."""
+        outcome = await self._clear_session_core(
+            sess, driver_user_id=driver_id_from_update(update),
+            chat_id=calling_chat_id(update), msg_id=update.message.message_id,
+            hold=lambda: self._hold_for_open_dialog(update, sess, CLEAR_COMMAND))
+        reason = outcome.reason
+        if reason == "sent":
+            # 👌 when it ran at once; 👀 when Claude Code queued it.
+            await self._react(update, reactions.HANDED_OFF if outcome.was_busy
+                              else reactions.ACK)
+            await reply_text(update.message, _sent_to_line(
+                "🧹", CLEAR_COMMAND, sess.label, tr))
+        elif reason == "held":
+            return
+        elif reason == "not_live":
+            await reply_text(update.message, tr.text(NO_ACTIVE))
+        elif reason == "missing":
+            await reply_text(update.message, tr.text(SESSION_MISSING, name=sess.name))
+        elif reason == "busy":
+            await reply_text(update.message, tr.text(CANT_CLEAR_BUSY))
+        elif reason == "prompt_open":
+            await self._hold_met_dialog(update, sess, CLEAR_COMMAND)
+        elif reason == "needs_admin":
+            await self._reply_needs_admin(update)
+        else:
+            await reply_text(update.message, tr.text(SEND_FAILED, session=sess.label))
 
     async def _confirm_model_feedback(
         self, message, sess, previous_model: str, header: str,

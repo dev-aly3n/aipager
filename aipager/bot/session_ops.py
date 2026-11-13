@@ -18,7 +18,7 @@ import time
 from types import SimpleNamespace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from telegram import (
     Update,
@@ -84,6 +84,7 @@ from aipager.bot.transport import (  # noqa: F401
     calling_chat_id,
     calling_user_id,
     driver_id_from_update,
+    mixed_sender_outstanding_for,
     NEEDS_ADMIN_REPLY,
     PROMPT_DIALOG,
     PROMPT_REFUSED,
@@ -474,6 +475,30 @@ class CompactOutcome:
     ok: bool
     reason: str
     label: str
+
+
+#: What Claude Code reads to start a new conversation (never translated).
+CLEAR_COMMAND = "/clear"
+
+
+@dataclass
+class ClearOutcome:
+    """Result of :meth:`SessionOpsMixin._clear_session_core`.
+
+    ``reason`` is one of ``"not_live"`` (the session ended),
+    ``"missing"`` (its socket is gone), ``"busy"`` (a turn runs),
+    ``"held"`` (the caller's hold took it), ``"parked"`` (on a Claude
+    Code background job), ``"prompt_open"`` (a dialog is open),
+    ``"waiting"`` (its background agents, a model check or another
+    sender's message are still going), ``"needs_admin"`` (the sender may
+    not send ``/clear``), ``"send_failed"``, ``"sent"``. ``was_busy``:
+    a turn ran when it was typed (the keyboard's 👀 rather than 👌).
+    """
+
+    ok: bool
+    reason: str
+    label: str
+    was_busy: bool = False
 
 
 @dataclass
@@ -4347,6 +4372,78 @@ class SessionOpsMixin:
             return CompactOutcome(ok=False, reason="send_failed", label=label)
         self._mark_injected_command_ran(sess, "/compact")
         return CompactOutcome(ok=True, reason="sent", label=label)
+
+    def _clear_wait_reason(self, sess: TrackedSession,
+                           driver_user_id: int | None) -> str:
+        """Why a ``/clear`` from a confirm (the ⋮ menu, the Mini App) must
+        not be typed now, or ``""``. Where the keyboard's Clear is held
+        for later, these refuse: a confirmed clear never runs later
+        unseen."""
+        if self._parked(sess):
+            return "parked"
+        if sess.any_dialog_open() or sess.dialog_release_pending():
+            return "prompt_open"
+        if (sess.job_background_open() or sess.model_hold_active()
+                or mixed_sender_outstanding_for(sess, driver_user_id)):
+            return "waiting"
+        return ""
+
+    async def _clear_session_core(
+        self, sess: TrackedSession, *, driver_user_id: int | None,
+        chat_id: int | None, msg_id: int | None = None,
+        hold: Callable[[], Awaitable[object]] | None = None,
+    ) -> ClearOutcome:
+        """Type ``/clear`` into *sess*: Claude Code starts a new
+        conversation. The one path every Clear takes, the Commands
+        keyboard's, the ⋮ menu's confirm and the Mini App's, so the busy
+        refusal, the slash-command role rule and the dialog guards are
+        the same everywhere.
+
+        ``hold``: the keyboard's hold (:meth:`_hold_for_open_dialog`),
+        which queues the message behind an open dialog and answers the
+        sender itself; truthy when it held. Without one (a confirm), a
+        session that cannot take it now refuses (:meth:`_clear_wait_reason`).
+        ``msg_id``: the Telegram message it came from, when there is one.
+        """
+        label = sess.label
+        if sess.status == Status.GONE:
+            return ClearOutcome(ok=False, reason="not_live", label=label)
+        if not await inject.is_alive(sess.name):
+            return ClearOutcome(ok=False, reason="missing", label=label)
+        # Destructive: refused while a turn runs, never queued behind it.
+        if sess.status == Status.BUSY:
+            return ClearOutcome(ok=False, reason="busy", label=label)
+        if hold is not None:
+            if await hold():
+                return ClearOutcome(ok=False, reason="held", label=label)
+        else:
+            reason = self._clear_wait_reason(sess, driver_user_id)
+            if reason:
+                return ClearOutcome(ok=False, reason=reason, label=label)
+        was_busy = sess.status == Status.BUSY
+        ok = await self._inject_prompt(sess, CLEAR_COMMAND, msg_id=msg_id,
+                                       chat_id=chat_id,
+                                       driver_user_id=driver_user_id)
+        if ok:
+            if not was_busy:
+                # Ran, so its note is no queued message: let it expire
+                # (roadmap 8.37).
+                if msg_id is not None:
+                    from aipager.policy_snapshot import mark_command_notes_ran
+                    mark_command_notes_ran(sess.name, msg_id=msg_id, chat_id=chat_id)
+                else:
+                    self._mark_injected_command_ran(sess, CLEAR_COMMAND)
+            log.info("[%s] Command sent: %s", label, CLEAR_COMMAND)
+            return ClearOutcome(ok=True, reason="sent", label=label, was_busy=was_busy)
+        if ok is PROMPT_DIALOG:
+            reason = "prompt_open"
+        elif ok is PROMPT_REFUSED:
+            reason = "needs_admin"
+        elif self._parked(sess):
+            reason = "parked"
+        else:
+            reason = "send_failed"
+        return ClearOutcome(ok=False, reason=reason, label=label, was_busy=was_busy)
 
     async def _switch_model_core(
         self, sess: TrackedSession, model: str, *,

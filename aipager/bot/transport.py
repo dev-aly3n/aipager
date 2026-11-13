@@ -245,7 +245,12 @@ def driver_id_from_update(update) -> int | None:
 def _sender_key(sess, update) -> tuple[int, int]:
     """``(scope_chat_id, driver_user_id)`` for the human who sent
     ``update`` — design.md "queue handoff"'s ``sender_key``."""
-    return (sess.scope_chat_id or 0, driver_id_from_update(update) or 0)
+    return _sender_key_for(sess, driver_id_from_update(update))
+
+
+def _sender_key_for(sess, user_id: int | None) -> tuple[int, int]:
+    """:func:`_sender_key` for a raw user id (``None``: unknown, 0)."""
+    return (sess.scope_chat_id or 0, user_id or 0)
 
 
 def _same_sender(note_key: tuple[int, int], current_key: tuple[int, int]) -> bool:
@@ -299,7 +304,15 @@ def _same_sender(note_key: tuple[int, int], current_key: tuple[int, int]) -> boo
 
 def mixed_sender_note_outstanding(sess, update) -> bool:
     """True when an outstanding queue-handoff note belongs to a Telegram
-    user OTHER than whoever sent ``update``.
+    user OTHER than whoever sent ``update``: see
+    :func:`mixed_sender_outstanding_for`, keyed by that sender's id."""
+    return mixed_sender_outstanding_for(sess, driver_id_from_update(update))
+
+
+def mixed_sender_outstanding_for(sess, user_id: int | None) -> bool:
+    """True when an outstanding queue-handoff note belongs to a Telegram
+    user OTHER than *user_id* (``None``: an unknown sender, who matches
+    nobody).
 
     The mixed-sender half of "who does a merged turn's permissions apply
     to": two different humans' messages must never silently combine into
@@ -315,7 +328,7 @@ def mixed_sender_note_outstanding(sess, update) -> bool:
     """
     from aipager.policy_snapshot import outstanding_sender_keys
 
-    current = _sender_key(sess, update)
+    current = _sender_key_for(sess, user_id)
     others = outstanding_sender_keys(sess.name)
     mismatched = sorted(key for key in others if not _same_sender(key, current))
     if mismatched:
