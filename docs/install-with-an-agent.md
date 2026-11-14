@@ -308,24 +308,25 @@ they want the group now, add it by hand:
    0600 (`chmod 600 ~/.config/aipager/aipager.yaml`).
 2. Check it with `aipager policy validate`, then check that the
    `aipager doctor` line `scope mode: ...` counts the new group.
-3. Send the daemon a live reload. On Linux, under the background
-   service:
+3. Send the daemon a live reload, as below.
 
-   ```sh
-   pid=$(systemctl --user show -p MainPID --value aipager.service)
-   [ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
-   ```
+On Linux, under the background service:
 
-   On macOS:
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
 
-   ```sh
-   pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
-   [ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
-   ```
+On macOS:
 
-   The `-gt 0` check matters: with no daemon, `kill -USR1 0` would
-   signal your own shell's processes. Never restart the daemon from
-   inside an aipager session: your turn would be cut off.
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+The `-gt 0` check matters: with no daemon, `kill -USR1 0` would signal
+your own shell's processes. Never restart the daemon from inside an
+aipager session: your turn would be cut off.
 
 ## See also
 
