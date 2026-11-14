@@ -62,12 +62,24 @@ def _forget_tasks_a_test_left_running():
     line send there, bound to a loop that will never run again, and a later
     test that drains those sets with ``asyncio.gather`` fails with "The
     future belongs to a different loop". The daemon runs one loop, so this
-    is a test-only concern."""
+    is a test-only concern.
+
+    ``session_ops._KEYSTROKE_WATCHES`` (session name -> watch task) is
+    emptied too, and what it held collected here: a watch left there keeps
+    its whole test's bot alive until a later test starts a watch for the
+    same name, and that test's loop then ran the old objects' finalizers
+    (CI 2026-11-14, py3.13: a teardown's ``select`` failed with EBADF
+    after "Task was destroyed but it is pending!" for two such watches)."""
     yield
-    from aipager.bot import animation, notify
+    import gc
+
+    from aipager.bot import animation, notify, session_ops
     for tasks in (notify._BACKGROUND_TASKS, animation._CARD_TASKS):
         for task in [t for t in tasks if not t.done()]:
             tasks.discard(task)
+    if session_ops._KEYSTROKE_WATCHES:
+        session_ops._KEYSTROKE_WATCHES.clear()
+        gc.collect()
 
 
 @pytest.fixture(autouse=True)
