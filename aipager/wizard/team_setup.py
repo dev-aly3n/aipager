@@ -7,8 +7,8 @@ import questionary
 
 from aipager import telegram_endpoint
 from aipager.errors import friendly_warn
-from aipager.team import is_shared_sender_id
 from aipager.ui import console, err_console, hint, ok
+from aipager.wizard import group_rules
 from aipager.wizard._constants import (
     _PROMPT_STYLE,
 )
@@ -38,11 +38,9 @@ def _shown(who) -> str:
 
 
 #: Roadmap 8.91e: what the wizard says to a shared sender id
-#: (``team.SHARED_SENDER_IDS``), typed or auto-detected.
-SHARED_SENDER_REFUSAL = (
-    "That id belongs to Telegram's anonymous admin or channel sender, which "
-    "every anonymous admin and channel post shares. Ask the person to post "
-    "as themselves, then try again.")
+#: (``team.SHARED_SENDER_IDS``), typed or auto-detected. Lives in
+#: group_rules (shared with `aipager setup group`); kept importable here.
+SHARED_SENDER_REFUSAL = group_rules.SHARED_SENDER_REFUSAL
 
 
 def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
@@ -257,11 +255,12 @@ def _capture_user_identity(
                     method = "manual"
                     break
                 return None
-            if is_shared_sender_id(uid):
-                err_console.print(f"  [err]{SHARED_SENDER_REFUSAL}[/err]")
+            problem = group_rules.member_id_problem(uid, existing_ids)
+            if problem is not None and problem.code != "duplicate_member":
+                err_console.print(f"  [err]{problem.message}[/err]")
                 passed_over.add(uid)
                 continue
-            if uid in existing_ids:
+            if problem is not None:
                 err_console.print(
                     f"  [err]User {uid} ({who or 'no handle'}) is already "
                     "on the allow-list. Ask someone else to mention.[/err]"
@@ -379,11 +378,9 @@ def _capture_user_identity(
             if not suggested_label:
                 suggested_label = f"user{uid}"
 
-        if is_shared_sender_id(uid):
-            friendly_warn(SHARED_SENDER_REFUSAL)
-            continue
-        if uid in existing_ids:
-            friendly_warn(f"User id {uid} is already on the allow-list.")
+        problem = group_rules.member_id_problem(uid, existing_ids)
+        if problem is not None:
+            friendly_warn(problem.message)
             continue
 
         finalized = _finalize_user(uid, suggested_label, existing_labels)
@@ -409,13 +406,9 @@ def _finalize_user(
             qmark="?", style=_PROMPT_STYLE,
         )).strip()
         label = raw or suggested_label
-        if not label:
-            friendly_warn("Label must be non-empty.")
-            continue
-        if label in existing_labels:
-            friendly_warn(
-                f"Label {label!r} is already in use - try a different one.",
-            )
+        problem = group_rules.label_problem(label, existing_labels)
+        if problem is not None:
+            friendly_warn(problem.message)
             continue
         return {"id": uid, "label": label}
 

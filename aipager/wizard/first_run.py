@@ -6,6 +6,7 @@ import questionary
 
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import GLYPH_OK, console, err_console, hint, ok, rule, step
+from aipager.wizard import group_rules
 from aipager.wizard._constants import (
     _CHAT_NOT_FOUND_RE, _PROMPT_STYLE,
 )
@@ -106,9 +107,11 @@ def _step_chat_id(
             except ValueError:
                 err_console.print("  [err]not a number[/err]")
                 continue
-            if mode == "team" and cid >= 0:
+            problem = (group_rules.group_chat_id_problem(cid)
+                       if mode == "team" else None)
+            if problem is not None:
                 err_console.print(
-                    "  [err]Group IDs are negative integers. Try again.[/err]",
+                    f"  [err]{problem.message} Try again.[/err]",
                 )
                 continue
         else:

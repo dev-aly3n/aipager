@@ -796,11 +796,12 @@ def test_bad_chat_id(env, value):
     assert env.tg.urls == []
 
 
-def test_negative_chat_id_points_at_config(env):
+def test_negative_chat_id_points_at_setup_group(env):
     code, doc, _o, _e = env.run_json("setup", "--token-file", str(env.token_file),
                                      "--chat-id=-100123")
     assert code == 2 and doc["error"] == "bad_chat_id"
-    assert "aipager config" in doc["message"]
+    assert "aipager setup group --chat-id N --member ID:LABEL:ROLE" in doc["message"]
+    assert "aipager setup group" in doc["fix"]
 
 
 def test_missing_chat_id(env):

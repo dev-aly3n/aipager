@@ -1,5 +1,8 @@
 """`aipager setup detect-chat`: find the person's Telegram id for
-`aipager setup --chat-id`, and save nothing.
+`aipager setup --chat-id`, and save nothing. `aipager setup
+detect-group` (at the end) does the same for a group's id, for
+`aipager setup group --chat-id`; it reads the token from the install,
+and the daemon-aware source does see groups.
 
 The person opens the bot and presses Start (which sends ``/start``);
 this command reports the newest private message to the bot dated at
@@ -232,4 +235,137 @@ def cmd_detect_chat(args: argparse.Namespace, run: _Run) -> int:
         "message), then run this again, with a longer --timeout if needed.")
 
 
-__all__ = ["cmd_detect_chat"]
+
+# ----- detect-group -----
+
+#: getUpdates returned a full batch of old updates, hiding newer ones.
+DETECT_GROUP_BACKLOG_ADVISORY = (
+    "The bot has 100 or more unread updates from the last 24 hours, and "
+    "Telegram shows detect-group only the oldest 100 of them (detect-group "
+    "never confirms updates, so it cannot page past them), so a new group "
+    "message cannot be seen.")
+
+#: Only groups already set up wrote to the bot in the look-back window.
+ONLY_KNOWN_GROUPS = (
+    "Only groups that are already set up wrote to the bot in the last "
+    f"{DETECT_LOOKBACK_SECONDS // 60} minutes.")
+
+
+def _found_group(run: _Run, candidate: dict, others: int) -> int:
+    doc = run.doc
+    doc["status"] = "found"
+    doc["candidate"] = candidate
+    doc["other_candidates"] = others
+    title = candidate.get("title") or "(no title)"
+    msg = f"Found the group {title}, chat id {candidate['id']}."
+    if others:
+        msg += (f" {others} other {'group' if others == 1 else 'groups'} also "
+                "wrote to the bot in the last "
+                f"{DETECT_LOOKBACK_SECONDS // 60} minutes: confirm it is the "
+                "right group.")
+    doc["message"] = msg
+    doc["next_step"] = (
+        "Show this group to the user; once they confirm, run: aipager setup "
+        f"group --chat-id {candidate['id']} --member ID:LABEL:ROLE")
+    run.plain_out.append(f"  id:       {candidate['id']}")
+    run.plain_out.append(f"  title:    {title}")
+    run.plain_out.append(f"  source:   {doc['source']}")
+    return EXIT_OK
+
+
+def cmd_detect_group(args: argparse.Namespace, run: _Run) -> int:
+    """``aipager setup detect-group``: the newest message in a group not
+    set up yet, from the last :data:`DETECT_LOOKBACK_SECONDS`. Reads the
+    token from the install (:func:`aipager.setup_group.load_install`).
+    Writes nothing and never confirms an update."""
+    from aipager.setup_group import load_install
+    from aipager.wizard import scope_io, telegram_api
+
+    doc = run.doc
+    timeout = _parse_timeout(getattr(args, "timeout", None))
+    _scopes, run.token = load_install()
+    username = _get_me_or_raise(run)
+    exclude = scope_io.configured_chat_ids()
+    source = _choose_source(run.token)
+    doc["source"] = source
+    who = "@" + username if username else "the bot"
+    start = _now()
+    not_before = int(start) - DETECT_LOOKBACK_SECONDS
+    deadline = _monotonic() + timeout
+    no_message = SetupError(
+        EXIT_DETECT_TIMEOUT, "detect_timeout",
+        f"No message in a new group arrived within {timeout} seconds.",
+        f"Ask the person to add {who} to the group and send /start there, "
+        "then run this again, with a longer --timeout if needed.")
+    sys.stderr.write(_scrub(
+        f"Watching {'through the running daemon' if source == 'daemon' else 'Telegram directly'} "
+        f"for a message in a new group (up to {timeout} s). Ask the person "
+        f"to add {who} to the group and send /start there.\n", run.token))
+    sys.stderr.flush()
+
+    if source == "daemon":
+        while True:
+            cid, title, _advisory = telegram_api._fetch_id_from_pending(
+                want="group", exclude=exclude, not_before=not_before)
+            if cid is not None:
+                return _found_group(run, {"id": cid, "title": title or "",
+                                          "type": None, "date": None}, 0)
+            remaining = deadline - _monotonic()
+            if remaining <= 0:
+                break
+            _sleep(min(DETECT_POLL_SECONDS, remaining))
+        if telegram_api._known_group_in_pending(exclude=exclude,
+                                                not_before=not_before):
+            no_message.message = f"{no_message.message} {ONLY_KNOWN_GROUPS}"
+        raise no_message
+
+    last_failed = False
+    backlog = False
+    saw_known = False
+    while True:
+        (candidate, others, code, _err, full,
+         known) = telegram_api._newest_group_chat(
+            run.token, not_before=not_before, exclude=exclude)
+        if candidate is not None:
+            return _found_group(run, candidate, others)
+        if code == 409:
+            raise SetupError(
+                EXIT_UPDATES_CONFLICT, "updates_conflict",
+                telegram_api.UPDATES_CONFLICT_ADVISORY,
+                "Stop the other program reading this bot's messages, or ask "
+                "the person for the group's id (a negative number).")
+        if code in (401, 404):
+            raise SetupError(
+                EXIT_TOKEN_REJECTED, "token_rejected",
+                "Telegram rejected the bot token in aipager.yaml.",
+                "Have the person check the token in `aipager config`, then "
+                "run this again.")
+        last_failed = code is None or code == 429 or code >= 500
+        backlog = full
+        saw_known = saw_known or known
+        remaining = deadline - _monotonic()
+        if remaining <= 0:
+            break
+        _sleep(min(DETECT_POLL_SECONDS, remaining))
+    if last_failed:
+        raise SetupError(
+            EXIT_TELEGRAM_UNREACHABLE, "telegram_unreachable",
+            "Could not reach Telegram to look for the group's message.",
+            "Check the network connection, then run this again.")
+    if backlog:
+        doc["warnings"].append({
+            "code": "updates_backlog",
+            "message": DETECT_GROUP_BACKLOG_ADVISORY,
+        })
+        raise SetupError(
+            EXIT_DETECT_TIMEOUT, "detect_timeout",
+            f"No message in a new group was found within {timeout} seconds. "
+            f"{DETECT_GROUP_BACKLOG_ADVISORY}",
+            "Ask the person for the group's id (a negative number) and pass "
+            "it to `aipager setup group --chat-id`.")
+    if saw_known:
+        no_message.message = f"{no_message.message} {ONLY_KNOWN_GROUPS}"
+    raise no_message
+
+
+__all__ = ["cmd_detect_chat", "cmd_detect_group"]

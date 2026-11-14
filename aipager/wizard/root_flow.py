@@ -8,13 +8,13 @@ menu's own ``_ask`` (passed as *ask*), so one stub answers them all.
 
 from __future__ import annotations
 
-import os
 from dataclasses import replace
 
 import questionary
 
 from aipager.errors import friendly_warn
 from aipager.ui import console, ok
+from aipager.wizard import group_rules
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.scope_io import commit_scope, read_config
 
@@ -24,37 +24,11 @@ ROOT_QUESTION = ("Members' root folder (members without can_manage, such "
                  "as user and read_only, start and work only inside it):")
 
 
-#: Folders whose files the system runs or loads as code: a member's turn
-#: may write in its root, so a root here (or inside one) lets a member put
-#: a program the operator's account then runs.
-CODE_LOADING = ("~/bin", "~/.local/bin", "~/.config/systemd",
-                "~/.config/autostart")
-
-
-def code_loading_folder(path: str) -> str | None:
-    """The folder of :data:`CODE_LOADING` that *path* is or lies inside
-    (as written and with symlinks resolved), ``~``-shortened, or ``None``."""
-    from aipager import member_root
-    forms = {os.path.abspath(path), os.path.realpath(path)}
-    for spot in CODE_LOADING:
-        folder = os.path.expanduser(spot)
-        for f in {os.path.abspath(folder), os.path.realpath(folder)}:
-            if any(member_root.inside(form, f) for form in forms):
-                return spot
-    return None
-
-
-def _root_overlap(path: str, scope, scopes):
-    """Another scope whose root is *path*, holds it or lies inside it."""
-    from aipager import member_root
-    real = os.path.realpath(path)
-    for other in scopes:
-        if other.chat_id == scope.chat_id:
-            continue
-        theirs = os.path.realpath(member_root.effective_root(other, scopes))
-        if member_root.inside(real, theirs) or member_root.inside(theirs, real):
-            return other
-    return None
+# Moved to group_rules (one code path with `aipager setup group`); the
+# old names stay importable from here.
+CODE_LOADING = group_rules.CODE_LOADING
+code_loading_folder = group_rules.code_loading_folder
+_root_overlap = group_rules.root_overlap
 
 
 def ask_root(scope, scopes, ask) -> str:
@@ -73,12 +47,10 @@ def ask_root(scope, scopes, ask) -> str:
             ROOT_QUESTION, default=member_root.short(current),
             qmark="?", style=_PROMPT_STYLE,
         )) or "").strip() or member_root.short(current)
-        problem = member_root.root_problem(raw)
+        problem, path, loader, other = group_rules.root_checks(raw, scope, scopes)
         if problem:
             friendly_warn(f"That folder can't be a root: {problem}.")
             continue
-        path = os.path.abspath(os.path.expanduser(raw))
-        loader = code_loading_folder(path)
         if loader is not None and not ask(questionary.confirm(
             f"{member_root.short(path)} is in {loader}, whose files your "
             "system runs as programs, and members' sessions can write in "
@@ -86,7 +58,6 @@ def ask_root(scope, scopes, ask) -> str:
             default=False, qmark="?", style=_PROMPT_STYLE,
         )):
             continue
-        other = _root_overlap(path, scope, scopes)
         if other is not None and not ask(questionary.confirm(
             f"{member_root.short(path)} is the same as, or nests with, the "
             f"root of \"{other.label}\", so their members would share files. "
