@@ -231,8 +231,9 @@ def test_idle_session_returns_exact_five_key_set(server, run_async):
         try:
             resp = await client.get("/api/sessions/dev", headers=_hdr(ADMIN_ID))
             body = await resp.json()
+            # Clear conversation (2026-11-13) joined idle's set.
             assert set(body["actions"].keys()) == {
-                "kill", "compact", "rename", "perms", "restart",
+                "kill", "compact", "rename", "clear", "perms", "restart",
             }
         finally:
             await client.close()

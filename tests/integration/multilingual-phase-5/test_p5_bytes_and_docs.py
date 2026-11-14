@@ -43,6 +43,7 @@ from tests.i18n_surfaces import (
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
     without_appearance_row,
+    without_clear_rows,
     without_card_divider,
     with_agent_calls_folded,
     CARD_FOLD_TAIL_SURFACES,
@@ -164,7 +165,9 @@ def test_every_english_surface_of_the_base_is_unchanged():
     # The aliases-only model list (2026-11-09) changed the model rows,
     # and only those.
     base = without_model_rows(_surfaces(at_base(rel)))
-    cur = without_model_rows(_surfaces(now(rel)))
+    # A live session's ⋮ menu gained a Clear conversation row
+    # (2026-11-13), and only that.
+    cur = without_clear_rows(without_model_rows(_surfaces(now(rel))))
     kept = {k: v for k, v in base.items()
             if k not in CHANGED_SINCE | MODE_LABEL_SURFACES | THREE_MODES_SURFACES
             | NO_KEYBOARD_APP_SURFACES | AGENTS_TREE_CARD_SURFACES | APPEARANCE_SURFACES

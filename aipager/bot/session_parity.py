@@ -97,6 +97,9 @@ _SESSION_ACTIONS = frozenset({
     "mode_show",
     # restart-confirm: an old button, answered "out of date".
     "restart", "restart-confirm", "restart-cancel",
+    # ⋮ Clear conversation: draws its confirm (clearok<turn_key>), and
+    # that confirm's Cancel.
+    "clear", "clear-cancel",
     "rename", "rename-cancel",
     "delete", "delete-confirm", "delete-cancel",
     "diff",
@@ -332,6 +335,40 @@ DELETED_BY = Msg("sess.deleted_by", "🗑️ Deleted [<b>{session}</b>] by {pers
                  eg={"session": "x1", "person": "@bob"})
 DELETE_CANCELLED = Msg("sess.delete_cancelled", "Delete cancelled for [<b>{session}</b>].",
                        note="The delete confirm, cancelled", eg={"session": "x1"})
+# Clear conversation (Claude Code's /clear), from the ⋮ menu behind a
+# confirm. Deliberately never in the / menu: one tap must not wipe a
+# conversation.
+BTN_CLEAR = Msg("sess.btn.clear", "🧹 Clear conversation",
+                note="Menu button: start a new conversation in the session, like Claude "
+                     "Code's /clear, after a confirm")
+BTN_CLEAR_OK = Msg("sess.btn.clear_ok", "🧹 Clear",
+                   note="Button on the clear confirm: clear the conversation")
+CLEAR_CONFIRM = Msg("sess.clear_confirm", "🧹 Clear the conversation in <b>{session}</b>?",
+                    note="HTML. The question before /clear is typed into the session",
+                    eg={"session": "x1"})
+CLEAR_CONFIRM_BODY = Msg("sess.clear_confirm_body",
+                         "Claude starts a new conversation and forgets this one.",
+                         note="Under the clear confirm's question")
+CLEAR_CONFIRM_SAVED = Msg("sess.clear_confirm_saved",
+                          "The old conversation stays saved on the computer, but it can't be "
+                          "resumed from here.",
+                          note="Under the clear confirm: aipager's Resume brings back only the "
+                               "new conversation")
+CLEAR_CANCELLED = Msg("sess.clear_cancelled", "Clear cancelled for [<b>{session}</b>].",
+                      note="The clear confirm, cancelled", eg={"session": "x1"})
+CLEAR_SENT_BY = Msg("sess.clear_sent_by", "🧹 {command} sent to {session} by {person}",
+                    note="HTML. The clear confirm in a group after it worked: who cleared it; "
+                         "{command} is /clear",
+                    eg={"command": "/clear", "session": "x1", "person": "@alice"})
+TOAST_CANT_CLEAR = Msg("toast.sess_cant_clear", "You can't clear this session's conversation.",
+                       note="Pop-up: the person may not clear this session")
+TOAST_MOVED_ON_CLEAR = Msg("toast.sess_moved_on_clear",
+                           "{session} changed since this was shown - tap 🧹 Clear conversation "
+                           "again to clear it.",
+                           note="Pop-up: the clear confirm was for an earlier turn or "
+                                "conversation", eg={"session": "x1"})
+TOAST_CLEAR_FAILED = Msg("toast.sess_clear_failed", "Couldn't clear {session} - try again.",
+                         note="Pop-up: /clear could not be typed", eg={"session": "x1"})
 
 
 # ---- lazily-initialised TelegramBot instance state -----------------------
@@ -659,11 +696,14 @@ def render_end_confirm(
 def _render_session_menu(
     bot: "TelegramBot", chat_id: int, sess: TrackedSession, tr=None,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Restart, Rename, Preferences, Diff, and — only when GONE —
-    Delete, in that order (entrypoints.md's "⋮ session menu" section).
-    Every row reuses the exact same callback the standalone command's
-    own picker/confirm flow uses, so there is one code path per action
-    regardless of which surface reached it."""
+    """Restart, End session, Clear conversation (live only), Rename,
+    Preferences, Diff, and — only when GONE — Delete, in that order
+    (entrypoints.md's "⋮ session menu" section). Every row reuses the
+    exact same callback the standalone command's own picker/confirm flow
+    uses, so there is one code path per action regardless of which
+    surface reached it. Clear has no standalone command (it is kept out
+    of the / menu on purpose): its confirm types ``/clear`` through the
+    same core the Commands keyboard's Clear uses."""
     tr = tr or i18n.for_chat(chat_id)
     names = _register_pref_index(bot, chat_id, [sess.name])
     pref_cb = f"_:spref:{_pref_idx(bot, chat_id, names, sess.name)}"
@@ -682,6 +722,9 @@ def _render_session_menu(
         # Off the main keyboard since 2026-09-30 (it sat beside Stop).
         rows.append([InlineKeyboardButton(
             tr.text(BTN_END_SESSION), callback_data=session_cb(bot, chat_id, sess, "end"))])
+        # Behind a confirm: Claude starts a new conversation (/clear).
+        rows.append([InlineKeyboardButton(
+            tr.text(BTN_CLEAR), callback_data=session_cb(bot, chat_id, sess, "clear"))])
     elif sess.claude_session_id:
         rows.append([InlineKeyboardButton(
             tr.text(BTN_RESUME), callback_data=session_cb(bot, chat_id, sess, "resume"))])
@@ -732,6 +775,130 @@ def _render_restart_confirm(
                              callback_data=session_cb(bot, chat_id, sess, "restart-cancel")),
     ]])
     return tr.html(RESTART_CONFIRM, session=sess.label), kb
+
+
+# ---- clear conversation ----------------------------------------------
+
+def _render_clear_confirm(
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession, tr=None,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """``🧹 Clear the conversation in x1?``, drawn over the ⋮ menu. Carries
+    the turn it was shown for (like Restart): a /clear and a new turn
+    both move it on, so a confirm left from before either does nothing."""
+    tr = tr or i18n.for_chat(chat_id)
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(tr.text(BTN_CLEAR_OK), callback_data=session_cb(
+            bot, chat_id, sess, f"clearok{sess.turn_key}")),
+        InlineKeyboardButton(tr.text(BTN_CANCEL),
+                             callback_data=session_cb(bot, chat_id, sess, "clear-cancel")),
+    ]])
+    text = (tr.html(CLEAR_CONFIRM, session=sess.label) + "\n"
+            + tr.html(CLEAR_CONFIRM_BODY) + "\n\n" + tr.html(CLEAR_CONFIRM_SAVED))
+    return text, kb
+
+
+async def _redraw_menu(bot: "TelegramBot", query, chat_id, sess) -> None:
+    """The card is the ⋮ menu again, everyone's."""
+    text, kb = _render_session_menu(bot, chat_id, sess)
+    await _edit(query, text, kb)
+    card_owner.release(bot, chat_id, _tapped_id(query))
+
+
+async def _handle_clear_tap(bot: "TelegramBot", query, sess, chat_id, user_id,
+                            person) -> None:
+    """⋮ → 🧹 Clear conversation: the confirm in place of the menu, for
+    someone who may clear it now; otherwise a pop-up and nothing drawn."""
+    from aipager.bot.handlers import CANT_CLEAR_BUSY  # local: import cycle
+    from aipager.bot.session_ops import CLEAR_COMMAND
+    from aipager.bot.transport import NEEDS_ADMIN_REPLY
+    if not bot._can_prompt_user(user_id, chat_id):
+        await bot._safe_answer(query, person.text(TOAST_CANT_CLEAR))
+        return
+    if session_foreign_to(sess, chat_id):
+        await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
+        return
+    if sess.status == Status.GONE:
+        await _redraw_menu(bot, query, chat_id, sess)
+        await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION))
+        return
+    if sess.status == Status.BUSY:
+        # Refused now rather than at the confirm: a dead confirm otherwise.
+        await bot._safe_answer(query, person.text(CANT_CLEAR_BUSY))
+        return
+    if bot._command_needs_admin(CLEAR_COMMAND, user_id,
+                                chat_id=bot._attribution_chat(sess, chat_id)):
+        # Clear off the Commands keyboard: /clear needs an admin's role.
+        await bot._safe_answer(query, shown(person, NEEDS_ADMIN_REPLY), show_alert=True)
+        return
+    text, kb = _render_clear_confirm(bot, chat_id, sess)
+    await _edit(query, text, kb)
+    card_owner.claim(bot, chat_id, _tapped_id(query), user_id, kind="clear",
+                     command="", who=getattr(query, "from_user", None))
+
+
+async def _handle_clear_confirm(bot: "TelegramBot", query, sess, turn: int, chat_id,
+                                user_id, shared, person) -> None:
+    """The confirm's 🧹 Clear: ``/clear`` typed into exactly this session,
+    through the one clear path (``_clear_session_core``), only for the turn
+    and conversation the confirm was shown for."""
+    from aipager.bot.handlers import CANT_CLEAR_BUSY, SENT_TO  # local: import cycle
+    from aipager.bot.session_ops import CLEAR_COMMAND
+    from aipager.bot.transport import NEEDS_ADMIN_REPLY
+    from aipager.miniapp.phrase import say
+    from aipager.miniapp.sessions import CLEAR_PROMPT_OPEN_REASON, CLEAR_WAITING_REASON
+    if not bot._can_prompt_user(user_id, chat_id):
+        await bot._safe_answer(query, person.text(TOAST_CANT_CLEAR))
+        return
+    if session_foreign_to(sess, chat_id):
+        await bot._safe_answer(query, person.text(TOAST_NOT_HERE))
+        return
+    if sess.is_resuming():
+        await bot._safe_answer(query, person.text(TOAST_RESUMING_RETRY, session=sess.label))
+        return
+    if sess.status == Status.GONE:
+        await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION))
+        await _redraw_menu(bot, query, chat_id, sess)
+        return
+    if not sess.tap_is_for_this_turn(None, turn=turn):
+        # A new turn, or a clear already made (its SessionEnd moves the
+        # turn on): the confirm is for a conversation the person no
+        # longer sees.
+        await bot._safe_answer(query, person.text(TOAST_MOVED_ON_CLEAR, session=sess.label))
+        await _redraw_menu(bot, query, chat_id, sess)
+        return
+    outcome = await bot._clear_session_core(sess, driver_user_id=user_id, chat_id=chat_id)
+    reason = outcome.reason
+    label = sess.label
+    if reason == "sent":
+        await bot._safe_answer(query)
+        # In a group, who cleared it (roadmap 8.91c); "" in a DM.
+        by = bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))
+        line = (shared.html(CLEAR_SENT_BY, command=Command(CLEAR_COMMAND), session=label,
+                            person=Command(by)) if by
+                else shared.html(SENT_TO, glyph=Safe("🧹"), what=Command(CLEAR_COMMAND),
+                                 session=label))
+        card_owner.release(bot, chat_id, _tapped_id(query))
+        await _edit(query, line, None)
+    elif reason == "busy":
+        await bot._safe_answer(query, person.text(CANT_CLEAR_BUSY))
+        await _redraw_menu(bot, query, chat_id, sess)
+    elif reason in ("not_live", "missing"):
+        await bot._safe_answer(query, person.text(TOAST_ENDED_SESSION) if reason == "not_live"
+                               else person.text(TOAST_NOT_FOUND_NAMED, session=label))
+        await _redraw_menu(bot, query, chat_id, sess)
+    elif reason == "already_cleared":
+        await bot._safe_answer(query, person.text(TOAST_MOVED_ON_CLEAR, session=label))
+        await _redraw_menu(bot, query, chat_id, sess)
+    elif reason == "prompt_open":
+        await bot._safe_answer(query, say(person, CLEAR_PROMPT_OPEN_REASON))
+    elif reason == "waiting":
+        await bot._safe_answer(query, say(person, CLEAR_WAITING_REASON))
+    elif reason == "parked":
+        await bot._safe_answer(query, person.text(_ops.BG_TOAST_REFUSED_PARKED, session=label))
+    elif reason == "needs_admin":
+        await bot._safe_answer(query, shown(person, NEEDS_ADMIN_REPLY), show_alert=True)
+    else:
+        await bot._safe_answer(query, person.text(TOAST_CLEAR_FAILED, session=label))
 
 
 async def handle_restart_cmd(
@@ -1674,6 +1841,7 @@ async def handle_callback(
     if action not in _SESSION_ACTIONS and not (
             (action.startswith("endok") and action[5:].isdigit())
             or (action.startswith("restartok") and action[9:].isdigit())
+            or (action.startswith("clearok") and action[7:].isdigit())
             or (action.startswith("modeask") and action[7:].isdigit())
             or (action.startswith("modeauto") and action[8:].isdigit())
             or (action.startswith("modefull") and action[8:].isdigit())
@@ -1993,6 +2161,20 @@ async def handle_callback(
     if action == "restart-cancel":
         card_owner.release(bot, chat_id, _tapped_id(query))
         await _edit(query, shared.html(RESTART_CANCELLED, session=sess.label), None)
+        return True
+
+    if action == "clear":
+        await _handle_clear_tap(bot, query, sess, chat_id, user_id, person)
+        return True
+
+    if action.startswith("clearok") and action[7:].isdigit():
+        await _handle_clear_confirm(bot, query, sess, int(action[7:]), chat_id, user_id,
+                                    shared, person)
+        return True
+
+    if action == "clear-cancel":
+        card_owner.release(bot, chat_id, _tapped_id(query))
+        await _edit(query, shared.html(CLEAR_CANCELLED, session=sess.label), None)
         return True
 
     if action == "rename":

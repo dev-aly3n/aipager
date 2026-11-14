@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Твоя роль не может запускать сессию в домашней папке или выше. Выбери папку проекта: создай её кнопкой «Новая папка» или попроси админа запустить сессию."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 Из очереди [{session}] удалено {n} сообщения через Mini App", "many": "🧹 Из очереди [{session}] удалено {n} сообщений через Mini App", "one": "🧹 Из очереди [{session}] удалено {n} сообщение через Mini App", "other": "🧹 Из очереди [{session}] удалено {n} сообщения через Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Сжатие переписки [{session}] запущено через Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} отправлено в [{session}] через Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Сессия {session} создана через Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Сессия {session} создана через Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] удалена через Mini App"}
@@ -131,6 +132,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} переключена на режим «Спрашивать» через Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} переключена на режим Авто через Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} переключена на режим «Полный доступ» через Mini App"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude работает: очисти переписку, когда эта задача закончится."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "Сначала ответь на открытый запрос, потом очищай переписку."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude ещё заканчивает работу: очисти переписку, когда он закончит."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Сначала ответь на открытый запрос, потом меняй режим."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude работает: смени модель, когда эта задача закончится."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Сессия не запущена."}
@@ -766,6 +770,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Сразу отправлено Claude"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "Отмена"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Отмена"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 Очистить переписку"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 Очистить"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Закрыть"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Удалить"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Изменения (diff)"}
@@ -776,6 +782,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Перезапустить"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Продолжить"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Отменено."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "Очистка переписки в [<b>{session}</b>] отменена."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 Очистить переписку в <b>{session}</b>?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude начнёт новую переписку и забудет эту."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "Старая переписка останется сохранённой на компьютере, но продолжить её отсюда нельзя."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} отправил(а) {command} в {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "Удаление [<b>{session}</b>] отменено."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ Убрать [<b>{session}</b>] из списка сессий? Это нельзя отменить."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "Нет завершённых сессий для удаления."}
@@ -1036,6 +1047,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager сейчас вводит сообщение, попробуй чуть позже"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Эта сессия уже завершена."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session}: уже {mode}."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "Ты не можешь очистить переписку этой сессии."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Ты не можешь удалить эту сессию."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Ты не можешь завершить эту сессию."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Ты не можешь переименовать эту сессию."}
@@ -1043,9 +1055,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Ты не можешь продолжить эту сессию."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Эту сессию сейчас нельзя продолжить."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Ты не можешь отправлять в эту сессию."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "Не удалось очистить переписку {session}: попробуй ещё раз."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} не остановилась: попробуй ещё раз"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} завершена"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} завершил(а) {session}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} изменилась с тех пор, как это было показано: нажми «🧹 Очистить переписку» ещё раз, если это всё ещё нужно."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} начала новую задачу: нажми «⏹ Завершить сессию» ещё раз, чтобы завершить её"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} начала новую задачу: нажми «🔄 Перезапустить» ещё раз, чтобы перезапустить её"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} начала новую задачу: если переключение ещё нужно, нажми кнопку ещё раз"}
@@ -1107,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Открыть {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude хочет использовать инструмент."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Вернуть"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Очистить переписку"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Очистить очередь"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Сжать сейчас"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Удалить"}
@@ -1142,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Включить режим «Полный доступ»"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Повторить"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Подождать ещё 10 мин"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Очистить переписку в {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude начнёт новую переписку и забудет эту; старая останется сохранённой на компьютере, но продолжить её отсюда нельзя."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Удалить {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Сессия пропадёт из твоего списка. Сохранённая переписка останется на диске."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Завершить {session}?"}
@@ -1196,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff недоступен."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Уже была завершена."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Вернулась из фонового режима Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude начинает новую переписку."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Очередь очищена."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Сжимаю переписку…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Удалено."}

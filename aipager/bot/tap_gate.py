@@ -81,6 +81,9 @@ EXACT_CAPS: dict[str, Cap] = {
     "restart": PROMPT,
     "restart-confirm": VIEW,     # an old button: answers "out of date"
     "restart-cancel": PROMPT,    # closes someone's confirm, like kill-cancel
+    # ⋮ Clear conversation (types /clear after its confirm, clearok<N>)
+    "clear": PROMPT,
+    "clear-cancel": PROMPT,      # closes someone's confirm, like kill-cancel
     "rename": PROMPT,
     "rename-cancel": PROMPT,     # clears the chat's pending rename
     "delete": PROMPT,
@@ -135,6 +138,7 @@ NUMBERED_CAPS: tuple[tuple[str, Cap], ...] = (
     ("pstop", PROMPT),       # /stop picker's Stop, keyed by turn
     ("endok", PROMPT),       # End confirm, keyed by turn
     ("restartok", PROMPT),   # Restart confirm, keyed by turn
+    ("clearok", PROMPT),     # Clear conversation confirm, keyed by turn
     ("modeask", PROMPT),     # /mode switch to Ask, keyed by turn
     ("modeauto", PROMPT),    # /mode switch to Auto
     ("modefull", MANAGE),    # /mode switch to Full access: the handler

@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "لا يمكن لدورك بدء جلسة في المجلد الرئيسي أو مجلد أعلى منه. يُرجى اختيار مجلد مشروع: إنشاء واحد عبر «مجلد جديد»، أو الطلب من مشرف بدء الجلسة."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 حُذفت {n} رسائل من قائمة انتظار [{session}] عبر Mini App", "many": "🧹 حُذفت {n} رسالة من قائمة انتظار [{session}] عبر Mini App", "one": "🧹 حُذفت رسالة واحدة من قائمة انتظار [{session}] عبر Mini App", "other": "🧹 حُذفت {n} رسالة من قائمة انتظار [{session}] عبر Mini App", "two": "🧹 حُذفت رسالتان من قائمة انتظار [{session}] عبر Mini App", "zero": "🧹 لم تُحذف أي رسالة من قائمة انتظار [{session}] عبر Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 بدأ تلخيص محادثة [{session}] عبر Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 تم إرسال {command} إلى [{session}] عبر Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 أُنشئت {session} عبر Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 أُنشئت {session} عبر Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ حُذفت [{session}] عبر Mini App"}
@@ -131,6 +132,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 انتقلت {session} إلى وضع «اسأل» عبر Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 انتقلت {session} إلى الوضع التلقائي عبر Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 انتقلت {session} إلى وضع الوصول الكامل عبر Mini App"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude يعمل - يمكنك مسح المحادثة حين تنتهي هذه المهمة."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "يمكنك الرد على الطلب المفتوح أولًا، ثم مسح المحادثة."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "لا يزال Claude ينهي عمله - يمكنك مسح المحادثة حين ينتهي."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "يمكنك الرد على الطلب المفتوح أولًا، ثم تغيير الوضع."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude يعمل - يمكنك تغيير النموذج حين تنتهي هذه المهمة."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "هذه الجلسة لا تعمل الآن."}
@@ -766,6 +770,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ أُرسلت إلى Claude الآن"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "إلغاء"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ إلغاء"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 مسح المحادثة"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 مسح"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ إغلاق"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ حذف"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 التغييرات (diff)"}
@@ -776,6 +782,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 إعادة التشغيل"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ استئناف"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ أُلغي."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "أُلغي مسح محادثة [<b>{session}</b>]."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 مسح المحادثة في <b>{session}</b>؟"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "سيبدأ Claude محادثة جديدة وينسى هذه المحادثة."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "تبقى المحادثة القديمة محفوظة على الكمبيوتر، لكن لا يمكن استئنافها من هنا."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 أرسل {person} {command} إلى {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "أُلغي حذف [<b>{session}</b>]."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ إزالة [<b>{session}</b>] من قائمة الجلسات؟ لا يمكن التراجع عن هذا."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "لا توجد جلسات منتهية لحذفها."}
@@ -1036,6 +1047,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager يكتب رسالة الآن، يمكنك المحاولة بعد قليل"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "تلك الجلسة انتهت بالفعل."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} في {mode} بالفعل."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "ليس لديك إذن بمسح محادثة هذه الجلسة."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "ليس لديك إذن بحذف هذه الجلسة."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "ليس لديك إذن بإنهاء هذه الجلسة."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "ليس لديك إذن بإعادة تسمية هذه الجلسة."}
@@ -1043,9 +1055,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "ليس لديك إذن باستئناف هذه الجلسة."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "لا يمكن استئناف تلك الجلسة الآن."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "ليس لديك إذن بإرسال رسائل إلى هذه الجلسة."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "تعذّر مسح محادثة {session} - يمكنك المحاولة مرة أخرى."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "لم تتوقف {session} - يمكنك المحاولة مرة أخرى"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ أُنهيت {session}"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ أُنهيت {session} بواسطة {person}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "تغيّرت {session} بعد عرض هذه البطاقة - إن لزم: 🧹 مسح المحادثة مرة أخرى"}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "بدأت {session} عملًا جديدًا - إن لزم: ⏹ إنهاء الجلسة مرة أخرى"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "بدأت {session} عملًا جديدًا - إن لزم: 🔄 إعادة التشغيل مرة أخرى"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "بدأت {session} عملًا جديدًا - إن لزم: الضغط على زر التبديل مرة أخرى"}
@@ -1107,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "فتح {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude يريد استخدام أداة."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "إعادتها"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "مسح المحادثة"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "مسح قائمة الانتظار"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "تلخيص الآن"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "حذف"}
@@ -1142,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "التبديل إلى وضع الوصول الكامل"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "إعادة المحاولة"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "الانتظار ١٠ د أخرى"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "مسح المحادثة في {session}؟"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "سيبدأ Claude محادثة جديدة وينسى هذه المحادثة، وتبقى المحادثة القديمة محفوظة على الكمبيوتر لكن لا يمكن استئنافها من هنا."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "حذف {session}؟"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "تُحذف الجلسة من قائمتك. تبقى محادثتها المحفوظة على القرص."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "إنهاء {session}؟"}
@@ -1196,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "التغييرات غير متاحة."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "أُغلقت من قبل."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "عادت من خلفية Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "يبدأ Claude محادثة جديدة."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "تم المسح."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "يجري تلخيص المحادثة…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "تم الحذف."}

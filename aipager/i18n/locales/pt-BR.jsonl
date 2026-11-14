@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Sua função não pode iniciar uma sessão na pasta pessoal nem numa pasta acima dela. Escolha uma pasta de projeto: crie uma com “Nova pasta” ou peça a um admin para iniciar a sessão."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"many": "🧹 {n} mensagens da fila de [{session}] apagadas pelo Mini App", "one": "🧹 {n} mensagem da fila de [{session}] apagada pelo Mini App", "other": "🧹 {n} mensagens da fila de [{session}] apagadas pelo Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 A compactação da conversa de [{session}] começou pelo Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} enviado para [{session}] pelo Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} criada pelo Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} criada pelo Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] excluída pelo Mini App"}
@@ -131,6 +132,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} mudou para o Modo Perguntar pelo Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} mudou para o Modo Automático pelo Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} mudou para o Modo Acesso total pelo Mini App"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "O Claude está trabalhando: limpe a conversa quando esta tarefa terminar."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "Responda primeiro ao pedido aberto e depois limpe a conversa."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "O Claude ainda está terminando o trabalho: limpe a conversa quando ele acabar."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Responda primeiro ao pedido aberto e depois troque o modo."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "O Claude está trabalhando: troque o modelo quando esta tarefa terminar."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "A sessão não está rodando."}
@@ -766,6 +770,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Enviado ao Claude agora"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "Cancelar"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Cancelar"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 Limpar conversa"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 Limpar"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Fechar"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Excluir"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Alterações (diff)"}
@@ -776,6 +782,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Reiniciar"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Continuar"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Cancelado."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "A limpeza da conversa de [<b>{session}</b>] foi cancelada."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 Limpar a conversa de <b>{session}</b>?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "O Claude começa uma conversa nova e esquece esta."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "A conversa antiga continua salva no computador, mas não dá para continuá-la daqui."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} enviou {command} para {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "A exclusão de [<b>{session}</b>] foi cancelada."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ Remover [<b>{session}</b>] da lista de sessões? Isso não pode ser desfeito."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "Não há sessões encerradas para excluir."}
@@ -1036,6 +1047,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "O aipager está digitando uma mensagem; tente de novo daqui a pouco"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Essa sessão já foi encerrada."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} já está no {mode}."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "Você não pode limpar a conversa desta sessão."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Você não pode excluir esta sessão."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Você não pode encerrar esta sessão."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Você não pode renomear esta sessão."}
@@ -1043,9 +1055,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Você não pode continuar esta sessão."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Essa sessão não pode ser continuada agora."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Você não pode enviar para esta sessão."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "Não deu para limpar a conversa de {session} - tente de novo."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} não parou - tente de novo"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} encerrada"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} encerrou {session}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} mudou desde que isto apareceu: toque em 🧹 Limpar conversa de novo se ainda quiser."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} começou outra tarefa: toque em ⏹ Encerrar sessão de novo para encerrá-la"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} começou outra tarefa: toque em 🔄 Reiniciar de novo para reiniciá-la"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} começou outra tarefa: se ainda quiser a troca, toque no botão de novo"}
@@ -1107,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Abrir {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "O Claude quer usar uma ferramenta."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Trazer de volta"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Limpar conversa"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Limpar a fila"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Compactar agora"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Excluir"}
@@ -1142,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Mudar para Modo Acesso total"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Tentar de novo"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Esperar mais 10 min"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Limpar a conversa de {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "O Claude começa uma conversa nova e esquece esta; a antiga continua salva no computador, mas não dá para continuá-la daqui."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Excluir {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Isso tira a sessão da sua lista. A conversa salva continua no disco."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Encerrar {session}?"}
@@ -1196,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "O diff não está disponível."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Já estava encerrada."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "De volta do segundo plano do Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "O Claude está começando uma conversa nova."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Fila limpa."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Compactando…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Excluída."}

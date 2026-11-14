@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Твоя роль не може запускати сесію в домашній папці або вище. Вибери папку проєкту: створи її кнопкою «Нова папка» або попроси адміна запустити сесію."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"few": "🧹 З черги [{session}] видалено {n} повідомлення через Mini App", "many": "🧹 З черги [{session}] видалено {n} повідомлень через Mini App", "one": "🧹 З черги [{session}] видалено {n} повідомлення через Mini App", "other": "🧹 З черги [{session}] видалено {n} повідомлення через Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Стиснення розмови [{session}] запущено через Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} надіслано в [{session}] через Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Сесію {session} створено через Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 Сесію {session} створено через Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] видалено через Mini App"}
@@ -131,6 +132,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} перемкнено на режим «Питати» через Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} перемкнено на режим Авто через Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} перемкнено на режим «Повний доступ» через Mini App"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude працює: очисти розмову, коли це завдання закінчиться."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "Спершу дай відповідь на відкритий запит, потім очищай розмову."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude ще завершує роботу: очисти розмову, коли він закінчить."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Спершу дай відповідь на відкритий запит, потім змінюй режим."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude працює: зміни модель, коли це завдання закінчиться."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Сесія не запущена."}
@@ -766,6 +770,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Одразу надіслано Claude"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "Скасувати"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Скасувати"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 Очистити розмову"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 Очистити"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Закрити"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Видалити"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Зміни (diff)"}
@@ -776,6 +782,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Перезапустити"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Продовжити"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Скасовано."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "Очищення розмови в [<b>{session}</b>] скасовано."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 Очистити розмову в <b>{session}</b>?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude почне нову розмову й забуде цю."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "Стара розмова залишиться збереженою на комп'ютері, але продовжити її звідси не можна."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} надіслав(-ла) {command} в {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "Видалення [<b>{session}</b>] скасовано."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ Прибрати [<b>{session}</b>] зі списку сесій? Це не можна скасувати."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "Немає завершених сесій для видалення."}
@@ -1036,6 +1047,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager зараз вводить повідомлення, спробуй трохи згодом"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Ця сесія вже завершена."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session}: вже {mode}."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "Ти не можеш очистити розмову цієї сесії."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Ти не можеш видалити цю сесію."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Ти не можеш завершити цю сесію."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Ти не можеш перейменувати цю сесію."}
@@ -1043,9 +1055,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Ти не можеш продовжити цю сесію."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Цю сесію зараз не можна продовжити."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Ти не можеш надсилати в цю сесію."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "Не вдалося очистити розмову {session}: спробуй ще раз."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} не зупинилася: спробуй ще раз"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} завершено"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} завершив(-ла) {session}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} змінилася відтоді, як це було показано: натисни «🧹 Очистити розмову» ще раз, якщо це ще потрібно."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} почала нове завдання: натисни «⏹ Завершити сесію» ще раз, щоб завершити її"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} почала нове завдання: натисни «🔄 Перезапустити» ще раз, щоб перезапустити її"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} почала нове завдання: якщо перемикання ще потрібне, натисни кнопку ще раз"}
@@ -1107,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Відкрити {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude хоче використати інструмент."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Повернути"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Очистити розмову"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Очистити чергу"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Стиснути зараз"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Видалити"}
@@ -1142,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Увімкнути режим «Повний доступ»"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Повторити"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Зачекати ще 10 хв"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Очистити розмову в {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude почне нову розмову й забуде цю; стара залишиться збереженою на комп'ютері, але продовжити її звідси не можна."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Видалити {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Сесія зникне з твого списку. Збережена розмова залишиться на диску."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Завершити {session}?"}
@@ -1196,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff недоступний."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Уже була завершена."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Повернулася з фонового режиму Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude починає нову розмову."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Чергу очищено."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Стискаю розмову…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Видалено."}

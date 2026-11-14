@@ -85,6 +85,16 @@ BG_JOB_BODIES = {"get_detail_busy", "get_detail_idle", "get_detail_viewer"}
 #: agents a session waiting for them waits for), and nothing else: none of
 #: them waits, so it is 0.
 JOB_WAIT_BODIES = {"get_detail_busy", "get_detail_idle", "get_detail_viewer"}
+#: The scenarios whose body Clear conversation (2026-11-13) gave a "clear"
+#: action, with exactly this state, and nothing else. A busy session's
+#: detail offers no clear (like no kill), so get_detail_busy is unchanged.
+CLEAR_ACTION_BODIES = {
+    "get_detail_idle": {"available": True, "reason": None},
+    "get_detail_viewer": {
+        "available": False,
+        "reason": "You don't have permission to control this session.",
+    },
+}
 
 
 @pytest.mark.parametrize("name", sorted(_scenarios.SCENARIOS))
@@ -103,6 +113,11 @@ def test_english_body_is_todays(env, golden, name):
     if name in JOB_WAIT_BODIES:
         body = dict(body)
         assert body.pop("job_agents") == 0
+    if name in CLEAR_ACTION_BODIES:
+        body = dict(body)
+        actions = dict(body["actions"])
+        assert actions.pop("clear") == CLEAR_ACTION_BODIES[name]
+        body["actions"] = actions
     assert body == golden[name]["body"]
 
 

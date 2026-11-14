@@ -182,6 +182,9 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # handlers.py's /mode card switch and session_parity.py's Restart
     # confirm (P4): the same turn key.
     "restartok{sess.turn_key}",
+    # session_parity.py's ⋮ Clear conversation confirm: the same turn key;
+    # "_:sx:<idx>:clearok" + 16 digits is ~32 bytes.
+    "clearok{sess.turn_key}",
     "modeask{sess.turn_key}",
     "modeauto{sess.turn_key}",
     # The /mode card's third switch (Full access, 2026-10-11): the same

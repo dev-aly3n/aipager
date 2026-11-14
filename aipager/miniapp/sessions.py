@@ -88,6 +88,21 @@ MODE_PROMPT_OPEN_REASON = Msg("app.reason.mode_prompt_open",
                                    "a question or permission prompt")
 QUEUE_EMPTY_REASON = Msg("app.reason.queue_empty", "Nothing queued to clear.",
                          note="Clear queue: no queued messages")
+# Clear conversation (/clear) from a confirm, the Mini App's or the chat ⋮
+# menu's: refused, never held for later, while the session cannot take it.
+# Shared by the Mini App route's 409 bodies and the chat's pop-ups.
+CLEAR_BUSY_REASON = Msg("app.reason.clear_busy",
+                        "Claude is working - clear the conversation when this turn ends.",
+                        note="Why a session's conversation can't be cleared now")
+CLEAR_PROMPT_OPEN_REASON = Msg("app.reason.clear_prompt_open",
+                               "Answer the open prompt first, then clear the conversation.",
+                               note="Clear conversation is refused while the session shows a "
+                                    "question or permission prompt")
+CLEAR_WAITING_REASON = Msg("app.reason.clear_waiting",
+                           "Claude is still finishing its work - clear the conversation when "
+                           "it's done.",
+                           note="Its background agents run, a model check runs, or someone "
+                                "else's message is still on its way")
 # Switching a running session's model (roadmap 8.35). Shared verbatim by
 # the detail payload's `model_switch` entry, the Mini App route's 409 body
 # and the chat's own refusal (bot/session_ops.model_switch_refusal), so
@@ -329,15 +344,16 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
 # Canonical, stable emission order (design.md): the server always builds
 # the ``actions`` dict by walking this tuple, so key order in the JSON
 # response never depends on set/dict iteration order. The client's own
-# ACTION_ORDER (static/_app.py) is the same ten keys in the same order —
-# the first six are the "session control" menu group, the last four are
-# "destructive/disruptive" (confirm-modal) — so filtering this tuple by
-# presence is exactly what produces the client's grouped rendering.
+# ACTION_ORDER (static/_app.py) is the same eleven keys in the same order —
+# the first six are the "session control" menu group, the last five are
+# "destructive/disruptive" (confirm-modal; Clear conversation first) — so
+# filtering this tuple by presence is exactly what produces the client's
+# grouped rendering.
 # ``bringback`` (a session parked on a Claude Code background job) comes
 # first: it is the one thing such a session is waiting for.
 _CANONICAL_ACTION_ORDER = (
     "bringback", "stop", "clearqueue", "compact", "resume", "rename",
-    "kill", "perms", "restart", "delete",
+    "clear", "kill", "perms", "restart", "delete",
 )
 
 # Which keys are even relevant for a given status, before any
@@ -346,11 +362,14 @@ _CANONICAL_ACTION_ORDER = (
 # offering it at idle would only ever 409. `compact` excludes `waiting`
 # on purpose: the terminal is displaying an open permission/question
 # prompt, and typing `/compact` there risks being read as input to that
-# prompt rather than a new turn.
+# prompt rather than a new turn. `clear` (Clear conversation, /clear) is
+# idle only: a confirmed clear is refused, never queued, while a turn runs,
+# a prompt is open, its background agents run or it is parked, so anywhere
+# else it would only ever 409.
 _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
     "busy": frozenset({"stop", "clearqueue", "compact", "rename", "perms", "restart"}),
     "waiting": frozenset({"stop", "clearqueue", "rename", "perms", "restart"}),
-    "idle": frozenset({"kill", "compact", "rename", "perms", "restart"}),
+    "idle": frozenset({"kill", "compact", "rename", "clear", "perms", "restart"}),
     "gone": frozenset({"resume", "rename", "delete"}),
     # Waiting for its own background agents (roadmap 8.121):
     # Claude's prompt is free, so the idle set, plus Stop (the stop route
@@ -782,6 +801,9 @@ def build_timeline(sess: "TrackedSession", now: float | None = None) -> list[dic
 
 
 __all__ = [
+    "CLEAR_BUSY_REASON",
+    "CLEAR_PROMPT_OPEN_REASON",
+    "CLEAR_WAITING_REASON",
     "MODEL_SWITCH_BUSY_REASON",
     "MODEL_SWITCH_NOT_LIVE_REASON",
     "MODEL_SWITCH_PENDING_REASON",

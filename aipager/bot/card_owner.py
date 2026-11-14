@@ -2,8 +2,8 @@
 
 In a group, an inline tap is invisible to the other members, so a confirm
 card anyone could press let bob end the session alice was only looking
-at, and the group saw alice's card say "Ended". Now the End, Restart and
-Delete confirms, the /mode switch confirm, the session pickers of
+at, and the group saw alice's card say "Ended". Now the End, Restart,
+Clear conversation and Delete confirms, the /mode switch confirm, the session pickers of
 /kill, /restart, /delete, /mode, /stop, /rename and /diff, the "Resume
 x1 as:" card a Resume tap draws (roadmap 8.94j), and the "Which
 session?" question (roadmap 8.94i: its buttons send the asker's message)
@@ -62,6 +62,8 @@ MAX_RECORDS = MAX_CARD_OWNERS
 _GUARDED = {
     "end": re.compile(r"endok\d+|kill-cancel"),
     "restart": re.compile(r"restartok\d+|restart-cancel"),
+    # ⋮ Clear conversation's confirm: its 🧹 Clear and Cancel.
+    "clear": re.compile(r"clearok\d+|clear-cancel"),
     "delete": re.compile(r"delete-confirm|delete-cancel"),
     "mode": re.compile(r"perms_confirm|perms_cancel|perms_stop_switch|perms_wait"),
     # "Which session?" (8.94i): its talk buttons send the asker's message.
@@ -79,6 +81,8 @@ _GUARDED = {
 _PICKER_ROW = {
     "end": re.compile(r"end"),
     "restart": re.compile(r"restart"),
+    # Never a picker (⋮ only); here so every kind has a picker form.
+    "clear": re.compile(r"clear"),
     "delete": re.compile(r"delete"),
     "mode": re.compile(r"mode_show|modeask\d+|modeauto\d+|modefull\d+"),
     "ask": re.compile(r"talk|resume"),
@@ -109,7 +113,7 @@ def _is_id(value) -> bool:
 def claim(bot: TelegramBot, chat_id, msg_id, user_id, *, kind: str,
           command: str, picker: bool = False, who=None) -> None:
     """Record that the card on *msg_id* in *chat_id* (a group) is *user_id*'s.
-    ``kind``: ``end``, ``restart``, ``delete``, ``mode``, ``ask``
+    ``kind``: ``end``, ``restart``, ``clear``, ``delete``, ``mode``, ``ask``
     ("Which session?", roadmap 8.94i), ``resume`` (the "Resume x1 as:"
     card), or the ``stop`` / ``rename`` / ``diff`` pickers (8.94j).
     ``command``: what another member sends for their own (``/kill x2``);

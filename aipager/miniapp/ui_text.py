@@ -304,6 +304,8 @@ BTN_COMPACT = Msg("ui.btn.action.compact", "Compact now",
                   note="Mini App session menu: shrink Claude's context (/compact)")
 BTN_RESTART = Msg("ui.btn.action.restart", "Restart", note="Mini App session menu")
 BTN_RENAME = Msg("ui.btn.action.rename", "Rename", note="Mini App session menu")
+BTN_CLEAR = Msg("ui.btn.action.clear", "Clear conversation",
+                note="Mini App session menu: start a new conversation (/clear)")
 BTN_BRINGBACK = Msg("ui.btn.action.bringback", "Bring it back",
                     note="Mini App session menu: bring the session back from Claude Code's "
                          "background into its own terminal")
@@ -330,6 +332,8 @@ DONE_MODE_SENT = Msg("ui.done.mode_sent", "Switch sent. Claude Code confirms it 
                      note="Mini App: an Ask/Auto switch was sent to the session (no restart); "
                           "Claude Code confirms it with its next step")
 DONE_RESTART = Msg("ui.done.restart", "Restarted.", note="Mini App: a short confirmation")
+DONE_CLEAR = Msg("ui.done.clear", "Claude is starting a new conversation.",
+                 note="Mini App: a short confirmation after Clear conversation")
 DONE_BRINGBACK = Msg("ui.done.bringback", "Back from Claude Code's background.",
                      note="Mini App: a short confirmation; the session was brought back from "
                           "a Claude Code background job")
@@ -383,6 +387,13 @@ CONFIRM_RESTART = Msg("ui.confirm.restart", "Restart {session}?", eg={"session":
 CONFIRM_RESTART_BODY = Msg("ui.confirm.restart_body",
                            "The session stops and relaunches with the same history. Any turn "
                            "in progress is interrupted.")
+CONFIRM_CLEAR = Msg("ui.confirm.clear", "Clear the conversation in {session}?",
+                    eg={"session": "x1"},
+                    note="Mini App: the in-app confirm before Clear conversation")
+CONFIRM_CLEAR_BODY = Msg("ui.confirm.clear_body",
+                         "Claude starts a new conversation and forgets this one, and the old "
+                         "one stays saved on the computer but can't be resumed from here.",
+                         note="Mini App: under the clear confirm's question")
 CONFIRM_KILL = Msg("ui.confirm.kill", "Kill {session}?", eg={"session": "x1"},
                    note="Kill: end the session's process")
 CONFIRM_KILL_BODY = Msg("ui.confirm.kill_body",

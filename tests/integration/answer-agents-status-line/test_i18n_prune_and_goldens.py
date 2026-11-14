@@ -33,6 +33,7 @@ from tests.i18n_surfaces import (
     THREE_MODES_NEW_SURFACES,
     THREE_MODES_SURFACES,
     with_keyboard_app_removed,
+    without_clear_rows,
     without_appearance_row,
     without_card_divider,
     without_job_wait,
@@ -226,7 +227,10 @@ def test_english_surfaces_change_only_under_agents_line():
     # The aliases-only model list (2026-11-09) changed the model rows, and
     # only those.
     old = without_model_rows(json.loads(_git_show(path)))
-    new = without_model_rows(json.loads((REPO / path).read_text(encoding="utf-8")))
+    # A live session's ⋮ menu gained a Clear conversation row
+    # (2026-11-13), and only that.
+    new = without_clear_rows(without_model_rows(
+        json.loads((REPO / path).read_text(encoding="utf-8"))))
     changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
     # agents_line is this feature's; language.list lost its "(beta)" marks
     # later on purpose (operator, 2026-10-10), and the mode labels became

@@ -448,8 +448,38 @@ def test_session_actions_idle_shows_compact_but_not_stop_or_clearqueue():
     actions = session_actions(
         "idle", resumable=False, can_act=True, is_admin=True, context_pct=40,
     )
-    assert list(actions.keys()) == ["compact", "rename", "kill", "perms", "restart"]
+    # Clear conversation (2026-11-13) sits first in the confirm group.
+    assert list(actions.keys()) == ["compact", "rename", "clear", "kill", "perms", "restart"]
     assert actions["compact"] == {"available": True, "reason": None}
+
+
+# ---- clear (Clear conversation) ----------------------------------------------
+
+@pytest.mark.parametrize("status", ["busy", "waiting", "gone", "tasks", "background"])
+def test_clear_offered_only_when_idle(status):
+    """Only a resting session takes /clear: busy, waiting, tasks and
+    background would only be refused (409), and a gone one is not live."""
+    assert "clear" in session_actions("idle", resumable=True, can_act=True)
+    assert "clear" not in session_actions(status, resumable=True, can_act=True,
+                                          queue_depth=1, parked=True)
+
+
+def test_clear_available_for_who_may_act():
+    actions = session_actions("idle", resumable=False, can_act=True)
+    assert actions["clear"] == {"available": True, "reason": None}
+
+
+def test_clear_unavailable_without_permission():
+    actions = session_actions("idle", resumable=False, can_act=False)
+    assert actions["clear"] == {"available": False, "reason": NO_PERMISSION_REASON}
+
+
+def test_clear_sits_after_rename_and_before_kill():
+    from aipager.miniapp.sessions import _CANONICAL_ACTION_ORDER
+
+    assert _CANONICAL_ACTION_ORDER == (
+        "bringback", "stop", "clearqueue", "compact", "resume", "rename",
+        "clear", "kill", "perms", "restart", "delete")
 
 
 def test_session_actions_gone_resumable_shows_resume_rename_and_delete_available():

@@ -112,6 +112,7 @@
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Peranmu tidak boleh memulai sesi di folder home atau folder di atasnya. Pilih folder proyek: buat dengan “Folder baru”, atau minta admin untuk memulai sesi."}
 {"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 {n} pesan antrean untuk [{session}] dihapus dari Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Percakapan [{session}] mulai diringkas dari Mini App"}
+{"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 {command} dikirim ke [{session}] dari Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 {session} dibuat dari Mini App · {mode}"}
 {"k": "app.mirror.created_in", "src": "78c65389", "v": "🚀 {session} dibuat dari Mini App · {mode}\n📁 {folder}"}
 {"k": "app.mirror.deleted", "src": "94f25a78", "v": "🗑️ [{session}] dihapus dari Mini App"}
@@ -131,6 +132,9 @@
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} beralih ke Mode Tanya dari Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} beralih ke Mode Auto dari Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} beralih ke Mode Akses penuh dari Mini App"}
+{"k": "app.reason.clear_busy", "src": "f8bfbb36", "v": "Claude sedang bekerja - hapus percakapan setelah tugas ini selesai."}
+{"k": "app.reason.clear_prompt_open", "src": "17ddae72", "v": "Jawab dulu permintaan yang terbuka, lalu hapus percakapan."}
+{"k": "app.reason.clear_waiting", "src": "0f4beab7", "v": "Claude masih menyelesaikan pekerjaannya - hapus percakapan setelah selesai."}
 {"k": "app.reason.mode_prompt_open", "src": "e70f1bb3", "v": "Jawab dulu permintaan yang terbuka, lalu ganti mode."}
 {"k": "app.reason.model_busy", "src": "9dd1a5eb", "v": "Claude sedang bekerja - ganti model setelah tugas ini selesai."}
 {"k": "app.reason.model_not_live", "src": "af9ca5bc", "v": "Sesi ini sedang tidak berjalan."}
@@ -766,6 +770,8 @@
 {"k": "sendnow.reply_sent", "src": "d0bd6be2", "v": "⚡ Langsung dikirim ke Claude"}
 {"k": "sess.btn.cancel", "src": "77dfd213", "v": "Batal"}
 {"k": "sess.btn.cancel_x", "src": "196a9f45", "v": "✖️ Batal"}
+{"k": "sess.btn.clear", "src": "6440b2ec", "v": "🧹 Hapus percakapan"}
+{"k": "sess.btn.clear_ok", "src": "26b6af04", "v": "🧹 Hapus"}
 {"k": "sess.btn.close", "src": "d7bfbcc3", "v": "✖️ Tutup"}
 {"k": "sess.btn.delete", "src": "8fb0a935", "v": "🗑️ Hapus"}
 {"k": "sess.btn.diff", "src": "d2cd6424", "v": "📝 Perubahan (diff)"}
@@ -776,6 +782,11 @@
 {"k": "sess.btn.restart", "src": "06188389", "v": "🔄 Mulai ulang"}
 {"k": "sess.btn.resume", "src": "20b4d582", "v": "▶️ Lanjutkan"}
 {"k": "sess.cancelled", "src": "3678513b", "v": "↩️ Dibatalkan."}
+{"k": "sess.clear_cancelled", "src": "bc141af4", "v": "Hapus percakapan [<b>{session}</b>] dibatalkan."}
+{"k": "sess.clear_confirm", "src": "5de5e03f", "v": "🧹 Hapus percakapan di <b>{session}</b>?"}
+{"k": "sess.clear_confirm_body", "src": "8cf77161", "v": "Claude memulai percakapan baru dan melupakan yang ini."}
+{"k": "sess.clear_confirm_saved", "src": "2a4b1dd1", "v": "Percakapan lama tetap tersimpan di komputer, tapi tidak bisa dilanjutkan dari sini."}
+{"k": "sess.clear_sent_by", "src": "35ff25ee", "v": "🧹 {person} mengirim {command} ke {session}"}
 {"k": "sess.delete_cancelled", "src": "7105554d", "v": "Penghapusan [<b>{session}</b>] dibatalkan."}
 {"k": "sess.delete_confirm", "src": "64eb8c00", "v": "🗑️ Hapus [<b>{session}</b>] dari daftar sesi? Ini tidak bisa dibatalkan."}
 {"k": "sess.delete_none", "src": "58e4ba7f", "v": "Tidak ada sesi yang sudah berakhir untuk dihapus."}
@@ -1036,6 +1047,7 @@
 {"k": "toast.sendnow_typing", "src": "84af1903", "v": "aipager sedang mengetik pesan, coba lagi sebentar lagi"}
 {"k": "toast.sess_already_ended", "src": "26dff17c", "v": "Sesi itu sudah berakhir."}
 {"k": "toast.sess_already_in", "src": "c88c4e2a", "v": "{session} sudah dalam {mode}."}
+{"k": "toast.sess_cant_clear", "src": "31265c3b", "v": "Kamu tidak boleh menghapus percakapan sesi ini."}
 {"k": "toast.sess_cant_delete", "src": "0d604e6a", "v": "Kamu tidak boleh menghapus sesi ini."}
 {"k": "toast.sess_cant_end", "src": "ab082660", "v": "Kamu tidak boleh mengakhiri sesi ini."}
 {"k": "toast.sess_cant_rename", "src": "143cfb24", "v": "Kamu tidak boleh mengganti nama sesi ini."}
@@ -1043,9 +1055,11 @@
 {"k": "toast.sess_cant_resume", "src": "d31995ad", "v": "Kamu tidak boleh melanjutkan sesi ini."}
 {"k": "toast.sess_cant_resume_now", "src": "e5acab2d", "v": "Sesi itu tidak bisa dilanjutkan sekarang."}
 {"k": "toast.sess_cant_send", "src": "a2a222a3", "v": "Kamu tidak boleh mengirim pesan ke sesi ini."}
+{"k": "toast.sess_clear_failed", "src": "7790f68b", "v": "Percakapan {session} gagal dihapus - coba lagi."}
 {"k": "toast.sess_did_not_stop", "src": "a2be40d7", "v": "{session} tidak berhenti - coba lagi"}
 {"k": "toast.sess_ended", "src": "394de850", "v": "⏹ {session} diakhiri"}
 {"k": "toast.sess_ended_by", "src": "202085cb", "v": "⏹ {person} mengakhiri {session}"}
+{"k": "toast.sess_moved_on_clear", "src": "4cffb10a", "v": "{session} sudah berubah sejak ini ditampilkan - kalau masih mau, ketuk 🧹 Hapus percakapan lagi."}
 {"k": "toast.sess_moved_on_end", "src": "a0c86605", "v": "{session} sudah mengerjakan hal baru - kalau masih mau, ketuk ⏹ Akhiri sesi lagi"}
 {"k": "toast.sess_moved_on_restart", "src": "7cfa3533", "v": "{session} sudah mengerjakan hal baru - kalau masih mau, ketuk 🔄 Mulai ulang lagi"}
 {"k": "toast.sess_moved_on_switch", "src": "50db406b", "v": "{session} sudah mengerjakan hal baru - kalau masih mau, ketuk tombol ganti lagi"}
@@ -1107,6 +1121,7 @@
 {"k": "ui.beacon.open_aria", "src": "6aebd26f", "v": "Buka {session}"}
 {"k": "ui.beacon.wants_tool", "src": "66aba1cd", "v": "Claude ingin memakai alat."}
 {"k": "ui.btn.action.bringback", "src": "a6642b04", "v": "Kembalikan"}
+{"k": "ui.btn.action.clear", "src": "751e4570", "v": "Hapus percakapan"}
 {"k": "ui.btn.action.clearqueue", "src": "98430109", "v": "Kosongkan antrean"}
 {"k": "ui.btn.action.compact", "src": "10c986db", "v": "Ringkas sekarang"}
 {"k": "ui.btn.action.delete", "src": "f6fdbe48", "v": "Hapus"}
@@ -1142,6 +1157,8 @@
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Beralih ke Mode Akses penuh"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Coba lagi"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Tunggu 10 menit lagi"}
+{"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Hapus percakapan di {session}?"}
+{"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude memulai percakapan baru dan melupakan yang ini; percakapan lama tetap tersimpan di komputer, tapi tidak bisa dilanjutkan dari sini."}
 {"k": "ui.confirm.delete", "src": "734db731", "v": "Hapus {session}?"}
 {"k": "ui.confirm.delete_body", "src": "a4488ec0", "v": "Sesi dihapus dari daftarmu. Percakapan tersimpannya tetap ada di disk."}
 {"k": "ui.confirm.kill", "src": "804fbc7f", "v": "Akhiri {session}?"}
@@ -1196,6 +1213,7 @@
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Diff tidak tersedia."}
 {"k": "ui.done.already_gone", "src": "9f734fbb", "v": "Sudah tidak ada."}
 {"k": "ui.done.bringback", "src": "726d142e", "v": "Sudah kembali dari latar belakang Claude Code."}
+{"k": "ui.done.clear", "src": "4abb3f86", "v": "Claude sedang memulai percakapan baru."}
 {"k": "ui.done.clearqueue", "src": "c97917b3", "v": "Dikosongkan."}
 {"k": "ui.done.compact", "src": "399fec37", "v": "Meringkas percakapan…"}
 {"k": "ui.done.delete", "src": "48ea780f", "v": "Dihapus."}
