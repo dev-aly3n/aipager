@@ -278,12 +278,65 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
 # Covers daemon manipulation, escalation, pipe-to-shell, and — critically —
 # nested ``claude`` invocations + privilege flags that would let an
 # in-session user craft a privileged claude instance.
+#
+# Best effort, not a wall: a role with Bash can still reach around any
+# pattern (a name held in a variable, a script written with a file tool
+# and then run, eval, a process signalled by number). The real boundary
+# for restricted roles is having no shell at all (RESTRICTED_DENY_TOOLS).
 # ---------------------------------------------------------------------------
+
+#: aipager's own commands that change who controls the machine or stop
+#: the daemon: any ``aipager setup`` form (it grants roles), ``config``,
+#: ``uninstall``, ``service``, ``start``; also through ``python -m
+#: aipager.cli`` and a path to the binary.
+BASH_AIPAGER_CLI = (r"\baipager(?:\.cli(?:\.__main__)?)?\s+"
+                    r"(?:service|config|start|setup|uninstall)\b")
+BASH_SYSTEMCTL_AIPAGER = r"\bsystemctl\b.*\baipager\b"
+BASH_RM_AIPAGER = r"\brm\b.*(\.config/aipager|\.claude|\.local/share/aipager)"
+#: Killing the daemon by name.
+BASH_KILL_AIPAGER = r"\b(?:p?kill|killall)\b.*\baipager\b"
+#: The macOS service by name (``com.aipager.daemon``).
+BASH_LAUNCHCTL_AIPAGER = r"\blaunchctl\b.*\baipager\b"
+#: A Python interpreter (python, python3, python3.12, ipython, pypy; also
+#: under ``uv run`` / ``uvx`` or a path) running code that imports
+#: aipager's own modules (its config writer), from ``-c`` or a here-
+#: document. Only after an interpreter word, so a search for the same
+#: text (``grep -rn "from aipager import" .``) stays allowed.
+BASH_PYTHON_IMPORTS_AIPAGER = (
+    r"(?:^|[\s;&|(/])(?:i?python|pypy)[\d.]*(?![\w-])[\s\S]*"
+    r"(?:\b(?:from|import)\s+aipager\b"
+    r"|\b(?:import_module|__import__)\s*\(\s*[\"']?aipager\b)")
+#: A glob or brace in the first folder under ``.config/``,
+#: ``.local/share/`` or ``.local/state/`` that could match ``aipager``:
+#: only letters of "aipager", wildcards and bracket or brace groups
+#: (``aipage?``, ``a*``, ``*``, ``[a]ipager``, ``{aipager,x}``).
+#: ``*.conf`` and ``nvim*`` do not match.
+BASH_GLOB_AIPAGER_DIR = (
+    r"\.(?:config|local/share|local/state)/"
+    r"(?=[^/\s\"';&|)]*[*?\[{])"
+    r"(?:[aipger*?]|\[[^\]/\s]*\]|\{[^}/\s]*\})+"
+    r"(?=$|[/\s\"';&|)])")
+#: Changing into the home folder's ``.config``, ``.local``,
+#: ``.local/share`` or ``.local/state`` itself (then ``aipager/...`` is a
+#: relative path no other pattern sees).
+BASH_CD_CONFIG_PARENT = (
+    r"\b(?:cd|pushd)\s+[\"']?"
+    r"(?:~|\$HOME|\$\{HOME\}|/home/[^/\s\"']+|/Users/[^/\s\"']+|/root)"
+    r"[\"']?/\.(?:config|local(?:/share|/state)?)/?[\"']?(?=$|[\s;&|)])")
+BASH_CONFIG_DIR = r"\.config/aipager\b"
+BASH_SHARE_DIR = r"\.local/share/aipager\b"
+BASH_STATE_DIR = r"\.local/state/aipager\b"
+
 DENY_BASH_PATTERNS: tuple[str, ...] = (
     r"^(sudo|su)\b",
-    r"\baipager\s+(service|config|start)\b",
-    r"\bsystemctl\b.*\baipager\b",
-    r"\brm\b.*(\.config/aipager|\.claude|\.local/share/aipager)",
+    BASH_AIPAGER_CLI,
+    BASH_SYSTEMCTL_AIPAGER,
+    BASH_RM_AIPAGER,
+    BASH_KILL_AIPAGER,
+    BASH_LAUNCHCTL_AIPAGER,
+    BASH_PYTHON_IMPORTS_AIPAGER,
+    BASH_GLOB_AIPAGER_DIR,
+    BASH_CD_CONFIG_PARENT,
     # Any command referencing aipager's own dirs — a Telegram session has
     # no legitimate reason to read OR write them. path_violation only
     # guards the Read/Glob/Edit tools, so without these a `cat`/`grep`/`cp`
@@ -293,9 +346,9 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     # session's own scratchpad root and the project folder name right after
     # it, which bash_violation normalises away first — see
     # normalize_scratchpad.)
-    r"\.config/aipager\b",
-    r"\.local/share/aipager\b",
-    r"\.local/state/aipager\b",
+    BASH_CONFIG_DIR,
+    BASH_SHARE_DIR,
+    BASH_STATE_DIR,
     # Nested claude invocations + privilege flags (the flag is the
     # smoking gun; catches obfuscated binary names too). Also incidentally
     # blocks reads of ~/.claude/** via Bash.
@@ -312,6 +365,31 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     # A recursive search or listing of the whole home folder or / (8.98).
     *DENY_BASH_SEARCH_PATTERNS,
 )
+
+#: The built-in patterns that also see the command with every quote and
+#: backslash removed (:func:`dequote`), so ``"aipager" setup``,
+#: ``aip""ager setup``, ``a\ipager setup`` and ``$HOME/.config/aip''ager``
+#: are caught too. Only patterns about aipager's own name and folders: the
+#: ``claude``, flag and search patterns keep matching the raw command.
+DEQUOTED_BASH_PATTERNS: tuple[str, ...] = (
+    BASH_AIPAGER_CLI,
+    BASH_SYSTEMCTL_AIPAGER,
+    BASH_RM_AIPAGER,
+    BASH_KILL_AIPAGER,
+    BASH_LAUNCHCTL_AIPAGER,
+    BASH_PYTHON_IMPORTS_AIPAGER,
+    BASH_GLOB_AIPAGER_DIR,
+    BASH_CD_CONFIG_PARENT,
+    BASH_CONFIG_DIR,
+    BASH_SHARE_DIR,
+    BASH_STATE_DIR,
+)
+
+
+def dequote(command: str) -> str:
+    """*command* with every ``'``, ``"`` and ``\\`` removed: what the shell
+    runs for a word that is only quoted or escaped to dodge a pattern."""
+    return command.replace("'", "").replace('"', "").replace("\\", "")
 
 # ---------------------------------------------------------------------------
 # Tools that run code as the OS user: Claude Code 2.1.283's own set (every
@@ -1273,17 +1351,25 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
 
     The built-in patterns (:data:`DENY_BASH_PATTERNS`) are matched against
     the command with the session's scratchpad root normalised away
-    (:func:`normalize_scratchpad`); any other pattern — an operator's own
+    (:func:`normalize_scratchpad`), and those in
+    :data:`DEQUOTED_BASH_PATTERNS` also against that command with its
+    quotes and backslashes removed (:func:`dequote`); any other pattern — an operator's own
     ``deny_bash_patterns`` from policy.yaml — sees the command exactly as
     typed, so a rule written against the scratchpad still applies.
     """
     if not command:
         return None
     normalized = normalize_scratchpad(command)
+    dequoted = dequote(normalized)
     for pat in patterns:
-        subject = normalized if pat in DENY_BASH_PATTERNS else command
+        if pat in DEQUOTED_BASH_PATTERNS:
+            subjects: tuple[str, ...] = (normalized, dequoted)
+        elif pat in DENY_BASH_PATTERNS:
+            subjects = (normalized,)
+        else:
+            subjects = (command,)
         try:
-            if re.search(pat, subject):
+            if any(re.search(pat, subject) for subject in subjects):
                 log.info("bash_violation: command blocked by pattern %r", pat)
                 if pat in DENY_BASH_SEARCH_PATTERNS:
                     return BASH_SEARCH_REASON

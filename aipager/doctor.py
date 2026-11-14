@@ -1030,20 +1030,24 @@ def _print_unanchored_safety_paths(console, policy) -> None:
 
 def _print_safety_policy() -> None:
     """Render the active safety policy (paths + bash patterns + roles)."""
+    from rich.markup import escape
+
     from aipager.config import POLICY
     from aipager.ui import console
 
+    # Escaped: a glob or regex holds `[...]`, which rich reads as markup
+    # (a pattern ending in `[/...]` made the whole check crash).
     console.print("Safety policy (enforced for Telegram-driven sessions):")
     console.print("  Blocked paths (read+write):")
     for p in POLICY.safety_deny_paths_no_access:
-        console.print(f"    • {p}")
+        console.print(f"    • {escape(p)}")
     if POLICY.safety_deny_paths_no_write:
         console.print("  Blocked paths (write):")
         for p in POLICY.safety_deny_paths_no_write:
-            console.print(f"    • {p}")
+            console.print(f"    • {escape(p)}")
     console.print("  Blocked bash patterns:")
     for p in POLICY.safety_deny_bash_patterns:
-        console.print(f"    • /{p}/")
+        console.print(f"    • /{escape(p)}/")
     console.print("  These apply to every role except owner (built-in, plus "
                   "the safety: section of policy.yaml).")
     _print_unanchored_safety_paths(console, POLICY)

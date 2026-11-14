@@ -58,6 +58,14 @@ ALLOWED = [
     f"tar czf {OWN_SCRATCH}.tgz x",
     # The `--resume` flag pattern no longer matches a different, longer flag.
     "node tool.js --resume-from 3",
+    # aipager's read-only commands and neighbours of the config-folder
+    # patterns stay allowed (test_safety_aipager_cli_floor.py has more).
+    "aipager doctor --json",
+    "aipager status",
+    "aipager policy validate",
+    "ls ~/.config/*.conf",
+    "cd ~/.config/nvim",
+    'grep -rn "from aipager import" .',
     "ls -la && npm test",
 ]
 
@@ -186,6 +194,13 @@ BLOCKED_OTHER = [
     "cat ~/.local/share/aipager/x",
     "cat ~/.local/state/aipager/y",
     "rm -rf ~/.config/aipager",
+    "aipager setup group --chat-id -1001 --member 5:me:owner --force",
+    '"aipager" config',
+    "aipager uninstall -y",
+    "pkill -f aipager",
+    'python3 -c "from aipager.wizard import scope_io"',
+    "cat ~/.config/aipage?/aipager.yaml",
+    "cd ~/.config && cat aipager/aipager.yaml",
 ]
 
 
