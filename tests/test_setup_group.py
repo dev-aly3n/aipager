@@ -1035,3 +1035,15 @@ def test_plan_owner_grant_promotion_warns_and_audits():
     assert plan.owner_grants == [222]
     assert plan.force_reasons == ["role_changed"]
     assert "owner_granted" in [w["code"] for w in plan.warnings]
+
+
+@pytest.mark.parametrize("json_out", [True, False])
+def test_a_token_typed_into_a_flag_is_never_printed(env, json_out):
+    """An error message that quotes a flag's value (here --root) must not
+    show the token pasted into it: the error line is scrubbed too."""
+    tail = ("--json",) if json_out else ()
+    code, out, err = env.run("setup", "group", "--chat-id", str(GID), *ALICE,
+                             "--root", TOKEN, *tail)
+    assert code == 2
+    assert TOKEN not in out + err and SECRET not in out + err
+    assert "bad_root" in out if json_out else "can't be a members' root folder" in err
