@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-14
+
 ### Added
 - **Clear conversation in a session's ⋮ menu and the Mini App.** Tap 🧹 Clear conversation and confirm, and Claude starts a new conversation in that session, as Claude Code's /clear does; it is refused while Claude works, and it is deliberately not in the / menu.
 
