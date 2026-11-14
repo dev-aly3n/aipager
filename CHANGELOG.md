@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`aipager setup group` sets up a Telegram group, its members and their roles with no prompts, and `aipager setup detect-group` finds a group's id.** For scripts and coding agents, on an install that is already set up: the same checks, file and live reload as `aipager config`; role changes and owner grants need `--force`, running it twice changes nothing, and nothing is ever sent to the group.
+
+### Security
+- **aipager's safety rules now block `aipager setup`, `aipager config`, `aipager uninstall` and other ways to change aipager's config from a Telegram turn that is not the owner's.** This covers quoted names, globs and a `cd` into `~/.config`, killing the daemon, and Python that imports aipager; best effort, like every command rule, for roles given Bash.
+
 ### Fixed
 - **Crons, /loop and messages between sessions now work in Claude Code sessions aipager did not start.** aipager's safety check ran in every Claude Code session on the machine, so in a plain `claude` a scheduled prompt had its first command refused and every later run stopped as "session halted", with nothing shown anywhere. aipager now leaves sessions it did not start alone (a turn carrying aipager's Telegram mark is still checked), and no longer makes their permission prompts wait for a Telegram tap that cannot come.
 

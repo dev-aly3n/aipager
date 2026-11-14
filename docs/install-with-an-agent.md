@@ -196,9 +196,17 @@ Tell them, in a few lines:
   stdin.
 - Do not edit `~/.config/aipager/` (apart from the token file in step
   2) or Claude Code's `settings.json` by hand. `aipager setup` and
-  `aipager config` write them.
+  `aipager config` write them. The one exception is a group on an
+  aipager older than this one, where `aipager setup group --help`
+  fails: see [5.5](#55-older-installs).
 - Do not add `--force` without asking the person: it replaces their
-  existing token, chat or role.
+  existing token, chat or role, and with `setup group` it changes or
+  removes roles or grants the owner role.
+- Through aipager, only the owner's turns can run `aipager setup` (any
+  form), `aipager config` or `aipager uninstall`: aipager's safety
+  rules block them for every other role. If the person reaches you
+  through aipager without being the owner, ask them to run the command
+  in a terminal themselves.
 - Do not restart or kill your own Claude Code session. On a first
   install, the session you are running in is not under aipager, and
   does not need to be: new sessions come from `/new` in Telegram or
@@ -210,10 +218,114 @@ Tell them, in a few lines:
 
 ## 5. Groups
 
-`aipager setup` sets up the person's own DM with the bot. To add a
-Telegram group with more people and their roles, the person runs
-`aipager config` (group setup is not scriptable yet). See
-[Team / group mode](groups.md).
+`aipager setup` sets up the person's own DM with the bot. `aipager
+setup group` adds a Telegram group, its members and their roles to an
+install that is already set up, with no questions (`aipager config`
+does the same with questions). It reads the bot token from the
+install, never restarts the daemon and sends nothing to the group. See
+[Team / group mode](groups.md) and
+[the command's reference](commands.md#aipager-setup-group).
+
+### 5.1 What only the person can do
+
+You cannot do these steps; ask the person to do them in Telegram:
+
+1. Add the bot to the group.
+2. Make the bot an admin of the group with the right to pin messages
+   (aipager pins a status bar there; without that right the group
+   works, with no status bar). Only a group admin can do this.
+3. Send `/start` in the group, so you can find its id (5.2).
+4. Give you each member's numeric Telegram user id, a short label (how
+   aipager shows them, as `@label`) and a role: `owner`, `admin`,
+   `user`, `read_only`, or a role of their own from `policy.yaml`.
+   The owner role has full control of this machine: it belongs to the
+   person who runs it and to nobody else. If they do not know an id,
+   `aipager config` can find it while that person writes in the group.
+
+### 5.2 Find the group
+
+```sh
+aipager setup detect-group --json
+```
+
+It waits (up to 300 seconds, `--timeout SECONDS`) for a message in a
+group that is not set up yet, sent at most 10 minutes before you ran
+it, and prints the group (`candidate.id`, `candidate.title`). It saves
+nothing. Show the title to the person and use the id only once they
+confirm it is the right group. Exit 8 means nothing arrived: ask them
+to send `/start` in the group again.
+
+### 5.3 Set it up
+
+Run it with `--dry-run` first, then the same command without it:
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+- `--member ID:LABEL:ROLE` once per person. To add someone later, run
+  it again with only the new `--member`: the others are kept.
+- `--remove-member ID` removes one person.
+- `--label NAME` names the group, `--root PATH` sets the folder where
+  its `user` and `read_only` members work (default
+  `~/aipager-users/group-<label>`), and `--block-edits` blocks Write
+  and Edit for its `user` members.
+- Running the same command again changes nothing (`unchanged`).
+- Exit 6 (`needs_force`) means the change needs `--force`:
+  `force_reasons` says why (a role change, an owner granted, demoted
+  or removed, a risky root folder). Show it to the person and add
+  `--force` only if they agree.
+
+### 5.4 Read the result
+
+| Exit | What to do |
+|---|---|
+| 0 | Done (`created`, `updated`, `unchanged` or `dry_run`). Tell the person the group's `label`, its `members` and what `daemon.outcome` says. |
+| 2 | A flag is wrong: `error`, `message` and `fix` name it. Fix it and run again. |
+| 6 | `needs_force`: ask the person about each `force_reasons` entry. |
+| 11 | `not_set_up`: set aipager up first ([3](#3-your-steps)). |
+| 1 | Anything else (`config_malformed`, `policy_malformed`, `last_member`, `config_changed`...): show `message` and `fix`. After `config_changed`, run it again. |
+
+`daemon.outcome` says what the running daemon did: `reloaded_live`
+(the group works now), `no_daemon` (it works once aipager starts),
+`restart_needed` or `not_applied` (show `next_step` to the person; do
+not restart aipager yourself). Warnings never change the exit code,
+but show them: `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin`
+and `group_not_found` mean the person has a step of 5.1 left, and
+`owner_granted` is worth saying out loud.
+
+### 5.5 Older installs
+
+If `aipager setup group --help` fails, this aipager is older than the
+command. Ask the person to update aipager (`aipager update`), or, if
+they want the group now, add it by hand:
+
+1. Add a group scope to `~/.config/aipager/aipager.yaml`, following
+   [the schema](groups.md#aipageryaml-schema-team-parts). The file
+   holds the bot token: never print it or `cat` it, and keep it mode
+   0600 (`chmod 600 ~/.config/aipager/aipager.yaml`).
+2. Check it with `aipager policy validate`, then check that the
+   `aipager doctor` line `scope mode: ...` counts the new group.
+3. Send the daemon a live reload. On Linux, under the background
+   service:
+
+   ```sh
+   pid=$(systemctl --user show -p MainPID --value aipager.service)
+   [ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+   ```
+
+   On macOS:
+
+   ```sh
+   pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+   [ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+   ```
+
+   The `-gt 0` check matters: with no daemon, `kill -USR1 0` would
+   signal your own shell's processes. Never restart the daemon from
+   inside an aipager session: your turn would be cut off.
 
 ## See also
 

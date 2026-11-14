@@ -548,6 +548,27 @@ the command patterns below, which a determined user can get around.
 `aipager doctor` warns once for every such role a member holds. Only
 give Bash to someone you would give a shell on the machine.
 
+**aipager's own commands and folders.** The command patterns keep a
+non-owner turn with Bash from changing who controls the machine. They
+deny `aipager setup` in any form (it grants roles), `aipager config`,
+`aipager uninstall`, `aipager service` and `aipager start`, also as
+`python -m aipager.cli` or through a path to the binary; `systemctl`,
+`launchctl`, `kill`, `pkill` or `killall` naming aipager; a Python
+interpreter running code that imports aipager's own modules
+(`python3 -c "from aipager ..."`, a here-document), while searching that
+code with `grep`, `rg` or `git log -S` stays allowed; any mention of
+`~/.config/aipager`, `~/.local/share/aipager` or `~/.local/state/aipager`,
+also when quotes or backslashes split the name (`"aipager"`,
+`aip""ager`, `a\ipager`) or a glob or brace could match it
+(`~/.config/aipage?`, `~/.config/*`, `~/.config/{aipager,x}`;
+`~/.config/*.conf` and `nvim*` are fine); and `cd` or `pushd` into the
+home folder's `.config`, `.local`, `.local/share` or `.local/state`
+itself. What still gets through: a command name held in a variable, a
+script written with a file tool and then run, a process signalled by
+its number, encoded or `eval`'d commands, and relative paths after
+reaching a folder by another route. The real boundary stays having no
+shell: the built-in `user` and `read_only` roles have none.
+
 **The built-in command rules.** Among the `Bash` patterns every
 non-owner Telegram turn with Bash is held to, one blocks the word `claude`: it
 stops a nested `claude` (with any path, wrapper or flag) and any
@@ -1011,6 +1032,7 @@ Known limits:
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; in Auto (the default for every new session) Claude Code's own safety check runs the calls it judges safe without a prompt and stops the risky ones for a person; a Full access session (admins, and a person in their own private chat) asks nothing, so only aipager's safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
 | Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders and other chats' uploads unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| A non-owner Telegram turn changes who controls the machine (`aipager setup`, `aipager config`, an edit of `aipager.yaml`) | No shell for restricted roles; the file tools never reach aipager's folders; for a role given Bash, best-effort command patterns block aipager's setup, config and uninstall commands, killing the daemon, Python that imports aipager, and aipager's folders through globs, quotes or a `cd` into their parent ([team-mode enforcement](#team-mode-enforcement)) |
 | A session's message claims an owner's authority | The message runs with the sending turn's proven rights, never the receiving session's earlier ones; without proof, read and think only ([messages between sessions](#messages-between-claude-sessions)) |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |

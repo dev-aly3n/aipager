@@ -27,8 +27,10 @@ records who did what, but only after the fact.
 
 ## Setup
 
-Everything is set up with `aipager config`. You never edit a file by
-hand.
+Everything is set up with `aipager config`, or, with no questions (for
+scripts and coding agents), with `aipager setup group` (see
+[below](#without-prompts-aipager-setup-group)). You never need to edit
+a file by hand.
 
 **First run** (no config yet). The wizard asks, in four steps:
 
@@ -110,6 +112,28 @@ To add someone to a group that is already set up, use Edit a scope →
 the group → Add a member. Everyone already in the group keeps their
 place and role.
 
+### Without prompts: `aipager setup group`
+
+`aipager setup group` does the same with no questions, on an install
+that is already set up: the same checks, the same file and the same
+live reload. Add the bot to the group, make it an admin with the right
+to pin messages and send `/start` there, then:
+
+```sh
+aipager setup detect-group --json      # finds the group's id; saves nothing
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+Run it again with another `--member` to add someone (the others keep
+their place and role), with `--remove-member ID` to remove someone, and
+with `--block-edits` for the optional rule. A role change, demoting or
+removing an owner, or making someone an owner who is not one anywhere
+yet, needs `--force`. The same command twice changes nothing. It checks, without sending anything to the group,
+whether the bot is in the group and may pin messages, and warns if not.
+Flags, exit codes and the JSON output:
+[commands](commands.md#aipager-setup-group).
+
 ### Finding ids (auto-detect)
 
 Auto-detect for a member takes the newest message from someone not
@@ -130,6 +154,10 @@ The wizard says where it watches:
   the daemon runs, paste their id (or stop the daemon first).
 - **"Watching Telegram directly"**: when the daemon is stopped, the
   wizard asks Telegram for the bot's recent messages itself.
+
+`aipager setup detect-group` finds a group's id the same way, with no
+questions: the newest message in a group not set up yet, from the last
+10 minutes.
 
 Your own DM in the first run is always read from Telegram. A message
 from an anonymous group admin, or one posted as the group or as a
@@ -180,6 +208,10 @@ What a reload applies at once:
   permission) is narrowed for every member of its chat who lost
   rights. A promotion never widens a running turn: the new rights
   apply from that person's next turn.
+
+`aipager setup group` sends the same reload after it writes, and
+reports what happened (`daemon: reloaded live`, `not applied`,
+`restart needed` or `no daemon running`).
 
 Only a new **bot token** needs a restart (`aipager config` says so
 after Refresh bot token). When no daemon is running, no reload is
@@ -286,7 +318,9 @@ aipager follows (above).
 Four built-in roles (see `aipager/safety.py`). The role that counts is
 the person's role **in the chat they act in**. Nobody can change
 members or roles from Telegram or the Mini App: only `aipager config`
-on the machine does that, which keeps it the owner's.
+or `aipager setup group` on the machine does that, which keeps it the
+owner's (aipager's safety rules block both for every Telegram turn that
+is not the owner's).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -312,8 +346,9 @@ on the machine does that, which keeps it the owner's.
   install the voice extra, send any slash command. An admin also
   bypasses role deny rules (scope and member `deny_tools` do not apply
   to them). Two things stay with the owner:
-  - changing members and roles: only `aipager config` on the machine
-    does that, and nothing in Telegram or the Mini App can;
+  - changing members and roles: only `aipager config` or `aipager
+    setup group` on the machine does that, and nothing in Telegram or
+    the Mini App can;
   - bypassing the safety floor (aipager's config and bot token, Claude
     Code's credentials, aipager's control files). An admin's `Grep` and
     `Glob` may search anywhere else, but not a folder that is one of
@@ -871,8 +906,11 @@ scopes:
 ```
 
 A DM scope and group scopes coexist: the bot serves every chat listed,
-with each chat's sessions kept apart. `aipager config` writes this
-file; you never need to edit it.
+with each chat's sessions kept apart. `aipager config` and `aipager
+setup group` write this file. Edit it by hand only on an aipager older
+than `aipager setup group`: keep it mode 0600, check it with `aipager
+policy validate`, and send the daemon a reload (see
+[Live reload](#live-reload)).
 
 ## How rules work
 
@@ -966,7 +1004,8 @@ a wall; see
    use Set role and pick `read_only` instead. (To add someone back
    later: Edit a scope → the group → Add a member.) For a person's own
    DM, end its sessions, then Edit a scope → their DM → Remove this
-   scope.
+   scope. With no questions: `aipager setup group --chat-id <group id>
+   --remove-member <their id>` (an owner needs `--force`).
 2. The wizard reloads the daemon live; it says "Scopes reloaded live".
    At once, their held messages are dropped (🤷 and a "Dropped" reply)
    and a turn of theirs that is still running is held to the restricted
