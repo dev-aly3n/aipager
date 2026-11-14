@@ -650,7 +650,8 @@ def test_old_config_env_install_is_not_set_up(tmp_path, monkeypatch, capsys):
     _constants.CONFIG_ENV.parent.mkdir(parents=True, exist_ok=True)
     _constants.CONFIG_ENV.write_text(f"TELEGRAM_BOT_TOKEN={TOKEN}\nCHAT_ID=111\n")
     code, doc, out, err = e.gj(*ALICE)
-    assert code == 11 and "aipager config" in doc["fix"]
+    assert code == 11 and doc["error"] == "not_set_up"
+    assert "config.env" in doc["message"] and "aipager config" in doc["fix"]
     assert not e.yaml_path.exists()
     assert SECRET not in out + err
 

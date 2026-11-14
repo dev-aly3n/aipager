@@ -471,8 +471,6 @@ def plan_group(existing_scopes: list, moved: dict, request: GroupRequest,
         plan.changes = [c for c in GROUP_CHANGE_ORDER if c in changes]
         if "root" in changes:
             _check_root(plan, root, new, scopes)
-        if new == target:
-            plan.changes = []
 
     plan.scope = new
     labels = [m.label for m in new.members]
@@ -784,7 +782,6 @@ def cmd_group(args: argparse.Namespace, run: _Run) -> int:
         doc["status"] = "unchanged"
         doc["message"] = (f"Nothing to change: group {label} (chat {cid}) is "
                           "already set up like this.")
-        doc["pinned_roots"] = []
         doc["next_step"] = _next_step(doc)
         _plain_lines(run)
         return EXIT_OK
