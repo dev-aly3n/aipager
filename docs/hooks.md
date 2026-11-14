@@ -70,7 +70,7 @@ The datagram is Claude Code's own hook JSON with aipager's fields added
 |---|---|
 | `hook_event_name` | The event (Claude Code's field; the daemon dispatches on it). |
 | `session_id`, `transcript_path`, `cwd`, ... | Claude Code's own fields, as sent. `session_id` is Claude Code's conversation id. |
-| `session` | Added by aipager: its name for the session, `claude-<name>`, from the `CLAUDE_DTACH_SESSION` variable aipager sets when it starts a session. Events from a Claude Code session aipager did not start carry no name and are ignored by the daemon. |
+| `session` | Added by aipager: its name for the session, `claude-<name>`, from the `CLAUDE_DTACH_SESSION` variable aipager sets when it starts a session. Events from a Claude Code session aipager did not start carry no name and are ignored by the daemon, and its tool calls are left alone (see [PreToolUse](#pretooluse)). |
 | `sl_tokens` | Added by aipager, on every event except `MessageDisplay`, when the session's status-line file exists: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added` and `lines_removed`. |
 | `claude_pid` | Added by aipager on the session's own events: the pid of its `claude` (Claude Code's `CLAUDE_PID`), which the daemon uses to find that claude in Claude Code's session list. |
 | `bg_job` | Added by aipager on every event of a Claude Code background job that counts for the session (see below): the job's id. |
@@ -96,7 +96,8 @@ map. Such a job's events go to the daemon as that session's, with
 Any other background process is foreign: its hook writes nothing, sends
 nothing and prints nothing, except that `PreToolUse` still checks its
 tool calls against the session's rules it inherited and prints a deny
-(it never allows more than that session would). The daemon drops a
+(it never allows more than that session would). A background process of
+a session aipager did not start is left alone, as that session is. The daemon drops a
 `bg_job` event it cannot match to a parked session, and creates nothing
 for it.
 
@@ -161,9 +162,18 @@ in the hook, before Claude Code looks at its permission rules:
   (`safety_blocked`): the turn stops with `🛑 x1 · Blocked by safety
   policy: ... (stopped)`, and every later tool call in that turn is
   denied too.
-- A `SendUserFile` call (Claude sending files to the chat) is checked for every turn, the owner's and a terminal prompt's included: the send floor, the file checks and the turn's own rules ([security](security.md#files-claude-sends)). A refused call gets a `deny` without the "aipager safety policy" mark: Claude reads why and tells you, the turn goes on, and the hook sends the daemon `send_files_refused`, naming each file, for the audit log.
+- A `SendUserFile` call (Claude sending files to the chat) is checked for every turn of a session aipager started, the owner's and a terminal prompt's included: the send floor, the file checks and the turn's own rules ([security](security.md#files-claude-sends)). A refused call gets a `deny` without the "aipager safety policy" mark: Claude reads why and tells you, the turn goes on, and the hook sends the daemon `send_files_refused`, naming each file, for the audit log.
 - A check that fails denies, unless the session's rules could be read
   and grant the owner's bypass.
+- A session aipager did not start (a plain `claude`, which has no
+  aipager name, or a background job of one) is left alone: the hook
+  prints nothing and Claude Code decides as it would without aipager,
+  so its crons, `/loop` and messages from other sessions run as usual.
+  aipager has nothing to hold such a session to: it gets no Telegram
+  input. A turn carrying aipager's `[via Telegram` mark is still
+  checked, and so is one whose transcript cannot be read, so a marked
+  Telegram message in a session of aipager's own that somehow lost its
+  name is checked as before.
 - Last, for a call it lets through, the hook leaves a short-lived stamp
   in a folder beside the daemon's socket and, while aipager is typing a
   message into that session, waits until the typing is done (at most 5
@@ -200,7 +210,9 @@ tap in time comes back as a `PermissionRequest` decision (allow, allow
 with the rule, or deny), which closes that dialog. If no tap comes in
 time, the hook tells the daemon the wait is over
 (`permission_reply_timeout`) and prints nothing; it also prints nothing
-when the daemon cannot be reached or anything on that path fails. The
+when the daemon cannot be reached or anything on that path fails. In a
+session aipager did not start it does not wait at all: the daemon
+ignores that session, so no tap can come. The
 dialog then waits in the terminal, and a later tap answers it by typing
 the keys. The audit log
 (`~/.claude/aipager-audit.jsonl`) records which way each tap answered,

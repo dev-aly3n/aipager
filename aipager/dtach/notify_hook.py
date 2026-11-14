@@ -868,6 +868,38 @@ def _deny_unhandled_pre_tool_use(session: str, error: Exception) -> bool:
     return denied
 
 
+def _not_started_by_aipager(session: str, data: dict) -> bool:
+    """Whether a PreToolUse comes from a Claude Code session aipager did
+    not start (no session name: a plain ``claude``, or a background worker
+    of one) in a turn with no Telegram marker. aipager leaves such a call
+    alone: no answer, so Claude Code decides as it would without aipager.
+
+    aipager's rules hold Telegram turns (and what joins them) to someone's
+    rights, and such a session gets no Telegram input: the daemon ignores
+    its events. Checked anyway, a cron or /loop fire there got the floor
+    (no rights are recorded for a session with no name) and every later
+    fire was halted, unseen (2026-11-14). A prompt typed there was
+    unrestricted already. A turn carrying the marker, which only aipager
+    types, is still checked as before, so a session of aipager's own that
+    somehow lost its name fails closed (``enforce.telegram_in_turn``)."""
+    if session:
+        return False
+    from aipager.dtach import enforce
+    return not enforce.telegram_in_turn(data.get("transcript_path"))
+
+
+def _left_alone(session: str, data: dict) -> bool:
+    """:func:`_not_started_by_aipager`, where any failure checks the call as
+    before."""
+    try:
+        return _not_started_by_aipager(session, data)
+    except MemoryError:
+        raise
+    except Exception as e:
+        _debug(f"session-owner check failed (checking the call): {e}")
+        return False
+
+
 def _run_foreign(session: str, data: dict, cap_slot: list) -> None:
     """A foreign background worker's event: no datagram, no file written,
     consumed or removed, no output, except a PreToolUse's deny or soft
@@ -880,6 +912,8 @@ def _run_foreign(session: str, data: dict, cap_slot: list) -> None:
         return
     if len(cap_slot) > 1:
         cap_slot[1] = True
+    if _left_alone(session, data):
+        return  # a worker of a session aipager did not start
     if session:
         data["session"] = session
     from aipager.dtach import enforce
@@ -1018,7 +1052,9 @@ def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
             from aipager.dtach import hook_reply
 
             runtime_dir = os.path.dirname(SOCKET_PATH) or "/tmp"
-            opened = hook_reply.open_reply_socket(runtime_dir)
+            # A session aipager did not start: the daemon ignores its
+            # events, so no answer can come; never wait for one.
+            opened = hook_reply.open_reply_socket(runtime_dir) if session else None
             if opened is not None:
                 sock, reply_path, request_id = opened
                 data["aipager_reply_addr"] = reply_path
@@ -1172,6 +1208,8 @@ def _run(session: str, cap_slot: list, worker: dict | None = None) -> None:
         # a deny for PreToolUse (main()); the slot write allocates nothing.
         if len(cap_slot) > 1:
             cap_slot[1] = True
+        if _left_alone(session, data):
+            return  # a session aipager did not start: Claude Code decides
         let_through = False
         try:
             from aipager.dtach import enforce

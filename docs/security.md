@@ -137,7 +137,11 @@ this order:
    (protected paths, command patterns), and denies what they refuse:
    Claude Code then refuses the tool without asking anyone, whatever
    its own rules say. A prompt typed in the terminal is not restricted
-   by this check. What it covers is below, under
+   by this check, and a Claude Code session aipager did not start (a
+   plain `claude`, when aipager's hooks are in the global settings) is
+   not checked at all, unless its turn carries aipager's `[via Telegram`
+   mark: it gets no Telegram input, so there is no one to hold it to.
+   What it covers is below, under
    [team-mode enforcement](#team-mode-enforcement).
 2. **Claude Code's own rules** (`~/.claude/settings.json`, the
    session's permission mode). If they say ask, Claude Code fires

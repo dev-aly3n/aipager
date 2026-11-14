@@ -515,6 +515,29 @@ def test_previous_joins_are_not_the_fires(tmp_path, run_hook):
     assert _decide(t, ("Bash", {"command": "ls"})) is None
 
 
+@pytest.mark.parametrize("form", ["local", "routine"])
+def test_a_block_in_one_fire_does_not_halt_the_next_fire(tmp_path, run_hook, form):
+    """2026-11-14: a cron's first fire was blocked and every later fire
+    read "session halted" until a prompt was typed (a session aipager did
+    not start). Each fire its pick-up saw is a turn of its own; the halt
+    holds only inside the turn that was blocked."""
+    ps.write_merged_snapshot(R, {**ps.resolve_snapshot(kit.builtin_role("user"), None, None),
+                                 "turn_origin": "telegram"})
+    _schedule(tmp_path, run_hook, "ScheduleWakeup")
+    t = _fire(tmp_path, form=form)
+    assert _decide(t, ("Bash", {"command": "ls"})) is not None
+    blocked = kit.tool_result(f"denied by the {enforce._BLOCK_MARKER}: Bash")
+    first = [kit.telegram_entry("set up a loop"), kit.tool_result(),
+             _fire_entry(form=form), blocked]
+    t = _tx(tmp_path, first, "fire.jsonl")
+    out = _decide(t, READ)
+    assert out is not None and "halted" in out["reason"]  # the same turn stays halted
+    ps.clear_turn_open(R)
+    notify_hook._match_and_promote(R, PROMPT, transcript_path=t)
+    t = _tx(tmp_path, [*first, _fire_entry(form=form)], "fire.jsonl")
+    assert _decide(t, READ) is None
+
+
 # ---- a bare /loop: its fire text is not the scheduled text ------------------------
 
 LOOP_TEXT = "You are running an autonomous loop. Check what needs doing next..."

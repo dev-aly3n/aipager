@@ -931,6 +931,71 @@ def _turn_already_blocked(path: str | None, own_peer_sha: str | None = None) -> 
     return False
 
 
+_TELEGRAM_MARKER_BYTES = peer_auth.TELEGRAM_MARKER.encode()
+
+
+def telegram_in_turn(path: str | None) -> bool:
+    """Whether the current turn of the transcript at *path* carries
+    aipager's Telegram marker: its governing prompt, or a message queued
+    into it (a Telegram message joining a running turn). For a session
+    with no aipager name, whose tool calls aipager otherwise leaves alone
+    (``notify_hook``): only aipager types that marker, so a session of
+    aipager's own that lost its name is still checked.
+
+    Streams back from the end to the turn's start: a prompt from this
+    session (typed or Telegram's), a scheduled fire, or input from outside
+    (another session, a channel push). Compact summaries, meta entries and
+    the session's own continuations and agents are passed over, as the
+    turn's own scan does. True when the transcript is missing or cannot
+    be read, or no turn start is found in it (the turn's own scan reads
+    such a turn as Telegram's): checked as before, never left alone on a
+    guess."""
+    if not isinstance(path, str) or not path:
+        return True
+    try:
+        for raw in _iter_raw_lines_reversed(path):
+            if not (_needs_parse(raw, sticky=False) or _TELEGRAM_MARKER_BYTES in raw):
+                continue
+            line = raw.decode("utf-8", "replace").strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            etype = entry.get("type")
+            if etype == "queue-operation":
+                content = entry.get("content")
+                if (entry.get("operation") == "enqueue" and isinstance(content, str)
+                        and _has_marker_line(content)):
+                    return True
+                continue
+            if etype != "user" or _is_tool_result(entry):
+                continue
+            text = _user_text(entry)
+            if _has_marker_line(text):
+                return True
+            kind, origin = _origin_kind(entry)
+            if _own_agent(origin) or (kind == "task-notification"
+                                      and origin.get("subkind") != "scheduled-trigger"):
+                continue  # the job's own, or a relayed continuation
+            if kind not in _LOCAL_KINDS or _scheduled_fire(entry):
+                return False  # the turn started with outside input or a fire
+            if _is_injected(entry) or text.lstrip().startswith(_TASK_NOTIFICATION_PREFIX):
+                continue
+            return False  # a prompt with no marker started the turn
+    except OSError:
+        return True
+    return True  # no turn start found
+
+
+def _has_marker_line(text: str) -> bool:
+    return any(ln.lstrip().startswith(peer_auth.TELEGRAM_MARKER)
+               for ln in text.split("\n"))
+
+
 def _user_text(entry: dict) -> str:
     """Extract the user message text from a transcript entry.
 

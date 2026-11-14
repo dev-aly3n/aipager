@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Crons, /loop and messages between sessions now work in Claude Code sessions aipager did not start.** aipager's safety check ran in every Claude Code session on the machine, so in a plain `claude` a scheduled prompt had its first command refused and every later run stopped as "session halted", with nothing shown anywhere. aipager now leaves sessions it did not start alone (a turn carrying aipager's Telegram mark is still checked), and no longer makes their permission prompts wait for a Telegram tap that cannot come.
+
 ## [1.5.0] - 2026-11-14
 
 ### Added
