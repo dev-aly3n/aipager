@@ -202,6 +202,10 @@ def _views():
     }
 
 
+# How long card_session's turn has run, in whole seconds.
+BUSY_FOR = 125
+
+
 def card_session(label: str = "x1", commentary: str = "", waiting_agents: int = 0):
     """A busy turn with every code-built card row kind the operator's card
     showed: tool rows, a failed one, a settled agent, live agents (one
@@ -213,7 +217,7 @@ def card_session(label: str = "x1", commentary: str = "", waiting_agents: int = 
     s.label = label
     s.status = Status.BUSY
     s.scope_chat_id, s.scope_kind = 4242, "dm"
-    s.busy_started_at = now - 125
+    s.busy_started_at = now - BUSY_FOR
     s.cost_baseline, s.last_cost_usd = 0.0, 1.21
     s.tool_history = [
         ("Read: /home/alice/a.md", True),
@@ -237,15 +241,6 @@ def card_session(label: str = "x1", commentary: str = "", waiting_agents: int = 
         s.active_subagents[f"w{k}"] = {"type": "general-purpose", "started_at": now - 5}
     s.stream_commentary = [(0, commentary)] if commentary else []
     return s
-
-
-def shift_clocks(s, seconds: float) -> None:
-    """Move the clocks :func:`card_session` set on by *seconds*, as if the
-    turn and its agents had started that much later: two cards drawn a
-    second apart on a slow runner then show the same times."""
-    s.busy_started_at += seconds
-    for info in s.active_subagents.values():
-        info["started_at"] += seconds
 
 
 def render_cases() -> dict[str, str]:

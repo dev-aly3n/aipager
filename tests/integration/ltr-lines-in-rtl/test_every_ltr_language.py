@@ -153,12 +153,18 @@ def _pure_renders(tr) -> dict[str, str]:
 def _card_pair(code: str, label: str, waiting: bool) -> tuple[str, str]:
     """The same turn's card drawn right to left (Claude writes Persian) and
     left to right, in *code*."""
-    s = kit.card_session(label, kit.FA_PROSE, waiting_agents=3 if waiting else 0)
+    # Every clock card_session sets is a whole number of seconds before its
+    # now and the card drops fractions, so two cards drawn within a second of
+    # that now show the same times. A slow runner can take longer (CI
+    # 2026-11-14: 37:01 against 37:00); then the pair is drawn again.
     tr = i18n.get(code)
-    drawn = time.monotonic()
-    rtl, _ = animation.build_stream_card_ex(s, "Working", tr=tr, rtl=True, waiting=waiting)
-    kit.shift_clocks(s, time.monotonic() - drawn)
-    ltr, _ = animation.build_stream_card_ex(s, "Working", tr=tr, rtl=False, waiting=waiting)
+    for _ in range(5):
+        s = kit.card_session(label, kit.FA_PROSE, waiting_agents=3 if waiting else 0)
+        born = s.busy_started_at + kit.BUSY_FOR
+        rtl, _ = animation.build_stream_card_ex(s, "Working", tr=tr, rtl=True, waiting=waiting)
+        ltr, _ = animation.build_stream_card_ex(s, "Working", tr=tr, rtl=False, waiting=waiting)
+        if time.monotonic() - born < 1:
+            break
     return rtl, ltr
 
 
