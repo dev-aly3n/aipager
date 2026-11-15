@@ -570,6 +570,27 @@ _PATTERN_NEEDS: dict[str, tuple[tuple[str, ...], ...]] = {
 }
 
 
+#: A backslash and the character it escapes, read left to right (so
+#: ``\\\\;`` is an escaped backslash, then a real ``;``).
+_ESCAPED_RE = re.compile(r"\\(.)", re.S)
+#: What the search rules' command start looks behind for, escaped: bash
+#: reads ``\\;`` as a plain ``;``, which starts no command.
+_ESCAPED_START = {c: "" for c in ";&|(`"}
+
+
+def _escaped_starts_plain(text: str) -> str:
+    """*text* for :data:`DENY_BASH_SEARCH_PATTERNS`: a separator, ``(`` or
+    backtick behind a backslash becomes a plain character, so it starts
+    no command there (as in bash). Those patterns read an escaped
+    character as part of a word, so otherwise each such character in one
+    long word started a scan of the rest of it: ``\\`a=`` repeated to 8 KB
+    took 0.74 s, to 100 KB minutes."""
+    if "\\" not in text:
+        return text
+    return _ESCAPED_RE.sub(
+        lambda m: "\\" + _ESCAPED_START.get(m[1], m[1]), text)
+
+
 def _may_match(pat: str, subject: str, lowered: dict[str, str | None],
                ) -> bool:
     """False when *subject* lacks text every match of *pat* holds
@@ -1676,6 +1697,8 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     read: dict = {}
     # each subject's lower case, for the patterns' needed text
     lowered: dict[str, str | None] = {}
+    # the command for the search rules (see _escaped_starts_plain)
+    search_subject: str | None = None
     if any(pat in dequoted_patterns or pat == BASH_GLOB_REACHES_AIPAGER_DIR
            for pat in patterns):
         copies = (dequote(normalized),)
@@ -1697,6 +1720,10 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
                 subjects += (spelled,)
             # a command with no quotes is its own quote-free copy
             subjects = tuple(dict.fromkeys(subjects))
+        elif pat in DENY_BASH_SEARCH_PATTERNS:
+            if search_subject is None:
+                search_subject = _escaped_starts_plain(normalized)
+            subjects = (search_subject,)
         elif pat in DENY_BASH_PATTERNS:
             subjects = (normalized,)
         else:

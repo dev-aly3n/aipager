@@ -877,3 +877,35 @@ def test_each_pattern_meets_each_distinct_subject_once(monkeypatch):
     assert {s for _, s in seen} == {"ls x"}
     assert len(seen) == len(DENY_BASH_PATTERNS) - 1
 
+
+# ----- an escaped separator starts no command for the search rules -----
+
+def test_an_escaped_separator_starts_no_search_command():
+    """Bash reads ``\\;`` as a plain ``;`` (no command starts after it);
+    ``\\\\;`` is an escaped backslash, then a real ``;``."""
+    assert bash_violation("echo x\\; grep -rn aipager ~", DENY_BASH_PATTERNS) is None
+    assert bash_violation("echo x\\| grep -rn aipager ~", DENY_BASH_PATTERNS) is None
+    assert bash_violation("echo x\\\\; grep -rn aipager ~", DENY_BASH_PATTERNS) == (
+        safety.BASH_SEARCH_REASON)
+    assert bash_violation("find ~ \\( -name a -o -name b \\)", DENY_BASH_PATTERNS) == (
+        safety.BASH_SEARCH_REASON)
+    assert safety._escaped_starts_plain("a\\;b\\\\;c\\x") == (
+        "a\\\uf8feb\\\\;c\\x")
+
+
+@pytest.mark.parametrize("unit", ["\\`a=", "\\;a=", "\\|ls\\;", "\\(a=", "\\&a="])
+@pytest.mark.parametrize("tail", ["; cat ~/.config/aipager/x",
+                                  "; ls ~/.config/nvim x"])
+def test_escaped_separators_in_one_word_stay_fast(unit, tail):
+    """The iteration 8 timing sweep: ``\\`a=`` repeated to 100 KB took 57 s, every
+    escaped backtick starting a search rule's scan of the rest."""
+    import time
+    cmd = unit * (100_000 // len(unit)) + tail
+    best = float("inf")
+    for k in range(3):
+        start = time.perf_counter()
+        verdict = bash_violation(": r%d ; %s" % (k, cmd), DENY_BASH_PATTERNS)
+        best = min(best, time.perf_counter() - start)
+    assert best < 0.5
+    if "aipager" in tail:
+        assert verdict is not None
