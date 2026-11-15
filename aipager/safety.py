@@ -285,58 +285,151 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
 # for restricted roles is having no shell at all (RESTRICTED_DENY_TOOLS).
 # ---------------------------------------------------------------------------
 
-#: aipager's own commands that change who controls the machine or stop
-#: the daemon: any ``aipager setup`` form (it grants roles), ``config``,
-#: ``uninstall``, ``service``, ``start``; also through ``python -m
-#: aipager.cli`` and a path to the binary.
-BASH_AIPAGER_CLI = (r"\baipager(?:\.cli(?:\.__main__)?)?\s+"
-                    r"(?:service|config|start|setup|uninstall)\b")
-BASH_SYSTEMCTL_AIPAGER = r"\bsystemctl\b.*\baipager\b"
-BASH_RM_AIPAGER = r"\brm\b.*(\.config/aipager|\.claude|\.local/share/aipager)"
+#: A bracket or brace group in a glob word. Its inside holds no
+#: separator, quote, ``=``, ``:`` or ``.``, so a run of brackets is read
+#: once instead of once per bracket.
+_GLOB_GROUP = (r"\[[^\][/\s;&|()<>`'\"=:.]*\]"
+               r"|\{[^{}/\s;&|()<>`'\"=:.]*\}")
+
+
+def _glob_word(letters: str) -> str:
+    """A word of *letters*, wildcards and bracket or brace groups with at
+    least one wildcard or group. No lookahead: each piece consumes only
+    what it may hold, so a long word is read in linear time."""
+    return (rf"[{letters}]*(?:[*?]|{_GLOB_GROUP})"
+            rf"(?:[{letters}*?]|{_GLOB_GROUP})*")
+
+
+#: A glob or brace word that could match ``aipager`` (any case): only
+#: letters of "aipager", wildcards and bracket or brace groups, with at
+#: least one wildcard, bracket or brace (``aipage?``, ``aip*r``, ``a*``,
+#: ``*``, ``[a]ipager``, ``{aipager,x}``). ``*.conf`` and ``nvim*`` do
+#: not match.
+_AIPAGER_GLOB = rf"(?i:{_glob_word('aipger')})"
+#: The subcommands that change who controls the machine or stop the
+#: daemon: any ``aipager setup`` form (it grants roles), ``config``,
+#: ``uninstall``, ``service``, ``start``.
+_AIPAGER_SUBCOMMAND = r"(?:service|config|start|setup|uninstall)\b"
+#: Options before the subcommand (``-v``, ``--verbose``, ``--x=1``). An
+#: option stops before another ``aipager`` inside it, which starts a
+#: match of its own: so ``aipager -aipager -aipager ...`` is read once.
+_OPTIONS = r"(?:\s+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
+#: aipager's own commands named above: the program in any case (a macOS
+#: disk runs ``AIPAGER``), options between it and the subcommand; also
+#: through ``python -m aipager[.cli[.__main__]]`` and a path to the
+#: binary.
+BASH_AIPAGER_CLI = (rf"(?i:\baipager)(?:\.cli(?:\.__main__)?)?{_OPTIONS}"
+                    rf"\s+{_AIPAGER_SUBCOMMAND}")
+#: Where a word is run as a program: the start of a command, after
+#: ``;``, ``&``, ``|``, ``(``, a backtick or ``$(``, behind ``env``,
+#: ``nohup``, ``exec``, ``command``, ``time``, ``nice`` or ``timeout``
+#: (with their options), and an optional path.
+_PROGRAM_POSITION = (
+    r"(?:^|[;&|(`\n])[\x20\t]*"
+    r"(?:(?:env|nohup|exec|command|time|nice|timeout)"
+    r"(?:\s+-\S+|\s+\w+=\S*|\s+\d+[smhd]?)*\s+)*"
+    r"(?:[^\s;&|()<>`]*/)?")
+#: A glob in the program name that could match aipager, run with one of
+#: those subcommands (``aip*r setup``, ``/usr/local/bin/aip* config``).
+BASH_AIPAGER_GLOB_PROGRAM = (rf"{_PROGRAM_POSITION}{_AIPAGER_GLOB}"
+                             rf"{_OPTIONS}\s+{_AIPAGER_SUBCOMMAND}")
+#: ``xargs`` running aipager (or a glob that could match it) with
+#: whatever arguments arrive on its input. ``xargs grep aipager`` (a
+#: search) is not this: there the program is ``grep``.
+BASH_XARGS_AIPAGER = (r"\bxargs(?:\s+-[IndPLsEa]\s+[^\s-]\S*|\s+-\S+)*\s+"
+                      rf"(?:[^\s;&|()<>`]*/)?(?:(?i:aipager)|{_AIPAGER_GLOB})"
+                      r"(?=$|[\s;&|)])")
+#: ``(?=(X))\1`` matches X once and never tries it again (an atomic
+#: group, which Python 3.10's ``re`` lacks): a pattern that has to find
+#: a command word and then a name later on the line looks for the word
+#: once per line, so a line of thousands of command words is still read
+#: in linear time.
+BASH_SYSTEMCTL_AIPAGER = r"(?:^|\n)(?=(.*?\bsystemctl\b))\1.*\baipager\b"
+BASH_RM_AIPAGER = (r"(?:^|\n)(?=(.*?\brm\b))\1"
+                   r".*(\.config/aipager|\.claude|\.local/share/aipager)")
 #: Killing the daemon by name.
-BASH_KILL_AIPAGER = r"\b(?:p?kill|killall)\b.*\baipager\b"
+BASH_KILL_AIPAGER = (r"(?:^|\n)(?=(.*?\b(?:p?kill|killall)\b))\1"
+                     r".*\baipager\b")
 #: The macOS service by name (``com.aipager.daemon``).
-BASH_LAUNCHCTL_AIPAGER = r"\blaunchctl\b.*\baipager\b"
+BASH_LAUNCHCTL_AIPAGER = r"(?:^|\n)(?=(.*?\blaunchctl\b))\1.*\baipager\b"
 #: A Python interpreter (python, python3, python3.12, ipython, pypy; also
 #: under ``uv run`` / ``uvx`` or a path) running code that imports
 #: aipager's own modules (its config writer), from ``-c`` or a here-
-#: document. Only after an interpreter word, so a search for the same
-#: text (``grep -rn "from aipager import" .``) stays allowed.
+#: document: ``from aipager``, ``import aipager``, ``import os,
+#: aipager.scope as s``, ``__import__``/``import_module``, and
+#: ``runpy.run_module``/``run_path`` of aipager's files. Only after an
+#: interpreter word, so a search for the same text (``grep -rn "from
+#: aipager import" .``) stays allowed.
 BASH_PYTHON_IMPORTS_AIPAGER = (
-    r"(?:^|[\s;&|(/])(?:i?python|pypy)[\d.]*(?![\w-])[\s\S]*"
-    r"(?:\b(?:from|import)\s+aipager\b"
-    r"|\b(?:import_module|__import__)\s*\(\s*[\"']?aipager\b)")
+    r"\A(?=([\s\S]*?(?:^|[\s;&|(/])(?:i?python|pypy)[\d.]*(?![\w-])))\1"
+    r"[\s\S]*"
+    r"(?:\bfrom\s+aipager\b"
+    r"|\bimport\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*aipager\b"
+    r"|\b(?:import_module|__import__|run_module)\s*\(\s*[\"']?aipager\b"
+    r"|\brun_path\s*\(\s*[\"']?[^()\s\"']*\baipager\b)")
+#: Home-folder spellings in a path.
+_HOME = r"(?:~|\$HOME|\$\{HOME\}|/home/[^/\s\"']+|/Users/[^/\s\"']+|/root)"
+#: The home folder's ``.config``, ``.local``, ``.local/share`` or
+#: ``.local/state`` itself (not a folder inside it).
+_HIDDEN_PARENT = r"\.(?:config|local(?:/share|/state)?)"
 #: A glob or brace in the first folder under ``.config/``,
-#: ``.local/share/`` or ``.local/state/`` that could match ``aipager``:
-#: only letters of "aipager", wildcards and bracket or brace groups
-#: (``aipage?``, ``a*``, ``*``, ``[a]ipager``, ``{aipager,x}``).
-#: ``*.conf`` and ``nvim*`` do not match.
+#: ``.local/share/`` or ``.local/state/`` that could match ``aipager``
+#: (:data:`_AIPAGER_GLOB`).
 BASH_GLOB_AIPAGER_DIR = (
     r"\.(?:config|local/share|local/state)/"
-    r"(?=[^/\s\"';&|)]*[*?\[{])"
-    r"(?:[aipger*?]|\[[^\]/\s]*\]|\{[^}/\s]*\})+"
+    rf"{_AIPAGER_GLOB}"
     r"(?=$|[/\s\"';&|)])")
+#: A glob in the hidden folder itself or in ``.local``'s second folder,
+#: then ``aipager`` or a glob that could match it: ``~/.c*/aipager``,
+#: ``~/.co?fig/aipager``, ``~/.*/aipager``, ``~/.local/*/aipager``.
+_DOT_GLOB = _glob_word("configla")
+_MID_GLOB = _glob_word("sharet")
+BASH_GLOB_HIDDEN_PARENT = (
+    r"(?:^|[\s/\"'=:(<>])\."
+    rf"(?:{_DOT_GLOB}/(?:(?:share|state|{_MID_GLOB})/)?|local/{_MID_GLOB}/)"
+    rf"(?:(?i:aipager)|{_AIPAGER_GLOB})(?=$|[/\s\"';&|)])")
 #: Changing into the home folder's ``.config``, ``.local``,
 #: ``.local/share`` or ``.local/state`` itself (then ``aipager/...`` is a
-#: relative path no other pattern sees).
+#: relative path no other pattern sees), options allowed (``cd -P``,
+#: ``cd --``, ``pushd -n``).
 BASH_CD_CONFIG_PARENT = (
-    r"\b(?:cd|pushd)\s+[\"']?"
-    r"(?:~|\$HOME|\$\{HOME\}|/home/[^/\s\"']+|/Users/[^/\s\"']+|/root)"
-    r"[\"']?/\.(?:config|local(?:/share|/state)?)/?[\"']?(?=$|[\s;&|)])")
-BASH_CONFIG_DIR = r"\.config/aipager\b"
-BASH_SHARE_DIR = r"\.local/share/aipager\b"
-BASH_STATE_DIR = r"\.local/state/aipager\b"
+    r"\b(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+[\"']?"
+    rf"{_HOME}"
+    rf"[\"']?/{_HIDDEN_PARENT}/?[\"']?(?=$|[\s;&|)])")
+#: The same in two steps: into the home folder (``cd``, ``cd ~``, ``cd
+#: $HOME``), then into ``.config`` or ``.local`` by its relative name.
+BASH_CD_HOME_THEN_PARENT = (
+    rf"\b(?:cd|pushd)(?:[\x20\t]+-[A-Za-z-]*)*(?:[\x20\t]+{_HOME}/?)?[\x20\t]*"
+    rf"(?:&&|;|\n|\|\|)\s*"
+    rf"(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+{_HIDDEN_PARENT}/?(?=$|[\s;&|)])")
+#: A command that copies, archives, links or moves the whole home
+#: ``.config`` or ``.local`` folder (or into it): ``cp -r ~/.config x``,
+#: ``rsync -a ~/.config/ x``, ``tar cf - ~/.config``, ``ln -s ~/.config
+#: x``. A folder inside it (``cp -r ~/.config/nvim x``) is not this.
+BASH_COPY_CONFIG_PARENT = (
+    rf"{_PROGRAM_POSITION}(?:cp|rsync|tar|bsdtar|zip|7z|ln|mv|scp|rclone)"
+    r"(?=\s)[^;&|\n(`)]*?"
+    rf"(?:^|[\s=])[\"']?{_HOME}[\"']?/{_HIDDEN_PARENT}(?:/\.?)?[\"']?"
+    r"(?=$|[\s;&|)])")
+BASH_CONFIG_DIR = r"(?i:\.config/aipager)\b"
+BASH_SHARE_DIR = r"(?i:\.local/share/aipager)\b"
+BASH_STATE_DIR = r"(?i:\.local/state/aipager)\b"
 
 DENY_BASH_PATTERNS: tuple[str, ...] = (
     r"^(sudo|su)\b",
     BASH_AIPAGER_CLI,
+    BASH_AIPAGER_GLOB_PROGRAM,
+    BASH_XARGS_AIPAGER,
     BASH_SYSTEMCTL_AIPAGER,
     BASH_RM_AIPAGER,
     BASH_KILL_AIPAGER,
     BASH_LAUNCHCTL_AIPAGER,
     BASH_PYTHON_IMPORTS_AIPAGER,
     BASH_GLOB_AIPAGER_DIR,
+    BASH_GLOB_HIDDEN_PARENT,
     BASH_CD_CONFIG_PARENT,
+    BASH_CD_HOME_THEN_PARENT,
+    BASH_COPY_CONFIG_PARENT,
     # Any command referencing aipager's own dirs — a Telegram session has
     # no legitimate reason to read OR write them. path_violation only
     # guards the Read/Glob/Edit tools, so without these a `cat`/`grep`/`cp`
@@ -366,30 +459,70 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     *DENY_BASH_SEARCH_PATTERNS,
 )
 
-#: The built-in patterns that also see the command with every quote and
-#: backslash removed (:func:`dequote`), so ``"aipager" setup``,
-#: ``aip""ager setup``, ``a\ipager setup`` and ``$HOME/.config/aip''ager``
-#: are caught too. Only patterns about aipager's own name and folders: the
-#: ``claude``, flag and search patterns keep matching the raw command.
+#: The built-in patterns that also see the command as the shell would
+#: spell it out (:func:`dequote`), so ``"aipager" setup``, ``aip""ager
+#: setup``, ``a\ipager setup``, ``$'\x61ipager' setup``, ``aip``ager
+#: setup`` and ``$HOME/.config//aip''ager`` are caught too. Only patterns
+#: about aipager's own name and folders: the ``claude``, flag and search
+#: patterns keep matching the raw command.
 DEQUOTED_BASH_PATTERNS: tuple[str, ...] = (
     BASH_AIPAGER_CLI,
+    BASH_AIPAGER_GLOB_PROGRAM,
+    BASH_XARGS_AIPAGER,
     BASH_SYSTEMCTL_AIPAGER,
     BASH_RM_AIPAGER,
     BASH_KILL_AIPAGER,
     BASH_LAUNCHCTL_AIPAGER,
     BASH_PYTHON_IMPORTS_AIPAGER,
     BASH_GLOB_AIPAGER_DIR,
+    BASH_GLOB_HIDDEN_PARENT,
     BASH_CD_CONFIG_PARENT,
+    BASH_CD_HOME_THEN_PARENT,
+    BASH_COPY_CONFIG_PARENT,
     BASH_CONFIG_DIR,
     BASH_SHARE_DIR,
     BASH_STATE_DIR,
 )
 
+#: ``$'...'`` (ANSI-C quoting): bash decodes its backslash escapes.
+_ANSI_C_RE = re.compile(r"\$'((?:[^'\\]|\\.)*)'", re.S)
+_ANSI_C_ESCAPE_RE = re.compile(
+    r"\\(?:x([0-9A-Fa-f]{1,2})|u([0-9A-Fa-f]{1,4})|U([0-9A-Fa-f]{1,8})"
+    r"|([0-7]{1,3})|(.))", re.S)
+_ANSI_C_SIMPLE = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f",
+                  "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+#: An empty command substitution: ``````, ``$()``.
+_EMPTY_SUBSTITUTION_RE = re.compile(r"`\s*`|\$\(\s*\)")
+
+
+def _ansi_c_char(m: re.Match) -> str:
+    hex2, hex4, hex8, octal, other = m.groups()
+    digits, base = ((hex2, 16) if hex2 else (hex4, 16) if hex4
+                    else (hex8, 16) if hex8 else (octal, 8) if octal
+                    else (None, 0))
+    if digits is None:
+        return _ANSI_C_SIMPLE.get(other, other)
+    try:
+        return chr(int(digits, base))
+    except (ValueError, OverflowError):
+        return ""
+
 
 def dequote(command: str) -> str:
-    """*command* with every ``'``, ``"`` and ``\\`` removed: what the shell
-    runs for a word that is only quoted or escaped to dodge a pattern."""
-    return command.replace("'", "").replace('"', "").replace("\\", "")
+    """*command* as the shell spells out a word quoted or split to dodge a
+    pattern: ``$'...'`` decoded (``$'\\x61ipager'`` is ``aipager``), the
+    ``$`` of ``$"..."`` dropped, every ``'``, ``"`` and ``\\`` removed,
+    empty substitutions (``````, ``$()``) dropped, repeated ``/`` made
+    one and ``/./`` made ``/`` (``~/.config//./aipager``)."""
+    out = _ANSI_C_RE.sub(lambda m: _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, m[1]),
+                         command)
+    out = out.replace('$"', '"')
+    out = out.replace("'", "").replace('"', "").replace("\\", "")
+    out = _EMPTY_SUBSTITUTION_RE.sub("", out)
+    out = re.sub(r"/{2,}", "/", out)
+    while "/./" in out:
+        out = out.replace("/./", "/")
+    return out
 
 # ---------------------------------------------------------------------------
 # Tools that run code as the OS user: Claude Code 2.1.283's own set (every
