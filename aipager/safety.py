@@ -287,17 +287,23 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
 
 #: A bracket or brace group in a glob word. Its inside holds no
 #: separator, quote, ``=``, ``:`` or ``.``, so a run of brackets is read
-#: once instead of once per bracket.
+#: once instead of once per bracket (patterns that may start after
+#: ``.``, ``=`` or ``:`` use it).
 _GLOB_GROUP = (r"\[[^\][/\s;&|()<>`'\"=:.]*\]"
                r"|\{[^{}/\s;&|()<>`'\"=:.]*\}")
+#: A bracket or brace group in one path folder: anything but ``/``, a
+#: blank or the closing bracket (``{aipager,a.b}``, ``[!.]``, ``[[]``).
+#: Only for a pattern that starts at a fixed folder name, so a group
+#: never holds another start.
+_FOLDER_GLOB_GROUP = r"\[[^\]/\s]*\]|\{[^}/\s]*\}"
 
 
-def _glob_word(letters: str) -> str:
+def _glob_word(letters: str, group: str = _GLOB_GROUP) -> str:
     """A word of *letters*, wildcards and bracket or brace groups with at
     least one wildcard or group. No lookahead: each piece consumes only
     what it may hold, so a long word is read in linear time."""
-    return (rf"[{letters}]*(?:[*?]|{_GLOB_GROUP})"
-            rf"(?:[{letters}*?]|{_GLOB_GROUP})*")
+    return (rf"[{letters}]*(?:[*?]|{group})"
+            rf"(?:[{letters}*?]|{group})*")
 
 
 #: A glob or brace word that could match ``aipager`` (any case): only
@@ -306,6 +312,9 @@ def _glob_word(letters: str) -> str:
 #: ``*``, ``[a]ipager``, ``{aipager,x}``). ``*.conf`` and ``nvim*`` do
 #: not match.
 _AIPAGER_GLOB = rf"(?i:{_glob_word('aipger')})"
+#: The same as one path folder, where a group may hold any character but
+#: ``/`` and a blank (:data:`_FOLDER_GLOB_GROUP`).
+_AIPAGER_FOLDER_GLOB = rf"(?i:{_glob_word('aipger', _FOLDER_GLOB_GROUP)})"
 #: The subcommands that change who controls the machine or stop the
 #: daemon: any ``aipager setup`` form (it grants roles), ``config``,
 #: ``uninstall``, ``service``, ``start``.
@@ -396,7 +405,7 @@ _HIDDEN_PARENT = r"\.(?:config|local(?:/share|/state)?)"
 #: (:data:`_AIPAGER_GLOB`).
 BASH_GLOB_AIPAGER_DIR = (
     r"\.(?:config|local/share|local/state)/"
-    rf"{_AIPAGER_GLOB}"
+    rf"{_AIPAGER_FOLDER_GLOB}"
     r"(?=$|[/\s\"';&|)])")
 #: A glob in the hidden folder itself or in ``.local``'s second folder,
 #: then ``aipager`` or a glob that could match it: ``~/.c*/aipager``,
