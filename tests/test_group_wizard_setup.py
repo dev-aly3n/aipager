@@ -783,6 +783,18 @@ def test_append_member_refuses_a_duplicate(member, why):
     assert _cfg().read_bytes() == before
 
 
+def test_append_member_keeps_a_token_changed_meanwhile():
+    """The token was rotated on disk after the menu read the file (by
+    ``aipager setup --token-file`` or another wizard): adding a member
+    keeps the file's token instead of writing back the one it read."""
+    rotated = "987654321:ROTATED"
+    scope_mod.dump_scopes([_dm(), _group()], rotated, _cfg())
+    assert scope_io.append_member(
+        GROUP, Member(id=EVE, label="eve", role="user"), TOKEN) is None
+    assert scope_io.read_config()[1] == rotated
+    assert (EVE, "eve", "user") in _members()
+
+
 def test_append_member_refuses_a_missing_scope():
     before = _write_config([_dm()])
     assert scope_io.append_member(GROUP, Member(id=EVE, label="eve",
