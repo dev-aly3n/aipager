@@ -45,6 +45,8 @@ _UNLIT = {chr(0xF0000 + ord(c)): c for c in _SPECIAL}
 #: the braces are expanded.
 _QUOTED_DOT = chr(0xF0000 + ord("."))
 _DOTS_BACK = {ord(_QUOTED_DOT): "."}
+#: Parens as characters (a group in a ``[[ =~ ]]`` pattern).
+_LIT_PARENS = {ord("("): _LIT[ord("(")], ord(")"): _LIT[ord(")")]}
 
 
 def _lit(text: str) -> str:
@@ -534,9 +536,13 @@ class _Lexer:
                 cur.add("$")
             elif kind == "open":
                 if regexp and not flat:
-                    # a group in a ``=~`` pattern: one piece of the word
-                    cur.add("(")
-                    i = self._matched(i, "(", ")", cur)
+                    # a group in a ``=~`` pattern: one piece of the word.
+                    # Bash never globs that word; a group not after an
+                    # extended glob's ``?*+@!`` would be a syntax error
+                    # anywhere else, so its parens count as characters
+                    glob = cur.last_char() in ("?", "*", "+", "@", "!")
+                    cur.add("(" if glob else _lit("("))
+                    i = self._matched(i, "(", ")", cur, not glob)
                     continue
                 pieces = cur.pieces
                 glued = bool(pieces)
@@ -788,13 +794,14 @@ class _Lexer:
             self._body_read(sub)
         return min(j + 1, n)
 
-    def _matched(self, i: int, open_: str, close: str, cur: _Word) -> int:
+    def _matched(self, i: int, open_: str, close: str, cur: _Word,
+                 literal: bool = False) -> int:
         """Read from *i* (after *open_*) to the matching *close*, as bash
         reads an assignment's subscript or a group in a ``=~`` pattern:
         quotes and expansions nest (their commands are more words), blanks,
         ``#`` and ``<<`` are characters. The text goes into *cur* as typed
-        and is set aside to be read again as plain words
-        (:meth:`_set_aside`)."""
+        (with *literal*, its parens as characters) and is set aside to be
+        read again as plain words (:meth:`_set_aside`)."""
         text, n = self.text, self.n
         begin = seg = i
         parts: list[str] = []
@@ -839,7 +846,7 @@ class _Lexer:
         self.level -= 1
         parts.append(text[seg:i])
         piece = "".join(parts)
-        cur.add(piece)
+        cur.add(piece.translate(_LIT_PARENS) if literal else piece)
         self._set_aside(begin, i)
         return i
 

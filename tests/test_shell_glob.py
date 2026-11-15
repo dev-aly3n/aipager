@@ -800,10 +800,19 @@ def test_the_review_6_subscript_commands_are_blocked(cmd):
     assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_REASON
 
 
+_LP, _RP = g._lit("("), g._lit(")")
+
+
 @pytest.mark.parametrize("cmd,want", [
-    ("[[ x =~ (a #) ]]; ls *.py", ["[[", "(a #)", "*.py"]),
-    ("[[ x =~ ( #) ]]; ls *.py", ["[[", "( #)", "*.py"]),
-    ("[[ x =~ x(a\n#)? ]] && ls *.py", ["[[", "x(a\n#)?", "*.py"]),
+    # a group's parens are characters (bash never globs this word) unless
+    # an extended glob's ?*+@! comes first; a glob after the group makes
+    # the word one that words() returns
+    ("[[ x =~ (a #)* ]]; ls *.py", ["[[", _LP + "a #" + _RP + "*", "*.py"]),
+    ("[[ x =~ ( #)* ]]; ls *.py", ["[[", _LP + " #" + _RP + "*", "*.py"]),
+    ("[[ x =~ x(a\n#)? ]] && ls *.py",
+     ["[[", "x" + _LP + "a\n#" + _RP + "?", "*.py"]),
+    ("[[ x =~ @(a #) ]]; ls *.py", ["[[", "@(a #)", "*.py"]),
+    ("[[ x =~ (a #) ]]; ls *.py", ["[[", "*.py"]),
     ("[[ x =~ a|#b ]]; ls *.py", ["[[", "*.py"]),
     ("[[ ! x =~ a|#b && y ]]; ls *.py", ["[[", "*.py"]),
     # only the word after =~, only inside [[ ]]
@@ -1271,3 +1280,14 @@ def test_a_flat_read_reads_on_after_an_open_param():
     # from the outermost one: the text before an inner open ``${`` too
     assert "~/.config/[a]ipager/x" in g.words(
         "# ${ ; cat ~/.config/[a]ipager/x ; ${")
+
+
+def test_a_regex_pattern_is_never_a_path():
+    """Review-7 nit: bash never globs the word after ``=~``; a group in it
+    not after an extended glob's ``?*+@!`` would be a syntax error
+    anywhere else, so its parens are characters."""
+    assert not g.command_reaches("[[ $p =~ ^~/.config/(nvim|fish) ]]")
+    assert not g.command_reaches("[[ $p =~ ~/.config/(aipager) ]]")
+    assert not g.command_reaches("[[ $p =~ ^~/.config/(nvim|(fish)) ]]")
+    assert g.command_reaches("[[ $p =~ ~/.config/@(aipager) ]]")
+    assert g.command_reaches("[[ $p =~ ~/.config/[a]ipager ]]")

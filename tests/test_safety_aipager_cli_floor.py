@@ -365,6 +365,8 @@ NEIGHBOURS = [
     "echo (x) { cp -r ~/.config x",
     "echo function f { cp -r ~/.config x",
     "grep -n 'function g { aip*r setup' x",
+    # a ``=~`` pattern is never globbed; its groups are characters
+    "[[ $p =~ ^~/.config/(nvim|fish) ]] && echo m",
 ]
 
 
