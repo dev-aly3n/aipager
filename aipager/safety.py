@@ -1601,12 +1601,17 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     the command with the session's scratchpad root normalised away
     (:func:`normalize_scratchpad`), and those in
     :data:`DEQUOTED_BASH_PATTERNS` also against that command with its
-    quotes and backslashes removed (:func:`dequote`); any other pattern — an operator's own
-    ``deny_bash_patterns`` from policy.yaml — sees the command exactly as
-    typed, so a rule written against the scratchpad still applies.
+    quotes and backslashes removed (:func:`dequote`). When the command
+    holds a ``$'``, which ``$'`` bash decodes depends on the quotes before
+    it, so those patterns also see it with every escape decoded
+    (``dequote(..., True)``) and as bash's own words spell it
+    (:func:`aipager.shell_glob.spelled`): each copy can only add a match.
+    Any other pattern — an operator's own ``deny_bash_patterns`` from
+    policy.yaml — sees the command exactly as typed, so a rule written
+    against the scratchpad still applies.
     :data:`BASH_GLOB_REACHES_AIPAGER_DIR` is not a regex match: at its
-    place in *patterns* both of those copies go through
-    :func:`aipager.shell_glob.command_reaches`.
+    place in *patterns* the normalised command and its quote-free copies
+    go through :func:`aipager.shell_glob.command_reaches`.
     """
     if not command:
         return None
