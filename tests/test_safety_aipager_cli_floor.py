@@ -189,6 +189,14 @@ REACH = [
     ("python3 -m aipager -v setup", safety.BASH_AIPAGER_CLI),
     ("python3 -m aipager.cli -v setup group", safety.BASH_AIPAGER_CLI),
     ("python3 -m aipager.cli.__main__ --verbose config", safety.BASH_AIPAGER_CLI),
+    # -m glued to the module name, after other flags, and aipager.__main__
+    ("python3 -maipager setup group --chat-id -1001 --member 5:me:owner --force",
+     safety.BASH_AIPAGER_CLI),
+    ("python3 -maipager.cli setup", safety.BASH_AIPAGER_CLI),
+    ("python3 -Imaipager setup", safety.BASH_AIPAGER_CLI),
+    ('python3 -m"aipager" setup', safety.BASH_AIPAGER_CLI),
+    ("python3 -m'aipager' setup", safety.BASH_AIPAGER_CLI),
+    ("python3 -m aipager.__main__ setup", safety.BASH_AIPAGER_CLI),
     # the program name in any case (a macOS disk runs it)
     ("AIPAGER setup group", safety.BASH_AIPAGER_CLI),
     ("Aipager config", safety.BASH_AIPAGER_CLI),
@@ -213,6 +221,16 @@ REACH = [
     ("xargs -n 1 aipager", safety.BASH_XARGS_AIPAGER),
     ("xargs -0 ~/.local/bin/aipager", safety.BASH_XARGS_AIPAGER),
     ("xargs aip*", safety.BASH_XARGS_AIPAGER),
+    # xargs run as a program behind a wrapper or a keyword
+    ("true; sudo xargs aipager", safety.BASH_XARGS_AIPAGER),
+    ("doas xargs aipager", safety.BASH_XARGS_AIPAGER),
+    ("{ xargs aipager; }", safety.BASH_XARGS_AIPAGER),
+    ("! xargs aipager", safety.BASH_XARGS_AIPAGER),
+    ("if xargs aipager; then :; fi", safety.BASH_XARGS_AIPAGER),
+    ("true; then xargs aipager", safety.BASH_XARGS_AIPAGER),
+    ("while xargs aipager; do :; done", safety.BASH_XARGS_AIPAGER),
+    ("nice -n 5 xargs aipager", safety.BASH_XARGS_AIPAGER),
+    ("builtin xargs aipager", safety.BASH_XARGS_AIPAGER),
     # Python
     ("python3 -c 'import sys, aipager.wizard.scope_io as s'",
      safety.BASH_PYTHON_IMPORTS_AIPAGER),
@@ -231,6 +249,17 @@ REACH = [
     ("cat ~/.local/s*/aipager/x", safety.BASH_GLOB_HIDDEN_PARENT),
     ("cat ~/.l*/share/aipager/x", safety.BASH_GLOB_HIDDEN_PARENT),
     ("cat ~/.c*/aipage?/aipager.yaml", safety.BASH_GLOB_HIDDEN_PARENT),
+    # a group in aipager's folder name holding a dot, =, : or [
+    ("sed -i s/a/b/ ~/.config/{aipager,a.b}/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/[!.]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/a{i,.}pager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/{aipager,x=y}/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/{aipager,a:b}/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/{aipager,..}/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/{,.}aipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/[[]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.local/share/{aipager,a.b}/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.local/state/a{i,.}pager/x", safety.BASH_GLOB_AIPAGER_DIR),
     # cd with options, or in two steps
     ("cd -P ~/.config", safety.BASH_CD_CONFIG_PARENT),
     ("cd -- ~/.config", safety.BASH_CD_CONFIG_PARENT),
@@ -291,6 +320,16 @@ NEIGHBOURS = [
     "git show HEAD:aipager/setup_cmd.py",
     "curl https://example.com//x",
     "echo $'hello\\n'",
+    "python3 -m pytest -q",
+    "python3 -mpytest -q",
+    "git commit -m fix",
+    "cat ~/.config/nvim/../nvim/init.lua",
+    "cd ..",
+    "cd src/..",
+    "ls ../x",
+    "cat ../../README.md",
+    "echo -cd",
+    "xargs -n xargs grep",
 ]
 
 
@@ -325,6 +364,14 @@ NORMALISED = [
     "aip` `ager setup",
     "aip$()ager setup",
     'aip$("")ager setup',
+    # a line continued inside a word (bash joins the lines)
+    "aip\\\nager setup",
+    "cat ~/.config/aip\\\nager/aipager.yaml",
+    # name/.. in a path
+    "cat ~/.config/nvim/../aipager/aipager.yaml",
+    "sed -i s/user/owner/ ~/.config/nvim/../aipager/aipager.yaml",
+    "cat ~/.local/share/nvim/../aipager/x",
+    "cat ~/.config/a/b/../../aipager/aipager.yaml",
 ]
 
 
@@ -354,6 +401,23 @@ def test_the_normalised_copy_is_what_blocks(cmd, monkeypatch):
     ("echo `date`", "echo `date`"),
     ("echo $(date)", "echo $(date)"),
     ("https://x", "https:/x"),
+    ("a\\\nb", "ab"),
+    ("~/.config/nvim/../aipager", "~/.config/aipager"),
+    ("~/.config/a/b/../../aipager", "~/.config/aipager"),
+    ("cd nvim/..", "cd ."),
+    ("cd ..", "cd .."),
+    ("../a/../b", "../b"),
+    ("a/../../b", "../b"),
+    ("../../x", "../../x"),
+    ("a/b/../", "a/"),
+    ("/../x", "/../x"),
+    ("~/../x", "~/../x"),
+    ("$HOME/../x", "$HOME/../x"),
+    ("--dir=~/x/../y", "--dir=~/y"),
+    ("x=a/../b", "x=a/../b"),
+    ("host:a/../b", "host:a/../b"),
+    ("a/./../b", "b"),
+    ("ls a/.. b/..;cd c/..", "ls . .;cd ."),
 ])
 def test_dequote_normalises(raw, out):
     assert safety.dequote(raw) == out
@@ -427,6 +491,66 @@ def test_the_new_patterns_never_backtrack_badly(cmd):
     start = time.monotonic()
     bash_violation(cmd, DENY_BASH_PATTERNS)
     assert time.monotonic() - start < 1.0
+
+
+#: Units repeated to 100 KB in front of a forbidden write: each was
+#: quadratic in some pattern once (rev-iter2-001, tester-iter2-001), or
+#: is a shape every start-anchored pattern must read once.
+_PADDING = [
+    ("cd-dash", "cd -"), ("pushd-dash", "pushd -"), ("cd-tab-dash", "cd\t-"),
+    ("dash-cd", "-cd "), ("comment-cd", "# cd -cd -"),
+    ("xargs-n", "xargs -n "), ("xargs-a", "xargs -a "), ("xargs-I", "xargs -I "),
+    ("xargs-d", "xargs -d "), ("xargs-L", "xargs -L "),
+    ("semi-xargs-n", ";xargs -n "), ("semi-xargs-dash", ";xargs -"),
+    ("semi-env-dash", ";env -"), ("env-newline", "env\n"),
+    ("newline-timeout", "\ntimeout"), ("env-u", "env -u "),
+    ("semi-timeout-s", ";timeout -s "), ("assign", "X=1 "), ("bang", "! "),
+    ("brace", "{ "), ("line-option-glob", "\n-a/a* -a/a*"),
+    ("aipager-v", "aipager -v "), ("glued-m", "-maipager -"),
+    ("python-m", "python3 -m"), ("ansi-hex", "$'\\x61'"), ("dot-seg", "/./"),
+    ("dotdot", "/.."), ("name-dotdot", "a/../"), ("systemctl", "systemctl "),
+    ("config-brace", ".config/{"), ("config-bracket", ".config/["),
+    ("config-dot-group", ".config/{a.b}"), ("eq-dot", "=."),
+    ("hidden-glob", "~/.c*/"), ("paren-cp", "(cp "), ("semi-cp", ";cp -r "),
+]
+_FORBIDDEN_TAIL = "; sed -i s/a/b/ ~/.config/aipager/aipager.yaml"
+
+
+def _floor_seconds(cmd: str) -> tuple[float, str | None]:
+    import time
+    start = time.perf_counter()
+    verdict = bash_violation(cmd, DENY_BASH_PATTERNS)
+    return time.perf_counter() - start, verdict
+
+
+@pytest.mark.parametrize("unit", [u for _, u in _PADDING],
+                         ids=[name for name, _ in _PADDING])
+def test_the_whole_floor_is_linear_on_100_kb_of_padding(unit):
+    """The hook has no time limit of its own and a check that runs out of
+    time decides nothing: every pattern over the command and its
+    normalised copy together stays under half a second at 100 KB, and the
+    write at the end is still denied. 25 KB comes first, so a quadratic
+    pattern fails in seconds instead of minutes; the best of three runs
+    is kept, so a busy machine does not fail it."""
+    for size in (25_000, 100_000):
+        cmd = unit * (size // len(unit) + 1) + _FORBIDDEN_TAIL
+        assert len(cmd) > size
+        best = None
+        for _ in range(3):
+            seconds, verdict = _floor_seconds(cmd)
+            assert verdict == safety.BASH_REASON
+            best = seconds if best is None else min(best, seconds)
+            if best < 0.5:
+                break
+        assert best < 0.5, (size, best)
+
+
+def test_the_normaliser_reads_a_long_word_once():
+    import time
+    cmd = "a" * 100_000 + " b/.."
+    start = time.perf_counter()
+    assert safety.dequote(cmd) == "a" * 100_000 + " ."
+    assert time.perf_counter() - start < 0.5
 
 
 # ----- per role -----
