@@ -94,10 +94,18 @@ OP_REPLACEMENT = [
 ]
 
 
+# Rows the developer closed in iteration 8 (fixes-8.md): their strict
+# xfail marks are removed.
+CLOSED_ITER8 = {
+    "function-keyword-brace", "function-keyword-question",
+    "function-keyword-bracket", "function-keyword-tab",
+    "function-keyword-nested-group"}
+
+
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(r[1], marks=pytest.mark.xfail(strict=True,
-                                                reason=UNDOCUMENTED))
+    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER8
+                  else pytest.mark.xfail(strict=True, reason=UNDOCUMENTED))
      for r in OP_REPLACEMENT],
     ids=[r[0] for r in OP_REPLACEMENT])
 def test_replacement_text_is_read_as_a_possible_value(cmd):
@@ -158,8 +166,8 @@ FUNCTION_CONTROLS = [
 
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(r[1], marks=pytest.mark.xfail(strict=True,
-                                                reason=UNDOCUMENTED_FN))
+    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER8
+                  else pytest.mark.xfail(strict=True, reason=UNDOCUMENTED_FN))
      for r in FUNCTION_KEYWORD],
     ids=[r[0] for r in FUNCTION_KEYWORD])
 def test_function_keyword_body_glob_program_is_blocked(cmd):

@@ -343,17 +343,19 @@ BASH_AIPAGER_CLI = (r"(?:\b|(?<=-)[A-Za-z]*m)(?i:aipager)"
 _TOKEN = r"[^\s;&|()<>`]"
 #: Where a word is run as a program: the start of a command (the start,
 #: after ``;``, ``&``, ``|``, ``(``, a backtick, ``$(``, a newline, or
-#: the ``)`` of a function's ``name()`` before its ``{``),
+#: the ``()`` of a function's ``name()`` before its ``{``), after a
+#: function's ``function NAME`` before its ``{``,
 #: behind ``env``, ``nohup``, ``exec``, ``command``, ``time``, ``nice``,
 #: ``timeout``, ``sudo``, ``doas``, ``builtin``, the keywords ``if``,
 #: ``then``, ``do``, ``else``, ``elif``, ``while``, ``until``, ``!`` and
 #: ``{`` (with their options), and an optional path.
 #:
 #: Cost: a match starts only at a separator, and every piece after it
-#: (blanks, wrapper words, options) stays on that one command, so the
-#: commands are read once each: linear on any input.
+#: (``function NAME``, blanks, wrapper words, options) stays on that one
+#: command, so the commands are read once each: linear on any input.
 _PROGRAM_POSITION = (
-    r"(?:^|[;&|(`\n]|\)(?=[\x20\t]*\{))[\x20\t]*"
+    r"(?:^|[;&|(`\n]|\([\x20\t]*\)(?=[\x20\t]*\{))[\x20\t]*"
+    rf"(?:function[\x20\t]+{_TOKEN}+[\x20\t]*(?=\{{))?"
     r"(?:(?:env|nohup|exec|command|time|nice|timeout|sudo|doas|builtin"
     r"|if|then|do|else|elif|while|until|!|\{)"
     rf"(?:[\x20\t]+-{_TOKEN}+|[\x20\t]+\w+={_TOKEN}*|[\x20\t]+\d+[smhd]?)*"

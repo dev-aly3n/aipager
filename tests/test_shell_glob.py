@@ -712,6 +712,10 @@ _MANY = [
     "a[1 #]=x; ", "[[ x =~ (a #) ]]; ", "if(true) then :; fi; ",
     "# ~/.config/nvim x\n", "echo '$'; echo $'\\x61' ", "a=(1 ')' 2); ",
     "$[" * 47 + "1" + "]" * 47 + " ",
+    # iteration 8: one long word meeting a glued ``(`` again and again
+    # (rev-iter7-001: 7-10 s when each ``(`` joined the word), here-document
+    # bodies full of specials (tester-iter7-004), ``${...}`` text read as
+    # words, ``$[`` with quotes nested deep
 ]
 
 
@@ -936,3 +940,12 @@ def test_a_word_only_quotes_or_dollar_quotes_make_is_read():
     taken out, ``'.''.'`` is a ``..`` step, and ``$'...'`` may make one."""
     assert g.command_reaches("cat ~/.config/x/'.''.'/aipager/x")
     assert g.command_reaches("cat ~/.config/x/$'\\x2e\\x2e'/aipager/x")
+
+
+# ----- iteration 8 (review-7, test-report-7; bash 5.2) -----
+
+def test_function_keyword_starts_a_command_for_its_name():
+    """``function f()(`` opens a subshell after ``f()``, where ``<<`` is a
+    here-document (bash 5.2 runs its body)."""
+    cmd = "function f()(cat <<E\n) <<F\nE\n)\nls *.py\nF"
+    assert "*.py" in g.words(cmd)

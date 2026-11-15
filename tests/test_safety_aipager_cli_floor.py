@@ -287,6 +287,17 @@ REACH = [
     # iteration 7 command fuzz)
     ("f() { cp -r ~/.config /tmp/x ; }; f", safety.BASH_COPY_CONFIG_PARENT),
     ("f(){ aip* setup; }; f", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("f ( ) { cp -r ~/.config /tmp/x ; }; f", safety.BASH_COPY_CONFIG_PARENT),
+    # ... and after ``function NAME`` (review-7 rev-iter7-002,
+    # test-report-7 tester-iter7-002; each runs in bash 5.2)
+    ("function f { cp -r ~/.config /tmp/q ; } ; f",
+     safety.BASH_COPY_CONFIG_PARENT),
+    ("function g { aip*r setup; }; g", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("function g {\taipage? config; }; g", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("function g { { [a]ipager uninstall -y; }; }; g",
+     safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("x=1; function my-fn  { aip* setup group ; } ; my-fn",
+     safety.BASH_AIPAGER_GLOB_PROGRAM),
     # the folder names in any case
     ("cat ~/.Config/aipager/aipager.yaml", safety.BASH_CONFIG_DIR),
     ("cat ~/.local/share/AIPAGER/x", safety.BASH_SHARE_DIR),
@@ -348,6 +359,12 @@ NEIGHBOURS = [
     "cat ~/.config/nvim/{lua,after}/x",
     "cd ~/projects/{app,lib}/..",
     "cat ~/.config/nvim/{x,y}/../init.lua",
+    # a ``)`` before ``{`` starts a command only as a function's ``()``
+    # (review-7 nit), and ``function`` only where a command starts
+    'echo "(x)" { cp -r ~/.config x',
+    "echo (x) { cp -r ~/.config x",
+    "echo function f { cp -r ~/.config x",
+    "grep -n 'function g { aip*r setup' x",
 ]
 
 
@@ -587,6 +604,12 @@ _SLOW_NEW = [
     # a ``!`` or ``^`` alone read two ways grows more slowly: 34 is seconds
     "cat ~/.config/" + "[!]" * 34 + "x",
     "cat ~/.config/" + "[^]" * 34 + "x",
+    # ``function NAME`` and a function's ``( )`` before ``{`` (review 7)
+    "function " * 20_000 + "{",
+    "function f " * 10_000 + "{",
+    "; function " * 10_000 + "f",
+    "()" * 30_000 + " {",
+    "( " * 30_000 + ") {",
 ]
 
 
@@ -797,3 +820,4 @@ def test_an_admin_telegram_turn_cannot_run_setup_group(
     assert res is not None and res["reason"] == safety.BASH_REASON
     # The control: the owner's turn runs it.
     assert _decide(_turn(ALICE)) is None
+

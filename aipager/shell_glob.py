@@ -161,6 +161,9 @@ _KEEPS_COMMAND_START = frozenset(
 #: ``(`` opens a subshell (``if(cat <<E ...``), as after a function's
 #: ``name()`` (``f()(...)``): never an extended glob group.
 _OPENS_SUBSHELL = _KEEPS_COMMAND_START - {"}"}
+#: ``function NAME``: the name stands where a command's start does, so
+#: ``function f()(cat <<E`` opens a subshell after ``f()`` too.
+_FUNCTION = "function"
 #: An assignment word (``x=1``, ``a[i]+=y``): a command may still start
 #: after it, and bash reads the next word's subscript as one word too.
 _ASSIGNMENT_RE = re.compile(r"[A-Za-z_]\w*(?:\[.*\])?\+?=", re.S)
@@ -346,7 +349,7 @@ class _Lexer:
                 elif w == "[[" and not flat:
                     cond = True
             regexp = cond and w == "=~"
-            if w in _KEEPS_COMMAND_START:
+            if w in _KEEPS_COMMAND_START or (start and w == _FUNCTION):
                 start = True
             elif start:
                 start = "=" in w and _ASSIGNMENT_RE.match(w) is not None
