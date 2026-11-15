@@ -813,8 +813,29 @@ def test_core_two_confirms_at_once_type_clear_once(mk_bot, run_async, typed):
             bot._clear_session_core(sess, driver_user_id=1, chat_id=None),
             bot._clear_session_core(sess, driver_user_id=2, chat_id=None))
 
-    reasons = sorted(o.reason for o in run_async(both()))
-    assert reasons == ["already_cleared", "sent"]
+    # The second confirm is refused either way; which refusal depends on
+    # whether it runs before the first one's note to Claude is written
+    # (the per-turn mark: already_cleared) or after (that note is another
+    # person's: waiting). CI 2026-11-15 py3.13 saw the second.
+    sent, refused = sorted(run_async(both()), key=lambda o: o.reason != "sent")
+    assert sent.reason == "sent"
+    assert (refused.ok, refused.reason in ("already_cleared", "waiting")) == (False, True)
+    assert typed == [("claude-dev", "/clear")]
+
+
+def test_core_one_persons_two_confirms_at_once_type_clear_once(mk_bot, run_async, typed):
+    """The same person twice (the chat and the Mini App): no other
+    person's note can refuse the second, so only the per-turn mark does."""
+    import asyncio
+    bot = mk_bot()
+    sess = _live(bot)
+
+    async def both():
+        return await asyncio.gather(
+            bot._clear_session_core(sess, driver_user_id=1, chat_id=None),
+            bot._clear_session_core(sess, driver_user_id=1, chat_id=None))
+
+    assert sorted(o.reason for o in run_async(both())) == ["already_cleared", "sent"]
     assert typed == [("claude-dev", "/clear")]
 
 
