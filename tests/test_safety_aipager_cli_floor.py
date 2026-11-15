@@ -585,9 +585,14 @@ _SLOW_NEW = [
 @pytest.mark.parametrize("cmd", _SLOW_NEW, ids=range(len(_SLOW_NEW)))
 def test_the_new_patterns_never_backtrack_badly(cmd):
     import time
-    start = time.monotonic()
-    bash_violation(cmd, DENY_BASH_PATTERNS)
-    assert time.monotonic() - start < 1.0
+    # best of three, so a loaded machine (the full suite with -n 4) does
+    # not fail a linear case; a backtracking one is slow every time
+    best = float("inf")
+    for _ in range(3):
+        start = time.monotonic()
+        bash_violation(cmd, DENY_BASH_PATTERNS)
+        best = min(best, time.monotonic() - start)
+    assert best < 1.0
 
 
 #: Units repeated to 100 KB in front of a forbidden write: each was
