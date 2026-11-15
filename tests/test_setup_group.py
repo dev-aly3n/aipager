@@ -763,6 +763,24 @@ def test_other_scopes_changed_meanwhile_are_kept(env, monkeypatch):
     assert {s.chat_id for s in env.scopes()} == {111, -100321, GID}
 
 
+def test_a_token_changed_meanwhile_is_kept(env, monkeypatch):
+    from aipager import setup_group
+    real = setup_group._bot_checks
+    rotated = "987654321:BBHf3kLmQ9zXwV7bN2pR8sT4uY6cE1dG0jZ"
+
+    def _rotate(token, chat_id):
+        # `aipager setup --token-file` (or the wizard) rotates the token
+        # between this run's read and its write.
+        scope_mod.dump_scopes(env.scopes(), rotated, scope_mod.CONFIG_PATH)
+        return real(token, chat_id)
+
+    monkeypatch.setattr(setup_group, "_bot_checks", _rotate)
+    code, _doc, out, err = env.gj(*ALICE)
+    assert code == 0
+    assert scope_mod.load_scopes(scope_mod.CONFIG_PATH)[1] == rotated
+    assert rotated not in out + err
+
+
 def test_check_write_guards_both_targets(env, monkeypatch):
     from aipager import _test_guard, audit
     seen = []
@@ -933,6 +951,27 @@ def test_a_network_error_on_getchat_skips_getchatmember(env):
     env.tg.get_chat = (None, None, "network: down")
     env.gj(*ALICE)
     assert env.tg.methods() == ["getMe", "getChat"]
+
+
+@pytest.mark.parametrize("method,answer", [
+    ("get_chat", {"ok": True}),
+    ("get_chat", {"ok": True, "result": None}),
+    ("get_chat", {"ok": True, "result": {"id": GID, "title": "Team"}}),
+    ("get_member", {"ok": True}),
+    ("get_member", {"ok": True, "result": None}),
+    ("get_member", {"ok": True, "result": {"user": {"id": BOT_ID}}}),
+], ids=["chat-no-result", "chat-null", "chat-no-type",
+        "member-no-result", "member-null", "member-no-status"])
+def test_an_unreadable_answer_skips_the_checks(env, method, answer):
+    setattr(env.tg, method, (answer, 200, ""))
+    code, doc, _o, _e = env.gj(*ALICE)
+    assert code == 0 and doc["status"] == "created"
+    codes = [w["code"] for w in doc["warnings"]]
+    assert codes.count("telegram_checks_skipped") == 1
+    assert "chat_not_a_group" not in codes
+    assert doc["telegram"]["checked"] is False
+    if method == "get_chat":
+        assert env.tg.methods() == ["getMe", "getChat"]
 
 
 def test_bot_checks_ask_about_the_bot_itself(env):
