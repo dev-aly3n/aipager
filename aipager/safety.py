@@ -328,9 +328,11 @@ _OPTIONS = r"(?:\s+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
 _LINE_OPTIONS = r"(?:[\x20\t]+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
 #: aipager's own commands named above: the program in any case (a macOS
 #: disk runs ``AIPAGER``), options between it and the subcommand; also
-#: through ``python -m aipager[.cli[.__main__]]`` and a path to the
-#: binary.
-BASH_AIPAGER_CLI = (rf"(?i:\baipager)(?:\.cli(?:\.__main__)?)?{_OPTIONS}"
+#: through ``python -m aipager[.cli][.__main__]`` (``-m`` glued to the
+#: name or after other flags too: ``-maipager``, ``-Imaipager``) and a
+#: path to the binary.
+BASH_AIPAGER_CLI = (r"(?:\b|(?<=-)[A-Za-z]*m)(?i:aipager)"
+                    rf"(?:\.cli)?(?:\.__main__)?{_OPTIONS}"
                     rf"\s+{_AIPAGER_SUBCOMMAND}")
 #: One shell word's characters: never a blank or a separator, so a run
 #: of them stays inside one command.
