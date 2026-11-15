@@ -654,8 +654,9 @@ def test_every_spelling_bash_takes_to_aipagers_folders_is_blocked():
 def test_the_stored_set_covers_the_review_and_report_spellings():
     sources = {c["source"].split()[0] for c in _golden() if c["reach"]}
     assert {"review-4", "test-report-4", "iter3", "iter4", "fuzz", "review-5",
-            "test-report-5", "desync"} <= sources
-    assert sum(c["reach"] for c in _golden()) >= 1500
+            "test-report-5", "desync", "review-6", "test-report-6", "iter7",
+            "desync7"} <= sources
+    assert sum(c["reach"] for c in _golden()) >= 2400
 
 
 def test_decoys_blocked_stay_few():

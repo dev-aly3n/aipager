@@ -1,5 +1,5 @@
 {
-"about": "Spellings of aipager's folders and decoys with real bash's verdict: reach is true when bash (nullglob, run with HOME at a throwaway folder holding .config/aipager/aipager.yaml, .local/share/aipager/x, .local/state/aipager/x and decoy folders) expands the word to a path inside one of the three folders, in default mode or with extglob, nocaseglob, globstar on and globskipdots off. Rows from iteration 6 (review-5, test-report-5, desync) are whole commands checked in bash 5.2 with every command replaced by a recorder: reach is true when a protected path reached a command's arguments.",
+"about": "Spellings of aipager's folders and decoys with real bash's verdict: reach is true when bash (nullglob, run with HOME at a throwaway folder holding .config/aipager/aipager.yaml, .local/share/aipager/x, .local/state/aipager/x and decoy folders) expands the word to a path inside one of the three folders, in default mode or with extglob, nocaseglob, globstar on and globskipdots off. Rows from iteration 6 (review-5, test-report-5, desync) are whole commands checked in bash 5.2 with every command replaced by a recorder: reach is true when a protected path reached a command's arguments. Rows from iteration 7 (review-6, test-report-6, iter7, desync7) were checked the same way, with the recorder logging each command's own arguments and folder: reach is also true when bash ran one of the floor's command rules with the decoded name (aipager setup/config/uninstall, python -m aipager, an aipager import under python -c, pkill/killall/systemctl/launchctl naming aipager, or cp/rsync/tar of the home .config itself).",
 "bash": "GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)",
 "home_files": [
 ".config/aipager/aipager.yaml",
@@ -15059,6 +15059,2116 @@
 {
 "source": "desync",
 "cmd": "shopt -s extglob\necho $(case a in a) echo \"it's\";; esac) ; echo a\\\nb ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo \"${x:-'}'}\" ; ",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\u00a0# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\u00a0#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\u00a0<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x\r# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\r#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\r<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x\u000b# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\u000b#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\u000b<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x\f# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\f#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\f<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x\u001c# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\u001c#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\u001c<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x\u0085# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\u0085#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\u0085<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x\u2003# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo x\u2003#'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat\u2003<<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x # ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo x #'; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E\ncat ~/.config/[a]ipager/x\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <((cat <<E\n) ) <<F\nE\n) )\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo $((cat <<E\n) ) <<F\nE\n) )\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "((cat <<E\n) ) <<F\nE\n) )\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[0 #]=1; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[0 #]=1\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[1 #$(cat ~/.config/[a]ipager/aipager.yaml)]=1",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo $(( a[1 #] ))\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "x=$((1 #))\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a=( [0 #]=1 ); cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "((x=1 #))\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo $((cat <<'E'\n) ) <<F\nE\n) )\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[1<<2]=x\ncat ~/.config/[a]ipager/aipager.yaml\n2]=x",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "a[1<<2]=x; cat ~/.config/[a]ipager/aipager.yaml\n2]=x",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "declare a[1<<2]=x\ncat ~/.config/[a]ipager/aipager.yaml\n2]=x",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "local a[1<<2]=x 2>/dev/null\ncat ~/.config/[a]ipager/aipager.yaml\n2]=x",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[1<<2]+=x\ncat ~/.config/[a]ipager/aipager.yaml\n2]+=x",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "x=1 a[0 #$(cat ~/.config/[a]ipager/aipager.yaml)]=1 true",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "[[ x #\n]]\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[1<<E]=x\ncat ~/.config/[a]ipager/aipager.yaml\nE]=x",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo $(cat <<E)\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo \"$(cat <<E)\"\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <(cat <<E)\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo `cat <<E`\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "cat <<E $(echo a\necho b)\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E $(echo a\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E \"a\nb\"\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E ${x:-a\nb}\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E `echo a\necho b`\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E; (echo a\ncat ~/.config/[a]ipager/aipager.yaml\nE\n)",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "f() { cat; } <<E\nx\nE\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "cat <<E | cat <<F\nx\nE\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E\nx\nE\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "cat << E\\\nX\ncat ~/.config/[a]ipager/aipager.yaml\nE\\\nX\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<\"\"\ncat ~/.config/[a]ipager/aipager.yaml\n\n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<''\ncat ~/.config/[a]ipager/aipager.yaml\n\n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<$''\ncat ~/.config/[a]ipager/aipager.yaml\n\n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<$\"\"\ncat ~/.config/[a]ipager/aipager.yaml\n\n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E\ncat ~/.config/[a]ipager/aipager.yaml\nE \n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E\ncat ~/.config/[a]ipager/aipager.yaml\n E\n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<-E\ncat ~/.config/[a]ipager/aipager.yaml\n\t E\n",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "cat <<E\ncat ~/.config/[a]ipager/aipager.yaml\nE\\\n\nE",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ (a #$(cat ~/.config/[a]ipager/aipager.yaml)) ]]",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ (a #) ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ (a<<b) ]]\ncat ~/.config/[a]ipager/aipager.yaml\nb) ]]",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "if(cat <<E\n) <<F\nE\n)then :;fi\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "while(cat <<E\n) <<F\nE\nfalse)do :;done\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "time(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "!(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "echo \"${x:-'}\" ; echo \"#\"; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo \"${x:-'}\" ; echo \\#; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo \"${x:='}\" ; echo \\#; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo \"${x:+'}\" ; echo \\#; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "x=1; echo \"${x:+'}\" ; echo \\#; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo \"${x-'}\" ; echo \\#; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo \"${x#'}\" ; echo \\#; cat ~/.config/[a]ipager/aipager.yaml ; echo \"'}\"",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a=([0 #$(cat ~/.config/[a]ipager/aipager.yaml)]=1)",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ a|#b ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ (#) ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ ( #) ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x ==(a #) ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ (<<E) ]]\ncat ~/.config/[a]ipager/aipager.yaml\nE) ]]",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "coproc(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "if true; then(cat <<E\n) <<F\nE\n)fi\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ ( x #) ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "case x in (x #) ;; esac; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "a[0 #]+=1 ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "echo $((cat <<E\n) )\nE\n) ) <<F\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "until(cat <<E\n) <<F\nE\n)do :;done\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "f()(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "f()(true #)\n)\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ ^(a|b)$ ]] && cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "review-6",
+"cmd": "[[ x =~ (a) ]] # cat ~/.config/[a]ipager/aipager.yaml",
+"reach": false
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat ~/.config/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "grep -n 'TODO$' notes.txt; sed -i s/user/owner/ ~/.config/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "grep -E '^a|b$' f && cat ~/.config/$'\\x61ipager'/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo 'cost: 5$'\ncat ~/.config/$'\\x61'ipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat ~/.config/$'\\141'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat ~/.local/share/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat ~/.local/state/aipag$'\\x65'r/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat ~/$'\\x2e'config/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cat \"$HOME\"/.config/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo \"$'\"; cat ~/.config/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo \"\\$'\"; cat ~/.config/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo # it's 5$'\ncat ~/.config/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "cat <<'E'\n5$'\nE\ncat ~/.config/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "cat <<E\n5\\$'\nE\ncat ~/.config/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cd ~/$'\\x2e'config && cat aipager/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "'echo $'; echo \"{\"; cat \"$(echo ~/.config/$'\\x61'ipager/x)\"",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo ${x:-'}$'};\necho $(( $(cat ~/.config/$'\\x61'ipager/x) + 0 )); echo done",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo \"'$'\"; cat ~/.config/aip$'\\x61'ger/x",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "grep -n 'TODO$' notes.txt; $'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; $'\\x61'ipager setup --token-stdin --chat-id 5 --role owner --force < f",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; aip$'\\x61'ger config",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; $'\\x61ipager' uninstall -y",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; python3 -m $'\\x61'ipager.cli setup",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; python3 -c $'import \\x61ipager.scope'",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "grep -n 'x$' f; pkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; killall $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; systemctl --user stop $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; launchctl kickstart -k gui/501/com.$'\\x61'ipager.daemon",
+"reach": true
+},
+{
+"source": "test-report-6",
+"cmd": "echo '$'; cp -r ~/$'\\x2e'config /tmp/x",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "echo x\u001f# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "echo x\u3000# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "a[1<<E]+=x\ncat ~/.config/[a]ipager/aipager.yaml\nE]+=x",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "if a[1 #$(cat ~/.config/[a]ipager/aipager.yaml)]=x; then :; fi",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "[[ ! x =~ a|#b && y ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "if(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "while(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "until(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "{(cat <<E\n) <<F\nE\n);}\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "if true; then(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "echo '$'; cat ~/$'\\x2e'config/[a]ipager/x",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "echo '$'; cat ~/.config/nvim\\x20/../$'\\x61'ipager/x",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "echo '$'; \\xargs aipager; echo 'x'",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "x=a; echo '$'; pkill -f ${x/*/$'\\x61'ipager}",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "grep -n 'TODO$' notes.txt; cat ~/$'\\x2e'config/[a]ipager/x",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "grep -n 'TODO$' notes.txt; cat ~/.config/nvim\\x20/../$'\\x61'ipager/x",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "grep -n 'TODO$' notes.txt; \\xargs aipager; echo 'x'",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "x=a; grep -n 'TODO$' notes.txt; pkill -f ${x/*/$'\\x61'ipager}",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "echo # it's 5$'\ncat ~/$'\\x2e'config/[a]ipager/x",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "echo # it's 5$'\ncat ~/.config/nvim\\x20/../$'\\x61'ipager/x",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "echo # it's 5$'\n\\xargs aipager; echo 'x'",
+"reach": false
+},
+{
+"source": "iter7",
+"cmd": "x=a; echo # it's 5$'\npkill -f ${x/*/$'\\x61'ipager}",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "f() { cp -r ~/.config /tmp/x ; }; f",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "f(){ aip* setup; }; f",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "f() { cp -r ~/$'\\x2e'config /tmp/x ; }; f",
+"reach": true
+},
+{
+"source": "iter7",
+"cmd": "cat <<E\ncat ~/.config/[a]ipager/aipager.yaml\nE",
+"reach": false
+},
+{
+"source": "desync7",
+"cmd": "echo x\u00a0# ; cat ~/.local/state/a[i]pager/x ; echo '#' ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:+\"}\"} ; cat <<E\n5\\$'\nE\ncd ~/$'\\x2e'config && cat aipager/x ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n>5$'\nE\necho x\r# ; pkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "for ((i=0;i<1;i++)); do :; done ; echo a#b ; cat <<E\n5\\$'\nE\n$'\\x61ipager' uninstall -y ; a=( [0 #]=1 ) ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ ( #) ]]; cat ~/.config/[[:a]ipager/aipager.yaml ; echo x\u2003# ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $|{x:-'}$'} ; echo $(cat <<E\n)\nE\n) ; while(cat <<E\n) <<F\nE\nfalse)do :;done\ncat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml\nF ; x=a; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-\"}\"} ; [[ x =~ (#) ]] ; echo \"`e{cho \\\"`\" ; cat ~/.local/share/[a]ipager/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\u001c# ; echo \"`echo \\\"`\" ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo {a,'}'} ; echo \\\n# it's\n[[ x =~ a|#b ]] ; echo `cat ~/.local/share/[a]ipager/x` ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001d# ; echo ${x:-'}$'} ; [[ x =~ ^(a|b)$ ]] ; cat ~/.config/aip$'\\141'ger/x ; echo $(( a[1 #] )) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\npython3 -c $'import \\x61ipager.scope' ; echo x\u001d# ; echo ${x:-$(echo })} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $(case a in a) echo \"it's\";$; esac) ; a[1 #$(cat ~/.local/share/[a]ipager/x)]=1 ; case a in a) echo ;; esac ; cat <<''\nx\n\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -n 'TODO$' notes.txt ; [[ x =~ ^(a|b)$ ]] ; cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}$'} ; while(cat <<E\n) <<F\nE\nfalse)do :;done\ncat ~/$'\\x2e'config/aipager/x\nF ; grep -n 'TODO$' notes.txt ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\r# ; cat ~/.local/state/a[i]pager/x ; echo x\u2003# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\necho ${x:-'}$'} ; [[ x =~ (a #$(cp -r ~/$'\\x2e'config /tmp/x)) ]] ; echo x\u001f# ; echo ${x:-'}$'} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $'it\\'s' ; echo '$' ; $'\\x61ipager' uninstall -y",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\u001d# ; cat ~/.local/share/[a]ipager/x ; echo x\f# ; a[0 #]=1 ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001c# ; cat <<E\n5\\$'\nE\n$'\\x61ipager' uninstall -y ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "a=([0 #$(cat ~/.config/[a]ip$'\\x61'ger/x)]=1) ; echo <<<'x' ; (( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2028# ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $#{!x} ; echo $\"x\" ; [[ x =~ (a #$(cat ~/.config/aip[a\\]]ger/aipager.yaml)) ]]",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\necho `cat ~/.config/$'\\x61'ipager/aipager.yaml` ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n5$'\nE\ncat ~/.config/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $(echo # )\n) ; a=([0 #$(cat ~/.local/share/[a]ipager/x)]=1) ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(( (1) )) ; echo ${x:-'}$'} ; coproc(cat <<E\n) <<F\nE\n)\ncat ~/.local/state/a[i]pager/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}'} ; echo x\u00a0# ; echo $((2#101)) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x#{} ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"'$'\" ; pkill -f $'\\x61'ipager ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho # it's 5$'\npkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $((2#101)) ; echo # it's 5$'\nf()(true #)\n)\npython3 -m $'\\x61'ipager.cli setup ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "e>cho \"'$'\" ; echo '#' ; cat <<E\n5\\$'\nE\ncat ~/.local/share/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<E\n5\\$'\nE\n[[ x =~ (a<<b) ]]\nsystemctl --user stop $'\\x61'ipager\nb) ]] ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001d# ; echo \"\\$'\" ; echo # it's 5$'\ncat <<E\n$(cp -r ~/$'\\x2e'config /tmp/x)\nE",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2028# ; echo 'cost: 5$'\naip$'\\x61'ger config ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho {a,'}'} ; echo x\u3000# ; echo `echo '` ; [[ x =~ ( #) ]]; cat ~/.config/[a]ip$'\\x61'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001c# ; echo ${x#'}'} ; (( x = 1 << 2 )) ; time(cat <<E\n) <<F\nE\n)\ncat ~/.local/state/a[i]pager/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(cat <<E\n)\nE\n) ; echo x\u000b# ; cat ~/.config/[a]ip$'\\x61'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo x\u001c# ; !(cat <<E\n) <<F\nE\n)\ncat ~/.local/state/a[i]pager/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ a|#b ]]; cat ~/.local/share/[a]ipager/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "f() { cp -r ~/$'\\x2e'config /tmp/x ; }; f ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $x#' ; echo `echo \\`` ; echo \\# ' ; if(cat <<E\n) <<F\nE\n)then :;fi\ncat ~/.local/share/[a]ipager/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $\"x\" ; echo \"$'\" ; case a in a) echo ;; esac ; pkill -f $'\\x61'ipager ; a[1 2]=3 ; echo \"\\$'\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; echo \"`echo \\\"`\" ; case a in a) echo ;; esac ; cp -r ~/$'\\x2e'config /tmp/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo a\\\nb ;\\ echo $\"x\" ; cat <<E\n5\\$'\nE\nsystemctl --user stop $'\\x61'ipager ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho <<<'x' ; cat <<'EOF'\n$( it's\nEOF\ngrep -n 'TODO$' notes.txt ; killall $'\\x61'ipager ; echo $((1<<2)) ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo hi # \"it's\" ${\necho x\u0085# ; echo # it's 5$'\ncat ~/.local/share/$'\\x61'ipager/x ; [[ x =~ (#) ]] ; echo x\u001c# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<\"E\"OF\n'\nEOF\ntime(cat <<E\n) <<F\nE\n)\ncat ~/.config/[[:a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"'$$'\" ; x=${y:-$(python3 -c $'import \\x61ipager.scope')} ; echo $(case a in a) echo \"it's\";; esac) ; x=a; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ;$ cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml ; echo x\r# ; f()(true) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ; echo \"${x:-\"a b\"}\" ; echo `cp -r ~/$'\\x2e'config /tmp/x` ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b>$' f && echo \"$(case a in (a) echo;; esac)\" ; f() { pkill -f $'\\x61'ipager ; }; f ; echo \"\\$'\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho # it's${ 5$'\naip$'\\x61'ger config",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<E\n5\\$'\nE\n[[ x =~ a|#b ]] ; cat ~/.local/state/a[i]pager/x ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "e&cho \"a\\\"b\" ; f() { cp -r ~/$'\\x2e'config /tmp/x ; }; f ; cat <<E\\OF\n\"\nEOF\nx=1 a[0 #]=1 true ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo # it's 5$'\ncat <<\"E\"OF\n'\nEOF\necho \"'$'\" ; cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho 'cost: 5$'\necho $[1<<2] ; time(cat <<E\n) <<F\nE\n)\ncat ~/$'\\x2e'config/aipager/x\nF ; echo ${x#{} ; echo x\f# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<'E'\n5$'\nE\npkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\r# ; echo ${x/\\}/} ; echo x\u001f# ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; [[ x =~ (a) ]] # x\necho # it's 5$'\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:=$'\\''} ; echo \"${x/{/}\" ; [[ x =~ a|#b ]]; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\r# ; echo '$' ; cat ~/$'\\x2e'config/aipager/x ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "f() { echo; } ; [[ x =~ (a) ]] # x\nx=a; [[ x =~ (a #$(cat ~/.local/share/[a]ipager/x)) ]]",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho \"\\$'\" ; echo ${x//[}]/} ; echo x\u0085# ; cat ~/.config/[a]ip$'\\x61'ger/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n5$'\nE\nkillall $'\\x61'ipager ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ a|#b ]]; cat ~/.config/[a]ip$'\\x61'ger/x ; echo $(cat <<E\n)\nE\n) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u3000# ; echo ${x#'}'} ; cat ~/.config/[[:a]ipager/aipager.yaml ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo a # \"$( \na=([0 #$(cat ~/.config/[a]ipager/aipager.yaml)]=1)",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2028# ; cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001f# ; echo 'cost: 5$'\necho ${x//[}]/} ; cat ~/.config/$'\\x61'ipager/aipager.yaml ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}$'} ; echo $(cd ~/$'\\x2e'config && cat aipager/x)",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001d# ; echo }# it's 5$'\necho x\u0085# ; x=${y:-$(cat ~/.local/share/$'\\x61'ipager/x)} ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "e|cho x\u001c# ; [[ x =~ ( #) ]]; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo a # \"$( \necho \"'$'\" ; killall $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\r# ; cat <<'E'\n5$'\nE\n[[ x =~ (a) ]] # x\n$'\\x61ipager' uninstall -y ; echo \"$'\" ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && python3 -c $'import \\x61ipager.scope' ; echo x\u3000# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2003# ; time(true) ; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "x=1 a[0 #]=1 true ; echo $(cat ~/.config/[a]ipager/aipager.yaml)",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2028# ; echo x\u001c# ; cat ~/.local/share/[a]ipager/x ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && time(true) ; f()(cat <<E\n) <<F\nE\n)\npkill -f $'\\x61'ipager\nF ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\u2003# ; echo \"'$'\" ; cat ~/$'\\x2e'config/aipager/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a$(|b$' f && echo a # \"$( \npython3 -m $'\\x61'ipager.cli setup ; echo x\u001e# ; echo \\\n# it's\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$(case a in (a) echo;; esac)\" ; echo 'cost: 5$'\n[[ x =~ ^(a|b)$ ]] ; systemctl --user stop $'\\x61'ipager ; x=a; echo \"${x/{/}\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo a#b ; echo x\u00a0# ; cat ~/.config/[a]ip$'\\x61'ger/x ; echo \"\\$'\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x/\\}/} ; echo x\u00a0# ; (( $(cat ~/.config/[a]ipager/aipager.yaml | wc -l) )) ; echo hi # \"it's\" ${\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo a\\\nb ; echo \"'$'\" ; x=a; cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml ; x=a; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<E\n5\\$'|\nE\necho x\u00a0# ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\r# ; cat ~/.local/share/[a]ipager/x ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\n(( x = 1 << 2 )) ; coproc(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\n[[ x =~ (#) ]] ; cat ~/.config/[a]ip$'\\x61'ger/x ; echo ${x:-{} && f() { echo; } ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost:{ 5$'\ncoproc(cat <<E\n) <<F\nE\n)\ncat ~/.local/state/a[i]pager/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "f() { echo; } ; cat <<'E'\n5$'\nE\ncoproc(cat <<E\n) <<F\nE\n)\ncat ~/$'\\x2e'config/aipager/x\nF ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(echo ')') ; echo \"'$'\" ; echo $(( (1) )) ; cat ~/$'\\x2e'config/aipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "if(true) then :; fi ; echo \"'$'\" ; cd ~/$'\\x2e'config && cat aipager/x ; echo ${!x} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncase a in a) echo ;; esac ; echo x\u2003# ; cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ (#) ]] ; echo ${x:-$(echo })} ; echo \n${x:-'}$'} ; cat ~/.config/$'\\x61'ipager/aipager.yaml ; echo x\u000b# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u00a0# ; cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "(true #)\n) ; echo \"'$'\" ; cat <<E\n$(systemctl --user stop $'\\x61'ipager)\nE ; cat <<\"\"\nx\n\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\na=([0 #$(cat ~/.config/aip[a\\]]ger/aipager.yaml)]=1) ; echo `echo \\`` ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; grep -E '^a|b$' f && [[ x =~ (a) ]] # x\npython3 -c $'import \\x61ipager.scope' ; echo $((2#101)) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001f# ; echo x\u00a0# ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo $(( (1) )) ; echo 'cost: 5$'\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo `python3 -c $'import \\x61ipager.scope'`",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo hi # \"it's\" ${\ncat <<'E'\n5$'\nE\naip$'\\x61'ger config ; time(true) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo\\ x\u001d# ; grep -E '^a|b$' f && echo ${y:-~/.config/aip$'\\141'ger/x}",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo # (it's 5$'\necho $\"x\" ; cat ~/.local/share/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n5$'&\nE\nx=a; cat ~/.config/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u0085# ; [[ x =~ ^(a|b)$ ]] ; echo ${y:-~/.config/[a]ip$'\\x61'ger/x}",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u000b# ; grep -n 'TODO$' notes.txt ; x=1 a[0 #]=1 true ; cd ~/$'\\x2e'config && cat aipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ntime(true) ; grep -n 'TODO$' notes.txt ; echo $(( (1) )) ; $'\\x61ipager' uninstall -y ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<E\n5\\$'\nE\nf() { echo; } ; grep -n 'TODO$' notes.txt ; python3 -c $'import \\x61ipager.scope' ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u00a0# ; echo ${x:-'}$'} ; echo $[1<<2] ; systemctl --user stop $'\\x61'ipager ; echo `echo \\`` ; echo '$' ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\f# ; echo x\u000b# ; [[ x =~ a|#b ]] ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; echo x\u3000# ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"`echo \\\"`\" ; echo x\r# ; echo `echo '` ; cat ~/.local/state/a[i]pager/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -n 'TODO$' notes.txt ; f()(true #)\n)\ncat ~/.config/$'\\x61'ipager/aipager.yaml ; echo ${x:+\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ; systemctl --user stop $'\\x61'ipager ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $'it\\'s' ; [[ x =~ ( #) ]]; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo '$' ; echo x\u001f# ; f()(true) ; cp -r ~/$'\\x2e'config /tmp/x ; echo x\u001c# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x[${y:-0}]} ; echo 'cost: 5$'\necho $((2#101)) ; cat ~/.local/share/$'\\x61'ipager/x ; f()(true) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\n}echo 'cost: 5$'\nx=a; echo x\u2003# ; cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho ${x:-'}$'} ; echo \"`echo \\\"`\" ; echo \"a\\\"b\" ; pkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho \"\\$'\" ; echo $(( (1) )) ; cp -r ~/$'\\x2e'config /tmp/x ; echo 'cost: 5$'\ncat <<'EOF'\n$( it's\nEOF\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\necho x\u001c# ; cat ~/.config/[a]ip$'\\x61'ger/x ; echo ${x//[}]/} ; echo a\\\nb ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\necho ${x//[}]/} ; cat ~/.config/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\necho ${x:-{} && cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml ; echo $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo '$' ; cp -r ~/$'\\x2e'config /tmp/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $( (echo) ) ; echo ${x:-`echo }`} ; echo # it's 5$'\nkillall $'\\x61'ipager ; echo x\u000b#' ; cat <<\"E\"OF\n'\nEOF\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $((1<<2)) ; [[ x =~ a|#b ]]; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\ntime(true) ; echo x\u0085# ; echo x\u00a0# ; cat ~/.config/[a]ip$'\\x61'ger/x ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\na[1 #$(cat ~/.local/state/a[i]pager/x)]=1",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ ( #) ]] ; echo 'cost: 5$'\necho ${x:-{} && [[ x =~ (a #$($'\\x61ipager' uninstall -y)) ]] ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo\n x\r# ; a=([0 #$(cat ~/.config/[a]ip$'\\x61'ger/x)]=1) ; cat <<''\nx\n\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}$'} ; python3 -m $'\\x61'ipager.cli setup",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$(echo \")\")\" ; echo \\# ' ; cat <<'E'\n5$'\nE\nif(cat <<E\n) <<F\nE\n)then :;fi\ncp -r ~/$'\\x2e'config /tmp/x\nF ; echo $(( a[1 #] )) ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && cat ~/.config/aip$'\\141'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$(echo \")\")\" ; echo ${x:-'}$'} ; $'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo # it's 5$'\necho ${x:-'}$'} ; echo x\u2003# ; pkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; cat ~/.config/aip$'\\141'ger/x ; echo a\\\nb ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001c# ; cat ~/.local/state/a[i]pager/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $(cat <<E\n)\nE\n) ; x=a; echo x\u001e# ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; a[0 #]+=1 ; echo $(( (1) )) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "for ((i=0;i<1;i++)); do :; done ; a[1 #$(cat ~/.config/[[:a]ipager/aipager.yaml)]=1 ; a[0 #]=1 ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; echo $(echo ')') ; echo x\u3000# ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\n$'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2003# ; echo x\u2028# ; echo x\u2003# ; cat ~/.local/state/a[i]pager/x ; [[ x =~ (a) ]] # x\nf() { echo; } ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x//[}]/} ; echo $(echo ')') ; echo x\u3000# ; cat ~/.config/[a]ip$'\\x61'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && cat ~/$'\\x2e'config/aipager/x ; echo $(( (1) )) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "a[1 #$(cat ~/.local/share/[a]ipager/x)]=1",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-{} && a[1 #$(cat ~/.config/aip[a\\]]ger/aipager.yaml)]=1",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \\\n# it's\necho \nE\nx\u001f# ; grep -E '^a|b$' f && cat ~/.config/[[:a]ipager/aipager.yaml ; echo {a,'}'} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001d# ; f() { echo; } ; echo x\r# ; cat ~/.local/state/a[i]pager/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $((2#101)) ; echo$ x\u001f# ; x=a; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; cat <<''\nx\n\necho $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n`5$'\nE\nkillall $'\\x61'ipager ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho \"'$'\" ; echo \"$(case a in (a) echo;; esac)\" ; echo x\u2003# ; a=([0 #$(killall $'\\x61'ipager)]=1)",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-`echo }`} ; echo $(cat <<E\n)\nE\n) ; [[ x =~ a|#b ]]; cat ~/.config/[[:a]ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\r# ; echo x\u00a0# ; cat ~/.config/[a]ipager/aipager.yaml ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"${x#'}'}\" ; echo \"$'\" ; cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml ; echo x\u001e# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\n[[ x =~ (a) ]] # x\na[1 #$(cat ~/.local/share/[a]ipager/x)]=1",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo '$' ; $'\\x61ipager' uninstall -y",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo a\\\nb ; echo # it's) 5$'\n[[ x =~ a|#b ]] ; killall $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ; echo $(cat <<E\n)\nE\n) ; [[ x =~ a|#b ]]; cat ~/.local/share/$'\\x61'ipager/x ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\ncat ~/.config/aip$'\\141'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "a=(x [2 ; echo b ]$=3) ; x=1 a[0 #]=1 true ; cat ~/.config/[a]ipager/aipager.yaml ; echo ${x:-`echo }`} ; echo ${x:-$(echo })} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $'it\\'s' ; $'\\x61'ipager status ; echo $(( a[1 #] )) ; x=1 a[0 #]=1 true ; ",
+"reach": false
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\n[[ x =~ ( #) ]]; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ngrep -E '^a|b$' f && a[1 #$(cat ~/.config/[a]ip$'\\x61'ger/x)]=1 ; echo ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && cat ~/.local/share/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ; f()(true) ; if(true) then :; fi ; aip$'\\x61'ger config ; grep -E '^a|b$' f && echo {a,'}'} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -n 'TODO$' notes.txt ; python3 -c $'import \\x61ipager.scope' ; echo x\f# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho a\\\nb ; echo x\u2028# ; cat ~/.local/share/[a]ipager/x ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001d# ; echo x\u001f# ; cat <<'E'\n5$'\nE\necho $(cd ~/$'\\x2e'config && cat aipager/x) ; cat <<\"\"\nx\n\necho \"${x/{/}\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-`echo }`} ; echo x\u001e# ; echo `python3 -c $'import \\x61ipager.scope'` ; echo \"$'\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "time(true) ; echo x\r# ; cat ~/.config/[a]ipager/aipager.yaml ; echo ${!x} ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\necho \"\\$'\" ; echo x\u00a0# ; $'\\x61ipager' uninstall -y ; cat <<EOF ; echo a ;\nbody ' \nEOF\necho $(( a[1 #] )) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "!(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ip$'\\x61'ger/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001c# ; echo ${x:-')}$'} ; cat ~/.config/$'\\x61'ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\n<cat <<\"E\"OF\n'\nEOF\necho '$' ; cd ~/$'\\x2e'config && cat aipager/x ; echo x\u3000# ; a=( [0 #]=1 ) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho \"'$'\" ;\nE\n echo x\u001d# ; python3 -m $'\\x61'ipager.cli setup ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ (#) ]] ; cat ~/.local/state/a[i]pager/x ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n5$'\nE\necho} x\u000b# ; aip$'\\x61'ger config ; echo \"`echo \\\"`\" ; (( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\ngrep -n 'TODO$' notes.txt ; killall $'\\x61'ipager ; echo $(cat <<E\n)\nE\n) ; echo ${x:+\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ a|#b ]] ; echo ${x:-'}$'} ; cat ~/.local/state/a[i]pager/x ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho \"${x:-'}'}\" ; x=1 a[0 #]=1 true ; cat ~/.config/[a]ip$'\\x61'ger/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho ;\"'$'\" ; echo $($'\\x61ipager' uninstall -y) ; cat <<-EOF\n\tit's\n\tEOF\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho a # \"$( \necho $\"x\" ; echo x\u2028# ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $\"x\" ; [[ x =~ ^(a|b)$ ]] ; grep -n 'TODO$' notes.txt ; cat ~/.config/$'\\x61'ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"'$'\" ; $'\\x61ipager' uninstall -y ; echo ${x:-{} && (true #)\n) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\nkillall $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\n[[ x =~ (a #$(cat ~/.local/share/[a]ipager/x)) ]]",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo '$' ; echo ${x:-'}$'} ; echo x\f# ; a[1 #$(cat ~/.config/[[:a]ipager/aipager.yaml)]=1 ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"'$'\" ; echo x\u0085# ; aip$'\\x61'ger config",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "coproc(cat <<E\n) <<F\nE\n)\ncat ~/.config/aip[a\\]]ger/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}'} ; echo x\u001f# ; cat ~/.local/share/[a]ipager/x ; echo ${x#{} ; echo x\u000b# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "time(cat <<E\n) <<F\nE\n)\ncat ~/.local/state/a[i]pager/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && $'\\x61ipager' uninstall -y ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$(case a in (a) echo;; esac)\" ; [[ x =~ a|#b ]]; cat ~/.local/state/a[i]pager/x ; echo $'it\\'s' ; echo hi # \"it's\" ${\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<\"\"\nx\n\necho 'cos}t: 5$'\nf()(cat <<E\n) <<F\nE\n)\ncp -r ~/$'\\x2e'config /tmp/x\nF ; echo \"${x:-\"a b\"}\" ; echo x\f# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"${x#'}'}\" ; grep -E '^a|b$' f && f()(cat <<E\n) <<F\nE\n)\nsystemctl --user stop $'\\x61'ipager\nF ; echo x\f# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; [[ x =~ (a #$(cat ~/.config/aip[a\\]]ger/aipager.yaml)) ]]",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001d# ; echo ${x:-\"}\"} ; echo ${x/\\}/} ; cat ~/.config/[a]ipager/aipager.yaml ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho `python3 -c $'import \\x61ipager.scope'` ; echo ${x:-'}'} ; cat <<E\\OF\n\"\nEOF\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-\"}\"} ; echo $x#' ; cat <<E\n5\\$'\nE\ncat ~/.local/share/$'\\x61'ipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho $((2#101)) ; [[ x =~ ( #) ]] ; echo ${x#{} ; cat ~/.config/[a]ip$'\\x61'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"'$'\" ; cat ~/.config/aip$'\\141'ger/x ; echo `echo \\`` ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "for ((i=0;i<1;i++)); do :; done ; echo <<<'x' ; echo # it's 5$'\ncat ~/.config/$'\\x61'ipager/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho ${x:-`echo }`} ; echo ${x:-}}} ; echo # it's 5$'\ncat ~/.config/aip$'\\141'ger/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho ${x:+\"}\"} ; echo \"$'\" ; time(true) ; pkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x//[}]/} ; if(true) then :#; fi ; echo '$' ; aip$'\\x61'ger config ; a[1 2]=3 ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001c# ; echo ${x:-}}} ; [[ x =~ a|#b ]] ; [[ x =~ ( #) ]]; cat ~/.config/[a]ip$'\\x61'ger/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$'\" ; echo a # \"$( \n(( $(cat ~/.con$'\\x66'ig/$'\\x61'ipager/aipager.yaml | wc -l) )) ; cat <<A <<B\n'\nA\n\"\nB\n[[ x =~ (#) ]] ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-\"}\"} ; echo x\r# ; grep -n 'TODO$' notes.txt ; [[ x =~ ( #) ]]; cat ~/.local/share/$'\\x61'ipager/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "x=1 a[0 #]=1 true ; echo $(echo ')') ; echo '#' ; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ngrep -E '^a|b$' f && echo $((2#101)) ; echo $(case a in a) echo \"it's\";; esac) ; if true; then(cat <<E\n) <<F\nE\n)fi\ncat ~/.config/[[:a]ipager/aipager.yaml\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "ec&ho x\u0085# ; cat ~/.config/[a]ip$'\\x61'ger/x ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ ( #) ]]; cat ~/.local/share/[a]ipager/x ; x=a; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ngrep -n 'TODO$' notes.txt ; if(true) then :; fi ; echo ${x/\\}/} ; a=([0 #$(cat ~/.local/share/$'\\x61'ipager/x)]=1) ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<''\nx\n\necho \"$'\" ; x=a; cat ~/.config/$'\\x61'ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'EOF'\n$( 'it's\nEOF\ncat <<'E'\n5$'\nE\necho x\u001c# ; cat ~/$'\\x2e'config/aipager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \nEOF\necho \"\\$'\" ; cat ~/.local/share/$'\\x61'ipager/x ; [[ x =~ ( #) ]] ; echo '$' ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n5$'\nE\necho x\u001d# ; $'\\x61ipager' uninstall -y",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u000b# ; echo ${x#{} ; echo '$' ; [[ x =~ ( #) ]]; python3 -c $'import \\x61ipager.scope' ; echo ${x/\\}/} ; case a in a) echo ;; esac ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo {a,'}'} ; echo # it's 5$'\necho x\r# ; if(cat <<E\n) <<F\nE\n)then :;fi\n$'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force\nF ; echo ${x[${y:-0}]} ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "grep -E '^a|b$' f && $'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force ; a[0 #]+=1 ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ (#) ]] ; echo '$' ; echo ${y:-~/.local/share/$'\\x61'ipager/x}",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(cat <<E\n)\nE\n) ; echo \"\\$'\" ; while(cat <<E\n) <<F\nE\nfalse)do :;done\npkill -f $'\\x61'ipager\nF ;  # ${",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x#{} ; echo \"$(case a in (a) echo;; esac)\" ; [[ x =~ a|#b ]]; cat ~/.config/[a]ip$'\\x61'ger/x ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\ncp -r ~/$'\\x2e'config /tmp/x ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho '$' ; $'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force ; echo $(( (1) )) ; echo `echo '` ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $\n{x/\\}/} ; echo '$' ; a[1<<2]=x\ncat ~/.config/aip[a\\]]ger/aipager.yaml\n2]=x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "x=1 a[0 #]=1 true ; grep -E '^a|b$' f && f()(cat <<E\n) <<F\nE\n)\npkill -f $'\\x61'ipager\nF ; echo x\r#' ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ ( #) ]] ; ca<t <<E\n5\\$'\nE\nf() { echo; } ; killall $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $\"x\" ; echo \"'$'\" ; aip$'\\x61'ger config ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho ${x[${y:-0}]} ; echo $(cat <<E\n)\nE\n) ; echo `echo \\`` ; [[ x =~ a|#b ]]; cat ~/.config/[a]ipager/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "(( x = 1 << 2 )) ; echo x\u00a0# ; cat ~/.config/[[:a]ipager/aipager.yaml ; [[ x =~ ( #) ]] ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<}E\n5\\$'\nE\necho ${x/\\}/} ; a=([0 #$(python3 -c $'import \\x61ipager.scope')]=1)",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\necho \"'$'\" ; echo ${x:+\"}\"} ; a=([0 #$(cp -r ~/$'\\x2e'config /tmp/x)]=1) ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "if(true) then :; fi ; time(cat <<E\n) <<F\nE\n)\ncat ~/.config/[a]ip$'\\x61'ger/x\nF",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(echo # )\n) ; echo \"'$'\" ; $'\\x61ipager' uninstall -y ; echo $(( (1) )) ; echo $(echo ')') ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\nx=1 a[0 #]=1 true ; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\ncat <<'E'\n5$'\nE\na[1<<E]+=x\nkillall $'\\x61'ipager\nE]+=x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<'E'\n5&$'\nE\npython3 -m $'\\x61'ipager.cli setup",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo # it's 5$'\n[[ x =~ a|#b ]] ; cat ~/.local/share/[a]ipager/x ; echo ${x:+\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2003# ; echo $\"x\" ; f() { echo; } ; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "if(true) then :; fi ; echo \"'$'\" ; pkill -f $'\\x61'ipager ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ; echo ${x:-{} && cd ~/$'\\x2e'config && cat aipager/x ; echo ${x:-}}} ; echo \"$'\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<E\n5\\$'\nE\necho x\u00a0# ; cp -r ~/$'\\x2e'config /tmp/x ; if(true) then :; fi ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $((1<<2)) ; case a in a) echo ;; esac ; grep -E '^a|b$' f && aip$'\\x61'ger config ; echo $'it\\'s' ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "(true #)\n) ; echo $((1<<2)) ; [[ x =~ ( #) ]] ; f() { cp -r ~/$'\\x2e'config /tmp/x ; }; f ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "x=a; echo x\r# ; cat ~/.config/[a]ip$'\\x61'ger/x ; echo $(( a[1 #] )) ; echo x\r# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "time(true) ; x=a; echo x}\u001d# ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho ${x:-$(echo })} ; echo x\u00a0# ; echo <<<'x' ; a[1 #$(cat ~/.local/state/a[i]pager/x)]=1",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"${x:-\"a b\"}\" ; f()(true) ; echo ${x:-{} && echo x\u00a0# ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "[[ x =~ ( #) ]] ; echo \"a\\\"b\" ; grep -E '^a|b$' f && cp -r ~/$'\\x2e'config /tmp/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u2003# ; cat ~/.local/share/[a]ipager/x ; echo \"$'\" ; cat <<''\nx\n\n",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "a=([0 #$(cat ~/.local/state/a[i]pager/x)]=1) ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}$'} ; echo x\u2003# ; $'\\x61ipager' uninstall -y",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"${x:-\"a b\"}\" ; echo \"'$'\" ; $'\\x61'ipager setup group --chat-id -1 --member 5:me:owner --force ; echo ${x:-'}$'} ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001e# ; cat <<E\n5\\$'\nE\npython3 -c $'import \\x61ipager.scope'",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"\\$'\" ;\nE\n pkill -f $'\\x61'ipager",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<\"E\"OF\n'\nEOF\necho '$' ; echo $((1<<2)) ; python3 -c $'import \\x61ipager.scope'",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo ${x:-'}<<E\n$'} ; cp -r ~/$'\\x2e'config /tmp/x ; x=a; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo 'cost: 5$'\necho \"${x/{/}\" ; echo ${y:-~/.config/aip$'\\141'ger/x} ;  # `",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo # it's 5$'\ntime(true) ; echo $( (echo) ) ; time(cat <<E\n) <<F\nE\n)\ncat ~/$'\\x2e'config/aipager/x\nF ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"$(case a in (a) echo;; esac)\" ; echo `echo '` ; [[ x =~ a|#b ]]; cat ~/.config/[a]ip$'\\x61'ger/x ; echo $((1<<2)) ; x=a; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<''\nx\n\necho \"$'\" ; cat ~/.config/$'\\x61'ipager/aipager.yaml ; echo \"$(echo \")\")\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; cat <<A <<B\n'\nA\n\"\nB\necho x\u0085# ; cat ~/.config/[a]ipager/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "cat <<$''\nx\n\necho x\r# ; echo \"${x:-\"a b\"}\" ; cat ~/.config/[a]ip$'\\x61'ger/x ; echo ${!x} ; echo \"${x/{/}\" ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "ec\nE\nho x\u00a0# ; echo `cat ~/.config/[[:a]ipager/aipager.yaml` ;  # '",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"${x:-'}'}\" ; echo \"${x#'}'}\" ; cat <<'EOF'\n$( it's\nEOF\na=([0 #$(cat ~/.local/state/a[i]pager/x)]=1) ;  # $(",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "shopt -s extglob\necho x\u001e# ; echo x\u001d# ; cat ~/.config/[[:a]ipager/aipager.yaml ; a[0 #]+=1 ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo \"a\\\"b\" ; echo \"$'\" ; python3 -m $'\\x61'ipager.cli setup ; echo ${x/\\}/} ; echo x\u001f# ; ",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "echo x\u001c# ; echo {a,'}'} ; cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync7",
+"cmd": "if(true) then :; fi ; cat <<'E'\n5$'\nE\npython3 -c $'import \\x61ipager.scope' ; echo x\u2003# ; echo # it's 5$'\n",
 "reach": true
 }
 ]
