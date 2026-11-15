@@ -32,7 +32,7 @@ import re
 
 #: One character standing for a value the floor cannot see: ``$X``,
 #: ``${...}``, ``$(...)``, a backtick substitution, an integer sequence.
-OPAQUE = ""
+OPAQUE = "\uf8ff"
 
 #: Characters that mean something to brace expansion or globbing. A quoted
 #: or escaped copy of one is moved into a private plane so it never acts
