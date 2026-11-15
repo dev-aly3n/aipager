@@ -191,7 +191,7 @@ def test_nesting_too_deep_is_unsure():
 
 
 def test_a_comment_starts_only_where_a_word_starts():
-    assert g.words("echo # ~/.config/[a]ipager/x") == []
+    assert g.words("echo # *.py") == []
     assert g.command_reaches("echo # it's\n" + T + " # '")
     assert g.command_reaches("echo a;#b'\n" + T)
     # mid-word # is plain, so the quote after it is real
@@ -213,10 +213,12 @@ def test_a_here_document_body_is_not_words():
     assert g.command_reaches("cat <<\"E\"OF\n'\nEOF\n" + T)
     assert g.command_reaches("cat <<E\\OF\n'\nEOF\n" + T)
     assert g.command_reaches("cat <<$'EOF'\n'\nEOF\n" + T)
-    # text inside the body is never a path
-    assert not g.command_reaches("cat <<EOF\n" + T + "\nEOF")
+    # text inside the body is no words (it is read again as words when
+    # it could name a folder: test_text_set_aside_is_read_again)
+    assert g.words("cat <<EOF\n*.py\nEOF") == []
     # a quoted delimiter keeps the body's $( ) as text
-    assert not g.command_reaches("cat <<'EOF'\n$(" + T + ")\nEOF")
+    assert g.words("cat <<'EOF'\n$(ls *.py)\nEOF") == []
+    assert g.words("cat <<EOF\n$(ls *.py)\nEOF") == ["*.py"]
     # the closing line must match exactly; one that never comes is unsure
     assert not g.lex("cat <<EOF\nx\nEOF \n")[1]
     assert g.command_reaches("cat <<EOF\nx\nEOF \n" + T)
@@ -243,6 +245,8 @@ def test_a_here_string_is_not_a_here_document():
 def test_a_shift_in_arithmetic_is_not_a_here_document(cmd):
     assert g.lex(cmd)[1]
     assert g.command_reaches(cmd)
+    # read as commands, not as a here-document body read again
+    assert "*.py" in g.words(cmd.replace(T, "ls *.py"))
 
 
 @pytest.mark.parametrize("cmd", [
@@ -702,6 +706,11 @@ _MANY = [
     "@(a|", "${x#{} ", "`echo '` ", "<<E ", "<<E\n", "# ' \n",
     "$((1<<2)) ", "${x:-[a]} ", "$(case a in a) b;; esac) ", "~/.c*/a?(x) ",
     "x[a[=[=]y ",
+    # iteration 7: subscripts, =~ groups, glued reserved words, text read
+    # again, $' read two ways
+    "a[1 #]=x; ", "[[ x =~ (a #) ]]; ", "if(true) then :; fi; ",
+    "# ~/.config/nvim x\n", "echo '$'; echo $'\\x61' ", "a=(1 ')' 2); ",
+    "$[" * 47 + "1" + "]" * 47 + " ",
 ]
 
 
@@ -742,3 +751,142 @@ def test_only_a_space_or_tab_is_a_blank(blank):
     assert g.words("ls x" + blank + "#*") == ["x" + blank + "#*"]
     assert g.lex("echo x" + blank + "#' ; ls")[1] is False
     assert g.command_reaches("echo x" + blank + "# ; " + T)
+
+
+@pytest.mark.parametrize("cmd,want", [
+    ("a[1 #]=x; ls *.py", ["a[1 #]=x", "*.py"]),
+    ("a[1 #]+=x; ls *.py", ["a[1 #]+=x", "*.py"]),
+    ("x=1 a[0 #]=1 true *.py", ["a[0 #]=1", "*.py"]),
+    ("a=([0 #]=1 [1]=2); ls *.py", ["[0 #]=1", "[1]=2", "*.py"]),
+    ("a=( x [2 ; echo b ]=3 ); ls *.py", ["[2 ; echo b ]=3", "*.py"]),
+    ("if a[1 #]=x; then ls *.py; fi", ["a[1 #]=x", "*.py"]),
+    # not where an assignment may stand: bash splits at the blank
+    ("a[b[1] #]=x; ls *.py", ["a[b[1] #]=x", "*.py"]),
+    ("echo a[1 #] *.py", ["a[1"]),
+    ("a=(x[0 #]=1) *.py", ["x[0"]),
+    ("for a[1 #] in *.py", ["a[1"]),
+])
+def test_an_assignment_subscript_is_one_word(cmd, want):
+    """rev-iter6-002: where an assignment may stand, bash reads
+    ``name[...]`` to its matching ``]`` as one word (blanks, ``#`` and
+    ``<<`` in it), and so a word starting with ``[`` in ``a=(...)``."""
+    assert g.words(cmd) == want
+
+
+@pytest.mark.parametrize("cmd", [
+    "a[1<<2]=x\n" + T + "\n2]=x",
+    "a[1<<E]+=x\n" + T + "\nE]+=x",
+    "a[1 #$(" + T + ")]=1",
+    "a=([0 #$(" + T + ")]=1)",
+    "x=1 a[0 #$(" + T + ")]=1 true",
+])
+def test_the_review_6_subscript_commands_are_blocked(cmd):
+    assert g.lex(cmd)[1]
+    assert g.command_reaches(cmd)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_REASON
+
+
+@pytest.mark.parametrize("cmd,want", [
+    ("[[ x =~ (a #) ]]; ls *.py", ["[[", "(a #)", "*.py"]),
+    ("[[ x =~ ( #) ]]; ls *.py", ["[[", "( #)", "*.py"]),
+    ("[[ x =~ x(a\n#)? ]] && ls *.py", ["[[", "x(a\n#)?", "*.py"]),
+    ("[[ x =~ a|#b ]]; ls *.py", ["[[", "*.py"]),
+    ("[[ ! x =~ a|#b && y ]]; ls *.py", ["[[", "*.py"]),
+    # only the word after =~, only inside [[ ]]
+    ("[[ x == y ]]; (ls #) ; ls *.py", ["[["]),
+    ("[[ a ]]; echo =~ a|#b ; ls *.py", ["[["]),
+])
+def test_a_regex_pattern_keeps_its_groups_and_bars(cmd, want):
+    """rev-iter6-003: in ``[[ x =~ ... ]]`` the pattern word holds its
+    ``(...)`` groups (blanks and ``#`` inside) and ``|``."""
+    assert g.words(cmd) == want
+
+
+@pytest.mark.parametrize("cmd", [
+    "[[ x =~ (#) ]]; " + T,
+    "[[ x =~ ( #) ]]; " + T,
+    "[[ x =~ a|#b ]]; " + T,
+    "[[ x =~ (a #$(" + T + ")) ]]",
+])
+def test_the_review_6_pattern_commands_are_blocked(cmd):
+    assert g.lex(cmd)[1]
+    assert g.command_reaches(cmd)
+
+
+@pytest.mark.parametrize("head", [
+    "if(", "while(", "until(", "time(", "!(", "coproc(", "{(",
+    "if true; then(", "f()("])
+def test_a_reserved_word_glued_to_a_paren_opens_a_subshell(head):
+    """rev-iter6-004: ``if(``, ``f()(`` and the like end the word: the
+    ``(`` opens a subshell, where ``<<`` is a here-document."""
+    cmd = head + "cat <<E\n) <<F\nE\n)\nls *.py\nF"
+    assert "*.py" in g.words(cmd)
+    assert g.command_reaches(head + "cat <<E\n) <<F\nE\n)\n" + T + "\nF")
+    # an extended glob glued to a word stays one word
+    assert g.words("echo x@(a|#b) *.py") == ["x@(a|#b)", "*.py"]
+
+
+def test_text_set_aside_is_read_again():
+    """rev-iter6-005: a comment, a here-document's delimiter or body, a
+    subscript or a ``=~`` group is read again as plain words when it
+    could name a folder, so bash reading it some other way never hides a
+    word."""
+    assert g.words("echo # ~/.config/[a]ipager/x") == ["~/.config/[a]ipager/x"]
+    assert g.command_reaches("echo x # ; " + T)
+    assert g.command_reaches("cat <<E\n" + T + "\nE")
+    assert g.command_reaches("cat <<'E'\n$(" + T + ")\nE")
+    assert g.command_reaches("cat <<E~/.config/[a]ipager/x\nE~/.config/[a]ipager/x")
+    assert g.command_reaches("echo $[ " + T)
+    assert "~/.config/[a]ipager/x" in g.words(
+        "echo # x # ~/.config/[a]ipager/x")
+    # a subscript bash may not read as one: its text is read again
+    assert ".config/[a]ipager/x]" in g.words("a[1 .config/[a]ipager/x]=1")
+    # text that cannot name a folder is not read again
+    assert g.words("echo # *.py") == []
+    assert g.words("cat <<E\n*.py\nE") == []
+
+
+def test_an_empty_quoted_delimiter_is_a_here_document():
+    """rev-iter6-008: ``<<''``, ``<<""``, ``<<$''`` and ``<<$""`` are
+    legal; the body ends at the first empty line."""
+    for d in ("''", '""', "$''", '$""'):
+        assert g.lex("cat <<" + d + "\nx\n\nls")[1]
+    assert not g.lex("cat << ; ls")[1]
+def test_a_numeric_escape_may_name_a_folder():
+    """Decoded wherever it stands, not only after a ``$'`` read from the
+    left (``echo '$'`` would shift that)."""
+    assert g._mentions("$'\\x2e'config", False)
+    assert g._mentions("echo '$'; echo $'\\056\\143onfig'", False)
+    assert g._mentions("echo `echo $'\\\\x2e'config`", False)
+    assert not g._mentions("echo $'\\x41' ~/projects", False)
+    assert g.command_reaches("echo '$'; cat ~/$'\\x2e'config/[a]ipager/x")
+
+
+def test_nothing_is_read_when_nothing_could_name_a_folder(monkeypatch):
+    """tester-iter6-002: a command where no copy could name ``.config``
+    or ``.local`` is not read at all."""
+    def boom(*a):
+        raise AssertionError("read")
+    monkeypatch.setattr(g, "_read", boom)
+    assert not g.command_reaches("(" * 5000 + "x" + ")" * 5000 + " ; ls *.py")
+
+
+def test_an_open_dollar_bracket_is_read_once():
+    """rev-iter6-007: ``$[`` left open 47 deep is read as plain words
+    once, not once per level."""
+    def best(levels: int) -> float:
+        cmd = "$[" * levels + "x" * 100_000 + " ~/.config/nvim/x"
+        out = float("inf")
+        for _ in range(3):
+            start = time.perf_counter()
+            assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+            out = min(out, time.perf_counter() - start)
+        return out
+    assert best(47) < 3 * best(1) + 0.02
+
+
+def test_a_word_only_quotes_or_dollar_quotes_make_is_read():
+    """The matcher skips a copy that holds no word worth expanding; quotes
+    taken out, ``'.''.'`` is a ``..`` step, and ``$'...'`` may make one."""
+    assert g.command_reaches("cat ~/.config/x/'.''.'/aipager/x")
+    assert g.command_reaches("cat ~/.config/x/$'\\x2e\\x2e'/aipager/x")
