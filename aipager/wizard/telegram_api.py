@@ -419,23 +419,16 @@ def _fetch_id_from_pending(
     from aipager.team import _pending_seen_at, list_pending_users
     if want == "dm":
         return None, None, DAEMON_DM_ADVISORY
+    if want == "group":
+        record, saw_known = _newest_pending_group(exclude=exclude,
+                                                  not_before=not_before)
+        if record is not None:
+            return record["chat_id"], (record.get("chat_title") or ""), None
+        return None, None, (ONLY_KNOWN_GROUPS_ADVISORY if saw_known
+                            else DAEMON_NO_GROUP_ADVISORY)
     saw_known = False
-    for r in reversed(list_pending_users()):
-        if not isinstance(r, dict):
-            continue
-        if not_before is not None:
-            seen_at = _pending_seen_at(r)
-            if seen_at is None or seen_at.timestamp() < not_before:
-                continue
-        if want == "group":
-            cid = r.get("chat_id")
-            if (r.get("chat_type") not in ("group", "supergroup")
-                    or not isinstance(cid, int) or isinstance(cid, bool)):
-                continue
-            if cid in exclude:
-                saw_known = True
-                continue
-            return cid, (r.get("chat_title") or ""), None
+    for r in _pending_records(list_pending_users(), _pending_seen_at,
+                              not_before):
         uid = r.get("user_id")
         # (list_pending_users already hides Telegram's shared sender ids.)
         if not isinstance(uid, int) or isinstance(uid, bool):
@@ -446,11 +439,45 @@ def _fetch_id_from_pending(
         who = _sender_name(r.get("username"), r.get("display_name"))
         return uid, who, None
     if saw_known:
-        return None, None, (ONLY_KNOWN_GROUPS_ADVISORY if want == "group"
-                            else ONLY_KNOWN_SENDERS_ADVISORY)
-    if want == "group":
-        return None, None, DAEMON_NO_GROUP_ADVISORY
+        return None, None, ONLY_KNOWN_SENDERS_ADVISORY
     return None, None, DAEMON_NO_USER_ADVISORY
+
+
+def _pending_records(records, seen_at, not_before: float | None):
+    """The pending-users *records* newest first, dicts only, without those
+    last written before *not_before* or with no readable time (when
+    *not_before* is set)."""
+    for r in reversed(records):
+        if not isinstance(r, dict):
+            continue
+        if not_before is not None:
+            when = seen_at(r)
+            if when is None or when.timestamp() < not_before:
+                continue
+        yield r
+
+
+def _newest_pending_group(*, exclude=frozenset(),
+                          not_before: float | None = None
+                          ) -> tuple[dict | None, bool]:
+    """``(record, saw_known)``: the newest group record in the daemon's
+    pending-users file whose chat id is not in *exclude* (its
+    ``chat_id`` an int, ``chat_type`` ``group`` or ``supergroup``), and
+    whether a group in *exclude* wrote. *not_before* as in
+    :func:`_fetch_id_from_pending`."""
+    from aipager.team import _pending_seen_at, list_pending_users
+    saw_known = False
+    for r in _pending_records(list_pending_users(), _pending_seen_at,
+                              not_before):
+        cid = r.get("chat_id")
+        if (r.get("chat_type") not in ("group", "supergroup")
+                or not isinstance(cid, int) or isinstance(cid, bool)):
+            continue
+        if cid in exclude:
+            saw_known = True
+            continue
+        return r, saw_known
+    return None, saw_known
 
 
 def _known_group_in_pending(*, exclude, not_before: float) -> bool:

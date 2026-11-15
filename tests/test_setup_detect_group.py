@@ -211,6 +211,17 @@ def test_plain_output(env):
 
 # ----- daemon source -----
 
+@pytest.mark.parametrize("ctype", ["group", "supergroup"])
+def test_daemon_source_reports_the_records_chat_type(env, ctype):
+    env.source = "daemon"
+    env.write_pending([
+        {"user_id": 7, "chat_id": -100009, "chat_type": ctype,
+         "chat_title": "Crew", "first_seen": _iso(NOW - 30)},
+    ])
+    _code, doc, _o, _e = env.run("--timeout", "0")
+    assert doc["candidate"]["type"] == ctype
+
+
 def test_daemon_source_reads_the_pending_records(env):
     env.source = "daemon"
     env.write_pending([
@@ -219,7 +230,7 @@ def test_daemon_source_reads_the_pending_records(env):
     ])
     code, doc, _o, _e = env.run("--timeout", "0")
     assert code == 0 and doc["source"] == "daemon"
-    assert doc["candidate"] == {"id": -100009, "title": "Crew", "type": None,
+    assert doc["candidate"] == {"id": -100009, "title": "Crew", "type": "supergroup",
                                 "date": None}
     assert not any("getUpdates" in u for u in env.urls)
 

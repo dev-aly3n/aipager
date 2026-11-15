@@ -305,11 +305,14 @@ def cmd_detect_group(args: argparse.Namespace, run: _Run) -> int:
 
     if source == "daemon":
         while True:
-            cid, title, _advisory = telegram_api._fetch_id_from_pending(
-                want="group", exclude=exclude, not_before=not_before)
-            if cid is not None:
-                return _found_group(run, {"id": cid, "title": title or "",
-                                          "type": None, "date": None}, 0)
+            record, _known = telegram_api._newest_pending_group(
+                exclude=exclude, not_before=not_before)
+            if record is not None:
+                title = record.get("chat_title")
+                return _found_group(run, {
+                    "id": record["chat_id"],
+                    "title": title if isinstance(title, str) else "",
+                    "type": record["chat_type"], "date": None}, 0)
             remaining = deadline - _monotonic()
             if remaining <= 0:
                 break
