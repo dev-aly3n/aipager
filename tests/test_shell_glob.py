@@ -716,6 +716,7 @@ _MANY = [
     # (rev-iter7-001: 7-10 s when each ``(`` joined the word), here-document
     # bodies full of specials (tester-iter7-004), ``${...}`` text read as
     # words, ``$[`` with quotes nested deep
+    "x(a)", "f()@", "~$f()", "/f()",
 ]
 
 
@@ -949,3 +950,19 @@ def test_function_keyword_starts_a_command_for_its_name():
     here-document (bash 5.2 runs its body)."""
     cmd = "function f()(cat <<E\n) <<F\nE\n)\nls *.py\nF"
     assert "*.py" in g.words(cmd)
+
+
+def test_an_empty_glued_group_is_not_read_as_commands(monkeypatch):
+    """A function's ``()`` glued to its name is taken as it is: no nested
+    read of commands per ``()`` (``f()`` repeated cost one call each)."""
+    calls = []
+    real = g._Lexer.commands
+
+    def spy(self, *a, **k):
+        calls.append(1)
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(g._Lexer, "commands", spy)
+    words = g.words("f() { :; }; " * 50 + "ls *.py")
+    assert "*.py" in words
+    assert len(calls) == 1

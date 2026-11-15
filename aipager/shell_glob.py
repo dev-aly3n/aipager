@@ -159,7 +159,9 @@ _KEEPS_COMMAND_START = frozenset(
      "{", "}", "coproc"))
 #: A reserved word glued to ``(`` at a command's start ends there and the
 #: ``(`` opens a subshell (``if(cat <<E ...``), as after a function's
-#: ``name()`` (``f()(...)``): never an extended glob group.
+#: ``name()`` (``f()(...)``): never an extended glob group. Decided from
+#: the word's pieces (one piece in this set, or a name and ``()``),
+#: never by joining the word, which may be long and meet many ``(``.
 _OPENS_SUBSHELL = _KEEPS_COMMAND_START - {"}"}
 #: ``function NAME``: the name stands where a command's start does, so
 #: ``function f()(cat <<E`` opens a subshell after ``f()`` too.
@@ -440,14 +442,22 @@ class _Lexer:
                     cur.add("(")
                     i = self._matched(i, "(", ")", cur)
                     continue
-                glued = bool(cur.pieces)
+                pieces = cur.pieces
+                glued = bool(pieces)
                 compound = glued and cur.last_char() == "="
                 if glued and not compound and not (
                         start and not arith and not flat
-                        and (cur.text() in _OPENS_SUBSHELL
-                             or cur.text().endswith("()"))):
+                        and ((len(pieces) == 1
+                              and pieces[0] in _OPENS_SUBSHELL)
+                             or (len(pieces) == 2 and pieces[1] == "()"))):
                     # an extended glob (``@(a|b)``) or another shell's
                     # group, glued to the word: kept in it as typed
+                    if text.startswith(")", i):
+                        # ``()``, as a function's name ends: nothing to read
+                        self._mark(")")
+                        cur.add("()")
+                        i += 1
+                        continue
                     begin = i - 1
                     self._enter()
                     i = self.commands(i, True, True)
