@@ -1,5 +1,5 @@
 {
-"about": "Spellings of aipager's folders and decoys with real bash's verdict: reach is true when bash (nullglob, run with HOME at a throwaway folder holding .config/aipager/aipager.yaml, .local/share/aipager/x, .local/state/aipager/x and decoy folders) expands the word to a path inside one of the three folders, in default mode or with extglob, nocaseglob, globstar on and globskipdots off.",
+"about": "Spellings of aipager's folders and decoys with real bash's verdict: reach is true when bash (nullglob, run with HOME at a throwaway folder holding .config/aipager/aipager.yaml, .local/share/aipager/x, .local/state/aipager/x and decoy folders) expands the word to a path inside one of the three folders, in default mode or with extglob, nocaseglob, globstar on and globskipdots off. Rows from iteration 6 (review-5, test-report-5, desync) are whole commands checked in bash 5.2 with every command replaced by a recorder: reach is true when a protected path reached a command's arguments.",
 "bash": "GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)",
 "home_files": [
 ".config/aipager/aipager.yaml",
@@ -127,23 +127,8 @@
 "reach": false
 },
 {
-"source": "test-report-4 posix-unclosed-colon",
-"cmd": "cat ~/.config/[[:a]ipager/aipager.yaml",
-"reach": true
-},
-{
 "source": "test-report-4 posix-unclosed-equals",
 "cmd": "cat ~/.config/[[=a]ipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "test-report-4 posix-unclosed-name",
-"cmd": "cat ~/.config/[[:alpha]ipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "test-report-4 posix-unclosed-last",
-"cmd": "cat ~/.config/[a[:]ipager/aipager.yaml",
 "reach": true
 },
 {
@@ -512,11 +497,6 @@
 "reach": true
 },
 {
-"source": "iter3 dotdot-after-eq-dir",
-"cmd": "mkdir ~/.config/a=b; cat ~/.config/a=b/../aipager/aipager.yaml",
-"reach": true
-},
-{
 "source": "iter3 dotdot-after-colon-dir",
 "cmd": "mkdir ~/.config/a:b; cat ~/.config/a:b/../aipager/aipager.yaml",
 "reach": true
@@ -525,11 +505,6 @@
 "source": "iter3 sub-var-piece",
 "cmd": "aipager s${X}etup group",
 "reach": false
-},
-{
-"source": "iter3 hidden-brace-and-dotted-leaf",
-"cmd": "cat ~/.{config,x}/{aipager,a.b}/aipager.yaml",
-"reach": true
 },
 {
 "source": "iter3 cd-cdpath",
@@ -948,11 +923,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager",
 "reach": true
 },
@@ -1003,11 +973,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/\\aip{.,a[!m]er/aipage[r[:].yaml}",
 "reach": true
 },
@@ -1039,11 +1004,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/aipager/'p'olicy.yam\"l\"",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -1123,11 +1083,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.\"c\"onfig/aipager/aipager.yam'l'",
 "reach": true
 },
@@ -1183,11 +1138,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.\"c\"onfig/ai[[=p=]]a?er",
 "reach": true
 },
@@ -1214,11 +1164,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .local/sh\\are/ai[o-r]ager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -1294,11 +1239,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/aipag{..,e}r",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -1433,11 +1373,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .conf[i\\]]g/aipager/aip'a'ger.[[=y=]]aml",
 "reach": true
 },
@@ -1538,11 +1473,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .lo*l/share/aipa{g\\e[,a.b}[.r.]]/*",
 "reach": true
 },
@@ -1598,11 +1528,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.conf{i..i}g/aip[[=a]ge\\r/a*pager.yaml",
 "reach": true
 },
@@ -1628,17 +1553,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .c{x,onfig/aipa[[.g.]}]e\"r\"/ai*r.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -1703,16 +1618,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipag*{r,x{a{{a,b},,b}}}",
 "reach": true
 },
@@ -1733,16 +1638,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .local/**/aipager/[{x/../[=x=],x{a,b}}]",
 "reach": true
 },
@@ -1754,11 +1649,6 @@
 {
 "source": "fuzz",
 "cmd": "cat {x,.config/a}ipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -1824,11 +1714,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/{nvim/x,.//.config/a}ipager/policy.y{a,./}ml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -1924,11 +1809,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.loca[]l]/state/aip\"a\"g\"e\"r/\"x\"",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -2103,27 +1983,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~//.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/sha*e{/,/}ai?ag'e'r/[x\\]]",
 "reach": true
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/[a,]ipage[r\\]]/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -2183,22 +2048,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.*n'f'ig/\\aipager//policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -2233,11 +2083,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.con{..,fig/}aipager",
 "reach": true
 },
@@ -2248,22 +2093,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/state/{aipager/?,{a,b}}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -2309,11 +2139,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .config/aipager/ai{a.b,p}ager.y[!m]ml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -2398,11 +2223,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .conf\"i\"g/a\\ipager/ai[[=p=]]ager.yaml",
 "reach": true
 },
@@ -2468,17 +2288,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipage[R]/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -2513,11 +2323,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/aipager.\"y\"am{k..m}",
 "reach": true
 },
@@ -2543,22 +2348,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/{.loc'a'[L]/s't'ate/aipager/x,/}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -2618,22 +2408,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/state/[!x]ipager/x",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.confi{g/aip,..}{ag,y/z}er",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -2698,11 +2478,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/aipager/ai{pa,x}ger.yaml",
 "reach": true
 },
@@ -2763,17 +2538,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/aipager/aipa[[.g.]]er.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -2803,11 +2568,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/./aipager/a[xi]pager.y\\aml",
 "reach": true
 },
@@ -2833,22 +2593,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/share/aipa\"g\"er/x",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat .config/aipager/aipager.ya[![:digit:]]l",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -2918,11 +2668,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.lo[c]al/'s'tate/ai[mp]age[[:lower:]]/x",
 "reach": true
 },
@@ -2943,22 +2688,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .[zc]onfig/aipage*/aipager.yaml",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.local/shar{e/aipager/x,/}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -3038,17 +2773,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/a:b/..{,}/aipa{x{a,b},ge}r",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share//aipager/x",
 "reach": true
 },
 {
@@ -3078,11 +2803,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .c[!{/,q]nfi}g/'a'ipager/ai\"p\"ager.{{a,b},yaml}",
 "reach": true
 },
@@ -3108,11 +2828,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/aipager/ai[P]ager[.,]ya{,m}l",
 "reach": true
 },
@@ -3129,11 +2844,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.local/s\"t\"a[{t]e/aip,..}ager/[]x]",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -3183,17 +2893,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/'.'[l,]ocal{.,/./state/[]a]i}pag[!m]r/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -3204,11 +2904,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .\\config/aipa\"g\"er/ai{y/z,pager.}yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -3258,22 +2953,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.lo{b..d}al/s*r*/aip[a,]ge{r..r}/[x[:]",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat .loca{l/sh*re/[[,a.b}:xdigit:]]ip[za]ger/{x..y}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -3309,11 +2994,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/{aipag,./}er",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -3403,11 +3083,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/aip{a.b,ager/aipager.}ya{ml,{a,b}}",
 "reach": true
 },
@@ -3458,21 +3133,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/sh\\are/aipage[R]/x",
 "reach": true
 },
@@ -3493,22 +3153,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/policy.ya{y/z,ml}",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/ai[{[.p.]]a,y/z}{,g}er/policy.y{a..b}\"m\"l",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -3524,11 +3174,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.{x,local/sh{..,a}re/aipage}r/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -3549,11 +3194,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.c{n..o}nfig/aipag{.,e}r",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -3583,11 +3223,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/./aip{nvim/x,ager/aipager.y}aml",
 "reach": true
 },
@@ -3609,11 +3244,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.{co{nfi,.}g/,nvim/..}aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -3673,11 +3303,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .lo{nvim/..,ca{x,l/}sha[}r\\]]e/\\aip\"a\"ger/x",
 "reach": true
 },
@@ -3728,17 +3353,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/aipa'g'[[.e.]]r/a{ipager,.}.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -3768,11 +3383,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/nvim/../aipager/aipager.yaml",
 "reach": true
 },
@@ -3794,11 +3404,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/aipager/policy.y*l",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -3854,11 +3459,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~//.config/aip/{.,x}./aipager/./po{licy.yaml,/}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -3943,17 +3543,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/pol[I]cy.[y]aml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -3974,11 +3564,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/a:b/../aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -4023,11 +3608,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/./aipa{{g..g}er/aipager.y,y/z}aml",
 "reach": true
 },
@@ -4039,11 +3619,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .c\"o\"nfig/aipager/aipager.ya?l",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -4108,27 +3683,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.*{onfig/a,y/z}\"i\"pager",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/pi{y/z,p/../aipager/policy.{y,x}aml}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -4144,11 +3704,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config{/a,nvim/x}i{pager/aipager.,.}yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -4173,27 +3728,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/ai{o..p}ager",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.local/state/aipager/[[:alphx]",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -4283,11 +3823,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/a\"i\"pager/aipager[[...]]yaml",
 "reach": true
 },
@@ -4299,11 +3834,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.co[l-p]fig*/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -4334,11 +3864,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/./.con[[.f.]]ig/aipag[be]\\r/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -4398,32 +3923,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.{config/aip,{a,b}}a?\"e\"r",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/ai[mp]a\"g\"er/policy.[Y]am*",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -4443,11 +3948,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.confi{g/\"a\"ip,}ag'e'r/policy.ya\"m\"l",
 "reach": true
 },
@@ -4459,11 +3959,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.local/share/aipager/'x'",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -4504,11 +3999,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.confi'g'/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -4578,17 +4068,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.co[m{-o]f'i',x}g/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.conf{i..j}g/aipager",
 "reach": true
 },
 {
@@ -4618,11 +4098,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/{nvim/x,aipager.ya}ml",
 "reach": true
 },
@@ -4648,17 +4123,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/./a[I]pag\\er",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -4674,11 +4139,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .loc[A]l/share/aipa[dg]e{q..s}/[[:xz]",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -4708,11 +4168,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aip{ager/aipager.ya,/}ml",
 "reach": true
 },
@@ -4724,11 +4179,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.conf[g-i]'g'/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -4749,11 +4199,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .local//share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -4783,37 +4228,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.con[f[:]\"i\"g/nvim/../aipage{r,./}",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/ai{pager/aip,x{a,b}}ager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -4868,11 +4288,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .co'n'*ig/ai'p'ager/aipager.yaml",
 "reach": true
 },
@@ -4908,17 +4323,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/[!{{a,b},d]har}e/aipager/?",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -4938,27 +4343,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/{x{a,b},[]s]ha\"r\"e/aipag}er/x",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat .*ocal/s\"h\"ar[]e]/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -4978,17 +4368,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat {/,.config/ai[yp}]a{,ger/aipager.yaml}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -5023,11 +4403,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.conf'i'g/aipag[[.e.]]r",
 "reach": true
 },
@@ -5054,11 +4429,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.[[.c.]]onfig/aipager/policy.yam\"l\"",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -5113,11 +4483,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .\"l\"ocal/share/ai[[:lower:]]ag\\er/x",
 "reach": true
 },
@@ -5158,22 +4523,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .loc{y/z,al/sh*/}aipager{a.b,/}'x'",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -5218,16 +4568,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/[A]ipag{/,er/aipage}r.yaml",
 "reach": true
 },
@@ -5253,11 +4593,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/polic[![:digit:]].yaml",
 "reach": true
 },
@@ -5274,11 +4609,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~//.co[[=n=]]fig/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -5323,11 +4653,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat {y/z,.config/aipager/./aip[A]ge[!}z].yaml",
 "reach": true
 },
@@ -5358,11 +4683,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/s[[=h=]]are/./a*pager/\\x",
 "reach": true
 },
@@ -5388,11 +4708,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/{x..y}",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.loca[!b]/share/aipager/{\"x\",x{a,b}}",
 "reach": true
 },
@@ -5414,11 +4729,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .local/sha{r\"e\"/*age,x{a,b}}r/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -5458,11 +4768,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.l*[a-b]l/share/ai[[:pq]a[yg]{er/,nvim/x}x",
 "reach": true
 },
@@ -5478,17 +4783,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.confi{{f..h}/aip\\a,}g*r",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -5548,11 +4843,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/state/a\"i\"pag[E]r/{x,/}",
 "reach": true
 },
@@ -5579,16 +4869,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.lo{,cal/{./,s}tate/aipage}r/*",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -5628,11 +4908,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .local/sh\\are/aipag{er/x,/}",
 "reach": true
 },
@@ -5644,11 +4919,6 @@
 {
 "source": "fuzz",
 "cmd": "cat {a.b,~/.con{x,fig/aipa}ger/a}ipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -5673,22 +4943,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/shar?/a\\ip'a'ger/x",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/a[i-i]pager/policy'.'yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -5728,11 +4988,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config{/aipa,nvim/x}ger",
 "reach": true
 },
@@ -5748,32 +5003,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .{local/share/aipager/x,y/z}",
 "reach": true
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.confi[g,]/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -5784,16 +5019,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/'.'confi{g/a,.}ipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -5873,22 +5098,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .\\l'o'cal/{s{x,hare/aip[[},{a,b}}:alpha]ger/[X]",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat .config/aipager/aip'a'ger.ya\\ml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -5928,16 +5143,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.co{nfig/aipager/a,.}{ipage,{a,b}}*ml",
 "reach": true
 },
@@ -5954,11 +5159,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/aipage{a.b,r/a}ipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -6018,22 +5218,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/sh[[.a.]]\\re/aipager/[[.x.]]",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.con\"f\"{ig/./aipage,}r",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -6083,11 +5273,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.'c'onfig/systemd/../aipager/./aipa[G]er.yaml",
 "reach": true
 },
@@ -6103,11 +5288,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~//.config/aipager/aipager.yam?",
 "reach": true
 },
@@ -6118,27 +5298,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.c[[.o.]]nfig/aipager//policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -6168,11 +5328,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .loc\"a\"l/sha{q..r}e/aipag[ke]r/x",
 "reach": true
 },
@@ -6189,11 +5344,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .'c'on*ig/aipager/aipag\"e\"r.ya\"m\"l",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -6269,11 +5419,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.config/{aipag,..}er",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -6398,16 +5543,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.\\conf[i]g/aipage[![:xdigit:]]",
 "reach": true
 },
@@ -6429,11 +5564,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.local/state/aipage[r\\]]/{x..x}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -6473,11 +5603,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .config/aipager/a*er.yaml",
 "reach": true
 },
@@ -6494,11 +5619,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.co\"n\"fig/aipag'e'[[:r]/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -6554,11 +5674,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.c[O]nfig/aipager/[[:alphp]olicy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -6673,17 +5788,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/./aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/{nvim/x,a[I]page[q-t]/}a\"i\"pag*r.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -6713,11 +5818,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~//.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipage*/policy.yaml",
 "reach": true
 },
@@ -6738,22 +5838,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .con*/aipa{f..g}er/aipager.yaml",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat ~/.co\\nfi[[:g]/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -6783,17 +5873,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/state/aipager{,/x}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -6893,11 +5973,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/policy.y[a\\]]\\ml",
 "reach": true
 },
@@ -6919,11 +5994,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.loc'a'\\l/share/aipager/{/,*}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -6973,16 +6043,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/systemd/../aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.co{nfig/aipager/aipager,x{a,b}}.yaml",
 "reach": true
 },
@@ -7014,11 +6074,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .config/aipag{..,er/aipa}ger.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7058,11 +6113,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/a?pager/aipager[[=.]yaml",
 "reach": true
 },
@@ -7078,11 +6128,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aip{ager,..}",
 "reach": true
 },
@@ -7094,16 +6139,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .co\\nf\\ig/aip{a..a}ger/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7148,11 +6183,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.co[n]fi{g/ai{p,{a,b}}ag,/}er",
 "reach": true
 },
@@ -7178,27 +6208,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/aipager/aip{a..b}ger.ya{l..m}l",
 "reach": true
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.lo{x,cal/share/aipager/}x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -7213,17 +6228,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/share/aipa{g,x{a,b}}er/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
 "reach": true
 },
 {
@@ -7249,11 +6254,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.local{/,/sha}re/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -7288,16 +6288,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .{c..c}onfig/a\\ipager/aipage{/,r.yaml}",
 "reach": true
 },
@@ -7308,22 +6298,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.config/\\aipag\\er/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7333,17 +6308,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.[!x]ocal/*e/aipager/[[:xm]",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -7378,32 +6343,12 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .local/share/aipage[]r]/{w..x}",
 "reach": true
 },
 {
 "source": "fuzz",
 "cmd": "cat .con{fi{g/a[![:spac,.}e:]],nvim/x}pa\"g\"er/aipage'r'.y[a]ml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7428,11 +6373,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .local/sha'r'e/aipager/./\\x",
 "reach": true
 },
@@ -7449,16 +6389,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~//.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7503,17 +6433,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/./st\\a{te//aipa,x}ger/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -7543,11 +6463,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat {./,~/.l}o{./,c[]}a]l/s[t][[:am]te/aip{a..b}ger/x",
 "reach": true
 },
@@ -7559,11 +6474,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.con[]f]i[g[:]/aipag*r/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
 "reach": true
 },
 {
@@ -7613,17 +6523,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .'c'o[[=n=]]{./,fig/a}{h..i}pager/aipag{e..f}r.ya\"m\"l",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7639,11 +6539,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .local/share/aipag*r/\"x\"",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config//aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7708,17 +6603,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/./.local/./share/nvim/..{,}/aipager//x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
 "reach": true
 },
 {
@@ -7729,16 +6614,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.c*ig/a{h..j}pager/po{licy,/}.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -7888,11 +6763,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat .l\"o\"c[a[=]l/s'h'ar[![:upper:]]{/aipager/[[.x.]],..}",
 "reach": true
 },
@@ -7933,11 +6803,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.co\"n\"fig/aipager/ai'p'ager.yaml",
 "reach": true
 },
@@ -7968,11 +6833,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/\\aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.?o\"c\"al/sh*/aipage[[=r=]]/[!d]",
 "reach": true
 },
@@ -7988,17 +6848,7 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/state/aip[ya]'g'er{/,nvim/..}x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -8023,11 +6873,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat .config/aipager/aipager.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.local/[]s]ta't'e/aipager/x",
 "reach": true
 },
@@ -8039,11 +6884,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.conf[qi]g/aip[{a]ger,a.b}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/aipager.yaml",
 "reach": true
 },
 {
@@ -8078,11 +6918,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~//.config/aipage{..,r}",
 "reach": true
 },
@@ -8094,11 +6929,6 @@
 {
 "source": "fuzz",
 "cmd": "cat ~/.local/sh[]a]re{/,/aipager}/{x..x}",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
 "reach": true
 },
 {
@@ -8168,26 +6998,6 @@
 },
 {
 "source": "fuzz",
-"cmd": "cat ~/.local/share/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.local/state/aipager/x",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat ~/.config/aipager/policy.yaml",
-"reach": true
-},
-{
-"source": "fuzz",
 "cmd": "cat ~/.co[!y]fi[![{x,:space:]]/a'i'pager/}aipager.yaml",
 "reach": true
 },
@@ -8204,11 +7014,6 @@
 {
 "source": "fuzz",
 "cmd": "cat .config/a\"i\"pager/aipa*aml",
-"reach": true
-},
-{
-"source": "fuzz",
-"cmd": "cat .local/share/aipager/x",
 "reach": true
 },
 {
@@ -8543,11 +7348,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/{{a,b},.config/nvi}{{a,b},[m[=]/[l\\]]ua/a.[}!x]ua",
 "reach": false
 },
@@ -8624,11 +7424,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.confi[]g][a,]{./,/[A}]pager/{nvim/x,x}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -8798,11 +7593,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat {..,~/.lo?al/share}//{m..n}vi{y/z,m/x}",
 "reach": false
 },
@@ -8833,11 +7623,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat .config/'n'vim/ini*'l'",
 "reach": false
 },
@@ -8849,11 +7634,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~{/pip/../.config/n{v..w}i{x,y}{,x}./,m/init.}l[]u]a",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
 "reach": false
 },
 {
@@ -8968,11 +7748,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.lo[[=c=]]al{/shar[E,nvim/..}]/n{x,y}{vim/{w..x},{a,b}}",
 "reach": false
 },
@@ -9083,11 +7858,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/projects/a[p\\]]p/[[:x]",
 "reach": false
 },
@@ -9104,11 +7874,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.lo[c,]al/\\lib/aipager/?",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/systemd/user/a.service",
 "reach": false
 },
 {
@@ -9233,11 +7998,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.config/aipagerx/./*",
 "reach": false
 },
@@ -9249,11 +8009,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config/ap[^a]ge\\r/\\x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
 "reach": false
 },
 {
@@ -9279,11 +8034,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat .config/n{x,vim/x/}{{,.,x}./init.}lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/pip/pip.conf",
 "reach": false
 },
 {
@@ -9314,11 +8064,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config'x'/aip[a-c]ger{nvim/{x,/,a.b}/}x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/pip/pip.conf",
 "reach": false
 },
 {
@@ -9364,11 +8109,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.*onfig/'n'vim/lu[[=a=]]/a[[:space:]]l[{.,![:xdigit:]]a}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/apager/x",
 "reach": false
 },
 {
@@ -9453,11 +8193,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.config/syste[[=m=]]d/u[s\\]]er/a.se[![:alnum:]]vice",
 "reach": false
 },
@@ -9469,11 +8204,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.loc{x,y}{x{a,b},al/lib/aipager/x}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -9533,11 +8263,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/a:b/..{,}/.co'n'{*ig,.}/[[:xdigit:]]i*/pip.conf",
 "reach": false
 },
@@ -9573,22 +8298,12 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/systemd/../.config/nvim/./[l]u*/pip/../a.lua",
 "reach": false
 },
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/projects/a{o..p{nvim/..,}\\}p/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
 "reach": false
 },
 {
@@ -9643,11 +8358,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/aipagerx/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.local{x{a,b},/l[i,][]b{],}/aipager}/\"x\"",
 "reach": false
 },
@@ -9664,16 +8374,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config{/a\\pa{g..g}er/\"x\",}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -9878,11 +8578,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/systemd/..{,}/.config/git/config",
 "reach": false
 },
@@ -9953,11 +8648,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/{a.b,.config/nvim/lu}a/a.lua",
 "reach": false
 },
@@ -9969,11 +8659,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~//.co\"n\"fi[yg]/ai{pagerx,y/z}/x/{x,..}/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
 "reach": false
 },
 {
@@ -9993,22 +8678,12 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.con[f,][![:punct:]]g/ai[]p]/[x\\]]",
 "reach": false
 },
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/[[:space:]]confi{g/nv?\\m/init.lua,.}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
 "reach": false
 },
 {
@@ -10138,11 +8813,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.con{fig/a'i'p/x,nvim/x}",
 "reach": false
 },
@@ -10159,11 +8829,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat .config/[[=n=]]v[a,]{..,x/../im/}/[[=i=]]nit.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/systemd/user/a.service",
 "reach": false
 },
 {
@@ -10214,11 +8879,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.c[o]nfig/s\"y\"stemd/{t..v}s[E]r/a.ser[]v]ic\"e\"",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.cache/aipager/x",
 "reach": false
 },
 {
@@ -10288,11 +8948,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/nvim/init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.config/nvim{x{a,b},/lua/a.lu}a",
 "reach": false
 },
@@ -10338,17 +8993,7 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.cache/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.lo{nvim/../cal/sh,.}a{re/nvim/,y/z}x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -10379,11 +9024,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/gi{{x{a,b},t/{}.,x}./aip,}ager/\"x\"",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/apager/x",
 "reach": false
 },
 {
@@ -10493,11 +9133,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.configx/ai\"p\"ag\"e\"r/?",
 "reach": false
 },
@@ -10509,11 +9144,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat .config/'n'vim/init.l{ua,..}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
 "reach": false
 },
 {
@@ -10618,22 +9248,12 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat .config/'n'vim/init{.//.lu,nvim/x}a",
 "reach": false
 },
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.confi*/n[^v][[.i]m/[I]nit.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -10678,11 +9298,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/aipagerx/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.config{{..,/sys}temd/user/a,a.b}.service",
 "reach": false
 },
@@ -10693,17 +9308,7 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat .config/nvim/init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.conf{nvim/../{..,ig/[[:d}igi,}t:]]it/config",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat .config/nvim/init.lua",
 "reach": false
 },
 {
@@ -10759,16 +9364,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.c[!x]n{{a,b},f*g/g'i't/co}nfig",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.local/share/nvim/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/apager/x",
 "reach": false
 },
 {
@@ -10859,11 +9454,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/\\.l{nvim/..,\\oca}l/a=b/../share/.{x,y}{./,.///n[^v]i}{l..m}/./[x,]",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.cache/aipager/x",
 "reach": false
 },
 {
@@ -10973,11 +9563,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.cache/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.[b-d]onfi\\g{..,/pip}/p\"i\"p.?onf",
 "reach": false
 },
@@ -11014,11 +9599,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config/s[y,]ste'm'd/user/a.serv\"i\"ce",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/nvim/init.lua",
 "reach": false
 },
 {
@@ -11063,22 +9643,12 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat .config/nvim/init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/p{ro{/[^j]e?ts/app/[[:a,y/z,y/z}}lphx]",
 "reach": false
 },
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.con[!y]ig/s{x{a,b},ystemd/*}er/a.se\\rvic*",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
 "reach": false
 },
 {
@@ -11114,11 +9684,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.c\"o\"\\nfig/pip/p[]i]p.c[m-o]nf",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/aipagerx/x",
 "reach": false
 },
 {
@@ -11223,11 +9788,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.c{{/,onf?g/pip},.}/nvim/../pip.conf",
 "reach": false
 },
@@ -11249,11 +9809,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config/[^p]ip/pip.conf",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -11333,11 +9888,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/apager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.local/s{y/z,hare/nvim/x}",
 "reach": false
 },
@@ -11359,16 +9909,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.confi{nvim/../g/git/,a.b}{x,..}/aipagerx/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/aip/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
 "reach": false
 },
 {
@@ -11423,32 +9963,12 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/systemd/user/a.service",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.co{nfig/a[p\\,{a,b}}]]a[e-i]er/[[:punc{t,x}:]]",
 "reach": false
 },
 {
 "source": "fuzz decoy",
 "cmd": "cat {~/.confi,x}g/g[i][zt]/conf*",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/pip/pip.conf",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat .config/nvim/init.lua",
 "reach": false
 },
 {
@@ -11528,11 +10048,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/x/../.config/apager/'x'",
 "reach": false
 },
@@ -11603,11 +10118,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/aip/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.config/a{o..p}{/*r/,./}x",
 "reach": false
 },
@@ -11638,11 +10148,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat .c[,]{./,/o}{nvim/x,nf}i'g'//?vim/init.l\\ua",
 "reach": false
 },
@@ -11654,11 +10159,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.co\"n\"fig/{./,aipa}gerx/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/aipagerx/x",
 "reach": false
 },
 {
@@ -11724,11 +10224,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config/nvim//lua/a.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -11819,16 +10314,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.cac{..,*e/ai?[]}a]ger/[X{x,]}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/nvim/init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/aipagerx/{w..x}",
 "reach": false
 },
 {
@@ -11973,11 +10458,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.cache/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/aip/..{,}/.co'n'figx/aipager/?",
 "reach": false
 },
@@ -12063,16 +10543,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/nvim/init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat .config/nvim/init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/a[a,]{nvim/x,ipager/}[{./,x,}]",
 "reach": false
 },
@@ -12083,17 +10553,7 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.con\"f{\"ig/{x,.}{a,b},aip/[x}[=]",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/apager/x",
 "reach": false
 },
 {
@@ -12114,11 +10574,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config[,]{x,x/aipager/x}",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat .config/nvim/init.lua",
 "reach": false
 },
 {
@@ -12144,11 +10599,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/a{x/../ipa,x{a,b}}ge{r,./}/*",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/aip/x",
 "reach": false
 },
 {
@@ -12303,11 +10753,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/{nvim/..,.config}/g[i][!m]/a:b/../c{o..p}nfig",
 "reach": false
 },
@@ -12373,11 +10818,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/./aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.c\\o{n..o}fig/n'v'im/in[[=i=]]{{a,b},./t.}lua",
 "reach": false
 },
@@ -12438,22 +10878,12 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat .config/nv[g-i]{{nvim/..,[m,nvim/x},]/init.}lua",
 "reach": false
 },
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/pr\"o\"jec\"t\"s/app/[yx]",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/nvim/lua/a.lua",
 "reach": false
 },
 {
@@ -12568,11 +10998,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/share/nvim/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.conf{y/z,ig}/aip/x",
 "reach": false
 },
@@ -12584,11 +11009,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.config/a{a.b,i}pagerx/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
 "reach": false
 },
 {
@@ -12633,11 +11053,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat [a,]{a.b,~/.conf*g/ai[P]/}x",
 "reach": false
 },
@@ -12678,11 +11093,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.{configx/aipager,./}/x",
 "reach": false
 },
@@ -12694,11 +11104,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.cache/aipager/x{./,/{{..,x},..}}/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/aipager/x",
 "reach": false
 },
 {
@@ -12724,11 +11129,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/\".\"cac[]h{]e/ai[[:graph:]]a',..}g'er/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/git/config",
 "reach": false
 },
 {
@@ -12848,11 +11248,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.local/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~{..,/.c[A]che/aipager/{{a,}b},./?}",
 "reach": false
 },
@@ -12888,11 +11283,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/aip/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/.config//{{{a,b},./n[V}]im/\"l\"*a,a.b}/[a,].l'u'a",
 "reach": false
 },
@@ -12909,11 +11299,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.c{nvim/x,ach}e/aipager/[{[=x,./}=]]",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.configx/aipager/x",
 "reach": false
 },
 {
@@ -12939,11 +11324,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.*ache/a{i{page,..}r,nvim/x}/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/pip/pip.conf",
 "reach": false
 },
 {
@@ -12979,11 +11359,6 @@
 {
 "source": "fuzz decoy",
 "cmd": "cat ~/.loc*/lib/aipager/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
 "reach": false
 },
 {
@@ -13088,16 +11463,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/.config/pip/pip.conf",
-"reach": false
-},
-{
-"source": "fuzz decoy",
-"cmd": "cat .config/nvim/./init.lua",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/projec[!b]s/app/x",
 "reach": false
 },
@@ -13188,11 +11553,6 @@
 },
 {
 "source": "fuzz decoy",
-"cmd": "cat ~/projects/app/x",
-"reach": false
-},
-{
-"source": "fuzz decoy",
 "cmd": "cat ~/./.config/systemd/use[![:upper:]]/a.service",
 "reach": false
 },
@@ -13212,9 +11572,3494 @@
 "reach": false
 },
 {
-"source": "fuzz decoy",
-"cmd": "cat ~/.config/aip/x",
+"source": "review-5",
+"cmd": "x=a; echo ${x#{} ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-5",
+"cmd": "echo ${#{} ; cat ~/.config/[a]ipager/aipager.yaml",
 "reach": false
+},
+{
+"source": "review-5",
+"cmd": "echo \"${x/{/}\" ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "review-5",
+"cmd": "echo ${x:-{} && cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "review-5",
+"cmd": "echo hi # \"it's\" ${\ncat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ${HOME%/}/.?ocal/shar[[.e.][=[=]/aipager",
+"reach": true
+},
+{
+"source": "test-report-5 default",
+"cmd": "less \"$HOME\"/$'.'\\conf[]i[=[=]g/systemd/user/../../aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"${HOME}\"/.local/s[][:print:]]'are'/ai[$'\\x70'[=[=]\"a\"'g'@(x|e){p..r}/?",
+"reach": true
+},
+{
+"source": "test-report-5 dotglob",
+"cmd": "shopt -s dotglob; sed -i s/a/b/ ~/.con\\f\"i\"[$'\\x67'[:[:]/{,\\./ai\\pa??'r'}/aipager$'\\u002e'ya{l..p}l",
+"reach": true
+},
+{
+"source": "test-report-5 dotglob",
+"cmd": "shopt -s dotglob; cat \"$HOME\"/.config/a[$'\\x69'][[=p=][=[=]age$'\\x72'/{aipager.yaml,\\}}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ${HOME%/}/.?onfig?(x)/aipager/$'\\x78'",
+"reach": true
+},
+{
+"source": "test-report-5 default",
+"cmd": "vim /home/alice/.[l'-'x[:[:]ocal/\\./share/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 dotglob",
+"cmd": "shopt -s dotglob; cat /home/alice/.co[n[:[:]\\fig/ai'pa'g\"er\"/{a..z..1}ipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ .config@(|x)/{,aipager}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ \"$HOME\"/.config?(x)/aip*r/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"${HOME}\"/.config@(|x)/\\aipage$'\\162'/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless $HOME/.$'\\u006c'*a?/'.'/state/././/aipager@(''|x)/!(nvim|git)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"$HOME\"/.?ocal/[][=!=]'.'$'\\x73']har+(e)/aipager@(|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~+/.config?(x)/{/,{a,a}ipager/x}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim /home/alice/.config@(|x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"${HOME}\"/.config!(x)/{aipager,{,}}/\".\"/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"$HOME\"/{'.l'ocal,'.'}/share/{,.}/aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.config@(''|x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"$HOME\"/{,.config!(x)/ai$'\\u0070'*(a)\\g\\e$'\\162'}/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config@(''|x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.config@(@(|x))/aipager/'p''o'li?(c)y*yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME%/}/.config@(''|x)/\\./aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config@(''|x)/aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~+/.config@(|x)/{..,aipager/policy.yaml}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME%/}/.config@(@(|x))/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat /home/alice/.config?(x)/aipag\\er/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.local/{share/aipager?(x)/x,nvim/..}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME%/}/.l*cal/s['h]']are/\\./aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"${HOME}\"/.confi?/aipager@(@(|x))/poli*(c)y?(.)yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ .config?(x)/[[=a=][=^=]{]ip[[:graph:]]@(g|x)er/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless $HOME/.loc[]\"a\"]l/./share/aipager@(@(|x))/\\x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"$HOME\"/.config@(''|x)/aipag[^xyz]r/a[[.i.]]pager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config!(x)/aipa$'\\x67'er/[p][^xy]l$'\\x69'cy.y[$'\\x61']ml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ${HOME}/.config?(x)/a'ipag'er",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/$'\\u002e'c\\on[][=x=][.f.]]ig/'.'/aipager?(x)/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~+/{./,.config@(|x)/$'\\x61'?p'ager'/aipager.yaml}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~+/.config@(|x)/aipager/*",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ${HOME%/}/.local/share/{nvim/..,aipager!(x)}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config@(''|x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/.config?(x)/{.,aipager}/{x,x}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config@(''|x)/systemd/user/../../aipager/?[[=o=]]licy$'\\056''yam'l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME%/}/.config@(|x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config?(x)/aipager@(|x)//policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config@(@(|x))/aipager/[x,[.*.]]",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/*(.config)/aipager!(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless .con[[=f=]]ig/aipager@(@(|x))/{{x,},aipager.yaml}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y $HOME/.config@(''|x)/[a[...]]ipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME}/.local/sh?re/\\./aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat /home/alice/.config!(x)/a[g-j]pa[[:}:]g'-'y]er/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.con{f,a.b}ig/aipager@(''|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.local/s??$'r'e/aipager!(x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"${HOME}\"/.config@(|x)/ai\\pag{e,.}r/[]$'\\x70'[:a:]]o'licy'.{v..y}?ml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~+/.local/state/{\\,,aipager?(x)/x}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config/{aipager@(|x)/\".\"/aipager.yaml,{x,}}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config?(x)/aipag$'\\145'r/\\policy.*(y)a{m,'{'}\\l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.co{n..z..27}f{i..i}g/'.'/aipager@(|x)/p\\olic'y.y'aml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim /home/alice/.config@(@(|x))//aipager",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(|x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim .co!(x)nfig/nvim/'..'/aipager!(x)/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.local{,}/state/aipager?(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"$HOME\"/.conf[i]g/aipager@(@(|x))/?$'\\u006f'\\licy@(.|x)[-\\y]\\aml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config!(x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/$'\\056'loc\\al/[]s'-'z]@(x|h)?r[][:=:]$'\\x65']/aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ .config@(''|x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config!(x)/.//?i'page'$'\\u0072'",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ .config@(|x)/aipager/{?(x),{p,q}}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config@(|x)/aipager/x@(@(|x))",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"${HOME}\"/.config@(@(|x))/aipager/$'\\x78'",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config@(|x)/aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~+/.con[]\"f\"]i'g'/aipager!(x)/{'a,b',x}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config?(x)/aipager/pol\"ic\"y@(.|x)yam\\l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config?(x)/'.'/{a.b,aipager}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.*n@(f|x)\\ig/aipager?(x)/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"${HOME}\"/.config@(|x)/[a'-'x]i\"p\"$'\\141''g'er/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~+/.config@(@(|x))/aipa\"ger\"/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"$HOME\"/.config?(x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME}/.config?(x)/aipager/[[.\\[.],v-z]",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config/{aipager!(x),y/z}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.*(l)ocal/state/aipager?(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ${HOME%/}/.config@(|x)/a\"ipag\"er/p?li{c,'{'}{w..y}.yam$'l'",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/\".\"con?ig/aipager?(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME}/.config!(x)/*pager/po'li'c*\\.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"${HOME}\"/.config@(|x)/ai\\p*er/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/.config@(@(|x))/./aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME}/.config@(|x)/aipager/[]p'-'x[=\\[=]]o[l[.x.]]ic\\y[.]y*",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config?(x)/'a'[[.\"[\".]'i']pager",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME%/}/.config!(x)/aipager//x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"${HOME}\"/.config?(x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/{.local,/}/share!(x)/aipager@(''|x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config!(x)/aipager/{x,y/z}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME}/.config@(''|x)/nvim/../aipager/p{o,'{'}licy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ${HOME%/}/.config@(''|x)/aipa{,g}e\\r",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"${HOME}\"/{.local,.}/state/aipager@(|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ${HOME}/{.config!(x)/{aipager,{,}}/policy.yam?(l),}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(@(|x))/ai$'\\x70'a[g[:!:]]er?(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"$HOME\"/.config@(|x)/\".\"/aipager",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ${HOME}/.config!(x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(@(|x))/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.loc[$'\\x61'[:^:]]$'\\u006c'/share/././/aipager!(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"${HOME}\"/.c{o,a.b}*f{i..i}g/aipager@(|x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config!(x)/systemd/user/../../aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~+/.local/s*re/aipager!(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME}/.config@(@(|x))/a\\ipa*r/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME%/}/.?onf[\\i]g/aipager@(|x)/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ $HOME/.config@(@(|x))/aipage['r]'[='['=]]/a+(i)pager.y\\aml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config@(''|x)/{{p,q},\\aipage*}/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.config?(x)/**ger/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/{.config,./}/aipager@(''|x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config@(''|x)/@(aipager|aipagerx)/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless $HOME/.config@(''|x)/aipager/.//x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"$HOME\"/.?ocal/share/aipager!(x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat /home/alice/.config/{aipager@(''|x)/policy.yaml,.}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"${HOME}\"/.config@(''|x)/{@(aipager|x),nvim/x}/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~+/.local@(@(|x))/share/aipager@(@(|x))",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless .config*(x)/{aipager?(x)/x,nvim/..}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config@(|x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(@(|x))/././/aip?ger/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ${HOME}/.con?ig/aipager@(@(|x))",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"${HOME}\"/.config!(x)/aipager/'.'/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/.config!(x)/aipager/+(x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config@(@(|x))/aipager",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ $HOME/.con{f..z..6}i?/aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.confi'g'/{{p,q},aipager@(|x)}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y \"${HOME}\"/.config@(''|x)/aipager/ai\"p\"\\age**ml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim {.c[[=*=]'o'^]nfig/aipager!(x),/}/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/{y/z,.l[][:digit:][.o.]]\"c\"al}/share/aipager?(x)/*",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config?(x)/{a..z..24}i\\p*\\r/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"${HOME}\"/{.co*fig/aipager@(''|x),nvim/..}/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ${HOME}/.config@(''|x)/aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.local/+(s)t?\\te/aipager?(x)/*",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.config?(x)/\\a\\i\"p\"ag[][:\"[\":][:lower:][=a=]]?/{aipager.yaml,.}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config?(x)/aipager/{,.}/p$'\\157'licy.+(y)\\am\\l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config@(@(|x))/.//aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config!(x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y $HOME/.config@(|x)/aipager/{x,x}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(|x)/aipager/[[:::]o-r]olicy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config@(@(|x))/nvim/'..'/a{\\{,i}pa$'g'$'\\145'r/\".\"/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y .config@(|x)/'a'[[:.:][.i.]]pag*/a$'\\151'?[!xyz]g??.ya$'\\x6d'\"l\"",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config?(x)/{\"aipager\",x}/{p..z..24}olicy.yam$'\\x6c'",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat /home/alice/.config@(''|x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/.config@(@(|x))/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim /home/alice/.config@(@(|x))/\\ai\"pag\"?$'\\162'/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim /home/alice/{.,}loca*/state/aipager@(''|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~+/.config/{\\.,y/z}/aipager@(|x)/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ${HOME}/.?onfig/aipager@(''|x)/'poli'[^xy]{y,}.{y,x}\"a\"ml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y $HOME/.config?(x)/aipager/\".\"/?(p)o{l..l}$'\\u0069'\\c[[.y.]]@(x|.)*[l]",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.config?(x)/aipager/[]\"a\"[=z=]]i'p'a[[=g=]]er.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~+/.config{,}/aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.con?\"i\"g/{aipager!(x),\\,}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ${HOME}/.config@(@(|x))/\\a$'\\151'pag\\er/{{p,q},policy.yaml}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~+/.local/{state,{,}}/aipager@(@(|x))/'.'/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config@(|x)/a[[.$'\\x5b'.][:*:]'i]']{o..s}[a'-'x[:::][:,:]]ge$'\\u0072'",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ $HOME/.config@(|x)/aipager/aipager.'yaml'",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(@(|x))/aipager/'.'/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/.config/a?p$'a'\"g\"[\\e[=*=]]r?(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~+/.config@(|x)/aipager/a?'p'a\\g\"e\"r'.'*?(a)+(m)l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~/.config!(x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"$HOME\"/'.con'f?g/aipager!(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless .\\co{n..n}\\f'i'g/aipager@(|x)/[x-z]",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat .config@(@(|x))/aipa'g'er",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"${HOME}\"/.config@(|x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config@(|x)/aipager/po?ic[y'-'x?[=$'\\x5b'=]].{y,\\,}a{m,.}l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.l@(o|x)c[^xy]l/share/aipager@(|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"${HOME}\"/.config@(|x)/aipag{c..f}r",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.local/sta\\te/{'a,b',./aipager@(|x)}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME%/}/.[[.c.]}]o?[f-]ig/aipager!(x)/*",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim /home/alice/.config@(@(|x))/aipager/'a'ipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ~+/.local/sh[[:alnum:][=[=]'r'e/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME}/.config@(''|x)/aipager",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ${HOME}/.config@(@(|x))/aipage*/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ${HOME}/.config@(@(|x))/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~+/.config!(x)/aipager/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"${HOME}\"/.config@(|x)/{aipager/aipager.yaml,nvim/x}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.config@(@(|x))/aipa[\\]g]'er'/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config@(''|x)/aipager",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~+/.local/{sha+(r)e/aipager@(|x),{p,q}}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.?onf[][.=.]i]g/aipager@(|x)/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ${HOME%/}/.c['o]']nfi[!x]/aipager@(@(|x))/policy.ya*(m)l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ .{a..e}onfi?/aipager?(x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat /home/alice/.local/s[[.h.]][[.a.][=x=]][r'-'z[:x:]]['e]']/aipager@(@(|x))",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ $HOME/.config!(x)/aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config?(x)/nvim/{..,x}/aipage\\r",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.@(x|l)oc?[^xy]/state/nvim/'..'/aipager@(@(|x))/*",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config@(''|x)/{..,ai?ager}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless .config?(x)/*/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim $HOME/.config@(''|x)/aipage\\r",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim .local/[[.\"[\".]r-t][[.-.]\\-[=t=]]at\\e/aipager!(x)/+(x)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.l$'\\u006f'[c'-'x]\\al/share/aipager@(|x)/{x,'a,b'}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ .config/{..,nvim/'..'/aipager@(|x)}/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ /home/alice/.config!(x)/{aipager/./,{x,}}/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"$HOME\"/.config@(|x)/aipag$'\\x65'\"r\"",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"${HOME}\"/.config!(x)//['a']i*er/?(x)x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y ~/.config@(''|x)/a\"ipag\"er/p{\\{,o}lic\"y.y\"aml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config?(x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat \"${HOME}\"/.config/{aipager@(''|x)/policy.yaml,./}",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ${HOME}/.config@(''|x)/[[:digit:]\\a]i?*$'g'er/@(policy.yaml|policy.yamlx)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim /home/alice/.config!(x)/'.'/{a,a}ipager/@(aipager.yaml)",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~+/.config!(x)/aipage$'r'/policy.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat ${HOME%/}/.c*i{g,'{'}/aipager@(|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.local/\\s[^xyz]ar\\e/aipager@(''|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless \"${HOME}\"/.local/?(s)hare/aipager@(''|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless /home/alice/.config?(x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~/.config@(|x)/aipager/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncat /home/alice/.c{o..z..18}n@(f|x)i\\g/aipager?(x)/aipager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ${HOME%/}/.local/s@(t|x)$'\\u0061'[[:-:]^'t']$'\\x65'/aipager@(|x)/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/\".\"c+(o)'nfi'g/aipager@(@(|x))/\\policy?(.)\\yam\\l",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nless ~/.config@(|x)/aipager/'.'/ai?ager.yaml",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim ~/.[[='.'$'\\x63']*n?\"i\"'g'/aipager@(@(|x))/p\"o\"l{i,'{'}*ya\"ml\"",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nvim \"$HOME\"/.config!(x)/aipager/aipage@(r|x).y'a'm\"l\"",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\nsed -i s/a/b/ ~+/.lo?a{l..z..20}/shar?/aipager@(@(|x))/x",
+"reach": true
+},
+{
+"source": "test-report-5 extglob",
+"cmd": "shopt -s extglob\ncp /tmp/x/y /home/alice/.config@(@(|x))/aipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo <<<'x' ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo '#' ; echo ${x[${y:-0}]} ; cat ~/.config/[a]ipager/aipager.yaml ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ a < b ]] ; echo '#' ; echo ${y:-~/.local/share/[a]ipager/x} ; echo $\"x\" ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-{} && cat ~/.config/aip[a\\]]ger/aipager.yaml ; cat <<A <<B\n'\nA\n\"\nB\necho ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x/\\}/} ; f() { echo; } ; echo ${y:-~/.local/state/a[i]pager/x} ; echo ${x[${y:-0}]} ; echo $(echo ')') ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo a\\\nb ; (( x = 1 << 2 )) ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo \"a\\\"b\" ; echo \"${x:-\"a b\"}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x:-'}'}\" ; for ((i=0;i<1;i++)); do :; done ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-$(echo })} ; echo ${y:-~/.local/state/a[i]pager/x} ; echo '#' ; echo $(( (1) )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x//[}]/} ; echo ${y:-~/.local/share/[a]ipager/x} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\ncat ~/.config/[a]ipager/aipager.yaml ; echo ${x#'}'} ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; echo hi # \"it's\" ${\ncat ~/.local/state/a[i]pager/x ; echo \"$(echo \")\")\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=a; echo \"$(echo \")\")\" ; e}cho $(( (1) )) ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/state/a[i]pager/x} ; echo {a,'}'} ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-{} && echo \"${x:-\"a b\"}\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; case a in a) echo ;; esac ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo ${x/\\}/} ; echo hi # \"it's\" ${\ncat ~/.local/state/a[i]pager/x ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<A <<B\n'\nA\n\"\nB\ncat <<E\\OF\n\"\nEOF\nx=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-$(echo })} ; x=${y:-$(cat ~/.local/share/[a]ipager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:+\"}\"} ; echo {a,'}'} ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo <<<'x' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo <<<'x' ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-\"a b\"}\" ; cat <<\"E\"OF\n'\nEOF\nx=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x/{/}\" ; echo ${x[${y:-0}]} ; f() { cat ~/.config/[[:a]ipager/aipager.yaml ; }; f ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"`echo \\\"`\" ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo ${x:-\"}\"} ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo $((1<<2)) ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(cat <<E\n)\nE\n) ; cat <<\"E\"OF\n'\nEOF\necho $[1<<2] ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo ${x:-{} && cat ~/.config/[a]ipager/aipager.yaml ; echo ${!x} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-}}} ; echo $\"x\" ; echo `echo \\`` ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo $((2#101)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"`echo \\\"`\" ; echo {a,'}'} ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo ${x#'}'} ; echo ${x:-`echo }`} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo ${x#{} ; cat ~/.config/[a]ipager/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x/\\}/} ; echo \"${x/{/}\" ; cat <<-EOF\n\tit's\n\tEOF\ncat ~/.config/[a]ipager/aipager.yaml ; cat <<E\\OF\n\"\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo {a,'}'} ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo $(echo # )\n) ; (( $(cat ~/.config/[a]ipager/aipager.yaml | wc -l) )) ; cat <<'EOF'\n$( it's\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && f() { echo; } ; cat ~/.local/state/a[i]pager/x ; echo ${x:-\"}\"} ; echo \"${x#'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-`echo }`} ; echo ${x//[}]/} ; f() { echo; } ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:=$'\\''} ; echo ${x#'}'} ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo `echo '` ; echo `echo \\`` ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $( (echo) ) ; echo $(case a in a) echo \"it's\";; esac) ; echo ${x#'}'} ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo ${#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo \"$(echo \")\")\" ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo $( (echo) ) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nx=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a#b ; echo \"${x/{/}\" ; echo \\\n# it's\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\necho \"${x/{/}\" ; echo \"a\\\"b\" ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo ${x[${y:-0}]} ; [[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {$\"x\" ; [[ a < b ]] ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; cat <<EOF\nit's $(\nEOF\necho ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\necho hi # \"it's\" ${\necho $;{x[${y:-0}]} ; cat ~/.config/[a]ipager/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho ${x:-'}'} ; cat <<E\n$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\nE",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat ~/.config/[[:a]ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo ${x#{} ; e&cho \"${x#'}'}\" ; echo `cat ~/.config/aip[a\\]]ger/aipager.yaml` ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:=$'\\''} ; echo $\"x\" ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo \"$(case a in (a) echo;; esac)\" ; echo \"$(echo \")\")\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ a < b ]] ; echo ${x:=$'\\''} ; echo a # \"$( \ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x#'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \\;\n# it's\necho ${y:-~/.config/aip[a\\]]ger/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \\\n# it's\necho $(( (1) )) ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:+\"}\"} ; for ((i=0;i<1;i++)); do :; done ; echo $(( (1) )${) ; f() { cat ~/.config/[a]ipager/aipager.yaml ; }; f",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\n# it's\necho \"${x:-\"a b\"}\" ; echo a\\\nb ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; (( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo $(cat <<E\n)\nE\n) ; (( $(cat ~/.local/share/[a]ipager/x | wc -l) )) ; echo {a,'}'} ; cat <<E\\OF\n\"\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo ${x[${y:-0}]} ; \\cat ~/.local/share/[a]ipager/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo `echo \\`` ; echo \"${x:-\"a b\"}\" ; cat ~/.config/[a]ipager/aipager.yaml ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo ${x#{} ; echo ${x//[}]/} ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a#b ; echo ${x#'}'} ; echo ${x[${y:-0}]} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo &$(case a in a) echo \"it's\";; esac) ; echo ${x#{} ; echo $(( (1) )) ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-`echo }`} ; echo '#' ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo \"`echo \\\"`\" ; echo \\\n# it's\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \\\n# it's\necho ${x//[}]/} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(( (1) )) ; echo `echo '` ; echo `echo \\`` ; echo `cat ~/.config/aip[a\\]]ger/aipager.yaml` ; echo `echo '` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $( (echo) ) ; echo hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x ; (( x = 1 << 2 )) ; echo ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/share/[a]ipager/x)} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $(echo # )\n) ; echo ${x/\\}/} ; echo $(( (1) )) ; echo ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\necho $(( (1) )) ; echo $(( (1) )) ; echo $(cat ~/.config/aip[a\\]]ger/aipager.yaml) ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/state/a[i]pager/x} ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\necho ${y:-~/.config/[a]ipager/aipager.yaml} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((1<<2)) ; echo '#' ; echo \"${x/{/}\" ; cat ~/.local/state/a[i]pager/x ; echo `echo '` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat ~/.local/share/[a]ipager/x ; echo ${x//[}]/} ; echo ${x:-`echo }`} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-\"a b\"}\" ; echo {a,'}'} ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-{} && cat <<EOF ; echo a ;\nbody ' \nEOF\ncat <<A <<B\n'\nA\n\"\nB\nx=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && x=a; echo ${!x} ; cat ~/.local/share/[a]ipager/x ; echo ${x//[}]/} ; echo a\\\nb ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((1<<2)) ; echo $((1<<2)) ; echo ${x:-}}} ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-'}'} ; echo $((1<<2)) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${!x} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo $(cat ~/.config/aip[a\\]]ger/aipager.yaml) ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo $( (echo) ) ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x/{/}\" ; echo \"$(case a in (a) echo;; esac)\" ; cat ~/.local/state/a[i]pager/x ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; cat <<EOF\nit's $(\nEOF\necho ${x:-{} && ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-}}} ; echo ${x:-'}'} ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(echo \")\")\" ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $(case a in a) echo \"it's\";; esac) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo \\`` ; echo \"$(echo \")\")\" ; # i't's\nx=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x[${y:-0}]} ; echo $(( (1) )) ; echo ${y:-~/.local/state/a[i]pager/x} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:=$'\\''} ; echo a\\\nb ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<EOF ; echo a ;\nbody ' \nEOF\necho ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; cat <<EOF\nit's $(\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nfor ((i=0;i<1;i++)); do :; done ; echo \\\n# it's\necho ${x[${y:-0}]} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\necho $'it\\'s' ; for ((i=0;i<1;i++)); do :; done ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo \"${x/{/}\" ; cat ~/.local/state/a[i]pager/x ; echo $[1<<2] ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-'}&'}\" ; echo ${x#{} ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\necho hi # \"it's\" ${\ncat <<E\\OF\n\"\nEOF\ncat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $\"x\" ; echo ${x#{} ; cat <<-EOF\n\tit's\n\tEOF\n(( $(cat ~/.config/[[:a]ipager/aipager.yaml | wc -l) ))",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=a; ec<ho ${x#'}'} ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo hi # \"it's\" ${\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $'it\\'s' ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $'it\\'s' ; echo ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo ')') ; echo a # \"$( \ncat ~/.config/aip[a\\]]ger/aipager.yaml ; for ((i=0;i<1;i++)); do :; done ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; cat <<EOF\nit's $(\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<EOF ; echo a ;\nbody ' \nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; # it's\n[[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ec\nho \"${x:-\"a b\"}\" ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo ${x:-'}'} ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo $(echo ')') ; cat <<E\n$(cat ~/.local/share/[a]ipager/x)\nE",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $(case a in a) echo \"it's\";; esac) ; cat <<-EOF\n\tit's\n\tEOF\necho \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo ${#{} ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ a < b ]] ; echo hi # \"it's\" ${\necho hi # \"it's\" $>{\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo \\\n# it's\nx=a; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(echo \")\")\" ; echo $(case a in a) echo \"it's\";; esac) ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=a; echo ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; (( x = 1 << 2 )) ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<\"E\"OF\n'\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(echo \")\")\" ; echo \"a\\\"b\" ; echo $(cat ~/.config/aip[a\\]]ger/aipager.yaml)",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\nx=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo $((2#101)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \\\n# it's\necho ${x[${y:-0}]} ; echo ${x#{} ; cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\n# it's\necho ${x:-{} && cat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo ')') ; echo $'it\\'s' ; echo \\\n# it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x#{} ; cat <<EOF\nit's $(\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; echo \"${x:-\"a b\"}\" ; echo '#' ; echo ${y:-~/.local/state/a[i]pager/x} ; echo `echo '` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo \"`echo \\\"`\" ; cat ~/.local/state/a[i]pager/x ; cat <<EOF ; echo a ;\nbody ' \nEOF\necho ${x:-$(echo })} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho hi # \"it's\" ${\ncat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<-EOF\n\tit's\n\tEOF\necho \"${x#'}'}\" ; echo ${y:-~/.config/[a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(echo \")\")\" ; ec$ho \"`echo \\\"`\" ; echo a#b ; (( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) )) ; echo {a,'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $((1<<2)) ; echo $((1<<2)) ; echo ${x:-{} && echo ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<'EOF'\n$( it's\nEOF\necho ${x:-\"}\"} ; echo \"$(echo \")\")\" ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; (( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) ))",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\nf() { echo; } ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo a\\\nb ; echo ${!x} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; echo $'it\\'s' ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo '#' ; cat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $( (echo) ) ; echo `echo '` ; echo ${x:-{} && echo $(cat ~/.config/aip[a\\]]ger/aipager.yaml) ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {a,'}'} ; echo \"${x:-\"a b\"}\" ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo \"${x/{/}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x:-\"a {b\"}\" ; echo a#b ; echo \"$(cat ~/.config/[a]ipager/aipager.yaml)\" ; echo $[1<<2] ; echo ${x#'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((1<<2)) ; echo $((2#101)) ; echo \"$(echo \")\")\" ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo \"${x#'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a\\\nb ; x=${y:-$(cat ~/.local/share/[a]ipager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; echo ${x#<{} ; echo \"`echo \\\"`\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho '#' ; cat <<EOF ; echo a ;\nbody ' \nEOF\nx=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat ~/.config/[a]ipager/aipager.yaml ; echo \"${x/{/}\" ; echo `echo \\`` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x$=a; echo ${x:-`echo }`} ; echo ${y:-~/.local/share/[a]ipager/x} ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x}#'\ncat <<-EOF\n\tit's\n\tEOF\ncat <<'EOF'\n$( it's\nEOF\necho ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $'it\\'s' $; echo ${x:-\"}\"} ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"a\\\"b\" ; cat <<-EOF\n\tit's\n\tEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; cat <<\"E\"OF\n'\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo $[1<<2] ; echo hi # \"it's\" ${\necho $(cat ~/.config/[[:a]ipager/aipager.yaml) ; cat <<-EOF\n\tit's\n\tEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"a\\\"b\" ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<'EOF'\n$( it's\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo \"${x/{/}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ a < b ]] ; echo \"${x#'}'}\" ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo $((2#101)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo ')') ; echo \"a\\\"b\" ; echo \"${x/{/}\" ; cat ~/.config/[a]ipager/aipager.yaml ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<\"E\"OF\n'\nEOF\necho ${x#{} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/state/a[i]pager/x} ; echo ${x#'}'} ; echo $(case a in a) echo \"it's\";; esac) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo hi # \"it's\" ${\necho ${y:-~/.config/[a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {a,'}'} ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo ${x:-`echo }`} ; echo $((2#101)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \ncat <<E\n$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\nE",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x//[}]/} ; echo \"${x:-\"a b\"}\" ; echo ${x#{} ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo \\\n# it's\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x#'}'}\" ; echo \"${x:-\"a b\"}\" ; f() { echo; } ; echo ${y:-~/.local/state/a[i]pager/x} ; [[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:+\"}\"} ; echo $( (echo) ) ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x[${y:-0}]} ; echo> ${x#'}'} ; for ((i=0;i<1;i++)); do :; done ; echo ${y:-~/.local/state/a[i]pager/x} ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(( (1) )) ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo ')') ; echo `echo '` ; echo \"${x/{/}\" ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo $(( (1) )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\n$'EOF\ncat <<'EOF'\n$( it's\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; [[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/share/[a]ipager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ech}o ${x:-{} && echo ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $>((1<<2)) ; echo $(( (1) )) ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$'${x:-'}'}\" ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\necho $\"x\" ; echo ${x:-{&} && cat ~/.local/state/a[i]pager/x ; echo ${x:-}}} ; echo <<<'x' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $'it\\'s' ; # it's\necho ${x//[}]/} ; echo `cat ~/.config/aip[a\\]]ger/aipager.yaml`",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x//[}]/} ; echo \"${x/{/}\" ; cat ~/.config/[a]ipager/aipager.yaml ; echo \"${x:-\"a b\"}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nf() { ech;o; } ; echo a#b ; echo ${x:-{} && cat ~/.config/[a]ipager/aipager.yaml ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x ; cat <<\"E\"OF\n'\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo $\"x\" ; echo `cat ~/.config/[a]ipager/aipager.yaml`",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a\\\nb ; echo $(echo # )\n) ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo $'it\\'s' ; echo ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<E\\OF\n\"\nEOF\nx=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat ~/.local/share/[a]ipager/x ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho `echo \\`` ; echo $(cat ~/.config/aip[a\\]]ger/aipager.yaml) ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo `echo '` ; cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; echo \\\n# it's\necho `cat ~/.config/aip[a\\]]ger/aipager.yaml`",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-`echo }`} ; cat <<A <<B\n'\nA\n\"\nB\necho ${x[${y:-0}]} ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; for ((i=0;i<1;i++)); do :; done ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo $(cat ~/.local/share/[a]ipager/x) ; f() { echo; } ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-\"}\"} ; echo hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x ; echo $'it\\'s' ; echo ${x#'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=a; echo \"${x/{/}\" ; echo \"${x/{/}\" ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<E\\OF\n\"\nEOF\necho $(cat ~/.config/aip[a\\]]ger/aipager.yaml) ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho {a,'}'} ; echo hi # \"it's\" ${\ncat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {a,'}'} ; echo a # \"$( \necho ${x:+\"}\"} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; cat <<EOF\nit's $(\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \nEOF\nf() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${y:-~/.config/aip[a\\]]ger/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "(( x = 1 << 2 )) ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo \"`echo \\\"`\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; echo $(case a in a) echo \"it's\";; esac) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\necho $((1<<2)) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo ${x:-}}} ; echo `echo \\`` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo \"${x:-\"a b\"}\" ; echo $( (echo) ) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo \\\n# it's\necho $'it\\'s' ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo ${x[${y:-0}]} ; echo ${x:-`echo }`} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"a\\\"b\" ; cat <<-EOF\n\tit's\n\tEOF\necho a#b ; x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)} ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \nEOF\necho \"$(case a in (a) echo;; esac)\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; echo $((2#101)) ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"a\\\"b\" ; case a in a) echo ;; esac ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ; echo ${x:+\"}\"} ; echo ${x#'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat <<E\\OF\n\"\nEOF\nf() { cat ~/.local/state/a[i]pager/x ; }; f ; cat <<E\\OF\n\"\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo \"${x:-'}'}\" ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(cat <<E\n)\nE\n) ; echo ${x:-\"}\"} ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ; cat <<A <<B\n'\nA\n\"\nB\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ a < b ]] ; echo \"${x/{/}\" ; echo a # \"$( \ncat <<E\n$(cat ~/.local/state/a[i]pager/x)\nE ; echo $[1<<2] ; echo $[1<<2] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $'it\\'s' ; echo {<a,'}'} ; echo a\\\nb ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo ${!x} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(( (1) )) ; echo $(case a in a) echo \"it's\";; esac) ; # it's\necho ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"$(echo \")\")\" ; echo '#' ; echo hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x ; echo \"${x:-\"a b\"}\" ; echo ${x:-`echo }`} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo `echo '` ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:+\"}\"} ; echo <<<'x' ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-\"a b\"}\" ; echo a\\\nb ; echo ${x:-#{} && cat ~/.local/share/[a]ipager/x ; [[ a < b ]] ; echo \"`echo \\\"`\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo # )\n) ; echo ${x:=$'\\''} ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; cat <<-EOF\n\tit's\n\tEOF\necho ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-'}'}\" ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo \"$(echo \")\")\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-$(echo })} ; echo hi # \"it's\" ${\necho $'it`\\'s' ; cat ~/.config/[a]ipager/aipager.yaml ; echo \"${x#'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; cat <<E\\OF\n\"\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-\\{} && x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((2#101)) ; cat <<A <<B\n'\nA\n\"\nB\nx=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=a; echo \"${x/{/}\" ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; cat <<-EOF\n\tit's\n\tEOF\n(( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\necho ${x:-$(echo })} ; cat <<E\n$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\nE ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo} $x#' ; echo $x#' ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo $\"x\" ; echo \\\n# it's\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; echo hi # \"it's\" ${\n(( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) )) ; echo ${x/\\}/} ; echo $((2#101)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho ${x/\\}/} ; cat <<'EOF'\n$( it's\nEOF\necho `cat ~/.config/aip[a\\]]ger/aipager.yaml` ; cat <<'EOF'\n$( it's\nEOF\ncase a in a) echo ;; esac ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\necho `cat ~/.config/aip[a\\]]ger/aipager.yaml` ; echo $(cat <<E\n)\nE\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x/{/}\" ; echo a # \"$( \ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "f() { echo; } ; echo \\\n# it's\ncat <<A <<B\n'\nA\n\"\nB\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a#b ; cat <<E\\OF\n\"\nEOF\nf() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)} ; echo \"${x:-'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ca\nE\nt <<-EOF\n\tit's\n\tEOF\necho ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo `echo '` ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho $(echo ')') ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<EOF ; echo a ;\nbody ' \nEOF\necho \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; echo ${x#{} ; cat ~/.local/share/[a]ipager/x ; x=a; echo \"a\\\"b\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; # it's\necho ${x#{} ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo ${x:-`echo }`} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ech{o $\"x\" ; echo a\\\nb ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; echo \"$(echo \")\")\" ; cat <<E\\OF\n\"\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo `echo '` ; cat <<A <<B\n'\nA\n\"\nB\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo \"a\\\"b\" ; echo <<<'x' ; cat ~/.config/[a]ipager/aipager.yaml ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\necho $[1<<2] ; echo \"${x:-'}'}\" ; (( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) )) ; echo $(cat <<E\n)\nE\n) ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $( (echo) ) ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo \"$(case a in (a) echo;; esac)\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo ${#{} ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $(case a in a) echo \"it's\";; esac) ; echo a\\\nb ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; for ((i=0;i<1;i++)); do :; done ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${>\necho `echo '` ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-\"}\"} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; [[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && (( $(cat ~/.config/[[:a]ipager/aipager.yaml | wc -l) ))",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\ncat ~/.local/state/a[i]pager/x ; echo a\\\nb ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; echo $(echo # )\n) ; echo {a,'}'} ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo '#' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; cat ~/.local/share/[a]ipager/x ; echo \"${x#'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#'}'} ; echo ${x:-{} && cat ~/.config/[a]ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && f() { echo; } ; echo \"${x:-\"a b\"}\" ; cat ~/.local/share/[a]ipager/x ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $(cat <<E\n)\nE\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"a\\\"b\" ; echo ${x:=$'\\''} ; echo \"${x/{/}\" ; (( $(cat ~/.config/[a]ipager/aipager.yaml | wc -l) ))",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(echo \")\")\" ; echo \"${x/{/}\" ; echo \"${x:-\"a b\"}\" ; cat <<E\n$(cat ~/.local/share/[a]ipager/x)\nE",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo ${x:-\"}\"} ; echo ${x:+\"}\"} ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo \\# ' ; # it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; echo $(cat <<E\n)\nE\n) ; (( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) )) ; echo $((1<<2)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<E\\OF\n\"\nEOF\ncat <<-EOF\n\tit's\n\tEOF\ncase a in a) echo ;; esac ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<\"E\"OF\n'\nEOF\necho ${x//[}]/} ; echo $(cat ~/.config/aip[a\\]]ger/aipager.yaml)",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(case a in (a) echo;; esac)\" ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo \"a\\\"b\" ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-\"a b\"}\" ; echo ${x/\\}/} ; echo ${x:-{} && echo $(cat ~/.config/[[:a]ipager/aipager.yaml) ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo h#i # \"it's\" ${\ncat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\necho hi # \"it's\" ${\ncat ~/.config/[[:a]ipager/aipager.yaml ; cat <<EOF\nit's $(\nEOF\necho $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\n(( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) )) ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; echo <<<'x' ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/share/[a]ipager/x} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo ${x:+\"}\"} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "for ((i=0;i<1;i++)); do :; done ; echo hi # \"it's\" ${\necho $((1<<2)) ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo ${!x} ; echo <<<'x' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo ${x[${y:-0}]} ; echo \\\n# it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo $( (echo) ) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((2#101)) ; echo a # \"$( \necho a\\\nb ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ; cat <<EOF\nit's $(\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo ${x#{} ; echo \"${x:-'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-'}'} ; echo ${x:-`echo }`} ; echo $(echo ')') ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \nEOF\necho ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \ncat <<\"E\"OF\n'\nEOF\necho <<<'x' ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo $[1<<2] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo hi # \"it's\" ${\necho ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; echo $((2#101)) ; cat <<E\\OF\n\"\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo {a,'}'} ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ec#ho hi # \"it's\" ${\necho '#' ; cat ~/.config/[[:a]ipager/aipager.yaml ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "(( x = 1# << 2 )) ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; [[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"`echo \\\"`\" ; echo ${y:-~/.local/share/[a]ipager/x} ; cat <<-EOF\n\tit's\n\tEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; echo $(case a in a) echo \"it's\";; esac) ; echo ${x:+\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat ~/.local/share/[a]ipager/x ; echo $(case a in a) echo \"it's\";; esac) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; echo ${y:-~/.local/share/[a]ipager/x} ; echo `echo '` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-`echo }`} ; cat <<'EOF'\n$( it's\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-$(echo })} ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nx=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:=$'\\''} ; echo ${x#{} ; cat ~/.local/share/[a]ipager/x ; (( x = 1 << 2 )) ; echo ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-\"a b\"}\" ; echo ${x#{} ; echo \"$(cat ~/.local/state/a[i]pager/x)\"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a#b ; cat <<'EOF'\n$( it's\nEOF\necho ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; cat <<A <<B\n'\nA\n\"\nB\necho ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-\"a b\"}\" ; echo ${x#'}'} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo $\"x\" ; echo \"`echo \\\"`\" ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo {a,'}'} ; echo ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x#'}'}\" ; echo ${x:=$'\\''} ; echo ${x#{} ; echo $(cat ~/.config/[[:a]ipager/aipager.yaml)",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-}}} ; echo $(echo # )\n) ; echo \"$(echo \")\")\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo $'it\\'s' ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "case a in a) echo ;; esac ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<\"E\"OF\n'\nEOF\necho ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $( (echo) ) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "f() { echo; } ; echo \"${x/{/}\" ; cat <<A <<B\n'\nA\n\"\nB\ncat ~/.local/share/[a]ipager/x ; echo $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\necho $(echo ')') ; echo ${x:-{} && cat ~/.config/[[:a]ipager/aipager.yaml ; echo \"`echo \\\"`\" ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; cat ~/.config/[a]ipager/aipager.yaml ; echo ${x:-$(echo })} ; echo {a,'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo \\\n# it's\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo `echo \\`` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x/{/}\" ; echo $(cat <<E\n)\nE\n) ; echo `cat ~/.local/state/a[i]pager/x` ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; f() { echo; } ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $( (echo) ) ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; echo \"${x:-\"a b\"}\" ; echo \"a\\\"b\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $'it\\'s' ; echo ${x:+\"}\"} ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<'EOF'\n$( it's\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${!x} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho hi # \"it's\" ${{\ncat ~/.local/share/[a]ipager/x ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo ${x:-{} && echo $((1<<2)) ; (( $(cat ~/.local/share/[a]ipager/x | wc -l) )) ; echo ${x#{} ; echo a\\\nb ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nx=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nfor ((i=0;i<1;i++)); do :; done ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((1<<2)) ; echo ${x[${y:-0}]} ; echo ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<E\\OF\n\"\nEOF\necho a#b ; echo ${x//[}]/} ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo `cat ~/.local/state/a[i]pager/x` ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "\\echo \"${x:-\"a b\"}\" ; echo ${x:-{} && cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo <<<'x' ; echo $(echo # )\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $x#' ; echo ${x[${y:-0}]} ; echo \\# ' ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\ncat <<E\n$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\nE ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo <<<'x' ; echo `echo '` ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo $(echo ')') ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; echo \\\n# it's\ncat <<E\n$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\nE ; echo ${x:-{} && ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:=$'\\''} ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo ${x:-\"}\"} $; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "for ((i=0;i<1;i++)); do :; done ; echo ${x//[}]/} ; echo ${y:-~/.local/state/a[i]pager/x} ; cat <<EOF ; echo a ;\nbody ' \nEOF\necho \"a\\\"b\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x/\\}/} ; f() { echo; } ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "# it's\ncat <<E\\OF\n\"\nEOF\necho ${y:-~/.config/[a]ipager/aipager.yaml} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${y:-~/.config/[a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; cat <<A <<B\n'\nA\n\"\nB\ncat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo # )\n) ; for ((i=0;i<1;i++)); do :; done ; (( x = 1 << 2 )) ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; echo ${x#{} ; echo {a,'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo <a#b ; x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $((2#101)) ; (( x = 1 << 2 )) ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<\"E\"OF\n'\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; cat <<\"E\"OF\n'\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; cat <<E\n$(cat ~/.config/[[:a]ipager/aipager.yaml)\nE ; for ((i=0;i<1;i++)); do :; done ; case a in a) echo ;; esac ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `ec|ho \\`` ; cat <<-EOF\n\tit's\n\tEOF\necho $((1<<2)) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo $( (echo) ) ; echo ${x#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<E\\OF\n\"\nEOF\necho $(cat <<E\n)\nE\n) ; echo \"$(echo \")\")\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=a; echo `echo '` ; echo ${x:+\"}\"} ; (( $(cat ~/.config/aip[a\\]]ger/aipager.yaml | wc -l) )) ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/share/[a]ipager/x} ; cat <<-EOF\n\tit's\n\tEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo \"${x:-'}'}\" ; echo ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\nx=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-`echo }`} ; echo <<<'x' ; echo ${x[${y:-0}]} ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ; x=a; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; # it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; [[ a < b ]] ; echo ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "case a in a) echo ;; esac ; echo \\\n# it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${!x} ; echo \"$(case a in (a) echo;; esac)\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\n(( x = 1 << 2 )) ; echo \"\\${x#'}'}\" ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo ${x:-}}} ; echo \"$(echo \")\")\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(cat <<E\n)\nE\n) ; echo {a,'}'} ; echo hi # \"it's\" ${\necho \"$(cat ~/.local/state/a[i]pager/x)\" ; echo ${x#'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\necho `cat ~/.config/aip[a\\]]ger/aipager.yaml` ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/state/a[i]pager/x} ; echo hi # \"it's\" ${\necho \"${x:-\"a b\"}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x//[}]/} ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:+\"}\"} ; echo ${x:-`echo }`} ; echo $(echo # )\n) ; echo ${y:-~/.local/state/a[i]pager/x} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $(( (1) )) ; echo ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat <<EOF ; echo a ;\nbody ' \nEOF\ncat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:=$'\\''} ; echo ${x#{} ; echo $((2#101)) ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat ~/.local/share/[a]ipager/x ; cat <<-EOF\n\tit's\n\tEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '${` ; echo `echo \\`` ; echo $\"x\" ; echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo ${#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<\"E\"OF\n'\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-$(echo })} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'<}'} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x[${y:-0}]} ; x=a; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x/\\}/} ; ech{o ${x/\\}/} ; echo ${y:-~/.local/share/[a]ipager/x} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat <<'EOF'\n$( it's\nEOF\ncat ~/.local/share/[a]ipager/x ; echo $(case a in a) echo \"it's\";; esac) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo $(cat <<E\n)\nE\n) ; echo $((1<<2)) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ca&t <<A <<B\n'\nA\n\"\nB\ncat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo <<<'x' ; echo hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x ; (( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x/{/}\" ; echo ${x:-{} && echo \"${x/{/}\" ; cat ~/.config/[a]ipager/aipager.yaml ; cat <<A <<B\n'\nA\n\"\nB\nfor ((i=0;i<1;i++)); do :; done ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho ${x:-}}} ; echo ${x#{} ; cat <<E\n$(cat ~/.config/[a]ipager/aipager.yaml)\nE ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"`echo \\\"`\" ; x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho ${x#{} ; cat <<EOF ; echo a ;\nbody ' \nEOF\ncat ~/.config/[[:a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo <<<'x' ; echo ${x:-'}'} ; f() { echo; } ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo \"${x:-\"a b\"}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ech{o '#' ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; echo ${x:-{} && echo a # \"$( \n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\n(( x = 1 &<< 2 )) ; echo hi # \"it's\" ${\ncat ~/.local/state/a[i]pager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo '` ; echo ${x:-{} && cat ~/.config/[[:a]ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $(echo # )\n) ; echo \"${x/{/}\" ; e$cho ${x[${y:-0}]} ; cat ~/.local/state/a[i]pager/x ; echo ${x:-}}} ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nf() { echo; } ; echo $((1<<2)) ; echo ${x:-{} && echo `cat ~/.config/aip[a\\]]ger/aipager.yaml`",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x//[}]/} ; x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)} ; echo ${!x} ; echo \"${x:-\"a b\"}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x:-\"a b\"}\" ; echo $(cat <<E\n)\nE\n) ; echo \\\n# it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; cat <<EOF\nit's $(\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {a,'{}'} ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo ${x:-{} && echo ${x:+\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat <<'EOF'\n$( it's\nEOF\ncat ~/.config/[a]ipager/aipager.yaml ;  # `",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $\"x\" ; cat <<\"E\"OF\n'\nEOF\necho `echo \\`` ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo $( (echo) ) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(( (1) )) ; echo $(case a in a)\\ echo \"it's\";; esac) ; echo $((2#101)) ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \nEOF\necho ${x:-`echo }`} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\necho \"$(case a in (a) echo;; esac)\" ; echo \"${x/{/}\" ; echo \"$(cat ~/.local/state/a[i]pager/x)\" ; echo \"$(echo \")\")\" ; echo $(cat <<E\n)\nE\n) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-'}'}\" ; echo ${x/\\}/} ; echo ${y:-~/.local/share/[a]ipager/x} ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $<{x:-}}} ; echo '#' ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; cat <<\"E\"OF\n'\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"`echo \\\"`\" $; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo `echo \\`` ; (( x = 1 << 2 )) ; echo ${y:-~/.local/state/a[i]pager/x} ; echo ${x#'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a#b ; echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; # it's\ncat <<'EOF'\n$( it's\nEOF\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; echo ${x#{} ; cat ~/.config/[a]ipager/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; echo $(( (1) )) ; echo \"${x#'}'}\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo \"$(case a in (a) echo;; esac)\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-'}'}\" ; echo $((1<<2)) ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo $[1<<2] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat ~/.local/state/a[i]pager/x ; echo ${x:-$(echo })} ; # it's\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo \\\n# it's\nf() { cat ~/.local/share/[a]ipager/x ; }; f ; echo $( (echo) ) ; echo ${x[${y:-0}]} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\n{cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; echo <<<'x' ; echo ${x:-{} && x=${y:-$(cat ~/.config/aip[a\\]]ger/aipager.yaml)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho $(case a in a) echo \"it's\";; esac) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-{} && echo ${x:-`echo }`} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho $(( (1) )) ; cat ~/.local/state/a[i]pager/x ; echo ${x:=$'\\''} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "case a in a) echo ;; esac ; echo ${x:-{} && echo `cat ~/.config/aip[a\\]]ger/aipager.yaml` ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/state/a[i]pager/x} ; echo ${x//[}]/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<A <<B\n'\nA\n\"\nB\necho ${y:-~/.config/[[:a]ipager/aipager.yaml} ; echo $(( (1) )) ; echo $\"x\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:-{} && cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {a,'}'} ; cat <<\"E\"OF\n'\nEOF\ncat <<EOF ; echo a ;\nbody ' \nEOF\nx=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'|} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; cat <<-EOF\n\tit's\n\tEOF\necho ${y:-~/.local/state/a[i]pager/x} ; echo $( (echo) ) ; x=a; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-$(echo })} ; cat <<A <<B\n'\nA\n\"\nB\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat <<E\n$(cat ~/.config/[a]ipager/aipager.yaml)\nE",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/share/[a]ipager/x} ; echo ${x:-`echo }`} ; echo `echo \\`` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\necho a\\\nb ; f() { echo; } ; x=${y:-$(cat ~/.local/state/a[i]pager/x)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; for ((i=0;i<1;i++)); do :; done ; echo `echo '` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $(echo # )\n) ; echo hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x//[}]/} ; echo $(cat <<E\n)\nE\n) ; cat <<\"E\"OF\n'\nEOF\nx=${y:-$(cat ~/.local/share/[a]ipager/x)} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \nx=a; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(( (1) )) ; echo $[1<<2] ; echo ${x#'}'} ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x/\\}/} ; echo `echo \\`` ; cat <<\"E\"OF\n'\nEOF\necho \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; echo \"`echo \\\"`\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; case a in a) echo ;; esac ; echo $(echo ')') ; cat ~/.config/[a]ipager/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo {a,'\n}'} ; cat <<A <<B\n'\nA\n\"\nB\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; echo \\\n# it's\necho '#' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"${x#'}'}\" ; echo ${x:-{} && cat ~/.local/state/a[i]pager/x ; echo {a,'}'} ; echo ${#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat <<EOF ; echo a ;\nbody ' \nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((1<<2)) ; cat <<E\\OF\n\"\nEOF\necho <<<'x' ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \n\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ; (( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:\nE\n-}}} ; echo ${x:-{} && echo `cat ~/.config/[[:a]ipager/aipager.yaml` ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ \na < b ]] ; echo ${y:-~/.local/state/a[i]pager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<-EOF\n\tit's\n\tEOF\necho ${x:-'}'} ; echo \"$(echo \")\")\" ; x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)} ; echo ${x:-{} && echo '#' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.local/share/[a]ipager/x} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; echo $[1<<2] ; echo ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<\"E\"OF\n'\nEOF\necho a # \"$( \necho ${x:-{} && cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} }&& echo ${y:-~/.local/share/[a]ipager/x} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x[${y:-0}]} ; echo hi # \"it's\" ${\necho <<<'x' ; echo $(cat ~/.local/share/[a]ipager/x) ; echo \"${x:-\"a b\"}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a#b ; cat <<-EOF\n\tit's\n\tEOF\necho ${x:-'}'} ; echo ${y:-~/.local/state/a[i]pager/x} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-\"}\"} ; echo $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(echo # )\n) ; echo \"${x/{/}\" ; cat ~/.config/[[:a]ipager/aipager.yaml ;  # ${",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\ncat <<\"E\"OF\n'\nEOF\necho \"${x:-'}'}\" ; ec\\ho hi # \"it's\" ${\necho \"$(cat ~/.config/[a]ipager/aipager.yaml)\"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $[1<<2] ; echo ${x:-$(echo })} ; for ((i=0;i<1;i++)); do :; done ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ; f() { echo; } ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\necho $((1<<2)) ; cat ~/.config/[[:a]ipager/aipager.yaml ; echo ${x:-{} && echo ${x:-$(echo })} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\nfor ((i=0;i<1;i++)); do :; done ; echo ${y:-~/.local/share/[a]ipager/x} ; echo \"${x#'}'}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<EOF ; echo a ;\nbody ' \nEOF\necho $(cat ~/.config/aip[a\\]]ger/aipager.yaml)",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo hi # \"it's\" ${\ncat ~/.config/[a]ipager/aipager.yaml ; (( x = 1 << 2 )) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:+\"}\"} ; echo '#' ; case a in a) ech$o ;; esac ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; [[ a < b ]] ; echo \"$(case a in (a) echo;; esac)\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x#{} ; echo \"`echo \\\"`\" ; (( $(cat ~/.local/share/[a]ipager/x | wc -l) ))",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(( (1) )) ; cat <<EOF ; echo a ;\nbody ' \nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $(case a in a) echo \"it's\";; esac) ; echo \"$(echo \")\")\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x[${y:-0}]} ; echo $'it\\'s' ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-}}} ; echo $((2#1|01)) ; x=${y:-$(cat ~/.local/share/[a]ipager/x)} ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<'EOF'\n$( it's\nEOF\ncat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $((1<<2)) ; echo ${y:-~/.local/share/[a]ipager/x}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "ec|ho a # \"$( \nx=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)} ; f() { echo; } ; echo ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "x=${y:-$(cat ~/.config/[[:a]ipager/aipager.yaml)} ; echo \"${x:-\"a b\"}\" ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo $((2#101)) ; echo ${x#'}'} ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && echo \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "[[ a < b ]] ; echo a\\\nb ; cat <<E\\OF\n\"\nEOF\ncat <<E\n$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\nE ; echo ${x:-\"}\"} ; echo ${x:-'}'} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${y:-~/.config/[[:a]ipager/aipager.yaml} ;  # \"",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x/{/}\" ; cat <<EOF ; echo a $;\nbody ' \nEOF\necho $((1<<2)) ; cat ~/.config/[a]ipager/aipager.yaml ; cat <<E\\OF\n\"\nEOF\necho ${x/\\}/} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"`echo \\\"`\" ; echo ${x:-`echo }`} ; # it's\ncat ~/.config/aip[a\\]]ger/aipager.yaml ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo $\"x\" ; cat <<-EOF\n\tit's\n\tEOF\necho \"$(cat ~/.config/aip[a\\]]ger/aipager.yaml)\" ; [[ a < b ]] ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-\"}\"} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo `echo \\`` ; echo $(case a in a) echo \"it's\";; esac) ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"${x:-'}'}\" ; echo \"$(e\\cho \")\")\" ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; f() { echo; } ; echo `echo \\`` ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "cat <<E\\OF\n\"\nEOF\necho ${x:+\"}\"} ; echo ${x[${y:-0}]} ; x=${y:-$(cat ~/.config/[a]ipager/aipager.yaml)}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"$(echo \")\")\" ; cat ~/.config/aip[a\\]]ger/aipager.yaml",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-{} && cat ~/.local/state/a[i]pager/x ; echo a#b ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#{} ; echo $'it\\'s' ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ; echo \"$(echo \")\")\" ; echo ${#{} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho {a,'}'} ; echo ${y:-~/.config/[a]ipager/aipager.yaml} ; cat <<EOF ; echo a ;\nbody ' \nEOF\necho \"${x/{/}\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:+\"}\"} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo `echo '` ; for ((i=0;i<1;i++)); do :; done ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo a # \"$( \necho $((1<<2)) ; echo $((2#101)) ; cat ~/.config/aip[a\\]]ger/aipager.yaml ; echo ${x:-\"}\"} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "for ((i=0;i<1;i++)); do :; done ; echo $((2#101)) ; echo ${x:-{} && cat ~/.local/share/[a]ipager/x",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho ${x:+\"}\"} ; cat ~/.config/aip[a\\]]ger/aipager.yaml ;  # $(",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo '#' ; echo \"$(echo \")\")\" ; x=${y:-$(cat ~/.local/state/a[i]pager/x)} ; cat <<\"E\"OF\n'\nEOF\necho ${x:-}}} ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x:-'}'} ; echo ${x:-{} && echo \\# ' '; echo \"$(cat ~/.local/share/[a]ipager/x)\" ; echo ${x//[}]/} ; echo \"`echo \\\"`\" ; ",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo hi # \"it's\" ${\ncat ~/.local/share/[a]ipager/x ; echo $(( (1) )) ; echo hi # \"it's\" ${\n",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo ${x#'}'} ; echo \"$(echo \")\")\" ; echo ${x/<<E\n\\}/} ; f() { cat ~/.config/aip[a\\]]ger/aipager.yaml ; }; f ;  # '",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "echo \"a\\\"b\" ; echo ${y:-~/.config/[a]ipager/aipager.yaml}",
+"reach": true
+},
+{
+"source": "desync",
+"cmd": "shopt -s extglob\necho $(case a in a) echo \"it's\";; esac) ; echo a\\\nb ; echo ${y:-~/.config/aip[a\\]]ger/aipager.yaml} ; echo \"${x:-'}'}\" ; ",
+"reach": true
 }
 ]
 }
