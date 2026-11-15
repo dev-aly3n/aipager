@@ -525,6 +525,29 @@ _ANSI_C_SIMPLE = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f",
                   "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
 #: An empty command substitution: ``````, ``$()``.
 _EMPTY_SUBSTITUTION_RE = re.compile(r"`\s*`|\$\(\s*\)")
+#: One whole shell word (a match takes the whole word at once, so each
+#: word is read once).
+_SHELL_WORD_RE = re.compile(r"[^\s;&|()<>`]+")
+
+
+def _keeps_its_place(part: str) -> bool:
+    """A path part that ``..`` after it must not cancel: the root (an
+    empty part), ``.``, ``..``, the home folder (``~``, ``$HOME``) or a
+    part holding ``=`` or ``:`` (``--dir=~``, ``host:``)."""
+    return (part in ("", ".", "..") or part[0] in "~$"
+            or "=" in part or ":" in part)
+
+
+def _drop_parent_steps(m: re.Match) -> str:
+    """The word with each ``name/..`` taken out, in one pass
+    (``~/.config/nvim/../aipager`` is ``~/.config/aipager``)."""
+    out: list[str] = []
+    for part in m[0].split("/"):
+        if part == ".." and out and not _keeps_its_place(out[-1]):
+            out.pop()
+        else:
+            out.append(part)
+    return "/".join(out) or "."
 
 
 def _ansi_c_char(m: re.Match) -> str:
@@ -542,18 +565,23 @@ def _ansi_c_char(m: re.Match) -> str:
 
 def dequote(command: str) -> str:
     """*command* as the shell spells out a word quoted or split to dodge a
-    pattern: ``$'...'`` decoded (``$'\\x61ipager'`` is ``aipager``), the
-    ``$`` of ``$"..."`` dropped, every ``'``, ``"`` and ``\\`` removed,
-    empty substitutions (``````, ``$()``) dropped, repeated ``/`` made
-    one and ``/./`` made ``/`` (``~/.config//./aipager``)."""
+    pattern: a backslash-newline (a line continued) dropped, ``$'...'``
+    decoded (``$'\\x61ipager'`` is ``aipager``), the ``$`` of ``$"..."``
+    dropped, every ``'``, ``"`` and ``\\`` removed, empty substitutions
+    (``````, ``$()``) dropped, repeated ``/`` made one, ``/./`` made
+    ``/`` (``~/.config//./aipager``) and ``name/..`` taken out
+    (``~/.config/nvim/../aipager``). Linear in the command's length."""
+    out = command.replace("\\\n", "")
     out = _ANSI_C_RE.sub(lambda m: _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, m[1]),
-                         command)
+                         out)
     out = out.replace('$"', '"')
     out = out.replace("'", "").replace('"', "").replace("\\", "")
     out = _EMPTY_SUBSTITUTION_RE.sub("", out)
     out = re.sub(r"/{2,}", "/", out)
     while "/./" in out:
         out = out.replace("/./", "/")
+    if "/.." in out:
+        out = _SHELL_WORD_RE.sub(_drop_parent_steps, out)
     return out
 
 # ---------------------------------------------------------------------------
