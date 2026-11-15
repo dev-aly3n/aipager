@@ -555,7 +555,8 @@ deny `aipager setup` in any form (it grants roles), `aipager config`,
 options before the subcommand (`aipager -v setup`), in any letter case,
 as `python -m aipager` (`-maipager`), through a path to the binary,
 through a glob that could match its name (`aip*r setup`, also in a
-function body: `f(){ aip* setup; }; f`) and through `xargs aipager`;
+function body: `f(){ aip* setup; }; f` or
+`function f { aip* setup; }; f`) and through `xargs aipager`;
 `systemctl`, `launchctl`, `kill`, `pkill` or `killall` naming aipager; a
 Python interpreter running code that imports aipager's own modules
 (`python3 -c "import os, aipager.scope"`, a here-document, `runpy`); any
@@ -591,11 +592,13 @@ quotes, comments, here-document bodies, `${...}`, an assignment's
 `a[...]` and a `[[ x =~ ... ]]` pattern end where bash ends them, the
 commands inside `$(...)`, backticks and `${x:-...}` are read as more
 words, and the default of an unquoted `${x:-default}` (or `${x-...}`,
-`${x:=...}`, `${x:+...}`) counts as a possible value. It can't be sure
-it reads every command as bash does, so text it sets aside (a comment,
-a here-document body) is checked as words anyway when it could name
-`.config` or `.local`, and a `$'...'` is read both ways: decoded only
-where bash decodes it, and decoded everywhere.
+`${x:=...}`, `${x:+...}`) and the replacement of `${x/pattern/new}` (or
+`${x//...}`, `${x/#...}`, `${x/%...}`) count as possible values. It
+can't be sure it reads every command as bash does, so text it sets aside
+(a comment, a here-document body, the text inside any `${...}`, open or
+closed) is checked as words anyway when it could name `.config` or
+`.local`, and a `$'...'` is read both ways: decoded only where bash
+decodes it, and decoded everywhere.
 
 When the floor can't be sure what bash would do with a word that could
 name `.config` or `.local`, it refuses the word. For example: an
@@ -622,7 +625,8 @@ does not read what such a list holds; a list of paths there
 (`ls ~/.config/nvim/{lua,after}`) is fine. A word the floor can't read,
 or a command left open, as above, is refused even when bash would not
 reach the folders with it, and so is a comment or here-document that
-names aipager's folders through a glob.
+names aipager's folders through a glob, or a `${...}` whose text does
+(`${f#~/.config/[a]ipager/}`).
 
 What still gets through: a command name, path or any other word of the
 command built from a variable, `$@` or a command substitution
