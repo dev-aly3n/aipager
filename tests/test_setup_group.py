@@ -1047,3 +1047,14 @@ def test_a_token_typed_into_a_flag_is_never_printed(env, json_out):
     assert code == 2
     assert TOKEN not in out + err and SECRET not in out + err
     assert "bad_root" in out if json_out else "can't be a members' root folder" in err
+
+
+def test_help_names_the_group_forms_and_flags(env):
+    """docs/install-with-an-agent.md 5.5 tells an agent that an aipager
+    whose `aipager setup group --help` fails is older than the command."""
+    code, out, _err = env.run("setup", "group", "--help")
+    assert code == 0
+    for word in ("detect-group", "--member", "--remove-member", "--label",
+                 "--root", "--block-edits"):
+        assert word in out
+    assert env.tg.urls == []
