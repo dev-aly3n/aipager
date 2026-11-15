@@ -2,7 +2,7 @@
 
 # أوامر البوت وواجهته
 
-<!-- i18n-source: docs/commands.md @ d25e85b2 -->
+<!-- i18n-source: docs/commands.md @ ace40cd4 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../commands.md))
 

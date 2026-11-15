@@ -1,6 +1,6 @@
 # Команды и интерфейс бота
 
-<!-- i18n-source: docs/commands.md @ d25e85b2 -->
+<!-- i18n-source: docs/commands.md @ ace40cd4 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../commands.md))
 

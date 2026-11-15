@@ -2,7 +2,7 @@
 
 # فرمان‌ها و رابط ربات
 
-<!-- i18n-source: docs/commands.md @ d25e85b2 -->
+<!-- i18n-source: docs/commands.md @ ace40cd4 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../commands.md))
 
