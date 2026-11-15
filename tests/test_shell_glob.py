@@ -725,6 +725,8 @@ _MANY = [
     "x(a)", "f()@", "~$f()", "/f()",
     "$[''" * 47 + "1" + "]" * 47 + " ",
     "${x/a/~/.config/nvim} ", "echo '${' ; ls ~/.config/nvim ; ",
+    "cat <<'E'\n~/.config ${ $( ` ' \" $' #\nE\n",
+    "cat <<E\n~/.config \\${ \\$( \\` ' \" $' #\nE\n",
 ]
 
 

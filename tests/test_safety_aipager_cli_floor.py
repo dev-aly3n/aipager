@@ -823,3 +823,57 @@ def test_an_admin_telegram_turn_cannot_run_setup_group(
     # The control: the owner's turn runs it.
     assert _decide(_turn(ALICE)) is None
 
+
+# ----- the patterns' needed text (iteration 8, a speed-up only) -----
+
+@pytest.mark.parametrize("pat", sorted(safety._PATTERN_NEEDS, key=str))
+def test_every_pattern_needs_only_text_its_matches_hold(pat):
+    """Each needed text is read off the pattern: a command each pattern
+    blocks holds it (so skipping a subject without it changes nothing)."""
+    from tests import test_bash_search_floor as search
+    rows = [c for c, p in REACH if p == pat] + list(
+        search.BY_PATTERN.get(pat, ()))
+    for cmd in rows:
+        low = cmd.lower()
+        assert all(any(w in low for w in alts)
+                   for alts in safety._PATTERN_NEEDS[pat]), cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    "aip*r\tsetup",
+    "aipager\tconfig",
+    # case-blind matching meets these letters; str.lower() does not make
+    # them ASCII, so a subject that is not ASCII is always searched
+    "a\u0130pager setup",
+    "a\u0131pager setup",
+    "AIPAGER setup",
+])
+def test_the_needed_text_skips_no_match(cmd):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+
+
+def test_a_subject_without_the_needed_text_is_not_searched():
+    kill = safety.BASH_KILL_AIPAGER
+    assert not safety._may_match(kill, "ls ~/.config/nvim", {})
+    assert not safety._may_match(kill, "pkill -f nvim", {})
+    assert safety._may_match(kill, "pkill -f aipager", {})
+    assert safety._may_match(kill, "pkill -f aİpager", {})
+    # a pattern with no needed text is always searched
+    assert safety._may_match(r"\bclaude\b", "ls", {})
+
+
+def test_each_pattern_meets_each_distinct_subject_once(monkeypatch):
+    """A command with no quotes is its own quote-free copy: each pattern
+    is asked about it once, and the needed-text check is asked first."""
+    seen = []
+    real = safety._may_match
+
+    def spy(pat, subject, lowered):
+        seen.append((pat, subject))
+        return real(pat, subject, lowered)
+
+    monkeypatch.setattr(safety, "_may_match", spy)
+    assert bash_violation("ls x", DENY_BASH_PATTERNS) is None
+    assert {s for _, s in seen} == {"ls x"}
+    assert len(seen) == len(DENY_BASH_PATTERNS) - 1
+

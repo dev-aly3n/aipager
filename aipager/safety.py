@@ -533,6 +533,57 @@ DEQUOTED_BASH_PATTERNS: tuple[str, ...] = (
     BASH_STATE_DIR,
 )
 
+#: Text every match of a built-in pattern holds, in lower case: each
+#: inner tuple names alternatives, one of which must be in the subject.
+#: :func:`bash_violation` skips a pattern on a subject (an ASCII one: a
+#: case-blind match may meet a non-ASCII letter ``str.lower`` keeps) that
+#: lacks one; a skipped search could not have matched. Only a speed-up:
+#: each entry is read off the pattern above it.
+_PATTERN_NEEDS: dict[str, tuple[tuple[str, ...], ...]] = {
+    BASH_AIPAGER_CLI: (("aipager",),
+                       ("service", "config", "start", "setup", "uninstall")),
+    # a space or tab right before the subcommand (``.config`` is not one)
+    BASH_AIPAGER_GLOB_PROGRAM: (tuple(
+        blank + sub for sub in ("service", "config", "start", "setup",
+                                "uninstall") for blank in "\x20\t"),),
+    BASH_XARGS_AIPAGER: (("xargs",),),
+    BASH_SYSTEMCTL_AIPAGER: (("systemctl",), ("aipager",)),
+    BASH_RM_AIPAGER: (("rm",), (".config/aipager", ".claude",
+                                ".local/share/aipager")),
+    BASH_KILL_AIPAGER: (("kill",), ("aipager",)),
+    BASH_LAUNCHCTL_AIPAGER: (("launchctl",), ("aipager",)),
+    BASH_PYTHON_IMPORTS_AIPAGER: (("python", "pypy"), ("aipager",)),
+    BASH_CD_CONFIG_PARENT: (("cd", "pushd"), ("/.config", "/.local")),
+    BASH_CD_HOME_THEN_PARENT: (("cd", "pushd"), (".config", ".local")),
+    # ``bsdtar`` holds ``tar``, ``scp`` holds ``cp``
+    BASH_COPY_CONFIG_PARENT: (
+        ("cp", "rsync", "tar", "zip", "7z", "ln", "mv", "rclone"),
+        ("/.config", "/.local")),
+    # the search rules' command names (``rgrep`` holds ``rg``,
+    # ``ack-grep`` holds ``ack``, ``fdfind`` holds ``fd``)
+    SEARCH_TEXT_FIRST: (("rg", "ag", "ack", "fd"),),
+    SEARCH_GREP_RECURSIVE: (("grep",),),
+    SEARCH_FIND: (("find",),),
+    LIST_TREE_DU: (("tree", "du"),),
+    LIST_LS_RECURSIVE: (("ls",),),
+    LIST_FILES: (("rg", "ack"),),
+}
+
+
+def _may_match(pat: str, subject: str, lowered: dict[str, str | None],
+               ) -> bool:
+    """False when *subject* lacks text every match of *pat* holds
+    (:data:`_PATTERN_NEEDS`); *lowered* caches each subject's lower case
+    (None for a subject that is not ASCII, which is always searched)."""
+    needs = _PATTERN_NEEDS.get(pat)
+    if needs is None:
+        return True
+    if subject not in lowered:
+        lowered[subject] = subject.lower() if subject.isascii() else None
+    low = lowered[subject]
+    return low is None or all(any(w in low for w in alts) for alts in needs)
+
+
 #: ``$'...'`` (ANSI-C quoting): bash decodes its backslash escapes.
 _ANSI_C_RE = re.compile(r"\$'((?:[^'\\]|\\.)*)'", re.S)
 _ANSI_C_ESCAPE_RE = re.compile(
@@ -1623,6 +1674,8 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     spelled = ""
     # one read of the command, shared by the bash reading and the matcher
     read: dict = {}
+    # each subject's lower case, for the patterns' needed text
+    lowered: dict[str, str | None] = {}
     if any(pat in dequoted_patterns or pat == BASH_GLOB_REACHES_AIPAGER_DIR
            for pat in patterns):
         copies = (dequote(normalized),)
@@ -1642,12 +1695,15 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
             subjects: tuple[str, ...] = (normalized, *copies)
             if spelled:
                 subjects += (spelled,)
+            # a command with no quotes is its own quote-free copy
+            subjects = tuple(dict.fromkeys(subjects))
         elif pat in DENY_BASH_PATTERNS:
             subjects = (normalized,)
         else:
             subjects = (command,)
         try:
-            if any(re.search(pat, subject) for subject in subjects):
+            if any(re.search(pat, subject) for subject in subjects
+                   if _may_match(pat, subject, lowered)):
                 log.info("bash_violation: command blocked by pattern %r", pat)
                 if pat in DENY_BASH_SEARCH_PATTERNS:
                     return BASH_SEARCH_REASON

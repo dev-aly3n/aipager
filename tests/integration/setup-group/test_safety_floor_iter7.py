@@ -586,20 +586,11 @@ def test_reread_shape_before_a_forbidden_read_is_under_budget(prefix, unit, clos
     assert _best_of_three(cmd) < BUDGET_S
 
 
-# Over the budget at abe7ead3 on an idle machine (tester-iter7-004): a
-# quoted here-document body holding ``${ $( ` ' " $' #``, best of 9 0.54 s
-# at 100 KB (0.23 s at bcb93100); the ``${ $( `` body 0.50-0.51 s. Not
-# strict: a faster runner may pass them.
-OVER_BUDGET = {"quoted-heredocs-naming-config", "quoted-heredocs-specials",
-               "unquoted-heredocs-escaped-specials"}
-
-
-@pytest.mark.parametrize(
-    "prefix,unit,close",
-    [pytest.param(*s[1:], marks=pytest.mark.xfail(
-        strict=False, reason="over budget at abe7ead3 (tester-iter7-004)"))
-     if s[0] in OVER_BUDGET else s[1:] for s in SHAPES7],
-    ids=[s[0] for s in SHAPES7])
+# Over the budget at abe7ead3 (tester-iter7-004: quoted here-document
+# bodies holding ``${ $( ` ' " $' #``, 0.50-0.57 s). The developer's
+# iteration 8 brought them to 0.11-0.16 s on the same machine, so their
+# non-strict xfail marks are removed (fixes-8.md).
+@_shape7
 def test_reread_shape_before_a_harmless_tail_is_under_budget(prefix, unit, close):
     cmd = _shape(prefix, unit, close, SIZE, HARMLESS_TAIL)
     assert _best_of_three(cmd) < BUDGET_S
