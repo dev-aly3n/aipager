@@ -293,6 +293,7 @@ REACH = [
 NEIGHBOURS = [
     # brackets that cannot spell aipager (the bash matcher counts them)
     "ls ~/.config/[[:lower:]]ip",
+    "ls ~/.config/[xy]ip",
     "cp ~/.config/{pip/pip.conf,git/config} /tmp/x",
     "aipager -v status",
     "aipager --version",
