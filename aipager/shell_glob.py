@@ -494,7 +494,8 @@ def _bracket(seg: str, i: int, run_on: bool = False,
     closes it (bash then reads ``[`` as itself). ``!`` or ``^`` first
     negates, a ``]`` right after that is a member. A POSIX item that is
     not closed, is empty, names no class or holds more than one character
-    is :class:`Unsure` (bash reads some of those as plain characters).
+    is :class:`Unsure` (bash reads some of those as plain characters), and
+    so is a plain ``[`` member.
 
     Bash 5.2 reads ``[[=a=]]x]`` two ways at once: a character the item
     matches ends the bracket at the first ``]``, any other runs on to the
@@ -561,6 +562,10 @@ def _bracket(seg: str, i: int, run_on: bool = False,
                 raise Unsure("a_collating_element_of_several_characters")
             j = close + 2
             continue
+        if c == "[":
+            # bash reads ``[[]`` as just ``[``; the floor has refused a
+            # bracket holding ``[`` since iteration 2 and keeps doing so
+            raise Unsure("a_bracket_holding_an_open_bracket")
         if j + 2 < n and seg[j + 1] == "-" and seg[j + 2] != "]":
             _range(c, seg[j + 2], maybe, sure)
             j += 3

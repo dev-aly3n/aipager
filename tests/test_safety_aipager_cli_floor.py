@@ -292,7 +292,6 @@ REACH = [
 #: The nearest neighbours of REACH that must stay allowed.
 NEIGHBOURS = [
     # brackets that cannot spell aipager (the bash matcher counts them)
-    "cat ~/.config/[[]ipager/x",
     "ls ~/.config/[[:lower:]]ip",
     "cp ~/.config/{pip/pip.conf,git/config} /tmp/x",
     "aipager -v status",
@@ -352,6 +351,8 @@ NEIGHBOURS = [
 #: when the matcher is taken out.
 MATCHED_LIKE_BASH = [
     "cat ~/.config/[!.]ipager/x",
+    # bash reads [[] as [ only; a bracket holding [ is refused as unsure
+    "cat ~/.config/[[]ipager/x",
     # POSIX bracket expressions and a ``]`` first in the folder's name
     "sed -i s/a/b/ ~/.config/[[:alpha:]]ipager/x",
     "cat ~/.config/[[=a=]]ipager/x",

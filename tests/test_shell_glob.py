@@ -186,7 +186,7 @@ def test_a_glob_that_matches_aipager(seg):
 @pytest.mark.parametrize("seg", [
     "[[:lower:]]ip", "nvim*", "*.conf", "[!a]ipager", "[b-z]ipager",
     "[[:x]ipager", "[[=x]ipager",
-    "[[:digit:]]ipager", "[[:foo:]]ipager", "aipage", "[[]ipager",
+    "[[:digit:]]ipager", "[[:foo:]]ipager", "aipage",
     "a?????????", "????????",
 ])
 def test_a_glob_that_cannot_match_aipager(seg):
@@ -196,6 +196,8 @@ def test_a_glob_that_cannot_match_aipager(seg):
 @pytest.mark.parametrize("seg", [
     "[[.a]ipager", "[[:a[.b]ipager", "[[:a]x[=b]ipager", "[a-.]ipager",
     "[z-a]ipager", "[[.ab.]]ipager", "@(aipager)", "!(x)", "[[:al]pha:]]x",
+    # bash reads [[] as [, but a bracket holding [ stays refused
+    "[[]ipager", "[a[b]x",
 ])
 def test_what_the_matcher_does_not_model_is_unsure(seg):
     assert g._classify(seg, False) == g._ALL
@@ -371,7 +373,6 @@ def test_the_floor_blocks_through_the_matcher(cmd):
 @pytest.mark.parametrize("cmd", [
     "ls ~/.config/[[:lower:]]ip",
     "cp ~/.config/{pip/pip.conf,git/config} /tmp/x",
-    "cat ~/.config/[[]ipager/x",
     "cat ~/.config/{git/config,nvim/x}",
     "ls ~/.config/nvim/{lua,after}",
     "ls .*/x",
@@ -413,7 +414,7 @@ def test_decoys_blocked_stay_few():
 
 
 #: Fuzz decoys the floor refused when the stored set was made.
-DECOYS_BLOCKED = 27
+DECOYS_BLOCKED = 29
 
 
 # ----- time -----
