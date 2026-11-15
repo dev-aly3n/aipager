@@ -1639,7 +1639,7 @@ Every key is always present; a value not known yet is `null`.
 ```
 
 `candidate` is `null` unless `status` is `found`; from the daemon
-source its `type` and `date` are `null`. `other_candidates` counts the
+source its `date` is `null`. `other_candidates` counts the
 other new groups that wrote in the same 10 minutes. `warnings` may
 hold `updates_backlog`.
 
