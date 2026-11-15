@@ -852,6 +852,51 @@ def test_an_empty_quoted_delimiter_is_a_here_document():
     for d in ("''", '""', "$''", '$""'):
         assert g.lex("cat <<" + d + "\nx\n\nls")[1]
     assert not g.lex("cat << ; ls")[1]
+
+
+@pytest.mark.parametrize("pre", [
+    "echo '$'; ", "grep -n 'TODO$' notes.txt; ", "grep -E '^a|b$' f && ",
+    "echo 'cost: 5$'\n", "echo \"$'\"; ", "echo \"\\$'\"; ",
+    "echo # it's 5$'\n", "cat <<'E'\n5$'\nE\n", "cat <<E\n5\\$'\nE\n",
+])
+def test_a_dollar_quote_bash_does_not_read_shifts_nothing(pre):
+    """tester-iter6-001: a ``$'`` bash does not read as ANSI-C quoting
+    (in quotes, a comment, a here-document body) must not change how a
+    later ``$'...'`` is read, in the matcher or in the regex rules."""
+    assert g.command_reaches(pre + "cat ~/$'\\x2e'config/[a]ipager/x")
+    for target in ("cat ~/.config/$'\\x61'ipager/aipager.yaml",
+                   "$'\\x61'ipager setup group --force",
+                   "python3 -c $'import \\x61ipager.scope'",
+                   "cd ~/$'\\x2e'config && cat aipager/x"):
+        assert bash_violation(pre + target, DENY_BASH_PATTERNS) is not None
+
+
+def test_the_words_bash_reads_are_a_copy_of_their_own():
+    """Only bash's own ``$'`` decoded (:func:`spelled`): ``\\xargs`` is
+    ``xargs`` there, where decoding every escape makes it a newline."""
+    cmd = "echo '$'; \\xargs aipager; echo 'x'"
+    assert "xargs aipager" in g.spelled(cmd)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    assert g.spelled('cat "$HOME"/.config/$\'\\x61\'ipager/x') == (
+        "cat $HOME/.config/aipager/x")
+    assert g.spelled("cd $HOME/x") == "cd $HOME/x"
+    # the regex rules see it with its paths made plain: here \x20 is
+    # x20 to bash (outside $'...'), a blank once every escape is decoded
+    cmd = "echo '$'; cat ~/.config/nvim\\x20/../$'\\x61'ipager/x"
+    regex_only = tuple(p for p in DENY_BASH_PATTERNS
+                       if p != safety.BASH_GLOB_REACHES_AIPAGER_DIR)
+    assert bash_violation(cmd, regex_only) is not None
+
+
+def test_every_escape_decoded_is_a_copy_of_its_own():
+    """Every escape decoded as if all of the command sat in ``$'...'``
+    (``dequote(..., True)``): bash decodes the ``$'`` in ``${x/*/...}``,
+    which the word reading keeps as typed."""
+    cmd = "x=a; echo '$'; pkill -f ${x/*/$'\\x61'ipager}"
+    assert "${x/*/aipager}" in safety.dequote(cmd, True)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+
+
 def test_a_numeric_escape_may_name_a_folder():
     """Decoded wherever it stands, not only after a ``$'`` read from the
     left (``echo '$'`` would shift that)."""

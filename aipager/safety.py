@@ -598,22 +598,40 @@ def _ansi_c_char(m: re.Match) -> str:
         return ""
 
 
-def dequote(command: str) -> str:
+def dequote(command: str, everywhere: bool = False) -> str:
     """*command* as the shell spells out a word quoted or split to dodge a
     pattern: a backslash-newline (a line continued) dropped, ``$'...'``
     decoded (``$'\\x61ipager'`` is ``aipager``), the ``$`` of ``$"..."``
     dropped, every ``'``, ``"`` and ``\\`` removed, empty substitutions
-    (``````, ``$()``) dropped, repeated ``/`` made one, ``/./`` made
-    ``/`` (``~/.config//./aipager``) and ``name/..`` taken out
-    (``~/.config/nvim/../aipager``, also a brace that may spell ``..``:
-    ``nvim/{..,x}``). Linear in the command's length."""
+    (``````, ``$()``) dropped, then the paths made plain
+    (:func:`_plain_paths`). Linear in the command's length.
+
+    Which ``$'`` bash reads as ANSI-C quoting depends on the quotes
+    before it: one inside single quotes (``grep 'TODO$'``), a comment or
+    a here-document body is not one, and reading it as one shifts every
+    later ``$'...'`` here. So no single reading is trusted: with
+    *everywhere*, every backslash escape in the command is decoded as if
+    all of it sat inside ``$'...'``; :func:`aipager.shell_glob.spelled`
+    gives the reading where only bash's own ``$'`` are decoded. The
+    floor checks every copy, so a wrong reading can only add a match."""
     out = command.replace("\\\n", "")
-    out = _ANSI_C_RE.sub(lambda m: _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, m[1]),
-                         out)
+    if everywhere:
+        out = _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, out.replace("$'", "'"))
+    else:
+        out = _ANSI_C_RE.sub(
+            lambda m: _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, m[1]), out)
     out = out.replace('$"', '"')
     out = out.replace("'", "").replace('"', "").replace("\\", "")
     out = _EMPTY_SUBSTITUTION_RE.sub("", out)
-    out = re.sub(r"/{2,}", "/", out)
+    return _plain_paths(out)
+
+
+def _plain_paths(text: str) -> str:
+    """*text* with repeated ``/`` made one, ``/./`` made ``/``
+    (``~/.config//./aipager``) and ``name/..`` taken out
+    (``~/.config/nvim/../aipager``, also a brace that may spell ``..``:
+    ``nvim/{..,x}``). Linear in the text's length."""
+    out = re.sub(r"/{2,}", "/", text)
     while "/./" in out:
         out = out.replace("/./", "/")
     if "/.." in out or "{" in out:
@@ -1592,15 +1610,30 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     if not command:
         return None
     normalized = normalize_scratchpad(command)
-    dequoted = dequote(normalized)
+    dequoted_patterns = DEQUOTED_BASH_PATTERNS
+    copies: tuple[str, ...] = ()
+    spelled = ""
+    # one read of the command, shared by the bash reading and the matcher
+    read: dict = {}
+    if any(pat in dequoted_patterns or pat == BASH_GLOB_REACHES_AIPAGER_DIR
+           for pat in patterns):
+        copies = (dequote(normalized),)
+        if "$'" in normalized:
+            # which ``$'`` bash decodes depends on the quotes before it:
+            # read it both ways (see :func:`dequote`)
+            copies += (dequote(normalized, True),)
+            spelled = _plain_paths(
+                _shell_glob.spelled(normalized, *copies, cache=read))
     for pat in patterns:
         if pat == BASH_GLOB_REACHES_AIPAGER_DIR:
-            if _shell_glob.command_reaches(normalized, dequoted):
+            if _shell_glob.command_reaches(normalized, *copies, cache=read):
                 log.info("bash_violation: command blocked by pattern %r", pat)
                 return BASH_REASON
             continue
-        if pat in DEQUOTED_BASH_PATTERNS:
-            subjects: tuple[str, ...] = (normalized, dequoted)
+        if pat in dequoted_patterns:
+            subjects: tuple[str, ...] = (normalized, *copies)
+            if spelled:
+                subjects += (spelled,)
         elif pat in DENY_BASH_PATTERNS:
             subjects = (normalized,)
         else:

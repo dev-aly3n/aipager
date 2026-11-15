@@ -113,10 +113,26 @@ ANSI_DESYNC = [
 ]
 
 
+#: Rows closed in the developer's iteration 7 (their xfail mark removed).
+CLOSED_ITER7 = {
+    "path-after-quoted-dollar", "path-after-grep-anchor",
+    "path-after-ere-anchor", "path-after-quoted-dollar-newline", "path-octal",
+    "path-local-share", "path-local-state", "path-dot-config",
+    "path-two-ansi-parts", "path-quoted-home", "path-after-dq-dollar-quote",
+    "path-after-dq-escaped-dollar", "path-after-comment",
+    "path-after-quoted-heredoc", "path-after-heredoc",
+    "cd-config-then-relative", "path-in-quoted-cmdsub", "path-in-arith-cmdsub",
+    "path-mid-name-after-dq", "cli-setup-group", "cli-setup-token-stdin",
+    "cli-config", "cli-uninstall", "cli-python-m", "cli-python-c-import",
+    "cli-pkill", "cli-killall", "cli-systemctl", "cli-launchctl",
+    "cli-cp-config",
+}
+
+
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(g[1] + g[2], marks=pytest.mark.xfail(strict=True,
-                                                       reason=UNDOCUMENTED))
+    [pytest.param(g[1] + g[2], marks=() if g[0] in CLOSED_ITER7 else
+                  pytest.mark.xfail(strict=True, reason=UNDOCUMENTED))
      for g in ANSI_DESYNC],
     ids=[g[0] for g in ANSI_DESYNC])
 def test_ansi_c_desync_is_blocked(cmd):
