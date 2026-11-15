@@ -1,6 +1,6 @@
 # Usage en équipe et groupes
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../groups.md))
 
@@ -20,7 +20,7 @@ Traitez la liste des membres comme vous traitez l'accès SSH à l'ordinateur. Le
 
 ## <a id="setup"></a>Configuration
 
-Tout se configure avec `aipager config`. Vous ne modifiez jamais un fichier à la main.
+Tout se configure avec `aipager config` ou, sans questions (pour les scripts et les agents de programmation), avec `aipager setup group` (voir [plus bas](#without-prompts-aipager-setup-group)). Vous n'avez jamais besoin de modifier un fichier à la main.
 
 **Premier lancement** (pas encore de configuration). L'assistant demande, en quatre étapes :
 
@@ -51,12 +51,26 @@ Il écrit votre discussion privée comme première discussion. Il ne demande pas
 
 Pour ajouter quelqu'un à un groupe déjà configuré, utilisez Edit a scope → le groupe → Add a member. Toutes les personnes déjà dans le groupe gardent leur place et leur rôle.
 
+### <a id="without-prompts-aipager-setup-group"></a>Sans questions : `aipager setup group`
+
+`aipager setup group` fait la même chose sans poser de questions, sur une installation déjà configurée : les mêmes vérifications, le même fichier et le même rechargement sans redémarrage. Ajoutez le bot au groupe, faites-en un administrateur avec le droit d'épingler des messages et envoyez-y `/start`, puis :
+
+```sh
+aipager setup detect-group --json      # trouve l'identifiant du groupe ; n'enregistre rien
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+Relancez-le avec un autre `--member` pour ajouter quelqu'un (les autres gardent leur place et leur rôle), avec `--remove-member ID` pour retirer quelqu'un, et avec `--block-edits` pour la règle facultative. Un changement de rôle, rétrograder ou retirer un propriétaire, ou faire propriétaire quelqu'un qui ne l'est encore nulle part, demande `--force`. La même commande deux fois ne change rien. Il vérifie, sans rien envoyer dans le groupe, si le bot est dans le groupe et peut épingler des messages, et prévient sinon. Options, codes de sortie et sortie JSON : [commandes](commands.md#aipager-setup-group).
+
 ### <a id="finding-ids-auto-detect"></a>Trouver les identifiants (détection automatique)
 
 La détection automatique d'un membre prend le message le plus récent de quelqu'un qui n'a pas encore été ajouté et demande "Is this the person to add?" (Est-ce la personne à ajouter ?) avant de l'utiliser (répondez non et elle cherche plus loin). Elle propose le nom d'utilisateur Telegram de la personne comme nom. Dans un groupe, la personne doit s'adresser au bot : le mentionner ou envoyer `/start` (voir [ce que lit le bot](#what-the-bot-reads-in-a-group)). L'assistant dit où il regarde :
 
 - **"Watching through the running daemon"** (à travers l'aipager en cours) : pendant qu'`aipager start` tourne, aipager reçoit tous les messages du bot, donc l'assistant lit ce qu'aipager a noté dans `~/.claude/aipager-pending-users.json`. aipager note qui s'adresse au bot dans un groupe qu'il ne sert pas encore (l'identifiant, le titre et le type du groupe, et l'identifiant, le nom d'utilisateur et le nom de la personne), et quiconque n'est pas membre d'un groupe qu'il sert. Il ne répond jamais dans un groupe qu'il ne sert pas. Un message privé de quelqu'un qui n'est pas configuré reçoit une réponse et n'est pas noté, donc pour ajouter la discussion privée d'une personne pendant qu'aipager tourne, collez son identifiant (ou arrêtez d'abord aipager).
 - **"Watching Telegram directly"** (directement dans Telegram) : quand aipager est arrêté, l'assistant demande lui-même à Telegram les messages récents du bot.
+
+`aipager setup detect-group` trouve l'identifiant d'un groupe de la même façon, sans questions : le message le plus récent dans un groupe pas encore configuré, sur les 10 dernières minutes.
 
 Votre propre discussion privée, au premier lancement, est toujours lue dans Telegram. Un message d'un admin anonyme du groupe, ou un message publié au nom du groupe ou d'un canal, ne compte pas : son identifiant d'expéditeur (1087968824, 136817688 ou 777000) est le même pour tous ceux qui publient ainsi, donc l'assistant le refuse, tapé ou détecté. Demandez à la personne de publier avec son propre compte.
 
@@ -74,6 +88,8 @@ Ce qu'un rechargement applique tout de suite :
 - un nouveau groupe ou une nouvelle discussion privée commence à recevoir des messages et reçoit son menu `/` ; une discussion retirée s'arrête (ses sessions continuent de tourner jusqu'à ce que vous les terminiez) ;
 - un message retenu (qui attend qu'une demande reçoive sa réponse ou que la tâche de quelqu'un d'autre se termine) d'une personne qui n'a plus le droit d'écrire dans cette discussion est abandonné : il reçoit un 🤷 et le bot répond « Pas envoyé à Claude : @bob n'a plus le droit d'écrire ici. » ;
 - une tâche en cours d'une personne retirée ou qui a perdu des droits ne garde, pour le reste de la tâche, que le plus strict de ses anciennes règles et des nouvelles (le socle restreint pour une personne retirée). Une tâche tapée dans le terminal n'est pas changée, sauf si un message Telegram l'a rejointe : aipager ne note pas de qui, donc une telle tâche est restreinte quand n'importe quel propriétaire de cette discussion (ou, dans une discussion privée, son membre) perd des droits. Une tâche qui tournait déjà quand aipager a redémarré (encore au travail, ou en attente d'une question ou d'une autorisation) est restreinte pour chaque membre de sa discussion qui a perdu des droits. Une promotion n'élargit jamais une tâche en cours : les nouveaux droits s'appliquent à partir de la prochaine tâche de cette personne.
+
+`aipager setup group` envoie le même rechargement après avoir écrit, et indique ce qui s'est passé (`daemon: reloaded live`, `not applied`, `restart needed` ou `no daemon running`).
 
 Seul un nouveau **token de bot** demande un redémarrage (`aipager config` le dit après Refresh bot token). Quand aucun aipager ne tourne, aucun rechargement n'est envoyé : le prochain `aipager start` lit la nouvelle configuration.
 
@@ -118,7 +134,7 @@ Activer les sujets transforme aussi un groupe simple en supergroupe, ce qu'aipag
 
 ## <a id="roles"></a>Rôles
 
-Quatre rôles intégrés (voir `aipager/safety.py`). Le rôle qui compte est celui de la personne **dans la discussion où elle agit**. Personne ne peut changer les membres ni les rôles depuis Telegram ou la Mini App : seul `aipager config` sur l'ordinateur le fait, ce qui laisse cela entre les mains du propriétaire.
+Quatre rôles intégrés (voir `aipager/safety.py`). Le rôle qui compte est celui de la personne **dans la discussion où elle agit**. Personne ne peut changer les membres ni les rôles depuis Telegram ou la Mini App : seuls `aipager config` ou `aipager setup group` sur l'ordinateur le font, ce qui laisse cela entre les mains du propriétaire (les règles de sécurité d'aipager bloquent les deux pour toute tâche Telegram qui n'est pas celle du propriétaire).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ Quatre rôles intégrés (voir `aipager/safety.py`). Le rôle qui compte est cel
 
 - **owner** : contrôle complet, y compris sur le socle de sécurité intégré. Il ne devrait y en avoir qu'un : la personne qui administre l'ordinateur.
 - **admin** : tout ce qu'un propriétaire peut faire dans Telegram et la Mini App : passer des sessions en Mode Accès complet (et les lancer dans ce mode), reprendre une session en Mode Accès complet, changer les `/settings` d'un groupe, lancer `/update`, installer la fonction vocale, envoyer n'importe quelle commande slash. Un admin est aussi exempté des règles de refus de rôle (les `deny_tools` de la discussion et du membre ne s'appliquent pas à lui). Deux choses restent au propriétaire :
-  - changer les membres et les rôles : seul `aipager config` sur l'ordinateur le fait, et rien dans Telegram ni dans la Mini App ne le peut ;
+  - changer les membres et les rôles : seuls `aipager config` ou `aipager setup group` sur l'ordinateur le font, et rien dans Telegram ni dans la Mini App ne le peut ;
   - l'exemption du socle de sécurité (la configuration et le token du bot d'aipager, les identifiants de Claude Code, les fichiers de contrôle d'aipager). Le `Grep` et le `Glob` d'un admin peuvent chercher partout ailleurs, mais pas dans un dossier qui est l'un de ceux-là, se trouve dans l'un d'eux ou en contient un : un `Grep` de `~`, de `/` ou de `/tmp` (ou sans dossier, depuis une session dans le dossier personnel) est refusé, tout comme un `Glob` dont le motif commence dans l'un d'eux (comme `/home/you/.config/aipager/*`). Cherchez plutôt dans un dossier de projet. Sur les versions de Claude Code sans outil `Grep`, Claude cherche par Bash ; là aussi, une recherche ou un listage récursif de tout le dossier personnel ou de `/` (`grep -rn x ~`, `rg x $HOME`, `find / -name x`) est refusé, au mieux (une recherche sans dossier, ou avec `..`, lancée depuis le dossier personnel ou en dessous n'est pas vue), et les recherches dans un projet ne le sont pas, y compris une recherche D'UN chemin personnel (`grep -rn "$HOME" src`) ([sécurité](security.md#team-mode-enforcement)).
 
   Un admin garde Bash, et avec un shell les motifs de commandes du socle sont au mieux, pas une barrière : ne faites de quelqu'un un admin que si vous lui donneriez un shell sur l'ordinateur.
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-Une discussion privée et des discussions de groupe coexistent : le bot sert chaque discussion de la liste, avec les sessions de chaque discussion séparées. `aipager config` écrit ce fichier ; vous n'avez jamais besoin de le modifier.
+Une discussion privée et des discussions de groupe coexistent : le bot sert chaque discussion de la liste, avec les sessions de chaque discussion séparées. `aipager config` et `aipager setup group` écrivent ce fichier. Ne le modifiez à la main que sur un aipager plus ancien qu'`aipager setup group` : gardez ses droits à 0600, vérifiez-le avec `aipager policy validate` et envoyez à aipager un rechargement (voir [Recharger sans redémarrer](#live-reload)).
 
 ## <a id="how-rules-work"></a>Comment les règles fonctionnent
 
@@ -359,7 +375,7 @@ Chaque tâche de chaque rôle sauf `owner` le reçoit en entier, tout comme les 
 
 ## <a id="revoking-a-user"></a>Retirer l'accès d'un utilisateur
 
-1. Lancez `aipager config` → Edit a member → la discussion → la personne → Remove member. Pour lui retirer le droit d'envoyer des messages tout en la laissant lire, utilisez Set role et choisissez `read_only`. (Pour la rajouter plus tard : Edit a scope → le groupe → Add a member.) Pour la discussion privée d'une personne, terminez ses sessions, puis Edit a scope → sa discussion privée → Remove this scope.
+1. Lancez `aipager config` → Edit a member → la discussion → la personne → Remove member. Pour lui retirer le droit d'envoyer des messages tout en la laissant lire, utilisez Set role et choisissez `read_only`. (Pour la rajouter plus tard : Edit a scope → le groupe → Add a member.) Pour la discussion privée d'une personne, terminez ses sessions, puis Edit a scope → sa discussion privée → Remove this scope. Sans questions : `aipager setup group --chat-id <identifiant du groupe> --remove-member <son identifiant>` (un propriétaire demande `--force`).
 2. L'assistant recharge aipager à chaud ; il dit "Scopes reloaded live". Tout de suite, ses messages retenus sont abandonnés (🤷 et une réponse « Pas envoyé à Claude ») et une tâche à elle qui tourne encore est tenue au socle restreint jusqu'à sa fin. Envoyez `/stop` pour arrêter cette tâche tout de suite.
 3. Retirez-la aussi du groupe Telegram. Tant qu'elle y reste, elle peut encore lire tout ce qui y est publié : cartes, réponses, entrées des outils et demandes d'autorisation.
 

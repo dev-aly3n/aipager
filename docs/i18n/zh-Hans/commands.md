@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ 08e5ce80 -->
+<!-- i18n-source: docs/commands.md @ d63d62ef -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
@@ -474,7 +474,7 @@ Claude 可以从它的会话里给你发文件：用你自己的话说就行（"
 | 命令 | 作用 |
 |---|---|
 | `aipager config` | 交互式设置向导：机器人 token、聊天、成员和角色、Claude Code 的 hook。重新运行它可以修改任何东西（见[群组](groups.md#setup)）。 |
-| `aipager setup` | 不提任何问题地完成同样的首次设置，供脚本和编程代理使用（见[下文](#command-line-aipager-setup-for-coding-agents)）。 |
+| `aipager setup` | 不提任何问题地完成同样的首次设置，供脚本和编程代理使用；`aipager setup group` 用同样的方式添加一个 Telegram 群组、它的成员和成员的角色（见[下文](#command-line-aipager-setup-for-coding-agents)）。 |
 | `aipager start` | 在前台运行 aipager。有另一个 aipager 在运行时，它会拒绝启动。 |
 | `aipager service install [--yes]` | 把 aipager 安装为后台服务（Linux 上是 systemd 用户服务，macOS 上是 launchd 代理）并启动它。`--yes` 会在已安装的服务文件不同时跳过询问。 |
 | `aipager service start\|stop\|status\|logs\|uninstall` | 启动、停止或查看服务，跟踪它的日志，或者卸载它。 |
@@ -496,7 +496,7 @@ Claude 可以从它的会话里给你发文件：用你自己的话说就行（"
 
 ## <a id="command-line-aipager-setup-for-coding-agents"></a>命令行：`aipager setup`（供编程代理使用）
 
-上面的部分介绍的是 Telegram 机器人。这一部分介绍的是你在终端里运行的一个命令，或者你的脚本或编程代理替你运行的命令：`aipager setup` 不提任何问题地设置 aipager，结果和第一次运行 `aipager config` 相同。
+上面的部分介绍的是 Telegram 机器人。这一部分介绍的是你在终端里运行的一个命令，或者你的脚本或编程代理替你运行的命令：`aipager setup` 不提任何问题地设置 aipager，结果和第一次运行 `aipager config` 相同。在已经设置好的安装上，`aipager setup group` 会添加一个 Telegram 群组及其成员和成员的角色，同样不提问题（见 [`aipager setup group`](#aipager-setup-group)）。
 
 ```sh
 # 1. 找到用户的 Telegram ID（用户打开机器人并点 Start）
@@ -505,6 +505,9 @@ aipager setup detect-chat --token-file ~/bot-token.txt --json
 aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 # 3. 检查安装
 aipager doctor --json
+# 之后：找到一个群组（在里面发送 /start），再设置它
+aipager setup detect-group --json
+aipager setup group --chat-id -1001234567890 --member 123456789:alice:owner --json
 ```
 
 它按这个顺序做的事：读取机器人的 token，向 Telegram 验证 token（getMe），在不写入任何东西的情况下检查这台电脑上的一切（现有的配置、依赖项、`~/.claude/settings.json`（或 `$CLAUDE_CONFIG_DIR/settings.json`）、是否有 aipager 在运行），给用户发一条测试消息（"aipager is set up for you. ..."），然后才写入。写入的文件，和设置向导写入的一样：
@@ -523,12 +526,17 @@ aipager doctor --json
 |---|---|
 | `--token-file PATH` | 从这个文件读取机器人的 token（最多 4096 字节；token 周围有其他文字也没关系）。其他用户能读的文件仍然可以使用，但会有警告 `token_file_shared`：请 `chmod 600` 它，或者在 setup 成功后删除它。 |
 | `--token-stdin` | 从 stdin 读取机器人的 token（管道或重定向的文件，绝不是终端）。管道必须关闭：setup 最多等 30 秒让 stdin 结束，然后以退出码 2 和 `token_stdin_timeout` 退出。`printf '%s\n' "$TOKEN" \| aipager setup --token-stdin ...` 和 `< token.txt` 都会关闭它。 |
-| `--chat-id N` | 必填。这个人的数字 Telegram 用户 ID，也就是这个人私聊的 ID。群组用 `aipager config` 添加。 |
+| `--chat-id N` | 必填。这个人的数字 Telegram 用户 ID，也就是这个人私聊的 ID。用在 `setup group` 上时：群组的 ID，一个负数。 |
 | `--role owner\|admin` | 这个人的角色（默认 `owner`）。 |
 | `--service` | 同时安装并启动后台服务（有 aipager 在运行时会被忽略）。 |
-| `--force` | 允许替换现有安装的机器人 token、所有者的私聊或角色。群组 scope 和其他私聊保持不变。 |
+| `--force` | 允许替换现有安装的机器人 token、所有者的私聊或角色。群组 scope 和其他私聊保持不变。用在 `setup group` 上时：允许 `force_reasons` 里列出的改动。 |
 | `--dry-run` | 运行所有检查，不发送任何东西，不写入任何东西，并报告会改变什么。 |
 | `--json` | 在 stdout 上只打印一个 JSON 对象；其他一切都输出到 stderr。 |
+| `--member ID:LABEL:ROLE` | 仅 `setup group`，可重复：一个成员的数字 Telegram 用户 ID、名字和角色。 |
+| `--remove-member ID` | 仅 `setup group`，可重复：移除这个成员。 |
+| `--label NAME` | 仅 `setup group`：群组的名字。 |
+| `--root PATH` | 仅 `setup group`：成员的根文件夹。 |
+| `--block-edits` | 仅 `setup group`：为群组的 `user` 成员拦下 Write 和 Edit。 |
 
 `--token-file` 和 `--token-stdin` 必须恰好给出其中一个。token 绝不会作为参数的值被接受：`--token` 和 `--bot-token` 会被拒绝（`token_on_command_line`），值也不会被显示。缩写的参数（`--token-f`、`--dry`）不被接受。setup 从不提问，从不需要终端，也从不从环境变量读取 token。
 
@@ -546,24 +554,52 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 限制：因为 detect-chat 从不确认消息，Telegram 只让它看到过去 24 小时里最早的 100 个未读更新。当机器人有这么多在等待时，新的 `/start` 是看不到的：这时 detect-chat 会超时（退出码 8）并发出警告 `updates_backlog`，再点一次 Start 也没用。请改为向用户要数字 Telegram ID（或者启动一次 aipager，它会读取并清空积压）。
 
+### <a id="aipager-setup-group"></a>`aipager setup group`
+
+```sh
+aipager setup group --chat-id N [--member ID:LABEL:ROLE ...] [--remove-member ID ...]
+                    [--label NAME] [--root PATH] [--block-edits]
+                    [--force] [--dry-run] [--json]
+```
+
+在已经设置好的安装上设置一个 Telegram 群组，检查、写文件和不重启地重新加载都和 `aipager config` 一样。它从 `aipager.yaml` 读取机器人 token（没有 `--token-file` 或 `--token-stdin`），不需要终端，从不重启 aipager，也从不往群组里发任何东西。
+
+- `--chat-id N`：群组的 ID，一个负数（[`detect-group`](#aipager-setup-detect-group) 能找到它）。
+- `--member ID:LABEL:ROLE`：一个正数 Telegram 用户 ID、一个名字（可以包含 `:`）和一个角色：`owner`、`admin`、`user`、`read_only`，或 `policy.yaml` 里定义的角色。Telegram 共用的发送者 ID（1087968824、136817688、777000）会被拒绝。
+- 新群组至少需要一个 `--member`。它的名字是 `--label`，否则是 `group-<ID 的数字>`；它的根文件夹是 `--root`，否则是 `~/aipager-users/group-<label>`，并写进文件。
+- 已经设置好的群组（包括 Telegram 升级它之后用另一个 ID 找到的，警告 `group_moved`）会被扩充：你没提到的成员保留，新 ID 会加入，已有 ID 配上新名字会被改名，对不是成员的人用 `--remove-member` 会给出警告 `not_a_member`。`--block-edits` 把 `Write` 和 `Edit` 加进群组的 `deny_tools`，从不去掉任何东西。最后一个成员不能移除（`last_member`，加 `--force` 也不行）：请在 `aipager config` 里移除整个群组。
+- 这些改动需要 `--force`，否则退出码 6 `needs_force`（`force_reasons` 会列出来）：`owner_granted`（新成员得到一个带 `bypass_safety` 的角色，而且在任何聊天里都还没有这样的角色；添加你自己私聊的所有者不需要）、`role_changed`、`owner_demoted`、`owner_removed`、`root_code_loading`（根文件夹在 `~/bin`、`~/.local/bin`、`~/.config/systemd` 或 `~/.config/autostart` 里）和 `root_overlap`（它与另一个聊天的根文件夹相同、包含它或在它里面）。
+- 用同样的选项再运行一次不会改变任何东西（`unchanged`）：不写文件，也不重新加载。
+- 每次授予 `owner` 角色，审计日志里都会有一条 `grant-owner` 记录。
+- 它只读地、在群组看不到的情况下向 Telegram 询问（getMe、getChat、针对机器人的 getChatMember）：机器人是否在群组里、是否是管理员、能否置顶消息。发现的问题只是警告，从不成为退出码；遇到网络错误后，剩下的检查会跳过（`telegram_checks_skipped`）。
+
+### <a id="aipager-setup-detect-group"></a>`aipager setup detect-group`
+
+```sh
+aipager setup detect-group [--timeout SECONDS] [--json]
+```
+
+等待还没设置的群组或超级群组里的最新消息（有人在那里发送 `/start`），并打印这个群组：ID、名称和类型。它不保存任何东西，所以请把群组给用户看，只有在用户确认后才运行 `aipager setup group --chat-id`。只有在命令开始之前不超过 10 分钟发送的消息才算数；`--timeout` 和 detect-chat 一样。它从 `aipager.yaml` 读取 token，不接受其他选项。这个机器人的 aipager 正在运行时，它读取 aipager 记下的内容（`source: "daemon"`，能看到群组）；否则它读取 Telegram，不确认任何消息（`source: "telegram"`）。
+
 ### <a id="exit-codes"></a>退出码
 
 | 退出码 | `error` | 含义 |
 |---|---|---|
-| 0 | | 成功（`installed`、`updated`、`unchanged`、`dry_run`，或者 detect-chat 的 `found`）。 |
-| 1 | `config_malformed`、`ambiguous_install`、`settings_invalid`、`test_send_failed`、`write_failed`、`service_failed`、`internal_error` | 失败。`ambiguous_install`：有不止一个私聊可能是所有者的；请在 `aipager config` 里修复。 |
-| 2 | `usage`、`missing_token_source`、`token_source_conflict`、`token_file_unreadable`、`token_stdin_is_tty`、`token_stdin_timeout`、`token_malformed`、`token_on_command_line`、`bad_chat_id`、`bad_role`、`bad_timeout` | 输入错误或缺失；`fix` 会指出是哪个参数。未知的参数或 `setup` 后面的错误单词会由参数解析器报告（纯文本，没有 JSON），也是退出码 2。 |
+| 0 | | 成功（`installed`、`created`、`updated`、`unchanged`、`dry_run`，或者 detect-chat 和 detect-group 的 `found`）。 |
+| 1 | `config_malformed`、`ambiguous_install`、`settings_invalid`、`test_send_failed`、`write_failed`、`service_failed`、`policy_malformed`、`not_a_group_scope`、`last_member`、`config_changed`、`internal_error` | 失败。`ambiguous_install`：有不止一个私聊可能是所有者的；请在 `aipager config` 里修复。`config_changed`：`setup group` 运行期间，群组在 `aipager.yaml` 里被改动了，所以什么都没写；请再运行一次。 |
+| 2 | `usage`、`missing_token_source`、`token_source_conflict`、`token_file_unreadable`、`token_stdin_is_tty`、`token_stdin_timeout`、`token_malformed`、`token_on_command_line`、`bad_chat_id`、`bad_role`、`bad_timeout`、`bad_member`、`bad_member_id`、`shared_sender_id`、`duplicate_member`、`bad_label`、`duplicate_label`、`unknown_role`、`bad_root` | 输入错误或缺失；`fix` 会指出是哪个参数。未知的参数或 `setup` 后面的错误单词会由参数解析器报告（纯文本，没有 JSON），也是退出码 2。 |
 | 3 | `deps_missing` | 缺少 dtach、claude、aipager-hook 或 aipager-statusline；`fix` 里有需要运行的命令。不写入任何东西。 |
 | 4 | `token_rejected` | Telegram 拒绝了 token。 |
 | 5 | `chat_not_started`、`bot_blocked` | 用户还没有在机器人里点 Start（"Open t.me/&lt;bot&gt; and press Start, then run this again."），或者屏蔽了机器人。不写入任何东西。 |
-| 6 | `existing_install` | 已经设置了不同的 token、聊天或角色；请加上 `--force`。 |
+| 6 | `existing_install`、`needs_force` | 已经设置了不同的 token、聊天或角色，或者 `setup group` 会做 `force_reasons` 里列出的改动；请（在问过用户之后）加上 `--force`。 |
 | 7 | `telegram_unreachable` | 网络错误，或者 Telegram 回复了 429 或 5xx。 |
-| 8 | `detect_timeout` | detect-chat 在 `--timeout` 结束之前没有看到任何私聊消息（当 100 个旧的未读更新挡住了更新的消息时，会附带警告 `updates_backlog`）。 |
+| 8 | `detect_timeout` | detect-chat 在 `--timeout` 结束之前没有看到任何私聊消息（detect-group：没有看到新群组里的消息）（当 100 个旧的未读更新挡住了更新的消息时，会附带警告 `updates_backlog`）。 |
 | 9 | `daemon_running` | detect-chat：一个正在运行的 aipager 在接收机器人的消息。 |
-| 10 | `updates_conflict` | detect-chat：另一个程序在读取这个机器人的消息。 |
+| 10 | `updates_conflict` | detect-chat 或 detect-group：另一个程序在读取这个机器人的消息。 |
+| 11 | `not_set_up` | `setup group` 或 `detect-group`：还没有带机器人 token 的 `aipager.yaml`（旧的 `config.env` 安装也算：运行一次 `aipager config` 把它迁移过来）。请先设置好 aipager。 |
 | 130 | `interrupted` | Ctrl-C。 |
 
-当多项检查同时失败时，退出码按这个顺序：`config_malformed`、`ambiguous_install`、`existing_install`、`settings_invalid`、`deps_missing`。`--dry-run` 会以真正运行时这些检查会得到的退出码退出。
+当多项检查同时失败时，退出码按这个顺序：`config_malformed`、`ambiguous_install`、`existing_install`、`settings_invalid`、`deps_missing`。`setup group` 的顺序是：`config_malformed` 或 `not_set_up`、`policy_malformed`、`unknown_role`、`usage`、`duplicate_label`、`not_a_group_scope`、`last_member`、`needs_force`。`--dry-run` 会以真正运行时这些检查会得到的退出码退出。
 
 ### <a id="json-aipager-setup---json"></a>JSON：`aipager setup --json`
 
@@ -625,6 +661,74 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 ```
 
 除非 `status` 是 `found`，否则 `candidate` 为 `null`。`warnings` 包含带有 `code`（`token_file_shared`、`updates_backlog`）和 `message` 的对象。`other_candidates` 统计在同样的 10 分钟里给机器人发过消息的其他人：它不是 0 时，请确认你选对了人。`next_step` 会重复你使用的 token 参数，绝不会重复 token 本身。
+
+### <a id="json-aipager-setup-group---json"></a>JSON: `aipager setup group --json`
+
+每个键总是存在；还不知道的值是 `null`。
+
+```json
+{
+  "command": "group",
+  "status": "created",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Group team (chat -1001234567890) is set up with 2 members.",
+  "fix": null,
+  "dry_run": false,
+  "force": false,
+  "bot_username": "example_bot",
+  "chat_id": -1001234567890,
+  "scope_chat_id": -1001234567890,
+  "label": "team",
+  "root": "/home/alice/aipager-users/group-team",
+  "block_edits": false,
+  "members": [{"id": 111111111, "label": "alice", "role": "owner"},
+              {"id": 222222222, "label": "bob", "role": "user"}],
+  "changed": ["group"],
+  "member_changes": [{"id": 222222222, "change": "added", "label": "bob", "role": "user", "previous_role": null}],
+  "force_reasons": [],
+  "pinned_roots": [],
+  "telegram": {"checked": true, "chat_type": "supergroup", "chat_title": "Team",
+               "bot_status": "administrator", "bot_can_pin": true, "privacy_mode": true},
+  "daemon": {"running": true, "reload": "reloaded", "restart_needed": false, "outcome": "reloaded_live"},
+  "warnings": [],
+  "next_step": "Check the group with `aipager doctor --json`."
+}
+```
+
+- `status`：`created`、`updated`、`unchanged`、`dry_run` 或 `error`。
+- `scope_chat_id`：群组保存时用的 ID（升级为超级群组后与 `--chat-id` 不同）。
+- `changed`：改变了什么（试运行时是会改变什么），按这个顺序：`group`（新群组）、`label`、`root`、`deny_tools`、`member_added`、`member_relabeled`、`role`、`member_removed`。
+- `member_changes[].change`：`added`、`relabeled`、`role` 或 `removed`。
+- `members`：改动后群组的成员（试运行时是计划中的）；运行在那之前就停下时为 `null`。
+- `pinned_roots`：其他聊天，它们的根文件夹会写进文件，以免被挪动。
+- 检查被跳过时 `telegram.checked` 为 false，这时 `telegram` 的其他键都是 `null`。`privacy_mode` 只是报告出来：它不改变 aipager 会响应什么。
+- `daemon.reload` 和 `setup` 一样；`daemon.outcome`：`reloaded_live`、`not_applied`、`restart_needed`、`no_daemon` 或 `not_needed`（什么都没写）。普通输出会写 `daemon: reloaded live`、`daemon: not applied: <reason>`、`daemon: restart needed` 或 `daemon: no daemon running`。
+- `warnings`（`code` 和 `message`；都不改变退出码）：`owner_granted`、`no_manager`（没有成员的角色能管理这个群组）、`not_a_member`、`group_moved`、`group_not_found`、`bot_not_in_group`、`bot_not_admin`、`bot_cannot_pin`、`group_upgraded`、`chat_not_a_group`、`token_rejected`、`telegram_checks_skipped`、`daemon_unknown`、`reload_refused`、`audit_write_failed`。
+- 出现 `bot_not_in_group`、`bot_not_admin`、`bot_cannot_pin` 或 `group_not_found` 时，`next_step` 会说明只有用户能在 Telegram 里做的事：把机器人加进群组，并把它设为有置顶消息权限的管理员。
+
+### <a id="json-aipager-setup-detect-group---json"></a>JSON: `aipager setup detect-group --json`
+
+```json
+{
+  "command": "detect-group",
+  "status": "found",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Found the group Team, chat id -1001234567890.",
+  "fix": null,
+  "bot_username": "example_bot",
+  "source": "telegram",
+  "candidate": {"id": -1001234567890, "title": "Team", "type": "supergroup", "date": 1700000000},
+  "other_candidates": 0,
+  "warnings": [],
+  "next_step": "Show this group to the user; once they confirm, run: aipager setup group --chat-id -1001234567890 --member ID:LABEL:ROLE"
+}
+```
+
+`status` 不是 `found` 时 `candidate` 为 `null`；来自 aipager 记录时，它的 `type` 和 `date` 为 `null`。`other_candidates` 统计同样 10 分钟里发过消息的其他新群组。`warnings` 里可能有 `updates_backlog`。
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

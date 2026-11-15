@@ -1,6 +1,6 @@
 # Chế độ làm việc nhóm và nhóm
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../groups.md))
 
@@ -20,7 +20,7 @@ Hãy đối xử với danh sách thành viên như với quyền truy cập SSH
 
 ## <a id="setup"></a>Thiết lập
 
-Mọi thứ được thiết lập bằng `aipager config`. Bạn không bao giờ phải tự sửa file.
+Mọi thứ được thiết lập bằng `aipager config`, hoặc, không hỏi gì (cho script và agent lập trình), bằng `aipager setup group` (xem [bên dưới](#without-prompts-aipager-setup-group)). Bạn không bao giờ phải tự sửa file.
 
 **Lần chạy đầu tiên** (chưa có cấu hình). Trình thiết lập hỏi qua bốn bước:
 
@@ -51,12 +51,26 @@ Nó ghi chat riêng của bạn làm chat đầu tiên. Nó không hỏi chế �
 
 Để thêm ai đó vào một nhóm đã được thiết lập, dùng Edit a scope → nhóm đó → Add a member. Mọi người đã có trong nhóm giữ nguyên chỗ và vai trò của họ.
 
+### <a id="without-prompts-aipager-setup-group"></a>Không hỏi gì: `aipager setup group`
+
+`aipager setup group` làm điều tương tự mà không hỏi gì, trên một bản cài đã được thiết lập: cùng các bước kiểm tra, cùng file và cùng cách tải lại không cần khởi động lại. Thêm bot vào nhóm, cho nó làm quản trị viên có quyền ghim tin nhắn và gửi `/start` ở đó, rồi:
+
+```sh
+aipager setup detect-group --json      # tìm ID của nhóm; không lưu gì
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+Chạy lại với một `--member` khác để thêm ai đó (những người khác giữ nguyên chỗ và vai trò), với `--remove-member ID` để gỡ ai đó, và với `--block-edits` cho quy tắc tùy chọn. Đổi vai trò, hạ hoặc gỡ một chủ sở hữu, hoặc biến ai đó chưa là chủ sở hữu ở đâu thành chủ sở hữu, đều cần `--force`. Cùng một lệnh chạy hai lần không thay đổi gì. Nó kiểm tra, mà không gửi gì vào nhóm, xem bot có trong nhóm và có được ghim tin nhắn không, và cảnh báo nếu không. Tùy chọn, mã thoát và đầu ra JSON: [lệnh](commands.md#aipager-setup-group).
+
 ### <a id="finding-ids-auto-detect"></a>Tìm ID (tự phát hiện)
 
 Tự phát hiện một thành viên sẽ lấy tin nhắn mới nhất từ một người chưa được thêm và hỏi “Is this the person to add?” (Đây có phải người cần thêm không?) trước khi dùng (trả lời không thì nó tìm tiếp qua người đó). Nó đề xuất username Telegram của người đó làm nhãn. Trong một nhóm, người đó phải gọi bot: nhắc đến bot hoặc gửi `/start` (xem [bot đọc những gì](#what-the-bot-reads-in-a-group)). Trình thiết lập cho biết nó theo dõi ở đâu:
 
 - **“Watching through the running daemon”** (qua aipager đang chạy): trong lúc `aipager start` đang chạy, aipager nhận mọi tin nhắn gửi cho bot, nên trình thiết lập đọc những gì aipager đã ghi trong `~/.claude/aipager-pending-users.json`. aipager ghi lại ai gọi bot trong một nhóm mà nó chưa phục vụ (ID, tiêu đề và loại của nhóm, cùng ID, username và tên của người đó), và bất kỳ ai không phải thành viên của một nhóm mà nó có phục vụ. Nó không bao giờ trả lời trong một nhóm mà nó không phục vụ. Một tin nhắn riêng từ người chưa được thiết lập sẽ được trả lời và không được ghi lại, nên để thêm chat riêng của một người trong lúc aipager đang chạy, hãy dán ID của họ (hoặc dừng aipager trước).
 - **“Watching Telegram directly”** (trực tiếp từ Telegram): khi aipager đã dừng, trình thiết lập tự hỏi Telegram các tin nhắn gần đây của bot.
+
+`aipager setup detect-group` tìm ID của một nhóm theo cùng cách, không hỏi gì: tin nhắn mới nhất trong một nhóm chưa được thiết lập, trong 10 phút gần nhất.
 
 Chat riêng của chính bạn ở lần chạy đầu tiên luôn được đọc từ Telegram. Một tin nhắn từ một quản trị viên nhóm ẩn danh, hoặc một tin được đăng dưới tên nhóm hay tên kênh, không được tính: ID người gửi của nó (1087968824, 136817688 hoặc 777000) là chung cho mọi người đăng theo cách đó, nên trình thiết lập từ chối nó, dù được gõ vào hay được phát hiện. Hãy nhờ người đó đăng bằng tên của chính họ.
 
@@ -74,6 +88,8 @@ Những gì một lần tải lại áp dụng ngay:
 - một nhóm hay chat riêng mới bắt đầu nhận tin nhắn và có menu `/` của nó; một chat đã bị xóa thì dừng (các phiên của nó vẫn chạy cho tới khi bạn kết thúc chúng);
 - một tin nhắn đang bị giữ (đang chờ một yêu cầu được trả lời hoặc chờ việc của người khác kết thúc) từ một người không còn được gửi trong chat đó sẽ bị bỏ: nó nhận một 🤷 và bot trả lời “Không gửi tới Claude: @bob không còn được phép gửi tin nhắn ở đây.”;
 - một việc đang chạy của một người đã bị xóa hoặc mất quyền chỉ giữ phần nghiêm nhất giữa quy tắc cũ và quy tắc mới (với người bị xóa là mức tối thiểu bị giới hạn) cho phần còn lại của việc đó. Một việc gõ trong terminal không bị thay đổi, trừ khi có một tin nhắn Telegram đã nhập vào: aipager không ghi lại là của ai, nên một việc như vậy bị thu hẹp khi bất kỳ chủ sở hữu nào của chat đó (hoặc, trong một chat riêng, thành viên của nó) mất quyền. Một việc đã đang chạy khi aipager khởi động lại (vẫn đang làm việc, hoặc đang chờ một câu hỏi hay yêu cầu cấp quyền) bị thu hẹp theo mọi thành viên của chat đó đã mất quyền. Một lần nâng quyền không bao giờ nới rộng một việc đang chạy: quyền mới áp dụng từ việc tiếp theo của người đó.
+
+`aipager setup group` gửi cùng lần tải lại đó sau khi ghi, và báo điều đã xảy ra (`daemon: reloaded live`, `not applied`, `restart needed` hoặc `no daemon running`).
 
 Chỉ có **token bot** mới cần khởi động lại (`aipager config` nói vậy sau Refresh bot token). Khi không có aipager nào đang chạy, không có lệnh tải lại nào được gửi: lần `aipager start` sau sẽ đọc cấu hình mới.
 
@@ -118,7 +134,7 @@ Bật chủ đề cũng nâng cấp một nhóm thường thành supergroup, đi
 
 ## <a id="roles"></a>Vai trò
 
-Bốn vai trò có sẵn (xem `aipager/safety.py`). Vai trò được tính là vai trò của người đó **trong chat mà họ đang thao tác**. Không ai đổi được thành viên hay vai trò từ Telegram hoặc Mini App: chỉ `aipager config` trên máy tính mới làm được, điều này giữ việc đó trong tay chủ sở hữu.
+Bốn vai trò có sẵn (xem `aipager/safety.py`). Vai trò được tính là vai trò của người đó **trong chat mà họ đang thao tác**. Không ai đổi được thành viên hay vai trò từ Telegram hoặc Mini App: chỉ `aipager config` hoặc `aipager setup group` trên máy tính mới làm được, điều này giữ việc đó trong tay chủ sở hữu (quy tắc an toàn của aipager chặn cả hai với mọi việc từ Telegram không phải của chủ sở hữu).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ Bốn vai trò có sẵn (xem `aipager/safety.py`). Vai trò được tính là 
 
 - **owner**: toàn quyền kiểm soát, kể cả mức an toàn tối thiểu có sẵn. Nên có đúng một người: người vận hành máy tính.
 - **admin**: mọi thứ một chủ sở hữu làm được trong Telegram và Mini App: chuyển phiên sang Chế độ Toàn quyền (và bắt đầu phiên ở chế độ đó), tiếp tục một phiên ở Chế độ Toàn quyền, đổi `/settings` của một nhóm, chạy `/update`, cài tính năng thoại, gửi mọi lệnh slash. Quản trị viên cũng bỏ qua quy tắc cấm của vai trò (`deny_tools` của scope và của thành viên không áp dụng cho họ). Có hai thứ vẫn thuộc về chủ sở hữu:
-  - đổi thành viên và vai trò: chỉ `aipager config` trên máy tính làm được, và không gì trong Telegram hay Mini App làm được;
+  - đổi thành viên và vai trò: chỉ `aipager config` hoặc `aipager setup group` trên máy tính làm được, và không gì trong Telegram hay Mini App làm được;
   - bỏ qua mức an toàn tối thiểu (cấu hình và token bot của aipager, thông tin đăng nhập của Claude Code, các file điều khiển của aipager). `Grep` và `Glob` của quản trị viên tìm được ở mọi nơi khác, nhưng không tìm trong một thư mục là một trong số đó, nằm bên trong hoặc chứa một thư mục như vậy: `Grep` trên `~`, `/` hoặc `/tmp` (hoặc không có thư mục, từ một phiên ở thư mục home) bị từ chối, một `Glob` có mẫu bắt đầu trong một thư mục như vậy cũng thế (như `/home/you/.config/aipager/*`). Hãy tìm bên trong một thư mục dự án. Trên các phiên bản Claude Code không có công cụ `Grep`, Claude tìm qua Bash; ở đó một lần tìm hay liệt kê đệ quy toàn bộ thư mục home hoặc `/` (`grep -rn x ~`, `rg x $HOME`, `find / -name x`) cũng bị từ chối, theo kiểu làm hết sức có thể (một lần tìm không có thư mục, hoặc với `..`, chạy từ thư mục home hoặc bên dưới nó thì không bị nhìn thấy), còn những lần tìm trong dự án thì không, kể cả một lần tìm ĐỂ tìm một đường dẫn home (`grep -rn "$HOME" src`) ([bảo mật](security.md#team-mode-enforcement)).
 
   Quản trị viên vẫn có Bash, và khi có shell thì các mẫu lệnh của mức tối thiểu chỉ làm hết sức có thể, không phải ranh giới: chỉ cho ai đó làm quản trị viên nếu bạn sẵn sàng cho họ một shell trên máy tính.
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-Một scope chat riêng và các scope nhóm cùng tồn tại: bot phục vụ mọi chat được liệt kê, và các phiên của mỗi chat được giữ tách biệt. `aipager config` ghi file này; bạn không bao giờ cần sửa nó.
+Một scope chat riêng và các scope nhóm cùng tồn tại: bot phục vụ mọi chat được liệt kê, và các phiên của mỗi chat được giữ tách biệt. `aipager config` và `aipager setup group` ghi file này. Chỉ sửa nó bằng tay trên bản aipager cũ hơn `aipager setup group`: giữ quyền của nó ở 0600, kiểm tra bằng `aipager policy validate` và gửi aipager một lần tải lại (xem [Tải lại không cần khởi động lại](#live-reload)).
 
 ## <a id="how-rules-work"></a>Quy tắc hoạt động thế nào
 
@@ -359,7 +375,7 @@ Mọi việc của mọi vai trò trừ `owner` đều nhận toàn bộ mức n
 
 ## <a id="revoking-a-user"></a>Thu hồi quyền của một người
 
-1. Chạy `aipager config` → Edit a member → chat đó → người đó → Remove member. Để lấy đi quyền gửi tin nhắn nhưng vẫn cho họ đọc, dùng Set role và chọn `read_only`. (Để thêm lại ai đó sau này: Edit a scope → nhóm đó → Add a member.) Với chat riêng của một người, hãy kết thúc các phiên của nó, rồi Edit a scope → chat riêng của họ → Remove this scope.
+1. Chạy `aipager config` → Edit a member → chat đó → người đó → Remove member. Để lấy đi quyền gửi tin nhắn nhưng vẫn cho họ đọc, dùng Set role và chọn `read_only`. (Để thêm lại ai đó sau này: Edit a scope → nhóm đó → Add a member.) Với chat riêng của một người, hãy kết thúc các phiên của nó, rồi Edit a scope → chat riêng của họ → Remove this scope. Không hỏi gì: `aipager setup group --chat-id <ID nhóm> --remove-member <ID của họ>` (chủ sở hữu thì cần `--force`).
 2. Trình thiết lập tải lại aipager trực tiếp; nó báo “Scopes reloaded live”. Ngay lập tức, các tin nhắn bị giữ của họ bị bỏ (🤷 và một câu trả lời “Không gửi tới Claude”) và một việc của họ vẫn đang chạy bị giữ ở mức tối thiểu bị giới hạn cho tới khi xong. Gửi `/stop` để kết thúc việc đó ngay.
 3. Xóa họ khỏi nhóm Telegram nữa. Chừng nào còn ở trong nhóm, họ vẫn đọc được mọi thứ được đăng ở đó: thẻ, câu trả lời, đầu vào của công cụ và yêu cầu cấp quyền.
 

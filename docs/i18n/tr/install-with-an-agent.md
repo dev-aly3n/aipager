@@ -1,6 +1,6 @@
 # Ajanla kurulum
 
-<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
+<!-- i18n-source: docs/install-with-an-agent.md @ d63d62ef -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../install-with-an-agent.md))
 
@@ -127,13 +127,83 @@ Birkaç satırla şunları söyle:
 ## <a id="4-what-you-must-not-do"></a>4. Yapmaman gerekenler
 
 - Token'ı yazdırma, `echo` ya da `cat` ile geçirme ve asla komut satırına koyma (`--token` zaten reddedilir). Onu yalnızca bir dosyayla ya da stdin üzerinden ver.
-- `~/.config/aipager/` (2. adımdaki token dosyası dışında) ve `~/.claude/settings.json` dosyalarını elle düzenleme. Onları `aipager setup` ve `aipager config` yazar.
-- Kişiye sormadan `--force` ekleme: mevcut token'ı, sohbeti ya da rolü değiştirir.
+- `~/.config/aipager/` (2. adımdaki token dosyası dışında) ve `~/.claude/settings.json` dosyalarını elle düzenleme. Onları `aipager setup` ve `aipager config` yazar. Tek istisna, bundan eski bir aipager'daki bir gruptur; orada `aipager setup group --help` başarısız olur: bkz. [5.5](#55-older-installs).
+- Kişiye sormadan `--force` ekleme: mevcut token'ı, sohbeti ya da rolü değiştirir. `setup group` ile rolleri değiştirir ya da kaldırır veya `owner` rolünü verir.
+- aipager üzerinden `aipager setup` (her biçimiyle), `aipager config` ya da `aipager uninstall` komutlarını yalnızca sahibin görevleri çalıştırabilir: aipager'ın güvenlik kuralları bunları başka her rol için engeller. Kişi seninle aipager üzerinden konuşuyor ve sahip değilse, komutu bir terminalde kendisinin çalıştırmasını iste.
 - Kendi Claude Code oturumunu yeniden başlatma ya da sonlandırma. İlk kurulumda içinde çalıştığın oturum aipager altında değildir ve olması da gerekmez: yeni oturumlar Telegram'da `/new` ile ya da `aipager session <name>` ile gelir. aipager zaten yapılandırılmışsa ve kişi seninle onun üzerinden konuşuyorsa (örneğin yeni bir token'la `setup --force` çalıştırmak için), aipager'ı kendi tarafından durdurma ya da yeniden başlatma: görevin ve yanıtı yarıda kesilir. İşin bitince kişiye aipager'ı yeniden başlatmasını söyle.
 
 ## <a id="5-groups"></a>5. Gruplar
 
-`aipager setup`, kişinin botla olan özel sohbetini yapılandırır. Başka kişilerle ve onların rolleriyle bir Telegram grubu eklemek için kişi `aipager config` çalıştırır (grup kurulumu henüz betikle yapılamıyor). Bkz. [Ekip modu ve gruplar](groups.md).
+`aipager setup`, kişinin botla olan özel sohbetini yapılandırır. `aipager setup group`, zaten yapılandırılmış bir kuruluma bir Telegram grubunu, üyelerini ve onların rollerini soru sormadan ekler (`aipager config` aynısını sorularla yapar). Bot token'ını kurulumdan okur, aipager'ı asla yeniden başlatmaz ve gruba hiçbir şey göndermez. Bkz. [Ekip modu ve gruplar](groups.md) ve [komutun başvurusu](commands.md#aipager-setup-group).
+
+### <a id="51-what-only-the-person-can-do"></a>5.1 Yalnızca kişinin yapabilecekleri
+
+Bu adımları sen yapamazsın; kişiden bunları Telegram'da yapmasını iste:
+
+1. Botu gruba eklemek.
+2. Botu, mesaj sabitleme hakkıyla grubun yöneticisi yapmak (aipager orada bir durum çubuğu sabitler; bu hak olmadan grup çalışır, yalnızca durum çubuğu olmaz). Bunu yalnızca grubun bir yöneticisi yapabilir.
+3. Gruba `/start` göndermek; böylece grubun kimliğini bulabilirsin (5.2).
+4. Sana her üyenin sayısal Telegram kullanıcı kimliğini, kısa bir adını (aipager'ın onu gösterdiği biçim, `@label` olarak) ve bir rolünü vermek: `owner`, `admin`, `user`, `read_only` ya da `policy.yaml` içindeki kendi rolü. `owner` rolü bu bilgisayarın tam denetimine sahiptir: bilgisayarı çalıştıran kişiye aittir, başka kimseye değil. Bir kimliği bilmiyorsa, o kişi grupta yazarken `aipager config` onu bulabilir.
+
+### <a id="52-find-the-group"></a>5.2 Grubu bulmak
+
+```sh
+aipager setup detect-group --json
+```
+
+Henüz yapılandırılmamış bir grupta, çalıştırmandan en fazla 10 dakika önce gönderilmiş bir mesajı bekler (en çok 300 saniye, `--timeout SECONDS`) ve grubu yazdırır (`candidate.id`, `candidate.title`). Hiçbir şey kaydetmez. Başlığı kişiye göster ve kimliği ancak doğru grup olduğunu onayladığında kullan. Çıkış 8, hiçbir şeyin gelmediği anlamına gelir: gruba yeniden `/start` göndermesini iste.
+
+### <a id="53-set-it-up"></a>5.3 Grubu yapılandırmak
+
+Önce `--dry-run` ile çalıştır, sonra aynı komutu onsuz:
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+- Her kişi için bir kez `--member ID:LABEL:ROLE`. Sonradan birini eklemek için yalnızca yeni `--member` ile yeniden çalıştır: diğerleri korunur.
+- `--remove-member ID` bir kişiyi çıkarır.
+- `--label NAME` gruba ad verir, `--root PATH` grubun `user` ve `read_only` üyelerinin çalıştığı klasörü belirler (varsayılan `~/aipager-users/group-<label>`), `--block-edits` ise grubun `user` üyeleri için Write ve Edit'i engeller.
+- Aynı komutu yeniden çalıştırmak hiçbir şeyi değiştirmez (`unchanged`).
+- Çıkış 6 (`needs_force`), değişikliğin `--force` gerektirdiği anlamına gelir: `force_reasons` nedenini söyler (bir rol değişikliği, verilen, düşürülen ya da çıkarılan bir sahip, riskli bir kök klasör). Bunu kişiye göster ve `--force` ekleme kararını onun onayına bırak.
+
+### <a id="54-read-the-result"></a>5.4 Sonucu okumak
+
+| Çıkış | Ne yapmalı |
+|---|---|
+| 0 | Tamam (`created`, `updated`, `unchanged` ya da `dry_run`). Kişiye grubun `label` değerini, `members` listesini ve `daemon.outcome` değerinin ne dediğini söyle. |
+| 2 | Bir seçenek yanlış: `error`, `message` ve `fix` onu söyler. Düzelt ve yeniden çalıştır. |
+| 6 | `needs_force`: `force_reasons` içindeki her madde için kişiye sor. |
+| 11 | `not_set_up`: önce aipager'ı yapılandır ([3](#3-your-steps)). |
+| 1 | Geri kalan her şey (`config_malformed`, `policy_malformed`, `last_member`, `config_changed`...): `message` ve `fix` değerlerini göster. `config_changed` sonrasında yeniden çalıştır. |
+
+`daemon.outcome`, çalışan aipager'ın ne yaptığını söyler: `reloaded_live` (grup şimdi çalışıyor), `no_daemon` (aipager başlayınca çalışacak), `restart_needed` ya da `not_applied` (kişiye `next_step` değerini göster; aipager'ı kendin yeniden başlatma). Uyarılar çıkış kodunu asla değiştirmez ama onları göster: `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin` ve `group_not_found`, kişinin 5.1'den bir adımı kaldığı anlamına gelir; `owner_granted` ise açıkça söylenmeye değer.
+
+### <a id="55-older-installs"></a>5.5 Eski kurulumlar
+
+`aipager setup group --help` başarısız olursa bu aipager komuttan daha eskidir. Kişiden aipager'ı güncellemesini iste (`aipager update`) ya da grubu hemen istiyorsa elle ekle:
+
+1. `~/.config/aipager/aipager.yaml` dosyasına [yapıya](groups.md#aipageryaml-schema-team-parts) uygun bir grup sohbeti ekle. Dosya bot token'ını içerir: onu asla yazdırma, `cat` ile açma ve izinlerini 0600 tut (`chmod 600 ~/.config/aipager/aipager.yaml`).
+2. Dosyayı `aipager policy validate` ile denetle, sonra `aipager doctor` çıktısındaki `scope mode: ...` satırının yeni grubu saydığına bak.
+3. aipager'a aşağıdaki gibi yeniden başlatmadan yeniden yükleme gönder.
+
+Linux'ta, arka plan hizmetiyle:
+
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
+
+macOS'ta:
+
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+`-gt 0` kontrolü önemlidir: aipager çalışmıyorsa `kill -USR1 0` sinyali kendi kabuğunun süreçlerine gönderir. aipager'ı asla bir aipager oturumunun içinden yeniden başlatma: görevin yarıda kesilir.
 
 ## <a id="see-also"></a>Ayrıca bkz.
 

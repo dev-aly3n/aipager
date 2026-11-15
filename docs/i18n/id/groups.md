@@ -1,6 +1,6 @@
 # Mode tim dan grup
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../groups.md))
 
@@ -20,7 +20,7 @@ Perlakukan daftar anggota seperti akses SSH ke komputer itu. Log audit ([`~/.cla
 
 ## <a id="setup"></a>Pengaturan
 
-Semuanya diatur lewat `aipager config`. Kamu tidak pernah perlu mengedit file dengan tangan.
+Semuanya diatur lewat `aipager config`, atau tanpa bertanya (untuk skrip dan agen coding) lewat `aipager setup group` (lihat [di bawah](#without-prompts-aipager-setup-group)). Kamu tidak pernah perlu mengedit file dengan tangan.
 
 **Saat pertama dijalankan** (belum ada konfigurasi). Wizard bertanya dalam empat langkah:
 
@@ -51,12 +51,26 @@ Wizard mencatat chat pribadimu sebagai chat pertama. Wizard tidak menanyakan mod
 
 Untuk menambahkan seseorang ke grup yang sudah diatur, pakai Edit a scope → grup → Add a member. Semua orang yang sudah ada di grup mempertahankan tempat dan perannya.
 
+### <a id="without-prompts-aipager-setup-group"></a>Tanpa bertanya: `aipager setup group`
+
+`aipager setup group` melakukan hal yang sama tanpa bertanya, pada pemasangan yang sudah diatur: pemeriksaan yang sama, file yang sama, dan muat ulang tanpa mulai ulang yang sama. Tambahkan bot ke grup, jadikan admin dengan hak menyematkan pesan, kirim `/start` di sana, lalu:
+
+```sh
+aipager setup detect-group --json      # menemukan ID grup; tidak menyimpan apa pun
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+Jalankan lagi dengan `--member` lain untuk menambahkan seseorang (yang lain tetap di tempat dan perannya), dengan `--remove-member ID` untuk mengeluarkan seseorang, dan dengan `--block-edits` untuk aturan opsional. Perubahan peran, menurunkan atau mengeluarkan pemilik, atau menjadikan pemilik seseorang yang belum menjadi pemilik di mana pun, butuh `--force`. Perintah yang sama dua kali tidak mengubah apa pun. Perintah ini memeriksa, tanpa mengirim apa pun ke grup, apakah bot ada di grup dan boleh menyematkan pesan, dan memberi peringatan kalau tidak. Opsi, kode keluar, dan keluaran JSON: [perintah](commands.md#aipager-setup-group).
+
 ### <a id="finding-ids-auto-detect"></a>Mencari ID (deteksi otomatis)
 
 Deteksi otomatis anggota mengambil pesan terbaru dari seseorang yang belum ditambahkan dan bertanya “Is this the person to add?” (Ini orang yang mau ditambahkan?) sebelum memakainya (jawab tidak, dan wizard terus mencari). Sebagai nama, wizard menyarankan username Telegram orang itu. Di grup, orang itu harus menyapa bot: menyebutnya, atau mengirim `/start` (lihat [apa yang dibaca bot](#what-the-bot-reads-in-a-group)). Wizard menyebutkan sumber yang dipantaunya:
 
 - **“Watching through the running daemon”** (lewat aipager yang sedang berjalan): selama `aipager start` berjalan, aipager menerima setiap pesan untuk bot, jadi wizard membaca apa yang dicatat aipager di `~/.claude/aipager-pending-users.json`. aipager mencatat siapa yang menyapa bot di grup yang belum dilayaninya (ID, judul, dan jenis grup, serta ID, username, dan nama orang itu), dan setiap orang yang bukan anggota grup yang dilayaninya. aipager tidak pernah membalas di grup yang tidak dilayaninya. Pesan pribadi dari seseorang yang belum diatur mendapat balasan dan tidak dicatat, jadi untuk menambahkan chat pribadi seseorang selama aipager berjalan, tempel ID-nya (atau hentikan aipager dulu).
 - **“Watching Telegram directly”** (langsung di Telegram): saat aipager dihentikan, wizard sendiri yang menanyakan pesan terbaru bot ke Telegram.
+
+`aipager setup detect-group` menemukan ID grup dengan cara yang sama, tanpa bertanya: pesan terbaru di grup yang belum diatur, dari 10 menit terakhir.
 
 Chat pribadimu sendiri saat pertama dijalankan selalu dibaca dari Telegram. Pesan dari admin grup anonim, atau pesan yang diterbitkan atas nama grup atau kanal, tidak dihitung: ID pengirimnya (1087968824, 136817688, atau 777000) sama untuk semua yang menerbitkan dengan cara itu, jadi wizard menolaknya, baik diketik maupun ditemukan. Minta orang itu menulis dari akunnya sendiri.
 
@@ -74,6 +88,8 @@ Yang langsung diterapkan muat ulang:
 - grup atau chat pribadi baru mulai menerima pesan dan mendapat menu `/`-nya; yang dihapus berhenti (sesinya tetap berjalan sampai kamu mengakhirinya);
 - pesan yang ditahan (yang menunggu jawaban atas permintaan atau selesainya tugas orang lain) dari seseorang yang tidak lagi boleh mengirim pesan di chat itu dibuang: pesan itu mendapat 🤷 dan bot membalas “Tidak dikirim ke Claude: @bob sudah tidak boleh mengirim pesan di sini.”;
 - tugas yang sedang berjalan milik orang yang dihapus atau kehilangan hak, sampai tugas itu selesai, hanya mempertahankan yang paling ketat dari aturan lama dan aturan barunya (untuk orang yang dihapus, batas bawah yang dibatasi). Tugas yang diketik di terminal tidak berubah, kecuali ada pesan Telegram yang bergabung ke dalamnya: aipager tidak mencatat dari siapa, jadi tugas seperti itu menyempit saat pemilik mana pun di chat itu (atau, di chat pribadi, anggotanya) kehilangan hak. Tugas yang sudah berjalan saat aipager dimulai ulang (masih bekerja, atau menunggu pertanyaan atau izin) menyempit untuk setiap anggota chat-nya yang kehilangan hak. Kenaikan hak tidak pernah melebarkan tugas yang sedang berjalan: hak baru berlaku dari tugas berikutnya orang itu.
+
+`aipager setup group` mengirim muat ulang yang sama setelah menulis, dan melaporkan apa yang terjadi (`daemon: reloaded live`, `not applied`, `restart needed`, atau `no daemon running`).
 
 Hanya **token bot** baru yang butuh mulai ulang (`aipager config` mengatakannya setelah Refresh bot token). Saat aipager tidak berjalan, tidak ada muat ulang yang dikirim: `aipager start` berikutnya membaca konfigurasi baru.
 
@@ -118,7 +134,7 @@ Menyalakan topik juga mengubah grup biasa menjadi supergroup, yang diikuti aipag
 
 ## <a id="roles"></a>Peran
 
-Empat peran bawaan (lihat `aipager/safety.py`). Yang dihitung adalah peran seseorang **di chat tempat ia bertindak**. Tidak ada yang bisa mengubah anggota atau peran dari Telegram atau Mini App: hanya `aipager config` di komputer yang melakukannya, dan dengan begitu hal itu tetap di tangan pemilik.
+Empat peran bawaan (lihat `aipager/safety.py`). Yang dihitung adalah peran seseorang **di chat tempat ia bertindak**. Tidak ada yang bisa mengubah anggota atau peran dari Telegram atau Mini App: hanya `aipager config` atau `aipager setup group` di komputer yang melakukannya, dan dengan begitu hal itu tetap di tangan pemilik (aturan keamanan aipager memblokir keduanya untuk setiap tugas dari Telegram yang bukan milik pemilik).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ Empat peran bawaan (lihat `aipager/safety.py`). Yang dihitung adalah peran seseo
 
 - **owner**: kendali penuh, termasuk atas batas bawah keamanan bawaan. Pemiliknya harus tepat satu: orang yang mengelola komputer itu.
 - **admin**: semua yang bisa dilakukan pemilik di Telegram dan Mini App: mengalihkan sesi ke Mode Akses penuh (dan memulai di sana), melanjutkan sesi dalam Akses penuh, mengubah `/settings` grup, menjalankan `/update`, memasang fitur pesan suara, mengirim perintah slash apa pun. Admin juga melewati aturan larangan peran (`deny_tools` chat dan anggota tidak berlaku untuk admin). Dua hal tetap milik pemilik:
-  - mengubah anggota dan peran: hanya `aipager config` di komputer yang melakukannya, dan tidak ada apa pun di Telegram atau Mini App yang bisa;
+  - mengubah anggota dan peran: hanya `aipager config` atau `aipager setup group` di komputer yang melakukannya, dan tidak ada apa pun di Telegram atau Mini App yang bisa;
   - melewati batas bawah keamanan (konfigurasi dan token bot aipager, kredensial Claude Code, file kontrol aipager). `Grep` dan `Glob` admin bisa mencari di mana saja selain itu, tapi tidak di folder yang merupakan salah satunya, ada di dalam salah satunya, atau memuat salah satunya: `Grep` atas `~`, `/`, atau `/tmp` (atau tanpa folder dari sesi di folder home) ditolak, begitu juga `Glob` yang polanya mulai di salah satunya (seperti `/home/you/.config/aipager/*`). Cari di dalam folder proyek saja. Di versi Claude Code tanpa alat `Grep`, Claude mencari lewat Bash; di sana pencarian atau pendaftaran rekursif atas seluruh folder home atau `/` (`grep -rn x ~`, `rg x $HOME`, `find / -name x`) juga ditolak, sebisanya (pencarian tanpa folder, atau dengan `..`, yang dijalankan dari folder home atau di bawahnya tidak terlihat), sedangkan mencari di proyek tidak, termasuk mencari path home (`grep -rn "$HOME" src`) ([keamanan](security.md#team-mode-enforcement)).
 
   Admin tetap punya Bash, dan dengan shell, pola perintah batas bawah bekerja sebisanya, bukan batas: jadikan seseorang admin hanya kalau kamu memercayainya dengan shell di komputer ini.
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-Chat pribadi dan chat grup hidup berdampingan: bot melayani setiap chat dalam daftar, dan sesi setiap chat dijaga terpisah. File ini ditulis oleh `aipager config`; kamu tidak pernah perlu mengeditnya.
+Chat pribadi dan chat grup hidup berdampingan: bot melayani setiap chat dalam daftar, dan sesi setiap chat dijaga terpisah. File ini ditulis oleh `aipager config` dan `aipager setup group`. Edit dengan tangan hanya di aipager yang lebih lama dari `aipager setup group`: biarkan izinnya 0600, periksa dengan `aipager policy validate`, lalu kirim aipager perintah muat ulang (lihat [Muat ulang tanpa mulai ulang](#live-reload)).
 
 ## <a id="how-rules-work"></a>Cara kerja aturan
 
@@ -359,7 +375,7 @@ Setiap tugas dari setiap peran kecuali `owner` mendapatkannya utuh, begitu juga 
 
 ## <a id="revoking-a-user"></a>Mencabut akses seseorang
 
-1. Jalankan `aipager config` → Edit a member → chat → orangnya → Remove member. Untuk mencabut hak mengirim pesan tapi tetap membiarkannya membaca, pakai Set role dan pilih `read_only`. (Untuk menambahkannya lagi nanti: Edit a scope → grup → Add a member.) Untuk chat pribadi seseorang, akhiri sesinya, lalu Edit a scope → chat pribadinya → Remove this scope.
+1. Jalankan `aipager config` → Edit a member → chat → orangnya → Remove member. Untuk mencabut hak mengirim pesan tapi tetap membiarkannya membaca, pakai Set role dan pilih `read_only`. (Untuk menambahkannya lagi nanti: Edit a scope → grup → Add a member.) Untuk chat pribadi seseorang, akhiri sesinya, lalu Edit a scope → chat pribadinya → Remove this scope. Tanpa bertanya: `aipager setup group --chat-id <ID grup> --remove-member <ID-nya>` (pemilik butuh `--force`).
 2. Wizard memuat ulang aipager secara langsung dan menulis “Scopes reloaded live”. Seketika itu pesannya yang ditahan dibuang (🤷 dan balasan “Tidak dikirim ke Claude”), dan tugasnya yang masih berjalan dibatasi pada batas bawah sampai selesai. Kirim `/stop` untuk mengakhiri tugas itu sekarang.
 3. Keluarkan juga orang itu dari grup Telegram. Selama ia di sana, ia masih bisa membaca semua yang diterbitkan di sana: kartu, jawaban, input alat, dan permintaan izin.
 
