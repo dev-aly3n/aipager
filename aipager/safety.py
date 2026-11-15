@@ -18,6 +18,7 @@ import re
 import sys
 
 from aipager import instance as _instance
+from aipager import shell_glob as _shell_glob
 
 log = logging.getLogger(__name__)
 
@@ -293,28 +294,12 @@ _GLOB_GROUP = (r"\[[^\][/\s;&|()<>`'\"=:.]*\]"
                r"|\{[^{}/\s;&|()<>`'\"=:.]*\}")
 
 
-def _bracket(also_not: str = "") -> str:
-    """A bracket expression in one path folder: an optional ``!`` or
-    ``^``, an optional ``]`` first (``[]a]``), then characters and POSIX
-    items (``[:alpha:]``, ``[=a=]``, ``[.a.]``) up to the closing ``]``.
-    Never ``/``, a blank or a character in *also_not*.
-
-    Read one way only, as bash reads it: a ``!`` or ``^`` right after
-    ``[`` is always the negation and a ``]`` right after that is always a
-    literal (so ``[]`` is never a whole bracket), each later piece starts
-    with a different character (a ``[`` opens a POSIX item only before
-    ``:``, ``=`` or ``.``). Two readings of ``[]`` or ``[!]`` made
-    ``[][][]...`` exponential."""
-    return (rf"\[(?:[!^]|(?![!^]))(?:\]|(?!\]))"
-            rf"(?:[^\]\[/\s{also_not}]|\[(?![:=.])"
-            rf"|\[[:=.][^\]/\s{also_not}]*\])*\]")
-
-
-#: A bracket or brace group in one path folder: anything but ``/``, a
-#: blank or the closing bracket (``{aipager,a.b}``, ``[!.]``, ``[[]``,
-#: ``[[:alpha:]]``, ``[]a]``). Only for a pattern that starts at a fixed
-#: folder name, so a group never holds another start.
-_FOLDER_GLOB_GROUP = rf"{_bracket()}|\{{[^}}/\s]*\}}"
+#: A brace group in one path folder: anything but ``/``, a blank or the
+#: closing brace (``{aipager,a.b}``). Only for a pattern that starts at a
+#: fixed folder name, so a group never holds another start. Brackets are
+#: left to :data:`BASH_GLOB_REACHES_AIPAGER_DIR`, which matches them as
+#: bash does (``[[:lower:]]ip`` has three letters and is not aipager).
+_FOLDER_GLOB_GROUP = r"\{[^}/\s]*\}"
 
 
 def _glob_word(letters: str, group: str = _GLOB_GROUP) -> str:
@@ -331,8 +316,8 @@ def _glob_word(letters: str, group: str = _GLOB_GROUP) -> str:
 #: ``*``, ``[a]ipager``, ``{aipager,x}``). ``*.conf`` and ``nvim*`` do
 #: not match.
 _AIPAGER_GLOB = rf"(?i:{_glob_word('aipger')})"
-#: The same as one path folder, where a group may hold any character but
-#: ``/`` and a blank (:data:`_FOLDER_GLOB_GROUP`).
+#: The same as one path folder, where a brace group may hold any
+#: character but ``/`` and a blank (:data:`_FOLDER_GLOB_GROUP`).
 _AIPAGER_FOLDER_GLOB = rf"(?i:{_glob_word('aipger', _FOLDER_GLOB_GROUP)})"
 #: The subcommands that change who controls the machine or stop the
 #: daemon: any ``aipager setup`` form (it grants roles), ``config``,
@@ -428,27 +413,6 @@ BASH_GLOB_AIPAGER_DIR = (
     r"\.(?:config|local/share|local/state)/"
     rf"{_AIPAGER_FOLDER_GLOB}"
     r"(?=$|[/\s\"';&|)])")
-#: The letters of ``aipager`` (any case), wildcards and brackets: the
-#: start of one brace item or the folder text before the brace.
-_BRACE_HEAD = rf"(?i:(?:[aipger*?]|{_bracket(',{}')})*)"
-#: A brace group whose items are paths (a ``/`` inside it), right at the
-#: first folder under ``.config``, ``.local/share`` or ``.local/state``,
-#: with one item whose first folder (with the text before the brace)
-#: could be ``aipager``:
-#: ``~/.config/{aipager/aipager.yaml,x}``, ``~/.config/{nvim/x,aipager}``,
-#: ``~/.config{/aipager,}/x``, ``.local/state/{aipager/x,y}``. An item
-#: of other letters (``{nvim/init.lua,fish/config.fish}``) is not this;
-#: a brace with no ``/`` is :data:`BASH_GLOB_AIPAGER_DIR`'s.
-#:
-#: Cost: a match starts only at the fixed folder name; the brace body
-#: holds no ``{`` or ``}``, so bodies never overlap, and the body is read
-#: once for the ``/`` and once trying the items at each ``,``: linear on
-#: any input.
-BASH_BRACE_AIPAGER_DIR = (
-    r"\.(?:config|local/share|local/state)"
-    rf"(?:/{_BRACE_HEAD})?\{{(?=[^{{}}\s]*/)(?:[^{{}}\s]*,)?/*(?!/)"
-    rf"{_BRACE_HEAD}"
-    r"(?=[/,}])")
 #: A glob in the hidden folder itself or in ``.local``'s second folder,
 #: then ``aipager`` or a glob that could match it: ``~/.c*/aipager``,
 #: ``~/.co?fig/aipager``, ``~/.*/aipager``, ``~/.local/*/aipager``.
@@ -486,6 +450,15 @@ BASH_COPY_CONFIG_PARENT = (
 BASH_CONFIG_DIR = r"(?i:\.config/aipager)\b"
 BASH_SHARE_DIR = r"(?i:\.local/share/aipager)\b"
 BASH_STATE_DIR = r"(?i:\.local/state/aipager)\b"
+#: Not read as a regex: the place in a pattern list where
+#: :func:`bash_violation` runs :func:`aipager.shell_glob.command_reaches`,
+#: which expands each word's braces and matches its globs the way bash
+#: does, and refuses a word that could reach aipager's folders or that it
+#: cannot read (``~/.config/[[:a]ipager``, ``nvim/{..,x}/aipager``,
+#: ``~/.config/[a,]{ipager/x,y}``, ``~/.config/@(aipager)``). As a regex
+#: it never matches, so a reader that only knows regexes skips it.
+BASH_GLOB_REACHES_AIPAGER_DIR = (
+    r"(?!)(?#aipager-shell-glob)")
 
 DENY_BASH_PATTERNS: tuple[str, ...] = (
     r"^(sudo|su)\b",
@@ -498,7 +471,6 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     BASH_LAUNCHCTL_AIPAGER,
     BASH_PYTHON_IMPORTS_AIPAGER,
     BASH_GLOB_AIPAGER_DIR,
-    BASH_BRACE_AIPAGER_DIR,
     BASH_GLOB_HIDDEN_PARENT,
     BASH_CD_CONFIG_PARENT,
     BASH_CD_HOME_THEN_PARENT,
@@ -515,6 +487,7 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     BASH_CONFIG_DIR,
     BASH_SHARE_DIR,
     BASH_STATE_DIR,
+    BASH_GLOB_REACHES_AIPAGER_DIR,
     # Nested claude invocations + privilege flags (the flag is the
     # smoking gun; catches obfuscated binary names too). Also incidentally
     # blocks reads of ~/.claude/** via Bash.
@@ -548,7 +521,6 @@ DEQUOTED_BASH_PATTERNS: tuple[str, ...] = (
     BASH_LAUNCHCTL_AIPAGER,
     BASH_PYTHON_IMPORTS_AIPAGER,
     BASH_GLOB_AIPAGER_DIR,
-    BASH_BRACE_AIPAGER_DIR,
     BASH_GLOB_HIDDEN_PARENT,
     BASH_CD_CONFIG_PARENT,
     BASH_CD_HOME_THEN_PARENT,
@@ -1613,12 +1585,20 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     quotes and backslashes removed (:func:`dequote`); any other pattern — an operator's own
     ``deny_bash_patterns`` from policy.yaml — sees the command exactly as
     typed, so a rule written against the scratchpad still applies.
+    :data:`BASH_GLOB_REACHES_AIPAGER_DIR` is not a regex match: at its
+    place in *patterns* both of those copies go through
+    :func:`aipager.shell_glob.command_reaches`.
     """
     if not command:
         return None
     normalized = normalize_scratchpad(command)
     dequoted = dequote(normalized)
     for pat in patterns:
+        if pat == BASH_GLOB_REACHES_AIPAGER_DIR:
+            if _shell_glob.command_reaches(normalized, dequoted):
+                log.info("bash_violation: command blocked by pattern %r", pat)
+                return BASH_REASON
+            continue
         if pat in DEQUOTED_BASH_PATTERNS:
             subjects: tuple[str, ...] = (normalized, dequoted)
         elif pat in DENY_BASH_PATTERNS:
