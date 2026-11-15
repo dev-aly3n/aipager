@@ -938,6 +938,10 @@ def _bracket(seg: str, i: int, run_on: bool = False,
             name = seg[j + 2:close]
             if "]" in name or not name:
                 raise Unsure("a_posix_item_that_holds_or_meets_a")
+            if "[" in name:
+                # ``[a[=[=]ger`` matches ``aipager`` in bash 5.2: an item
+                # of ``[`` is read in ways not modelled here
+                raise Unsure("a_posix_item_of_an_open_bracket")
             if kind == ":":
                 # an unknown class matches nothing
                 may, surely = _CLASSES.get(name, (frozenset(), frozenset()))

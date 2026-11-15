@@ -403,6 +403,15 @@ def test_a_group_anywhere_in_a_segment_is_unsure(seg):
     assert g._classify(seg, False) == g._ALL
 
 
+@pytest.mark.parametrize("seg", [
+    # tester-iter5-002: a POSIX item whose character is [
+    "aip[a[=[=]ger", "aip[a[:[:]ger", "aip[]a[=[=]ger", ".conf[]i[=[=]g",
+    "aip[a[.[.]ger", "[[=[=]a]ipager",
+])
+def test_a_posix_item_of_an_open_bracket_is_unsure(seg):
+    assert g._classify(seg, False) == g._ALL
+
+
 def test_an_equivalence_class_before_two_brackets_is_read_both_ways():
     # bash 5.2: a*[[=a=]]r] matches a], aipager and apager (the bracket
     # runs on to the last ]); the first reading alone (a* a r]) cannot

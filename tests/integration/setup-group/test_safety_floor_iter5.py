@@ -88,7 +88,12 @@ CLOSED_ITER6 = {
     "ext-config-optional", "ext-config-not", "ext-config-empty-alt",
     "ext-config-home-var", "ext-leaf-in-brace", "ext-leaf-after-star-config",
     "ext-leaf-after-star-local", "ext-leaf-after-glob-state",
-    "ext-star-group-and-leaf", "ext-local-brace",
+    "ext-star-group-and-leaf", "ext-local-brace", "posix-equiv-of-bracket",
+    "posix-class-of-bracket", "posix-equiv-of-bracket-close-first",
+    "posix-equiv-of-bracket-share", "posix-equiv-of-bracket-state",
+    "posix-equiv-then-equiv-of-bracket", "posix-class-of-bracket-in-config",
+    "posix-equiv-of-bracket-in-config", "posix-equiv-of-bracket-ansi",
+    "posix-class-of-bracket-braced-home",
 }
 
 
