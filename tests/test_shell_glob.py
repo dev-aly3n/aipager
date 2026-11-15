@@ -717,6 +717,7 @@ _MANY = [
     # bodies full of specials (tester-iter7-004), ``${...}`` text read as
     # words, ``$[`` with quotes nested deep
     "x(a)", "f()@", "~$f()", "/f()",
+    "$[''" * 47 + "1" + "]" * 47 + " ",
 ]
 
 
@@ -966,3 +967,209 @@ def test_an_empty_glued_group_is_not_read_as_commands(monkeypatch):
     words = g.words("f() { :; }; " * 50 + "ls *.py")
     assert "*.py" in words
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("cmd", [
+    "# $[ cat ~/.config/[a]ipager/x ]",
+    "# $[ $[ cat ~/.config/[a]ipager/x ] ]",
+    "cat <<'E'\n$[ cat ~/.config/[a]ipager/x ]\nE",
+])
+def test_a_flat_read_reads_arithmetic_as_words(cmd):
+    """rev-iter7-004: an arithmetic-only ``$[...]`` inside text read
+    again is read as words there, not set aside a second time."""
+    assert "~/.config/[a]ipager/x" in g.words(cmd)
+
+
+def test_a_copy_that_nests_too_deep_counts():
+    """A quote-free copy can nest where the command as typed does not
+    (``'$($(...'``); past the nesting cap its words are missing, so the
+    check fails closed whichever copy it is."""
+    cmd = "echo '" + "$(" * 60 + "' ; eval 'cat ~/.config/[a]ipager/x'"
+    assert g.lex(cmd)[1]
+    assert g.command_reaches(cmd, safety.dequote(cmd))
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    # deep but naming nothing: nothing is read at all
+    assert not g.command_reaches("echo " + "$(" * 60 + " ; ls *.py")
+
+
+def test_a_second_reading_that_nests_too_deep_counts():
+    """Text set aside (here a comment) whose second reading runs past the
+    nesting cap may hide words there: the check fails closed."""
+    cmd = "echo x # " + "$(" * 60 + " ; cat ~/.config/[a]ipager/x"
+    out, sure, _, deep = g._read(cmd, False)
+    assert deep and not sure
+    assert g.command_reaches(cmd)
+
+
+@pytest.mark.parametrize("text,want", [
+    ("~/.config ${ $( ` ' \" $' #", False),
+    ("~/.config/nvim $(ls) ${x} $[1]", False),
+    ("~/.config/[a]ipager", True),
+    ("x{a,b}", True),
+    ("~/.config/*", True),
+    ("x(y)", True),
+    ("'.''.'", True),
+    ("\\.\\.", True),
+    ("$'\\x2e\\x2e'", True),
+    ("$'\\056.'", True),
+    ("${x:-[a]}", True),
+    ("$((1))", True),
+])
+def test_only_text_that_can_give_a_checked_word_is_read_again(text, want):
+    """A flat read gives a word the matcher checks only from a glob,
+    brace or group character that opens no expansion, or two dots."""
+    assert g._may_give_worth(text) is want
+
+
+def test_a_bracket_pair_is_the_one_a_scan_finds():
+    """The ``$[`` pairs from one table per text are the ones a scan from
+    each ``[`` finds, also in a slice of the text."""
+    import random
+    rnd = random.Random(8)
+    for _ in range(300):
+        text = "".join(rnd.choice("[]x'$") for _ in range(rnd.randrange(1, 40)))
+        table = g._Brackets(text)
+        lo = rnd.randrange(0, len(text))
+        hi = rnd.randrange(lo, len(text) + 1)
+        for at in range(lo, hi):
+            if text[at] != "[":
+                continue
+            depth, want = 1, len(text)
+            for k in range(at + 1, len(text)):
+                depth += {"[": 1, "]": -1}.get(text[k], 0)
+                if depth == 0:
+                    want = k
+                    break
+            assert table.close(at) == want
+            # in the slice text[lo:hi] the same pair, or none
+            sliced = min(table.close(at) - lo, hi - lo)
+            sub = g._Brackets(text[lo:hi]).close(at - lo)
+            assert sliced == min(sub, hi - lo)
+
+
+def test_text_that_cannot_give_a_checked_word_is_not_read_again(monkeypatch):
+    """Set-aside text that names ``.config`` but holds no glob, brace,
+    group or ``..`` (the ``(``, ``{``, ``[`` of ``$(``, ``${``, ``$[`` do
+    not count) is not read a second time; text that does, is."""
+    flat = []
+    real = g._Lexer.commands
+
+    def spy(self, *a, **k):
+        if self.flat:
+            flat.append(1)
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(g._Lexer, "commands", spy)
+    g.words("cat <<'E'\n~/.config ${ $( ` ' \" $' #\nE\n" * 20)
+    assert flat == []
+    g.words("cat <<'E'\n~/.config/[a]ipager\nE\n")
+    assert flat == [1]
+
+
+def test_a_copy_that_cannot_give_a_checked_word_is_not_read(monkeypatch):
+    """A quote-free copy whose text holds no glob, brace, group or ``..``
+    (the openers of ``$(``, ``${``, ``$[`` do not count) is not read; the
+    command as typed still is (one left open refuses it)."""
+    reads = []
+    real = g._read
+
+    def spy(copy, *a, **k):
+        reads.append(copy)
+        return real(copy, *a, **k)
+
+    monkeypatch.setattr(g, "_read", spy)
+    cmd = "cat <<'E'\n~/.config ${ $( ` ' \" $' #\nE\n" * 3
+    copies = (safety.dequote(cmd), safety.dequote(cmd, True))
+    assert not g.command_reaches(cmd, *copies)
+    assert reads == [cmd]
+
+
+def test_an_arithmetic_only_body_is_not_read_as_words(monkeypatch):
+    """``$[...]`` with no quote, escape or substitution is set aside (read
+    again only if it could name a folder), not read word by word: 47
+    nested levels are one read."""
+    calls = []
+    real = g._Lexer.commands
+
+    def spy(self, *a, **k):
+        calls.append(1)
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(g._Lexer, "commands", spy)
+    assert g.lex("echo " + "$[" * 47 + "1" + "]" * 47 + " ; ls *.py") == (
+        ["*.py"], True)
+    assert len(calls) == 1
+
+
+def test_a_nested_dollar_bracket_in_a_body_closes():
+    """A ``$[`` inside a ``$[...]`` body read on its own finds its own
+    ``]`` (the pairs of the whole text, shifted to the body)."""
+    assert g.lex("echo $[ ''~/.config/nvim + $[ 2 ] ] ; ls *.py")[1]
+    assert g.lex("cat <<E\n$[ ''~/.config/nvim + $[ 2 ] ]\nE\nls *.py")[1]
+
+
+def test_a_quoted_dollar_bracket_nest_is_read_once(monkeypatch):
+    """``$[''`` nested 47 deep: the brackets are paired in one pass over
+    the text, not scanned again for every ``$[`` (review-7: a scan per
+    level cost 0.38 s at 100 KB)."""
+    scans = []
+    real = g._BRACKET_RE
+
+    class Counting:
+        def finditer(self, *a):
+            scans.append(1)
+            return real.finditer(*a)
+
+    monkeypatch.setattr(g, "_BRACKET_RE", Counting())
+    unit = "$[''" * 47 + "1" + "]" * 47 + " "
+    out, sure, _, _ = g._read(unit * 20 + "; ls ~/.config/nvim/x", False)
+    assert sure
+    assert len(scans) == 1
+
+
+def test_a_subscript_word_holds_no_copy_of_what_is_nested():
+    """A nested expansion in a subscript is one unknown value in the
+    word around it (a group, so the segment may match anything); its own
+    words are read where it stands."""
+    found = g.words("a[$(ls ~/.config/[a]ipager/x)]=1 ; ls *.py")
+    assert "a[" + g._NESTED + "]=1" in found
+    assert "~/.config/[a]ipager/x" in found
+    assert g.command_reaches("a[$(x)]/../.config/[a]ipager/x")
+
+
+_NEST_FILL = ("x ~/.config/nvim " * 6000)[:100_000]
+
+
+@pytest.mark.parametrize("head,tail", [
+    ("a[$(", ")]=1"),
+    ("a[$(# ", "\n)]=1"),
+    ("cat <<E\n$(", "\n)\nE\n"),
+    ("a=([$(", ")]=1)"),
+    ("[[ x =~ (", ") ]]"),
+    ("${x/a/", "}"),
+    ("${x:-${y/a/", "}}"),
+    ("# $[", "]"),
+], ids=["subscript", "comment-in-subscript", "heredoc", "compound",
+        "regexp", "replacement", "default-replacement", "flat-arith"])
+def test_nested_set_aside_text_is_read_again_once(head, tail):
+    """rev-iter7-005: text set aside inside text set aside is read again
+    once (the outermost span only), not once per level: 23 levels around
+    100 KB cost about what one does."""
+    def best(levels: int) -> float:
+        if head.startswith("cat <<E"):
+            cmd = _NEST_FILL
+            for k in range(levels):
+                cmd = "cat <<E%d\n$(%s\n)\nE%d\n" % (k, cmd, k)
+        else:
+            cmd = head * levels + _NEST_FILL + tail * levels
+        cmd += " ; ls ~/.config/nvim x"
+        out = float("inf")
+        for k in range(3):
+            c = ": r%d ; %s" % (k, cmd)
+            start = time.perf_counter()
+            bash_violation(c, DENY_BASH_PATTERNS)
+            out = min(out, time.perf_counter() - start)
+        return out
+    # reading again per level costs 0.7-1 s here; one level's own words
+    # (a 100 KB word met once at depth 23) may cost a little more
+    assert best(23) < 3 * best(1) + 0.2
