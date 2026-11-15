@@ -235,7 +235,10 @@ def test_a_glob_that_may_be_a_dot_step():
 def test_a_long_segment_is_not_parsed_past_the_longest_name():
     assert g._items("a" * 8) is None
     assert g._items("[a]" * 7 + "*") is not None
-    assert g._classify("[" * 50_000 + "x", False) == 0
+    start = time.perf_counter()
+    assert g._classify("?x" * 50_000, False) == 0
+    assert g._classify("[" * 50_000 + "x", False) == g._ALL
+    assert time.perf_counter() - start < 0.5
 
 
 def test_literal_names_compare_in_any_case():
