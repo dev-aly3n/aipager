@@ -260,6 +260,32 @@ REACH = [
     ("cat ~/.config/[[]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.local/share/{aipager,a.b}/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.local/state/a{i,.}pager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    # POSIX bracket expressions and a ``]`` first in the folder's name
+    ("sed -i s/a/b/ ~/.config/[[:alpha:]]ipager/x",
+     safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/[[=a=]]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/[[.a.]]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/aipage[[:alpha:]]/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/[]a]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.config/[^]x]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    ("cat ~/.local/share/[[:alpha:]]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
+    # a brace group whose items are paths
+    ("sed -i s/a/b/ ~/.config/{aipager/aipager.yaml,x}",
+     safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config/{aipager,a/b}/x", safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config/{nvim/x,aipager/aipager.yaml}",
+     safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config{/aipager,}/aipager.yaml", safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config/a{x,ipager/aipager.yaml}", safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config/{AIPAGER/aipager.yaml,x}", safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config/{[a]ipager/aipager.yaml,x}",
+     safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.config/{//aipager/aipager.yaml,x}",
+     safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.local/share/{x/y,aipager}/x", safety.BASH_BRACE_AIPAGER_DIR),
+    ("cat ~/.local/state/{aipager/x,y}", safety.BASH_BRACE_AIPAGER_DIR),
+    ("cd; cat .config/{aipager/aipager.yaml,y}",
+     safety.BASH_BRACE_AIPAGER_DIR),
     # cd with options, or in two steps
     ("cd -P ~/.config", safety.BASH_CD_CONFIG_PARENT),
     ("cd -- ~/.config", safety.BASH_CD_CONFIG_PARENT),
@@ -330,6 +356,14 @@ NEIGHBOURS = [
     "cat ../../README.md",
     "echo -cd",
     "xargs -n xargs grep",
+    "ls ~/.config/[[:lower:]]vim",
+    "ls ~/.config/[!]x]vim",
+    "cp ~/.config/{nvim/init.lua,fish/config.fish} /tmp/x",
+    "cat ~/.config{/nvim/init.lua,/fish/config.fish}",
+    "cat ~/.config/{git/config,nvim/x}",
+    "cat ~/.config/nvim/{lua,after}/x",
+    "cd ~/projects/{app,lib}/..",
+    "cat ~/.config/nvim/{x,y}/../init.lua",
 ]
 
 
@@ -372,6 +406,12 @@ NORMALISED = [
     "sed -i s/user/owner/ ~/.config/nvim/../aipager/aipager.yaml",
     "cat ~/.local/share/nvim/../aipager/x",
     "cat ~/.config/a/b/../../aipager/aipager.yaml",
+    # a ``..`` made by a brace
+    "cat ~/.config/nvim/{..,x}/aipager/aipager.yaml",
+    "cat ~/.config/nvim/..{,}/aipager/aipager.yaml",
+    "cat ~/.config/nvim/.{.,}/aipager/aipager.yaml",
+    "cat ~/.config/nvim/{.,x}./aipager/aipager.yaml",
+    "cat ~/.config/nvim/{x,../aipager}/aipager.yaml",
 ]
 
 
@@ -418,6 +458,15 @@ def test_the_normalised_copy_is_what_blocks(cmd, monkeypatch):
     ("host:a/../b", "host:a/../b"),
     ("a/./../b", "b"),
     ("ls a/.. b/..;cd c/..", "ls . .;cd ."),
+    ("a/{..,x}/b", "b"),
+    ("a/..{,}/b", "b"),
+    ("a/.{.,}/b", "b"),
+    ("a/{.,x}./b", "b"),
+    ("a/{x,../b}", "b}"),
+    ("a/..{,}./b", "a/..{,}./b"),
+    ("a/{x,y}/b", "a/{x,y}/b"),
+    ("{..,x}/../y", "{..,x}/../y"),
+    ("echo ${HOME}", "echo ${HOME}"),
 ])
 def test_dequote_normalises(raw, out):
     assert safety.dequote(raw) == out
@@ -482,6 +531,15 @@ _SLOW_NEW = [
     "cd" + "\n" * 20_000,
     "cd" + " \n" * 20_000,
     "cd ~ " + "|| " * 10_000,
+    "cat ~/.config/[" + "[:a" * 20_000,
+    "cat ~/.config/[" + "[:a]" * 15_000,
+    "cat ~/.config/a" + "[]" * 20_000,
+    "cat ~/.config/{" + "n/a," * 15_000,
+    "cat ~/.config/{" + "[a" * 20_000,
+    "cat ~/.config/{" + "/" * 50_000,
+    "cat ~/.config/a" + "[a]" * 15_000 + "{",
+    "cat a/" + "{..,x" * 10_000,
+    "cat a/" + "{" * 50_000,
 ]
 
 
@@ -512,6 +570,10 @@ _PADDING = [
     ("config-brace", ".config/{"), ("config-bracket", ".config/["),
     ("config-dot-group", ".config/{a.b}"), ("eq-dot", "=."),
     ("hidden-glob", "~/.c*/"), ("paren-cp", "(cp "), ("semi-cp", ";cp -r "),
+    ("config-posix", ".config/[[:"), ("config-close-first", ".config/[]"),
+    ("config-brace-path", ".config/{a/"), ("config-brace-item", ".config/{n,"),
+    ("config-brace-slash", ".config{/"), ("brace-dotdot", "/{..,x}"),
+    ("brace-dot-dot", "a/.{.,}/"), ("brace-open", "a/{x,"),
 ]
 _FORBIDDEN_TAIL = "; sed -i s/a/b/ ~/.config/aipager/aipager.yaml"
 
@@ -545,11 +607,15 @@ def test_the_whole_floor_is_linear_on_100_kb_of_padding(unit):
         assert best < 0.5, (size, best)
 
 
-def test_the_normaliser_reads_a_long_word_once():
+@pytest.mark.parametrize("cmd,out", [
+    ("a" * 100_000 + " b/..", "a" * 100_000 + " ."),
+    ("a/" * 50_000 + "..", "a/" * 49_998 + "a"),
+    ("a/{..,x}/" * 30_000 + "b", "b"),
+], ids=["long-word", "long-path", "long-brace-path"])
+def test_the_normaliser_reads_a_long_word_once(cmd, out):
     import time
-    cmd = "a" * 100_000 + " b/.."
     start = time.perf_counter()
-    assert safety.dequote(cmd) == "a" * 100_000 + " ."
+    assert safety.dequote(cmd) == out
     assert time.perf_counter() - start < 0.5
 
 
