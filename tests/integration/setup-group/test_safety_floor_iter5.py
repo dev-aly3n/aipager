@@ -83,10 +83,19 @@ GAPS = [
 ]
 
 
+#: Rows closed in the developer's iteration 6 (their xfail mark removed).
+CLOSED_ITER6 = {
+    "ext-config-optional", "ext-config-not", "ext-config-empty-alt",
+    "ext-config-home-var", "ext-leaf-in-brace", "ext-leaf-after-star-config",
+    "ext-leaf-after-star-local", "ext-leaf-after-glob-state",
+    "ext-star-group-and-leaf", "ext-local-brace",
+}
+
+
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(g[1], marks=pytest.mark.xfail(strict=True,
-                                                reason=UNDOCUMENTED))
+    [pytest.param(g[1], marks=() if g[0] in CLOSED_ITER6 else
+                  pytest.mark.xfail(strict=True, reason=UNDOCUMENTED))
      for g in GAPS],
     ids=[g[0] for g in GAPS])
 def test_gap_is_blocked(cmd):

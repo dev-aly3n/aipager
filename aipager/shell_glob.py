@@ -992,8 +992,6 @@ def _items(seg: str, run_on: bool = False,
                 items.append(_STAR)
             i += 1
             continue
-        if c in "()":
-            raise Unsure("an_extended_glob_or_group")
         if c == "?":
             items.append((_ALPHABET, False))
             i += 1
@@ -1050,6 +1048,10 @@ def _classify(seg: str, dotglob: bool) -> int:
         return flags | (_C if low == ".config" else _L if low == ".local"
                         else _S if low in ("share", "state")
                         else _A if low == "aipager" else 0)
+    if "(" in seg or ")" in seg:
+        # an extended glob or another shell's group, anywhere in the
+        # segment (also past the longest name: ``.config?(x)``)
+        return _ALL
     quirks: list[int] = []
     try:
         readings = [_items(seg, False, quirks)]

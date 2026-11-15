@@ -394,6 +394,15 @@ def test_what_the_matcher_does_not_model_is_unsure(seg):
     assert g._classify(seg, False) == g._ALL
 
 
+@pytest.mark.parametrize("seg", [
+    # tester-iter5-001: a group past the longest name's length
+    ".config?(x)", ".config!(x)", ".config@(|x)", "aipager?(x)", "aipager!(x)",
+    "aipager@(|x)", "*(.config)", "share@(|x)",
+])
+def test_a_group_anywhere_in_a_segment_is_unsure(seg):
+    assert g._classify(seg, False) == g._ALL
+
+
 def test_an_equivalence_class_before_two_brackets_is_read_both_ways():
     # bash 5.2: a*[[=a=]]r] matches a], aipager and apager (the bracket
     # runs on to the last ]); the first reading alone (a* a r]) cannot
