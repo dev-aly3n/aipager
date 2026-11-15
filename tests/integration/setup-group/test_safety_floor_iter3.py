@@ -338,37 +338,38 @@ def test_ordinary_command_stays_allowed(cmd):
 
 UNDOCUMENTED = "undocumented gap"
 DOCUMENTED = "documented gap"
+CLOSED_ITER4 = "closed in iteration 4"  # no xfail: must be blocked
 
 GAPS = [
     # brace group holding "/" (tester-iter3-001)
     ("brace-slash-in-item", "sed -i s/a/b/ ~/.config/{aipager,a/b}/x",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("brace-whole-path", "sed -i s/a/b/ ~/.config/{aipager/aipager.yaml,x}",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("brace-sibling-path",
-     "sed -i s/a/b/ ~/.config/{nvim/x,aipager/aipager.yaml}", UNDOCUMENTED),
+     "sed -i s/a/b/ ~/.config/{nvim/x,aipager/aipager.yaml}", CLOSED_ITER4),
     ("brace-empty-item", "cat ~/.config/{aipager/aipager.yaml,}",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("brace-before-slash", "cat ~/.config{/aipager,}/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("brace-share-path", "sed -i s/a/b/ ~/.local/share/{x/y,aipager}/x",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("brace-state-path", "sed -i s/a/b/ ~/.local/state/{aipager/x,y}",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("brace-relative-path", "cd; cat .config/{aipager/aipager.yaml,y}",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     # POSIX bracket expressions (tester-iter3-002)
     ("posix-alpha", "sed -i s/a/b/ ~/.config/[[:alpha:]]ipager/x",
-     UNDOCUMENTED),
-    ("posix-equiv", "sed -i s/a/b/ ~/.config/[[=a=]]ipager/x", UNDOCUMENTED),
+     CLOSED_ITER4),
+    ("posix-equiv", "sed -i s/a/b/ ~/.config/[[=a=]]ipager/x", CLOSED_ITER4),
     ("posix-collating", "sed -i s/a/b/ ~/.config/[[.a.]]ipager/x",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("bracket-close-first", "sed -i s/a/b/ ~/.config/[]a]ipager/x",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("posix-last-letter", "sed -i s/a/b/ ~/.config/aipage[[:alpha:]]/x",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("posix-share", "sed -i s/a/b/ ~/.local/share/[[:alpha:]]ipager/x",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     # extglob after shopt (tester-iter3-003)
     ("extglob-at", "shopt -s extglob\nsed -i s/a/b/ ~/.config/@(aipager)/x",
      UNDOCUMENTED),
@@ -377,11 +378,11 @@ GAPS = [
      UNDOCUMENTED),
     # ".." produced by a brace, or after a part holding = or : (iter3-004)
     ("dotdot-from-brace", "cat ~/.config/nvim/{..,x}/aipager/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("dotdot-brace-twice", "cat ~/.config/nvim/..{,}/aipager/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("dotdot-brace-built", "cat ~/.config/nvim/.{.,}/aipager/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER4),
     ("dotdot-after-eq-dir",
      "mkdir ~/.config/a=b; cat ~/.config/a=b/../aipager/aipager.yaml",
      UNDOCUMENTED),
@@ -416,7 +417,8 @@ GAPS = [
 
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(g[1], marks=pytest.mark.xfail(strict=True, reason=g[2]))
+    [pytest.param(g[1], marks=() if g[2] == CLOSED_ITER4
+                  else pytest.mark.xfail(strict=True, reason=g[2]))
      for g in GAPS],
     ids=[g[0] for g in GAPS])
 def test_known_gap_is_blocked(cmd):
