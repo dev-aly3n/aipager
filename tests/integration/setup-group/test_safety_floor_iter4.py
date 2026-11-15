@@ -213,10 +213,15 @@ CLOSED_ITER5 = {
 }
 
 
+#: Rows closed in the developer's iteration 7 (their xfail mark removed).
+CLOSED_ITER7 = {"glob-prog-function"}
+
+
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER5 else pytest.mark.xfail(
-        strict=True, reason="documented gap")) for r in DOCUMENTED_OPEN],
+    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER5 | CLOSED_ITER7
+                  else pytest.mark.xfail(strict=True, reason="documented gap"))
+     for r in DOCUMENTED_OPEN],
     ids=[r[0] for r in DOCUMENTED_OPEN])
 def test_documented_open_route_is_blocked(cmd):
     assert _blocked(cmd) is True

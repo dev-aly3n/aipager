@@ -342,7 +342,8 @@ BASH_AIPAGER_CLI = (r"(?:\b|(?<=-)[A-Za-z]*m)(?i:aipager)"
 #: of them stays inside one command.
 _TOKEN = r"[^\s;&|()<>`]"
 #: Where a word is run as a program: the start of a command (the start,
-#: after ``;``, ``&``, ``|``, ``(``, a backtick, ``$(`` or a newline),
+#: after ``;``, ``&``, ``|``, ``(``, a backtick, ``$(``, a newline, or
+#: the ``)`` of a function's ``name()`` before its ``{``),
 #: behind ``env``, ``nohup``, ``exec``, ``command``, ``time``, ``nice``,
 #: ``timeout``, ``sudo``, ``doas``, ``builtin``, the keywords ``if``,
 #: ``then``, ``do``, ``else``, ``elif``, ``while``, ``until``, ``!`` and
@@ -352,7 +353,7 @@ _TOKEN = r"[^\s;&|()<>`]"
 #: (blanks, wrapper words, options) stays on that one command, so the
 #: commands are read once each: linear on any input.
 _PROGRAM_POSITION = (
-    r"(?:^|[;&|(`\n])[\x20\t]*"
+    r"(?:^|[;&|(`\n]|\)(?=[\x20\t]*\{))[\x20\t]*"
     r"(?:(?:env|nohup|exec|command|time|nice|timeout|sudo|doas|builtin"
     r"|if|then|do|else|elif|while|until|!|\{)"
     rf"(?:[\x20\t]+-{_TOKEN}+|[\x20\t]+\w+={_TOKEN}*|[\x20\t]+\d+[smhd]?)*"

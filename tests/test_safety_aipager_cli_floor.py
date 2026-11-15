@@ -283,6 +283,10 @@ REACH = [
     ("mv ~/.local/share /tmp/s", safety.BASH_COPY_CONFIG_PARENT),
     ("scp -r ~/.config host:", safety.BASH_COPY_CONFIG_PARENT),
     ('cp -r "$HOME/.config" /tmp/x', safety.BASH_COPY_CONFIG_PARENT),
+    # a function's body starts a command after its name() (found by the
+    # iteration 7 command fuzz)
+    ("f() { cp -r ~/.config /tmp/x ; }; f", safety.BASH_COPY_CONFIG_PARENT),
+    ("f(){ aip* setup; }; f", safety.BASH_AIPAGER_GLOB_PROGRAM),
     # the folder names in any case
     ("cat ~/.Config/aipager/aipager.yaml", safety.BASH_CONFIG_DIR),
     ("cat ~/.local/share/AIPAGER/x", safety.BASH_SHARE_DIR),
@@ -296,6 +300,7 @@ NEIGHBOURS = [
     "ls ~/.config/[xy]ip",
     "cp ~/.config/{pip/pip.conf,git/config} /tmp/x",
     "aipager -v status",
+    "echo $(ls) cp -r ~/.config x",
     "aipager --version",
     "aipager doctor --json",
     "ls ~/.config",
