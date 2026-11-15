@@ -121,7 +121,7 @@ ONLY_BECAUSE_OF = [
      "python3 -c \"__import__('aipager.wizard.scope_io')\""),
     (safety.BASH_GLOB_AIPAGER_DIR, "cat ~/.config/aipage?/aipager.yaml"),
     (safety.BASH_GLOB_AIPAGER_DIR, "cat ~/.config/{aipager,x}/aipager.yaml"),
-    (safety.BASH_GLOB_AIPAGER_DIR, "cat ~/.config/[a]ipager/aipager.yaml"),
+    (safety.BASH_GLOB_REACHES_AIPAGER_DIR, "cat ~/.config/[a]ipager/aipager.yaml"),
     (safety.BASH_CD_CONFIG_PARENT, "cd ~/.config && cat aipager/aipager.yaml"),
     (safety.BASH_CD_CONFIG_PARENT, 'cd "$HOME/.config"; cat aipager/policy.yaml'),
 ]
@@ -129,8 +129,11 @@ ONLY_BECAUSE_OF = [
 
 @pytest.mark.parametrize("pat,cmd", ONLY_BECAUSE_OF)
 def test_each_new_pattern_blocks_a_command_alone(pat, cmd):
+    """Taken out together with the bash matcher, which blocks the folder
+    globs too (its own guards are tested in tests/test_shell_glob.py)."""
     assert pat in DENY_BASH_PATTERNS
-    without = tuple(p for p in DENY_BASH_PATTERNS if p != pat)
+    without = tuple(p for p in DENY_BASH_PATTERNS
+                    if p not in (pat, safety.BASH_GLOB_REACHES_AIPAGER_DIR))
     assert bash_violation(cmd, without) is None
     assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
 
@@ -251,41 +254,13 @@ REACH = [
     ("cat ~/.c*/aipage?/aipager.yaml", safety.BASH_GLOB_HIDDEN_PARENT),
     # a group in aipager's folder name holding a dot, =, : or [
     ("sed -i s/a/b/ ~/.config/{aipager,a.b}/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/[!.]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.config/a{i,.}pager/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.config/{aipager,x=y}/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.config/{aipager,a:b}/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.config/{aipager,..}/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.config/{,.}aipager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/[[]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.local/share/{aipager,a.b}/x", safety.BASH_GLOB_AIPAGER_DIR),
     ("cat ~/.local/state/a{i,.}pager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    # POSIX bracket expressions and a ``]`` first in the folder's name
-    ("sed -i s/a/b/ ~/.config/[[:alpha:]]ipager/x",
-     safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/[[=a=]]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/[[.a.]]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/aipage[[:alpha:]]/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/[]a]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.config/[^]x]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    ("cat ~/.local/share/[[:alpha:]]ipager/x", safety.BASH_GLOB_AIPAGER_DIR),
-    # a brace group whose items are paths
-    ("sed -i s/a/b/ ~/.config/{aipager/aipager.yaml,x}",
-     safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config/{aipager,a/b}/x", safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config/{nvim/x,aipager/aipager.yaml}",
-     safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config{/aipager,}/aipager.yaml", safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config/a{x,ipager/aipager.yaml}", safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config/{AIPAGER/aipager.yaml,x}", safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config/{[a]ipager/aipager.yaml,x}",
-     safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.config/{//aipager/aipager.yaml,x}",
-     safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.local/share/{x/y,aipager}/x", safety.BASH_BRACE_AIPAGER_DIR),
-    ("cat ~/.local/state/{aipager/x,y}", safety.BASH_BRACE_AIPAGER_DIR),
-    ("cd; cat .config/{aipager/aipager.yaml,y}",
-     safety.BASH_BRACE_AIPAGER_DIR),
     # cd with options, or in two steps
     ("cd -P ~/.config", safety.BASH_CD_CONFIG_PARENT),
     ("cd -- ~/.config", safety.BASH_CD_CONFIG_PARENT),
@@ -316,6 +291,10 @@ REACH = [
 
 #: The nearest neighbours of REACH that must stay allowed.
 NEIGHBOURS = [
+    # brackets that cannot spell aipager (the bash matcher counts them)
+    "cat ~/.config/[[]ipager/x",
+    "ls ~/.config/[[:lower:]]ip",
+    "cp ~/.config/{pip/pip.conf,git/config} /tmp/x",
     "aipager -v status",
     "aipager --version",
     "aipager doctor --json",
@@ -367,11 +346,53 @@ NEIGHBOURS = [
 ]
 
 
+#: Folder spellings only the bash matcher
+#: (:data:`safety.BASH_GLOB_REACHES_AIPAGER_DIR`) blocks: brackets in
+#: aipager's folder name and braces whose items are paths. Each passes
+#: when the matcher is taken out.
+MATCHED_LIKE_BASH = [
+    "cat ~/.config/[!.]ipager/x",
+    # POSIX bracket expressions and a ``]`` first in the folder's name
+    "sed -i s/a/b/ ~/.config/[[:alpha:]]ipager/x",
+    "cat ~/.config/[[=a=]]ipager/x",
+    "cat ~/.config/[[.a.]]ipager/x",
+    "cat ~/.config/aipage[[:alpha:]]/x",
+    "cat ~/.config/[]a]ipager/x",
+    "cat ~/.config/[^]x]ipager/x",
+    "cat ~/.local/share/[[:alpha:]]ipager/x",
+    # a brace group whose items are paths
+    "sed -i s/a/b/ ~/.config/{aipager/aipager.yaml,x}",
+    "cat ~/.config/{aipager,a/b}/x",
+    "cat ~/.config/{nvim/x,aipager/aipager.yaml}",
+    "cat ~/.config{/aipager,}/aipager.yaml",
+    "cat ~/.config/a{x,ipager/aipager.yaml}",
+    "cat ~/.config/{AIPAGER/aipager.yaml,x}",
+    "cat ~/.config/{[a]ipager/aipager.yaml,x}",
+    "cat ~/.config/{//aipager/aipager.yaml,x}",
+    "cat ~/.local/share/{x/y,aipager}/x",
+    "cat ~/.local/state/{aipager/x,y}",
+    "cd; cat .config/{aipager/aipager.yaml,y}",
+]
+
+
 @pytest.mark.parametrize("cmd,pat", REACH, ids=[c for c, _ in REACH])
 def test_reach_is_blocked_by_its_own_pattern(cmd, pat):
+    """Taken out together with the bash matcher, which also blocks the
+    folder spellings here (``{aipager,a.b}``, ``~/.c*/aipager``)."""
     assert pat in DENY_BASH_PATTERNS and pat in safety.DEQUOTED_BASH_PATTERNS
     assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
-    without = tuple(p for p in DENY_BASH_PATTERNS if p != pat)
+    without = tuple(p for p in DENY_BASH_PATTERNS
+                    if p not in (pat, safety.BASH_GLOB_REACHES_AIPAGER_DIR))
+    assert bash_violation(cmd, without) is None
+
+
+@pytest.mark.parametrize("cmd", MATCHED_LIKE_BASH)
+def test_the_bash_matcher_alone_blocks_these(cmd):
+    assert safety.BASH_GLOB_REACHES_AIPAGER_DIR in DENY_BASH_PATTERNS
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    assert bash_violation(cmd, (safety.BASH_GLOB_REACHES_AIPAGER_DIR,)) is not None
+    without = tuple(p for p in DENY_BASH_PATTERNS
+                    if p != safety.BASH_GLOB_REACHES_AIPAGER_DIR)
     assert bash_violation(cmd, without) is None
 
 
@@ -417,9 +438,13 @@ NORMALISED = [
 
 @pytest.mark.parametrize("cmd", NORMALISED)
 def test_the_normalised_copy_is_what_blocks(cmd, monkeypatch):
-    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    """Without the bash matcher, which reads ``name/..`` and brace-made
+    ``..`` on its own (tests/test_shell_glob.py)."""
+    without = tuple(p for p in DENY_BASH_PATTERNS
+                    if p != safety.BASH_GLOB_REACHES_AIPAGER_DIR)
+    assert bash_violation(cmd, without) is not None
     monkeypatch.setattr(safety, "DEQUOTED_BASH_PATTERNS", ())
-    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+    assert bash_violation(cmd, without) is None
 
 
 @pytest.mark.parametrize("raw,out", [
