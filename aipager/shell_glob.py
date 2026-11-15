@@ -146,8 +146,15 @@ _PARAM_RE = re.compile("|".join((
     r"(?P<oldarith>\$\[)",
     r"(?P<dollar>\$)",
 )))
-#: ``${name:-word}`` and its kin: the word may become the value.
-_DEFAULT_HEAD_RE = re.compile(r"(?:[A-Za-z_]\w*|\d+|[@*#?$!-]):?[-=+]")
+#: The name of a ``${...}`` (``!`` or ``#`` first, a subscript after)
+#: and the operation that follows it. A default (``${x:-word}``,
+#: ``${x-word}``, ``${x:=word}``, ``${x:+word}``) or a replacement
+#: (``${x/pat/rep}``, ``//``, ``/#``, ``/%``) may put its text in the
+#: value; the other operations (``#``, ``%``, ``:?``, ``^``, ``,``,
+#: ``@``, offsets) may not, but their text is read as words all the same.
+_PARAM_HEAD_RE = re.compile(
+    r"[!#]?(?:[A-Za-z_]\w*|\d+|[@*#?$!-])(?:\[[^]}]*\])?"
+    r"(?:(?P<value>:?[-=+]|/[/#%]?)|##?|%%?|:\??|\?|\^\^?|,,?|@)")
 #: A backtick body ends at the next backtick a backslash does not escape;
 #: quotes do not count there.
 _TICK_BODY_RE = re.compile(r"(?:[^`\\]|\\[\s\S])*")
@@ -298,14 +305,16 @@ class _Lexer:
 
     A reading may add words, never take them away. Text this reader sets
     aside as not words (a comment, a here-document's delimiter and body,
-    an assignment's subscript, a group in a ``[[ =~ ]]`` pattern) is read
-    again as plain words whenever it could name ``.config`` or
-    ``.local`` (:meth:`_set_aside`, :func:`_read_again`): if bash
-    reads that text some other way, its words are checked all the same.
+    an assignment's subscript, a group in a ``[[ =~ ]]`` pattern, the
+    text of a ``${...}``, open or closed) is read again as plain words
+    whenever it could name ``.config`` or ``.local`` (:meth:`_set_aside`,
+    :func:`_read_again`): if bash reads that text some other way, its
+    words are checked all the same.
 
     *flat* is that plain reading: no comments, here-documents,
     subscripts or patterns, so nothing is set aside again; an arithmetic
-    ``$[...]`` body is read as words there. *spell*, when given,
+    ``$[...]`` body is read as words there, and a ``${`` left open ends
+    where it starts, its text read on as commands. *spell*, when given,
     collects every word and operator for :func:`spelled`. *spans* and
     *base*: where this reader's text sits in the text whose set-aside
     spans it records (*groups* holds every such text of one read)."""
@@ -330,6 +339,10 @@ class _Lexer:
         self.spans = spans
         self.base = base
         self.groups: list[_Spans] = groups if groups is not None else []
+        # how many ``${`` are open here; a flat read ends the outermost
+        # one left open where it starts, once (``params_off``)
+        self.params = 0
+        self.params_off = False
         # the bracket pairs of the text this one is a slice of, and where
         # it starts there (:meth:`_old_arith`)
         self.brackets: _Brackets | None = None
@@ -500,6 +513,11 @@ class _Lexer:
                 if len(tok) == 2 and tok[1] != "\n":
                     cur.add(_lit(tok[1]))
             elif kind == "param":
+                if self.params_off:
+                    # a flat read past a ``${`` left open: plain text
+                    cur.add("$")
+                    i -= 1
+                    continue
                 i = self._param(i, cur, False)
             elif kind == "subst":
                 i = self._comsub(i)
@@ -597,6 +615,10 @@ class _Lexer:
                 elif ch != "\n":
                     cur.add(_lit(tok))
             elif kind == "param":
+                if self.params_off:
+                    cur.add("$")
+                    i -= 1
+                    continue
                 i = self._param(i, cur, True)
             elif kind == "subst":
                 i = self._comsub(i)
@@ -617,14 +639,24 @@ class _Lexer:
 
     def _param(self, i: int, cur: _Word, quoted: bool) -> int:
         """Read ``${...}`` from *i* (after ``${``); one :data:`OPAQUE` in
-        *cur*. Unquoted, a ``${x:-word}`` default may become the value:
-        the word's second reading takes it (see :class:`_Word`). A
-        command substitution inside is read as more words."""
+        *cur*. Unquoted, a default (``${x:-word}``) or a replacement
+        (``${x/pat/rep}``) may put its text in the value: the word's
+        second reading takes it (see :class:`_Word`; for a replacement,
+        the text after the pattern's first unquoted ``/``). Every
+        operation's text is also a word of its own, and it is set aside
+        to be read again as plain words (:meth:`_set_aside`), to the end
+        of the command when nothing closes it. A command substitution
+        inside is read as more words."""
         text, n = self.text, self.n
         begin = i - 2
         self._enter()
-        head = _DEFAULT_HEAD_RE.match(text, i)
-        inline = not quoted and head is not None
+        self.params += 1
+        head = _PARAM_HEAD_RE.match(text, i)
+        value = head.group("value") if head is not None else None
+        inline = not quoted and value is not None
+        # a replacement's value is the text after the pattern's end, the
+        # first unquoted ``/`` (None until it is met)
+        rep_at: int | None = None if value and value[0] == "/" else 0
         word = _Word()
         if head is not None:
             i = head.end()
@@ -633,10 +665,27 @@ class _Lexer:
             kind, tok, i = m.lastgroup, m.group(), m.end()
             if kind == "close":
                 self.level -= 1
-                cur.add(OPAQUE, word.alt_text() if inline else None,
-                        text[begin:i])
+                self.params -= 1
+                inline = inline and rep_at is not None
+                own = word.alt_text()
+                if not inline and _WORTH_RE.search(own):
+                    # not in the value: a word of its own (a value's text
+                    # is in the word's second reading already)
+                    self.out.append(own)
+                if inline and rep_at:
+                    pieces = word.alt if word.alt is not None else word.pieces
+                    own = "".join(pieces[rep_at:])
+                cur.add(OPAQUE, own if inline else None, text[begin:i])
+                self._set_aside(begin + 2, i - 1)
                 return i
             if kind == "run":
+                if rep_at is None and "/" in tok:
+                    k = tok.index("/") + 1
+                    word.add(tok[:k])
+                    rep_at = len(word.pieces)
+                    tok = tok[k:]
+                    if not tok:
+                        continue
                 word.add(tok)
             elif kind == "esc":
                 if len(tok) == 2:
@@ -674,9 +723,19 @@ class _Lexer:
                 word.add(OPAQUE)
             else:
                 word.add("$")
+        # left open: bash would read the command another way or not at
+        # all, and what follows the ``${`` may be commands there
         self.sure = False
         self.level -= 1
+        self.params -= 1
         cur.add(OPAQUE)
+        if not self.flat:
+            self._set_aside(begin + 2, n)
+        elif not self.params and not self.params_off:
+            # a flat read reads on from the outermost open ``${`` (once:
+            # every later ``${`` is plain text, so this stays linear)
+            self.params_off = True
+            return begin + 2
         return n
 
     def _comsub(self, i: int) -> int:

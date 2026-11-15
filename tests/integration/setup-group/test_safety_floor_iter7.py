@@ -96,7 +96,7 @@ OP_REPLACEMENT = [
 
 # Rows the developer closed in iteration 8 (fixes-8.md): their strict
 # xfail marks are removed.
-CLOSED_ITER8 = {
+CLOSED_ITER8 = {r[0] for r in OP_REPLACEMENT} | {
     "function-keyword-brace", "function-keyword-question",
     "function-keyword-bracket", "function-keyword-tab",
     "function-keyword-nested-group"}

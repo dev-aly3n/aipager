@@ -91,9 +91,15 @@ def test_a_default_value_is_a_second_reading():
     assert g.command_reaches("echo ${x:-~/.config/[a]ipager/aipager.yaml}")
     assert g.command_reaches("cat ~/.config/${x:=[a]ipager}/aipager.yaml")
     assert g.command_reaches("cat ~/.config/${x:-${y:-[a]ipager}}/aipager.yaml")
-    # quoted, it is not globbed; a pattern is never a value
-    assert not g.command_reaches('echo "${x:-~/.config/[a]ipager/aipager.yaml}"')
-    assert not g.command_reaches("echo ${x#~/.config/[a]ipager/aipager.yaml}")
+    # quoted, it is not globbed, and a pattern is never a value; but every
+    # operation's text is read as words of its own all the same (review-7
+    # rev-iter7-003: a reading may only add words). Only the unquoted
+    # value goes into the word's second reading.
+    assert "~/.config/[a]ipager/x" in g.words(
+        'echo "${x:-~/.config/[a]ipager/x}"')
+    assert "~/.config/[a]ipager/x" in g.words(
+        "echo ${x#~/.config/[a]ipager/x}")
+    assert g.words("echo ${x#a}/*") == [g.OPAQUE + "/*"]
 
 
 def test_commands_inside_an_expansion_are_read():
@@ -718,6 +724,7 @@ _MANY = [
     # words, ``$[`` with quotes nested deep
     "x(a)", "f()@", "~$f()", "/f()",
     "$[''" * 47 + "1" + "]" * 47 + " ",
+    "${x/a/~/.config/nvim} ", "echo '${' ; ls ~/.config/nvim ; ",
 ]
 
 
@@ -1173,3 +1180,94 @@ def test_nested_set_aside_text_is_read_again_once(head, tail):
     # reading again per level costs 0.7-1 s here; one level's own words
     # (a 100 KB word met once at depth 23) may cost a little more
     assert best(23) < 3 * best(1) + 0.2
+
+
+@pytest.mark.parametrize("cmd", [
+    "cat ${x/a/~/.config/[a]ipager/aipager.yaml}",
+    "cat ${x//?/~/.config/[a]ipager/x}",
+    "cat ${x/#a/~/.config/[a]ipager/x}",
+    "cat ${x/%a/~/.config/[a]ipager/x}",
+    "cat ${x/a/~/.local/share/[a]ipager/x}",
+    "cat ${a[0]/a/~/.config/[a]ipager/x}",
+    "cat ${!x/a/~/.config/[a]ipager/x}",
+    "cat ${x/a/${unset_v:-~/.config/[a]ipager/x}}",
+    "cat ${unset_v:-${x/a/~/.config/[a]ipager/x}}",
+    "cat ${x:+${x/a/~/.config/[a]ipager/x}}",
+    "cat ${x#a}${x/a/~/.config/[a]ipager/x}",
+])
+def test_a_replacement_may_be_the_value(cmd):
+    """tester-iter7-001: bash expands ``~`` and globs in the replacement
+    of ``${x/pat/rep}`` (``x=a; cat ${x/a/~/.config/[a]ipager/x}`` reads
+    the file), as in a ``${x:-default}``."""
+    assert g.command_reaches(cmd)
+
+
+def test_a_replacement_is_the_value_in_its_word():
+    """The replacement goes into the word's second reading, so a word
+    whose replacement holds only part of the name reaches too."""
+    assert g.command_reaches("cat ${x/a/~/.config/[a]ip}ager/x")
+    assert g.command_reaches("cat ~/.config/${x/a/[a]}ipager/x")
+    # a pattern operation's text is a word of its own, never in the value
+    assert g.words("cat ~/.config/${x#[a]}ipager/x") == ["[a]"]
+    # a replacement with no new text deletes: the value is not known
+    assert "~/.config/[a]ipager/x" not in g.words(
+        "cat ~/.config/${x/[a]}ipager/x")
+    # the whole text of a ${...} is also read again as plain words
+    assert "x#~/.config/[a]ipager/x" in g.words(
+        "echo ${x#~/.config/[a]ipager/x}")
+    # quoted, a default is not globbed: never in the word's second reading
+    assert not g.command_reaches('cat "~/.config/${x:-[a]}ipager/x"')
+    # words read before a ${...} stay (a $(...) inside it is more words)
+    assert "*.py" in g.words(
+        "ls *.py ; echo ${x:-$(cat ~/.config/[a]ipager/x)}")
+
+
+@pytest.mark.parametrize("op", [
+    "#", "##", "%", "%%", ":?", "?", "^", "^^", ",", ",,", "@", ":", ""])
+def test_every_operation_text_is_read_as_words(op):
+    """rev-iter7-003: whatever the operation, the text of a ``${...}`` is
+    read as words, as a word of its own and again as plain words."""
+    found = g.words("echo ${x" + op + "~/.config/[a]ipager/x} ; ls *.py")
+    assert any(w.endswith("~/.config/[a]ipager/x") for w in found), found
+    assert "*.py" in found
+
+
+@pytest.mark.parametrize("cmd", [
+    "grep -n '${HOME' x ; eval 'cat ~/.config/[a]ipager/aipager.yaml'",
+    "echo '${' ; bash -c 'cat ~/.config/[a]ipager/aipager.yaml'",
+    "echo \"${\" ; eval 'cat ~/.config/[a]ipager/aipager.yaml'",
+    "echo $'${' ; eval 'cat ~/.local/share/[a]ipager/x'",
+    "echo '${x#' ; eval 'cat ~/.config/aip[a]ger/x'",
+    "echo '${' ; eval 'cat ~/.config/nvim/../[a]ipager/x'",
+    "echo '${' ; eval 'cat ~/.config/{aipager,x}/aipager.yaml'",
+])
+def test_a_quoted_open_param_hides_nothing(cmd):
+    """rev-iter7-003: in a quote-free copy a quoted ``${`` opens (and runs
+    to the end, or to a ``}`` far off); the text after it is still read as
+    words (set aside and read again)."""
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+
+
+def test_an_open_param_is_read_on_in_a_quote_free_copy():
+    """The command as typed is sure and has no reaching word; its
+    quote-free copy leaves ``${`` open to the end. Only reading the text
+    after that ``${`` finds the word."""
+    cmd = "grep -n '${HOME' x ; eval 'cat ~/.config/[a]ipager/aipager.yaml'"
+    copy = safety.dequote(cmd)
+    assert g.lex(cmd)[1] and not g.command_reaches(cmd)
+    assert not g.lex(copy)[1]
+    assert g.command_reaches(cmd, copy)
+
+
+def test_a_flat_read_reads_on_after_an_open_param():
+    """A second (flat) reading reads the text after the outermost ``${``
+    left open as commands, once: later ``${`` are plain text there."""
+    assert "~/.config/[a]ipager/x" in g.words(
+        "# ${ ; cat ~/.config/[a]ipager/x")
+    assert "~/.config/[a]ipager/x" in g.words(
+        "# ${x:-${ ; cat ~/.config/[a]ipager/x")
+    assert "~/.config/[a]ipager/x" in g.words(
+        "# ${ ${ ; cat ~/.config/[a]ipager/x")
+    # from the outermost one: the text before an inner open ``${`` too
+    assert "~/.config/[a]ipager/x" in g.words(
+        "# ${ ; cat ~/.config/[a]ipager/x ; ${")
