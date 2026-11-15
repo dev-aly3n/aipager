@@ -59,7 +59,10 @@ CLOSED = [
      "ls ~/.config/aipager2"),
     ("brace-empty-dot", "sed -i s/a/b/ ~/.config/{,.}aipager/x",
      "cat ~/.config/git/config"),
-    ("bracket-bracket", "sed -i s/a/b/ ~/.config/[[]ipager/x",
+    # [[]ipager can only match a folder literally named "[ipager", so the
+    # iteration 3 pin of it as blocked was a false block (dropped in
+    # iteration 5); a bracket holding "[" and "a" does reach aipager
+    ("bracket-bracket", "sed -i s/a/b/ ~/.config/[[a]ipager/x",
      "ls ~/.config/[n]vim"),
     ("share-brace-dot", "sed -i s/a/b/ ~/.local/share/{aipager,a.b}/x",
      "ls ~/.local/share/nvim"),

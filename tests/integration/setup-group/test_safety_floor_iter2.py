@@ -397,9 +397,14 @@ SIZES = (625, 1250, 2500, 5000, 10000, REPEATS)
 
 
 def _elapsed(cmd: str, patterns: tuple[str, ...]) -> float:
-    t0 = time.perf_counter()
-    bash_violation(cmd, patterns)
-    return time.perf_counter() - t0
+    """Best of three runs, so one slow run on a loaded machine (0.63 s
+    once in iteration 5) does not fail a check that is linear."""
+    best = float("inf")
+    for _ in range(3):
+        t0 = time.perf_counter()
+        bash_violation(cmd, patterns)
+        best = min(best, time.perf_counter() - t0)
+    return best
 
 
 def _first_slow(unit: str, tail: str, budget: float, groups):

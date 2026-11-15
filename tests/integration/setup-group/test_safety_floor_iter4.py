@@ -405,10 +405,19 @@ def test_shape_before_a_harmless_tail_is_under_budget(prefix, unit):
 @pytest.mark.parametrize(("prefix", "unit"), TIMING_ARGS, ids=TIMING_IDS)
 def test_shape_grows_linearly(prefix, unit):
     """4x the input may take at most 8x the time (quadratic would be 16x);
-    a 20 ms floor keeps timer noise on tiny times out of it."""
-    small = _best_of_three(_build(prefix, unit, SMALL, HARMLESS_TAIL))
-    large = _best_of_three(_build(prefix, unit, LARGE, HARMLESS_TAIL))
-    assert large < max(8 * small, 0.02)
+    a 20 ms floor keeps timer noise on tiny times out of it. A quadratic
+    shape fails every round; a loaded machine (4 shapes just over 8x once
+    in iteration 5) gets three rounds before the test calls it."""
+    small_cmd = _build(prefix, unit, SMALL, HARMLESS_TAIL)
+    large_cmd = _build(prefix, unit, LARGE, HARMLESS_TAIL)
+    rounds = []
+    for _ in range(3):
+        small = _best_of_three(small_cmd)
+        large = _best_of_three(large_cmd)
+        rounds.append(large < max(8 * small, 0.02))
+        if rounds[-1]:
+            break
+    assert rounds[-1] is True
 
 
 # Single-start long runs that end on a letter no pattern takes, so no early
