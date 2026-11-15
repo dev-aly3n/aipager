@@ -2,7 +2,7 @@
 
 # أوامر البوت وواجهته
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../commands.md))
 
@@ -794,7 +794,7 @@ aipager setup detect-group [--timeout SECONDS] [--json]
 
 </div>
 
-تكون `candidate` بقيمة `null` ما لم تكن `status` بقيمة `found`؛ ومن مصدر aipager يكون `type` و`date` فيها `null`. ويعدّ `other_candidates` المجموعات الجديدة الأخرى التي كتبت في الدقائق العشر نفسها. وقد تحوي `warnings` التحذير `updates_backlog`.
+تكون `candidate` بقيمة `null` ما لم تكن `status` بقيمة `found`؛ ومن مصدر aipager يكون `date` فيها `null`. ويعدّ `other_candidates` المجموعات الجديدة الأخرى التي كتبت في الدقائق العشر نفسها. وقد تحوي `warnings` التحذير `updates_backlog`.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

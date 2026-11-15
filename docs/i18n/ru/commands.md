@@ -1,6 +1,6 @@
 # Команды и интерфейс бота
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../commands.md))
 
@@ -728,7 +728,7 @@ aipager setup detect-group [--timeout SECONDS] [--json]
 }
 ```
 
-`candidate` равен `null`, если `status` не `found`; из источника aipager его `type` и `date` равны `null`. `other_candidates` считает другие новые группы, которые писали в те же 10 минут. В `warnings` может быть `updates_backlog`.
+`candidate` равен `null`, если `status` не `found`; из источника aipager его `date` равен `null`. `other_candidates` считает другие новые группы, которые писали в те же 10 минут. В `warnings` может быть `updates_backlog`.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 
@@ -728,7 +728,7 @@ aipager setup detect-group [--timeout SECONDS] [--json]
 }
 ```
 
-`status`가 `found`가 아니면 `candidate`는 `null`이에요. aipager에서 읽은 경우 `type`과 `date`는 `null`이에요. `other_candidates`는 같은 10분 동안 글을 쓴 다른 새 그룹 수예요. `warnings`에는 `updates_backlog`가 들어갈 수 있어요.
+`status`가 `found`가 아니면 `candidate`는 `null`이에요. aipager에서 읽은 경우 `date`는 `null`이에요. `other_candidates`는 같은 10분 동안 글을 쓴 다른 새 그룹 수예요. `warnings`에는 `updates_backlog`가 들어갈 수 있어요.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

@@ -1,6 +1,6 @@
 # 机器人命令和界面
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../commands.md)）
 
@@ -728,7 +728,7 @@ aipager setup detect-group [--timeout SECONDS] [--json]
 }
 ```
 
-`status` 不是 `found` 时 `candidate` 为 `null`；来自 aipager 记录时，它的 `type` 和 `date` 为 `null`。`other_candidates` 统计同样 10 分钟里发过消息的其他新群组。`warnings` 里可能有 `updates_backlog`。
+`status` 不是 `found` 时 `candidate` 为 `null`；来自 aipager 记录时，它的 `date` 为 `null`。`other_candidates` 统计同样 10 分钟里发过消息的其他新群组。`warnings` 里可能有 `updates_backlog`。
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

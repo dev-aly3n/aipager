@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -728,7 +728,7 @@ Todas las claves están siempre; un valor que todavía no se conoce es `null`.
 }
 ```
 
-`candidate` es `null` salvo que `status` sea `found`; desde la fuente aipager, su `type` y su `date` son `null`. `other_candidates` cuenta los otros grupos nuevos que escribieron en los mismos 10 minutos. `warnings` puede contener `updates_backlog`.
+`candidate` es `null` salvo que `status` sea `found`; desde la fuente aipager, su `date` es `null`. `other_candidates` cuenta los otros grupos nuevos que escribieron en los mismos 10 minutos. `warnings` puede contener `updates_backlog`.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

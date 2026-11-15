@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -728,7 +728,7 @@ Mọi khóa luôn có mặt; giá trị chưa biết là `null`.
 }
 ```
 
-`candidate` là `null` trừ khi `status` là `found`; từ nguồn aipager, `type` và `date` của nó là `null`. `other_candidates` đếm các nhóm mới khác đã viết trong cùng 10 phút. `warnings` có thể chứa `updates_backlog`.
+`candidate` là `null` trừ khi `status` là `found`; từ nguồn aipager, `date` của nó là `null`. `other_candidates` đếm các nhóm mới khác đã viết trong cùng 10 phút. `warnings` có thể chứa `updates_backlog`.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

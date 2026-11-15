@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -728,7 +728,7 @@ Setiap kunci selalu ada; nilai yang belum diketahui adalah `null`.
 }
 ```
 
-`candidate` bernilai `null` kecuali `status` bernilai `found`; dari sumber aipager, `type` dan `date`-nya bernilai `null`. `other_candidates` menghitung grup baru lain yang menulis dalam 10 menit yang sama. `warnings` bisa berisi `updates_backlog`.
+`candidate` bernilai `null` kecuali `status` bernilai `found`; dari sumber aipager, `date`-nya bernilai `null`. `other_candidates` menghitung grup baru lain yang menulis dalam 10 menit yang sama. `warnings` bisa berisi `updates_backlog`.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

@@ -1,6 +1,6 @@
 # 安全模型
 
-<!-- i18n-source: docs/security.md @ 16c28aab -->
+<!-- i18n-source: docs/security.md @ d25e85b2 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../security.md)）
 
@@ -64,7 +64,7 @@ token 不会出现在 aipager 的日志里：带有 token 的 HTTP 请求行不�
 
 有两项独立的检查决定一次工具调用能否运行，它们按这个顺序进行：
 
-1. **aipager 的安全检查。** Claude Code 在每次工具调用之前运行 aipager 的 `PreToolUse` hook。对于从 Telegram 开始的任务，hook 会让调用遵守发送者角色的规则和安全底线（受保护路径、命令模式），并拒绝它们不允许的东西：这时 Claude Code 会拒绝这个工具，不问任何人，无论它自己的规则怎么说。在终端里输入的消息不受这项检查的限制。它包括下面[团队模式下的规则执行](#team-mode-enforcement)里描述的内容。
+1. **aipager 的安全检查。** Claude Code 在每次工具调用之前运行 aipager 的 `PreToolUse` hook。对于从 Telegram 开始的任务，hook 会让调用遵守发送者角色的规则和安全底线（受保护路径、命令模式），并拒绝它们不允许的东西：这时 Claude Code 会拒绝这个工具，不问任何人，无论它自己的规则怎么说。在终端里输入的消息不受这项检查的限制；不是 aipager 启动的 Claude Code 会话（aipager 的 hook 写在全局设置里时的普通 `claude`）完全不检查，除非它的任务带有 aipager 的 `[via Telegram` 标记：它收不到任何来自 Telegram 的输入，所以没有可以用来约束它的人。它包括下面[团队模式下的规则执行](#team-mode-enforcement)里描述的内容。
 2. **Claude Code 自己的规则**（`~/.claude/settings.json`、会话的权限模式）。如果它们说要询问，Claude Code 就会发出 `PermissionRequest`，aipager 会在 Telegram 里显示权限请求（见 [hook](hooks.md#permissionrequest)）。你的点按会作为 hook 的决定回到 Claude Code，或者如果 20 秒的等待已经过去，就输入到 Claude Code 自己的对话框里。如果 Claude Code 的规则拒绝了这次调用，它就绝不会到达 Telegram。
 
 所以 aipager 可以拒绝一次 Claude Code 本会允许的调用，而当 Claude Code 询问时，aipager 绝不会自己回答“是”：允许总是来自一个人的点按。有三样东西能让调用不经询问就运行：
@@ -116,6 +116,12 @@ token 不会出现在 aipager 的日志里：带有 token 的 HTTP 请求行不�
 - 在项目里，受限用户可以修改你之后自己运行或读取的东西（源码、`Makefile`、`package.json` 里的脚本、`conftest.py`、你自己的任务会加载的 `CLAUDE.md`）。
 
 **有 Bash 的角色**（`admin`，它会绕过角色的禁止规则，或者任何被 `policy.yaml` 重新给了 Bash 的角色：`allow_tools` 里写了 `Bash`，或者替换了 `deny_tools`）**只受尽力而为的规则约束**：也就是下面的命令模式，一个下定决心的人可以绕过它们。对成员拥有的每个这样的角色，`aipager doctor` 会警告一次。只把 Bash 交给你愿意把这台电脑的 shell 交出去的人。
+
+**aipager 自己的命令和文件夹。** 命令模式阻止所有者之外、有 Bash 的任务改变谁来控制这台电脑。它们会拒绝任何形式的 `aipager setup`（它会分配角色）、`aipager config`、`aipager uninstall`、`aipager service` 和 `aipager start`，包括子命令前带选项（`aipager -v setup`）、任意大小写、写成 `python -m aipager.cli`、通过程序的路径、通过可能匹配它名字的 glob（`aip*r setup`）以及通过 `xargs aipager`；点名 aipager 的 `systemctl`、`launchctl`、`kill`、`pkill` 或 `killall`；运行导入 aipager 自己模块的代码的 Python 解释器（`python3 -c "import os, aipager.scope"`、here-document、`runpy`）；任何提到 `~/.config/aipager`、`~/.local/share/aipager` 或 `~/.local/state/aipager` 的地方，包括用引号、反斜杠、`$'...'` 或空替换拆开名字（`"aipager"`、`aip""ager`、`$'\x61ipager'`、`aip$()ager`）、路径里有 `//` 或 `/./`，或者 glob 或花括号可能匹配它（`~/.config/aipage?`、`~/.config/*`、`~/.c*/aipager`、`~/.local/*/aipager`；`~/.config/*.conf` 和 `nvim*` 没问题）；用 `cd` 或 `pushd` 进入主文件夹的 `.config`、`.local`、`.local/share` 或 `.local/state` 本身，包括带选项或分两步（`cd ~ && cd .config`）；以及把整个这个文件夹交给 `cp`、`rsync`、`tar`、`zip`、`ln`、`mv` 或 `scp`（`cp -r ~/.config /tmp/x`；里面的文件夹，比如 `~/.config/nvim`，没问题）。
+
+按模块名搜索 aipager 的代码仍然允许（`grep -rn "from aipager import" .`、`rg setup_group`）。但模式分不清搜索和命令：含有 `aipager setup`、`aipager config`、`aipager uninstall` 或 `.config/aipager` 这些词的 `grep`、`git grep`、`git log --grep` 或提交信息，对所有者之外的任务同样会被拒绝。
+
+仍然能绕过的情况：用变量或命令替换拼出的命令名或路径（`A=aipager; $A setup`）、shell 函数或别名、编码过的或用 `eval` 执行的命令（`base64 -d | sh`）、在脚本里拼出的路径、先用文件工具写好再运行的脚本、之前通过别的途径建好的符号链接、用名字的一部分（`pkill -f aip`）指定或按编号发信号的进程、`systemctl --user stop 'aip*'`（systemctl 自己匹配 glob）、改了名字的 aipager 程序副本，以及通过别的途径进入某个文件夹之后的相对路径。真正的边界仍然是没有 shell：内置的 `user` 和 `read_only` 角色没有 shell。
 
 **内置的命令规则。** 在所有者之外、每个有 Bash 的 Telegram 任务都要遵守的 `Bash` 模式里，有一条会拦下 `claude` 这个词：它用一条规则同时拦下嵌套的 `claude`（无论路径、包装或参数）和对 `~/.claude` 的任何访问，并且还能拦下 aipager 自己的 `/tmp/claude-*` 控制文件的直接名称，因为它们的名称有相同的前缀（对这些文件来说，模式并不是真正的保护：用 glob 的写法就能避开）。唯一的例外是 Claude Code 创建的 scratchpad 文件夹 `/tmp/claude-<uid>/…`：正是这个文件夹，作为一个完整的路径部分，被豁免，所以从会话的 scratchpad 运行的命令不会被拦下。这个文件夹属于系统用户，而不是某一个会话，所以有 Bash 的任务可以读取那里其他会话的 scratchpad 和任务输出，就像 `Read` 工具也能做到的那样。它的 glob 或形似的名称（`/tmp/claude-1*`、`claude-1000x`）、其他临时文件夹，以及从它能到达的任何地方（`…/../../home/you/.claude`）仍然会被拦下。这个词的其他用法（`git log --grep=claude`、名为 `claude-notes.md` 的文件、`pip show claude-agent-sdk`）也仍然会被拦下，这是有意的：同一个词既是程序的名字，也是它的 SDK 和 aipager 控制文件的名字，而模式无法区分它们。你在 `policy.yaml` 里添加的规则看到的是原样输入的命令，包括 scratchpad。
 
@@ -266,6 +272,7 @@ Claude Code 允许一个会话给另一个会话发消息（它的 `SendMessage`
 | 机器人 token 被盗 | 在 @BotFather 里 `/revoke`，重新配置 |
 | claude 的工具调用被利用 | aipager 的安全检查拒绝来自 Telegram 的任务的规则所禁止的东西；在询问模式下，Claude Code 自己在 `settings.json` 里的规则决定它询问什么，一个人的点按是唯一的允许方式；在自动模式下（每个新会话的默认模式），Claude Code 自己的安全检查会不经询问地运行它认为安全的调用，并拦下有风险的调用交给人来决定；完全访问模式的会话（管理员，以及在自己私聊里的人）什么都不问，所以只剩 aipager 的安全检查挡在路上，而对于所有者自己的任务和在终端里输入的消息，什么都挡不住（[谁来决定](#who-decides-whether-a-tool-call-runs)） |
 | 受限的 Telegram 用户获得所有者的权限 | 没有 shell，会话只能在成员自己的根文件夹里启动，写入和搜索限于其中的项目（绝不是主文件夹），不能读取主文件夹里根文件夹之外的内容，其他成员的根文件夹和其他聊天的上传文件无法触及，存放登录信息的文件不能读取，文件工具遵守受保护路径，出错的检查会拒绝（[团队模式下的规则执行](#team-mode-enforcement)）；对被给了 Bash 的角色只是尽力而为，并且不包括“已知限制”里的情况 |
+| 所有者之外的 Telegram 任务改变谁来控制这台电脑（`aipager setup`、`aipager config`、修改 `aipager.yaml`） | 受限角色没有 shell；文件工具永远碰不到 aipager 的文件夹；对有 Bash 的角色，只有尽力而为的命令模式，下定决心的人可以绕过：它们拦下 aipager 的 setup、config 和 uninstall 命令、杀掉守护进程、导入 aipager 的 Python，以及通过 glob、引号、`cd` 进入上级文件夹或复制上级文件夹来接触 aipager 的文件夹（[团队模式下的规则执行](#team-mode-enforcement)） |
 | 一个会话的消息自称拥有所有者的权限 | 消息以发送任务经过证明的权限运行，绝不以接收会话之前的权限运行；没有证明就只能阅读和思考（[会话之间的消息](#messages-between-claude-sessions)） |
 | 群组成员借用别人的权限 | 每条消息都以发送者本人在消息来源聊天里的角色运行；另一个发送者的消息要等正在运行的任务结束；如果仍然并入了，最严格的规则胜出；受限角色的斜杠命令仅限于键盘上的命令（[团队模式下的规则执行](#team-mode-enforcement)） |
 | 群组里的闲聊进入会话 | 在群组里只处理命令、对机器人的回复、提及机器人的消息和带标记的键盘点按（[群组](groups.md#what-the-bot-reads-in-a-group)） |

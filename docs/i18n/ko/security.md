@@ -1,6 +1,6 @@
 # 보안 모델
 
-<!-- i18n-source: docs/security.md @ 16c28aab -->
+<!-- i18n-source: docs/security.md @ d25e85b2 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../security.md))
 
@@ -64,7 +64,7 @@ token이 새어 나갔다고 의심되면 [@BotFather](https://t.me/BotFather)�
 
 도구 호출을 실행할지는 서로 다른 두 확인이 정하고, 이 순서로 실행돼요:
 
-1. **aipager의 안전 검사.** Claude Code는 도구를 호출하기 전마다 aipager의 `PreToolUse` hook을 실행해요. Telegram에서 시작한 작업이라면 hook이 그 호출을 보낸 사람 역할의 규칙과 안전 기준선(보호된 경로, 명령 패턴)에 따르게 하고, 허용되지 않는 것은 거부해요. 그러면 Claude Code는 자기 규칙이 무엇이라고 하든 아무에게도 묻지 않고 그 도구를 거부해요. 터미널에서 입력한 메시지는 이 확인의 제한을 받지 않아요. 아래 [팀 모드의 규칙 적용](#team-mode-enforcement)에서 설명하는 내용이 여기에 들어가요.
+1. **aipager의 안전 검사.** Claude Code는 도구를 호출하기 전마다 aipager의 `PreToolUse` hook을 실행해요. Telegram에서 시작한 작업이라면 hook이 그 호출을 보낸 사람 역할의 규칙과 안전 기준선(보호된 경로, 명령 패턴)에 따르게 하고, 허용되지 않는 것은 거부해요. 그러면 Claude Code는 자기 규칙이 무엇이라고 하든 아무에게도 묻지 않고 그 도구를 거부해요. 터미널에서 입력한 메시지는 이 확인의 제한을 받지 않고, aipager가 시작하지 않은 Claude Code 세션(aipager의 hook이 전역 설정에 있을 때의 일반 `claude`)은 그 작업에 aipager의 `[via Telegram` 표시가 없으면 아예 확인하지 않아요. 그런 세션은 Telegram에서 아무 입력도 받지 않으니, 그 규칙을 따르게 할 사람이 없어요. 아래 [팀 모드의 규칙 적용](#team-mode-enforcement)에서 설명하는 내용이 여기에 들어가요.
 2. **Claude Code 자체의 규칙**(`~/.claude/settings.json`, 세션의 권한 모드). 물어보라고 하면 Claude Code가 `PermissionRequest`를 보내고, aipager가 Telegram에 권한 요청을 보여 줘요([hook](hooks.md#permissionrequest) 참고). 내가 누른 것은 hook의 결정으로 Claude Code에 돌아가거나, 20초 기다림이 지났다면 Claude Code 자체 대화 상자에 입력돼요. Claude Code의 규칙이 호출을 거부하면 Telegram까지 오지 않아요.
 
 그래서 aipager는 Claude Code가 허용할 호출을 거부할 수 있고, Claude Code가 물을 때 aipager가 스스로 “예”라고 답하는 일은 절대 없어요. 허용은 항상 사람의 누름이에요. 묻지 않고 호출을 실행하게 하는 것은 세 가지예요:
@@ -116,6 +116,12 @@ token이 새어 나갔다고 의심되면 [@BotFather](https://t.me/BotFather)�
 - 프로젝트 안에서 제한된 사용자는 내가 나중에 직접 실행하거나 읽는 것을 바꿀 수 있어요(소스 코드, `Makefile`, `package.json`의 스크립트, `conftest.py`, 내 작업이 불러오는 `CLAUDE.md`).
 
 **Bash가 있는 역할**(역할 금지 규칙을 건너뛰는 `admin`, 또는 `policy.yaml`이 Bash를 돌려준 역할: `Bash`를 적은 `allow_tools`, 또는 바꾼 `deny_tools`)**은 최선의 노력인 규칙에만 묶여요**. 아래의 명령 패턴이고, 마음먹은 사람은 피해 갈 수 있어요. `aipager doctor`는 멤버가 가진 그런 역할마다 한 번 경고해요. 이 컴퓨터의 shell을 줘도 되는 사람에게만 Bash를 주세요.
+
+**aipager 자체의 명령과 폴더.** 명령 패턴은 Bash가 있는 소유자 외의 작업이 이 컴퓨터를 누가 제어하는지 바꾸지 못하게 해요. 어떤 형태든 `aipager setup`(역할을 부여해요), `aipager config`, `aipager uninstall`, `aipager service`, `aipager start`를 거부하고, 하위 명령 앞에 옵션이 있을 때(`aipager -v setup`), 대소문자를 바꿨을 때, `python -m aipager.cli`로 실행할 때, 프로그램 경로로 실행할 때, 이름과 맞을 수 있는 glob으로 실행할 때(`aip*r setup`), `xargs aipager`로 실행할 때도 거부해요. aipager를 가리키는 `systemctl`, `launchctl`, `kill`, `pkill`, `killall`, aipager 자체의 모듈을 import하는 코드를 실행하는 Python 인터프리터(`python3 -c "import os, aipager.scope"`, here-document, `runpy`), `~/.config/aipager`, `~/.local/share/aipager`, `~/.local/state/aipager`에 대한 모든 언급도 거부해요. 따옴표, 백슬래시, `$'...'`, 빈 치환으로 이름을 나눴을 때(`"aipager"`, `aip""ager`, `$'\x61ipager'`, `aip$()ager`), 경로에 `//`나 `/./`가 있을 때, glob이나 중괄호가 그 경로와 맞을 수 있을 때(`~/.config/aipage?`, `~/.config/*`, `~/.c*/aipager`, `~/.local/*/aipager`. `~/.config/*.conf`와 `nvim*`는 괜찮아요)도 마찬가지예요. 홈 폴더의 `.config`, `.local`, `.local/share`, `.local/state` 자체로 들어가는 `cd`나 `pushd`는 옵션을 붙이거나 두 단계로 나눠도(`cd ~ && cd .config`) 거부하고, 그 폴더 전체를 넘기는 `cp`, `rsync`, `tar`, `zip`, `ln`, `mv`, `scp`도 거부해요(`cp -r ~/.config /tmp/x`. 그 안의 폴더, 예를 들어 `~/.config/nvim`은 괜찮아요).
+
+모듈 이름으로 aipager 코드를 검색하는 건 여전히 허용돼요(`grep -rn "from aipager import" .`, `rg setup_group`). 하지만 패턴은 검색과 명령을 구별하지 못해요. `aipager setup`, `aipager config`, `aipager uninstall`, `.config/aipager`라는 말이 들어간 `grep`, `git grep`, `git log --grep`이나 커밋 메시지도 소유자 외의 작업에서는 거부돼요.
+
+그래도 빠져나가는 것은 이런 것들이에요. 변수나 명령 치환으로 만든 명령 이름이나 경로(`A=aipager; $A setup`), shell 함수나 별칭, 인코딩했거나 `eval`로 실행한 명령(`base64 -d | sh`), 스크립트 안에서 만든 경로나 파일 도구로 써 두고 나중에 실행한 스크립트, 미리 다른 방법으로 만들어 둔 심볼릭 링크, 이름 일부(`pkill -f aip`)나 번호로 신호를 보낸 프로세스, `systemctl --user stop 'aip*'`(systemctl이 glob을 직접 맞춰요), 다른 이름으로 복사한 aipager 프로그램, 다른 방법으로 폴더에 들어간 뒤의 상대 경로예요. 진짜 경계는 여전히 shell이 없는 거예요. 기본 역할 `user`와 `read_only`에는 shell이 없어요.
 
 **기본 명령 규칙.** Bash가 있는 소유자 외의 모든 Telegram 작업이 따라야 하는 `Bash` 패턴 가운데 하나는 `claude`라는 단어를 막아요. 규칙 하나로 중첩된 `claude`(경로, 감싸는 명령, 옵션이 무엇이든)와 `~/.claude`에 대한 모든 접근을 막고, 이름이 같은 접두사로 시작하는 aipager 자체의 `/tmp/claude-*` 제어 파일의 이름도 잡아요(이 파일들에 대해 패턴은 진짜 보호가 아니에요. glob 작성법으로 피할 수 있어요). 유일한 예외는 Claude Code가 만드는 scratchpad 폴더 `/tmp/claude-<uid>/…`예요. 바로 그 폴더가, 경로의 한 부분 전체로서, 예외라서 세션의 scratchpad에서 실행하는 명령은 멈추지 않아요. 이 폴더는 세션 하나가 아니라 운영 체제 사용자의 것이라서, Bash가 있는 작업은 거기 있는 다른 세션의 scratchpad와 작업 출력을 읽을 수 있어요. `Read` 도구도 그럴 수 있는 것처럼요. 그것의 glob이나 비슷하게 생긴 이름(`/tmp/claude-1*`, `claude-1000x`), 다른 임시 폴더, 거기서 닿을 수 있는 모든 것(`…/../../home/you/.claude`)은 여전히 막혀요. 이 단어의 다른 쓰임(`git log --grep=claude`, `claude-notes.md`라는 파일, `pip show claude-agent-sdk`)도 일부러 여전히 막아요. 같은 단어가 프로그램, 그 SDK, aipager의 제어 파일 이름이고, 패턴은 이것들을 구별할 수 없으니까요. 내가 `policy.yaml`에 더한 규칙은 scratchpad를 포함해 입력된 그대로의 명령을 봐요.
 
@@ -266,6 +272,7 @@ Claude Code는 세션 하나가 다른 세션에 메시지를 보내게 해 줘�
 | 봇 token 도난 | @BotFather에서 `/revoke`, 다시 설정 |
 | claude의 도구 호출이 악용됨 | aipager의 안전 검사가 Telegram 작업의 규칙이 금지하는 것을 거부해요. 확인 모드에서는 Claude Code 자체의 `settings.json` 규칙이 무엇을 물을지 정하고, 사람의 누름이 유일한 허용 방법이에요. 자동 모드(모든 새 세션의 기본값)에서는 Claude Code 자체의 안전 검사가 안전하다고 보는 호출은 묻지 않고 실행하고, 위험한 호출은 멈춰서 사람이 정하게 해요. 전체 권한 모드의 세션(관리자, 그리고 자기 개인 채팅 안의 사람)은 아무것도 묻지 않으니 aipager의 안전 검사만 길을 막고, 소유자 자신의 작업과 터미널에서 입력한 메시지에는 아무것도 막지 않아요([누가 정하나요](#who-decides-whether-a-tool-call-runs)) |
 | 제한된 Telegram 사용자가 소유자의 권한을 얻음 | shell 없음, 세션은 멤버 자신의 루트 폴더 안에서만 시작, 쓰기와 검색은 그 안의 프로젝트로 제한(홈 폴더는 절대 아님), 루트 폴더 밖의 홈 폴더는 읽지 못함, 다른 멤버의 루트 폴더와 다른 채팅의 업로드에는 닿지 못함, 로그인 정보 파일은 읽지 못함, 파일 도구의 보호된 경로, 고장 난 확인은 거부([팀 모드의 규칙 적용](#team-mode-enforcement)). Bash를 받은 역할에는 최선의 노력일 뿐이고, “알려진 한계”의 경우는 다루지 않아요 |
+| 소유자 외의 Telegram 작업이 이 컴퓨터를 누가 제어하는지 바꿈(`aipager setup`, `aipager config`, `aipager.yaml` 수정) | 제한된 역할에는 shell 없음, 파일 도구는 aipager의 폴더에 절대 닿지 않음, Bash를 받은 역할에는 마음먹은 사람이 피해 갈 수 있는 최선의 노력인 명령 패턴만 있음: aipager의 setup, config, uninstall 명령, 데몬 종료, aipager를 import하는 Python, 그리고 glob, 따옴표, 상위 폴더로의 `cd`나 그 복사로 aipager 폴더에 닿는 것을 막음([팀 모드의 규칙 적용](#team-mode-enforcement)) |
 | 세션의 메시지가 소유자의 권한을 주장함 | 메시지는 보낸 작업의 증명된 권한으로 실행되고, 받는 세션의 이전 권한으로는 절대 실행되지 않아요. 증명이 없으면 읽고 생각하기만 해요([세션 사이의 메시지](#messages-between-claude-sessions)) |
 | 그룹 멤버가 다른 사람의 권한을 빌림 | 메시지마다 그것이 온 채팅에서 보낸 사람 자신의 역할로 실행돼요. 다른 보낸 사람의 메시지는 실행 중인 작업을 기다려요. 그래도 합쳐지면 가장 엄격한 규칙이 이겨요. 제한된 역할의 슬래시 명령은 키보드의 명령으로만 제한돼요([팀 모드의 규칙 적용](#team-mode-enforcement)) |
 | 그룹의 잡담이 세션으로 들어감 | 그룹에서는 명령, 봇에 대한 답장, 봇 멘션, 표시가 있는 키보드 누름만 처리해요([그룹](groups.md#what-the-bot-reads-in-a-group)) |

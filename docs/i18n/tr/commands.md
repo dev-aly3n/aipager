@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -728,7 +728,7 @@ Her anahtar her zaman vardır; henüz bilinmeyen bir değer `null` olur.
 }
 ```
 
-`status` `found` değilse `candidate` `null` olur; aipager kaynağından gelen `type` ve `date` değerleri `null` olur. `other_candidates`, aynı 10 dakika içinde yazan diğer yeni grupları sayar. `warnings` içinde `updates_backlog` olabilir.
+`status` `found` değilse `candidate` `null` olur; aipager kaynağından gelen `date` değeri `null` olur. `other_candidates`, aynı 10 dakika içinde yazan diğer yeni grupları sayar. `warnings` içinde `updates_backlog` olabilir.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

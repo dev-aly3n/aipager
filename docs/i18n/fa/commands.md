@@ -2,7 +2,7 @@
 
 # فرمان‌ها و رابط ربات
 
-<!-- i18n-source: docs/commands.md @ d63d62ef -->
+<!-- i18n-source: docs/commands.md @ d25e85b2 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../commands.md))
 
@@ -794,7 +794,7 @@ aipager setup detect-group [--timeout SECONDS] [--json]
 
 </div>
 
-&rlm;`candidate` همیشه `null` است مگر اینکه `status` برابر `found` باشد؛ از منبع aipager،&rlm; `type` و `date` آن `null` هستند. `other_candidates` گروه‌های جدید دیگری را می‌شمارد که در همان ۱۰ دقیقه پیام داده‌اند. `warnings` ممکن است `updates_backlog` داشته باشد.
+&rlm;`candidate` همیشه `null` است مگر اینکه `status` برابر `found` باشد؛ از منبع aipager،&rlm; `date` آن `null` است. `other_candidates` گروه‌های جدید دیگری را می‌شمارد که در همان ۱۰ دقیقه پیام داده‌اند. `warnings` ممکن است `updates_backlog` داشته باشد.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 
