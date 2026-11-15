@@ -291,11 +291,25 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
 #: ``.``, ``=`` or ``:`` use it).
 _GLOB_GROUP = (r"\[[^\][/\s;&|()<>`'\"=:.]*\]"
                r"|\{[^{}/\s;&|()<>`'\"=:.]*\}")
+
+
+def _bracket(also_not: str = "") -> str:
+    """A bracket expression in one path folder: an optional ``!`` or
+    ``^``, an optional ``]`` first (``[]a]``), then characters and POSIX
+    items (``[:alpha:]``, ``[=a=]``, ``[.a.]``) up to the closing ``]``.
+    Never ``/``, a blank or a character in *also_not*. Each piece starts
+    with a different character (a ``[`` opens a POSIX item only before
+    ``:``, ``=`` or ``.``; only the first ``!`` or ``^`` reads two ways),
+    so a run of brackets is read once."""
+    return (rf"\[[!^]?\]?(?:[^\]\[/\s{also_not}]|\[(?![:=.])"
+            rf"|\[[:=.][^\]/\s{also_not}]*\])*\]")
+
+
 #: A bracket or brace group in one path folder: anything but ``/``, a
-#: blank or the closing bracket (``{aipager,a.b}``, ``[!.]``, ``[[]``).
-#: Only for a pattern that starts at a fixed folder name, so a group
-#: never holds another start.
-_FOLDER_GLOB_GROUP = r"\[[^\]/\s]*\]|\{[^}/\s]*\}"
+#: blank or the closing bracket (``{aipager,a.b}``, ``[!.]``, ``[[]``,
+#: ``[[:alpha:]]``, ``[]a]``). Only for a pattern that starts at a fixed
+#: folder name, so a group never holds another start.
+_FOLDER_GLOB_GROUP = rf"{_bracket()}|\{{[^}}/\s]*\}}"
 
 
 def _glob_word(letters: str, group: str = _GLOB_GROUP) -> str:
@@ -409,6 +423,27 @@ BASH_GLOB_AIPAGER_DIR = (
     r"\.(?:config|local/share|local/state)/"
     rf"{_AIPAGER_FOLDER_GLOB}"
     r"(?=$|[/\s\"';&|)])")
+#: The letters of ``aipager`` (any case), wildcards and brackets: the
+#: start of one brace item or the folder text before the brace.
+_BRACE_HEAD = rf"(?i:(?:[aipger*?]|{_bracket(',{}')})*)"
+#: A brace group whose items are paths (a ``/`` inside it), right at the
+#: first folder under ``.config``, ``.local/share`` or ``.local/state``,
+#: with one item whose first folder (with the text before the brace)
+#: could be ``aipager``:
+#: ``~/.config/{aipager/aipager.yaml,x}``, ``~/.config/{nvim/x,aipager}``,
+#: ``~/.config{/aipager,}/x``, ``.local/state/{aipager/x,y}``. An item
+#: of other letters (``{nvim/init.lua,fish/config.fish}``) is not this;
+#: a brace with no ``/`` is :data:`BASH_GLOB_AIPAGER_DIR`'s.
+#:
+#: Cost: a match starts only at the fixed folder name; the brace body
+#: holds no ``{`` or ``}``, so bodies never overlap, and the body is read
+#: once for the ``/`` and once trying the items at each ``,``: linear on
+#: any input.
+BASH_BRACE_AIPAGER_DIR = (
+    r"\.(?:config|local/share|local/state)"
+    rf"(?:/{_BRACE_HEAD})?\{{(?=[^{{}}\s]*/)(?:[^{{}}\s]*,)?/*(?!/)"
+    rf"{_BRACE_HEAD}"
+    r"(?=[/,}])")
 #: A glob in the hidden folder itself or in ``.local``'s second folder,
 #: then ``aipager`` or a glob that could match it: ``~/.c*/aipager``,
 #: ``~/.co?fig/aipager``, ``~/.*/aipager``, ``~/.local/*/aipager``.
@@ -458,6 +493,7 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     BASH_LAUNCHCTL_AIPAGER,
     BASH_PYTHON_IMPORTS_AIPAGER,
     BASH_GLOB_AIPAGER_DIR,
+    BASH_BRACE_AIPAGER_DIR,
     BASH_GLOB_HIDDEN_PARENT,
     BASH_CD_CONFIG_PARENT,
     BASH_CD_HOME_THEN_PARENT,
@@ -507,6 +543,7 @@ DEQUOTED_BASH_PATTERNS: tuple[str, ...] = (
     BASH_LAUNCHCTL_AIPAGER,
     BASH_PYTHON_IMPORTS_AIPAGER,
     BASH_GLOB_AIPAGER_DIR,
+    BASH_BRACE_AIPAGER_DIR,
     BASH_GLOB_HIDDEN_PARENT,
     BASH_CD_CONFIG_PARENT,
     BASH_CD_HOME_THEN_PARENT,
@@ -532,18 +569,39 @@ _SHELL_WORD_RE = re.compile(r"[^\s;&|()<>`]+")
 
 def _keeps_its_place(part: str) -> bool:
     """A path part that ``..`` after it must not cancel: the root (an
-    empty part), ``.``, ``..``, the home folder (``~``, ``$HOME``) or a
-    part holding ``=`` or ``:`` (``--dir=~``, ``host:``)."""
-    return (part in ("", ".", "..") or part[0] in "~$"
-            or "=" in part or ":" in part)
+    empty part), ``.``, ``..`` or a brace that may spell it, the home
+    folder (``~``, ``$HOME``) or a part holding ``=`` or ``:``
+    (``--dir=~``, ``host:``)."""
+    return (part in ("", ".") or part[0] in "~$"
+            or "=" in part or ":" in part or _may_be_parent(part))
+
+
+#: A path part made of a brace group with at most two dots around it
+#: (``{..,x}``, ``..{,}``, ``.{.,}``, ``{x,..`` when an item holds ``/``).
+_BRACE_PART_RE = re.compile(r"(\.{0,2})\{([^{}]*)(?:\}(\.{0,2}))?")
+
+
+def _may_be_parent(part: str) -> bool:
+    """``..``, or a brace part one of whose items spells ``..`` with the
+    dots around the brace (``nvim/{..,x}`` and ``nvim/.{.,}`` may climb
+    out of ``nvim``). A brace still open in this part (an item holding
+    ``/``) counts any of its items, whatever follows the brace."""
+    if part == "..":
+        return True
+    m = _BRACE_PART_RE.fullmatch(part)
+    if not m:
+        return False
+    need = 2 - len(m[1]) - len(m[3] or "")
+    return need >= 0 and "." * need in m[2].split(",")
 
 
 def _drop_parent_steps(m: re.Match) -> str:
     """The word with each ``name/..`` taken out, in one pass
-    (``~/.config/nvim/../aipager`` is ``~/.config/aipager``)."""
+    (``~/.config/nvim/../aipager`` is ``~/.config/aipager``); a brace
+    that may spell ``..`` counts as one (:func:`_may_be_parent`)."""
     out: list[str] = []
     for part in m[0].split("/"):
-        if part == ".." and out and not _keeps_its_place(out[-1]):
+        if _may_be_parent(part) and out and not _keeps_its_place(out[-1]):
             out.pop()
         else:
             out.append(part)
@@ -570,7 +628,8 @@ def dequote(command: str) -> str:
     dropped, every ``'``, ``"`` and ``\\`` removed, empty substitutions
     (``````, ``$()``) dropped, repeated ``/`` made one, ``/./`` made
     ``/`` (``~/.config//./aipager``) and ``name/..`` taken out
-    (``~/.config/nvim/../aipager``). Linear in the command's length."""
+    (``~/.config/nvim/../aipager``, also a brace that may spell ``..``:
+    ``nvim/{..,x}``). Linear in the command's length."""
     out = command.replace("\\\n", "")
     out = _ANSI_C_RE.sub(lambda m: _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, m[1]),
                          out)
@@ -580,7 +639,7 @@ def dequote(command: str) -> str:
     out = re.sub(r"/{2,}", "/", out)
     while "/./" in out:
         out = out.replace("/./", "/")
-    if "/.." in out:
+    if "/.." in out or "{" in out:
         out = _SHELL_WORD_RE.sub(_drop_parent_steps, out)
     return out
 
