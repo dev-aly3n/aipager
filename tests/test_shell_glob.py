@@ -528,6 +528,33 @@ def test_dotglob_lets_a_star_be_a_hidden_folder():
     assert g._walk("~/**", True) == g.UNSURE
 
 
+def test_brace_results_are_counted_across_a_command():
+    # 16 words of 256 results each fit the budget of 4096; a 17th does not
+    word = "~/.config/x" + "{a,b}" * 8 + "/%d"
+    sixteen = " ".join(word % k for k in range(16))
+    assert not g.command_reaches("ls " + sixteen)
+    assert g.command_reaches("ls " + sixteen + " " + word % 16)
+    # words of one result do not count
+    assert not g.command_reaches("ls " + " ".join(
+        "~/.config/nvim/*.%d" % k for k in range(5000)))
+
+
+def test_segment_flags_are_shared_by_a_commands_words(monkeypatch):
+    known: dict[str, int] = {}
+    g.word_reach("~/.config/[n]vim/a", False, known)
+    assert "[n]vim" in known
+    calls = []
+    real = g._classify
+
+    def counting(seg, dotglob):
+        calls.append(seg)
+        return real(seg, dotglob)
+
+    monkeypatch.setattr(g, "_classify", counting)
+    g.command_reaches("ls ~/.config/[n]vim/a ~/.config/[n]vim/b")
+    assert calls.count("[n]vim") == 1
+
+
 def test_a_long_path_is_read_in_one_pass():
     path = "~/.config/" + "a/" * 40_000 + ".." * 0 + "x"
     start = time.perf_counter()
@@ -664,4 +691,41 @@ def test_the_matcher_is_linear(prefix, unit):
     small, large = best(25_000), best(100_000)
     assert large < 0.5
     assert large < max(8 * small, 0.02)
+
+
+#: Many words, each with its own work (review-5 rev-iter5-002: words
+#: expanding near the cap; tester-iter5-004: open groups), and the shapes
+#: the parser reads (here-documents, comments, arithmetic, backticks).
+_MANY = [
+    "ls .c{.*,b}{.*,b}{.*,b}{a,b}{a,b}{a,b}{a,b}{a,b}/.*/.*/.*/%d ",
+    "@(a|", "${x#{} ", "`echo '` ", "<<E ", "<<E\n", "# ' \n",
+    "$((1<<2)) ", "${x:-[a]} ", "$(case a in a) b;; esac) ", "~/.c*/a?(x) ",
+    "x[a[=[=]y ",
+]
+
+
+def _many(unit: str, size: int) -> str:
+    out, k = [], 0
+    total = 0
+    while total < size:
+        piece = unit % k if "%d" in unit else unit
+        out.append(piece)
+        total += len(piece)
+        k += 1
+    return "".join(out)
+
+
+@pytest.mark.parametrize("tail", ["; cat ~/.config/aipager/x",
+                                  "; ls ~/.config/nvim x"])
+@pytest.mark.parametrize("unit", _MANY)
+def test_many_costly_words_stay_fast(unit, tail):
+    cmd = _many(unit, 100_000) + tail
+    best = float("inf")
+    for _ in range(3):
+        start = time.perf_counter()
+        verdict = bash_violation(cmd, DENY_BASH_PATTERNS)
+        best = min(best, time.perf_counter() - start)
+    assert best < 0.5
+    if "aipager" in tail:
+        assert verdict is not None
 

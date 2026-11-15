@@ -1150,18 +1150,21 @@ def _up(node: tuple | None) -> list[tuple | None]:
     return [node[1]]
 
 
-def _walk(path: str, dotglob: bool) -> str:
+def _walk(path: str, dotglob: bool, known: dict[str, int] | None = None,
+          ) -> str:
     """Read *path*'s segments in order, keeping every way the path can
     resolve: ``//`` and ``/./`` drop out, ``name/..`` cancels (see
     :func:`_up`), and a glob that may be ``.`` or ``..`` (``.*``) is read
     all three ways. Each reading is a linked stack, so a long path costs
     one step a segment. :data:`REACH` as soon as one reading passes
-    through aipager's folders."""
+    through aipager's folders. *known* caches each segment's flags (one
+    dict for a whole command)."""
     segs = [s for s in path.split("/") if s and s != "."]
     last = len(segs) - 1
     readings: list[tuple | None] = [None]
     # a long path repeats its segments: classify each kind once
-    known: dict[str, int] = {}
+    if known is None:
+        known = {}
     for k, seg in enumerate(segs):
         if seg == "..":
             nxt = [r for node in readings for r in _up(node)]
@@ -1192,16 +1195,30 @@ def _walk(path: str, dotglob: bool) -> str:
     return CLEAR
 
 
-def word_reach(word: str, dotglob: bool = False) -> str:
+#: At most this many brace results are walked for one command (words of
+#: one result do not count); past it the command is :data:`UNSURE`.
+_MAX_WALKED = 4096
+
+
+def word_reach(word: str, dotglob: bool = False,
+               known: dict[str, int] | None = None,
+               budget: list[int] | None = None) -> str:
     """:data:`REACH` when some expansion of *word* (from :func:`words`)
     can be a path through aipager's folders, :data:`UNSURE` when this
     module cannot tell on a word that could name ``.config`` or
-    ``.local``, else :data:`CLEAR`."""
+    ``.local``, else :data:`CLEAR`. *known* and *budget* (a one-item
+    list, the brace results left) are shared by a command's words."""
     if not may_name_start(word, dotglob):
         return CLEAR
+    if known is None:
+        known = {}
     try:
         results = expand_braces(word)
-        verdicts = [_walk(r, dotglob) for r in results]
+        if budget is not None and len(results) > 1:
+            budget[0] -= len(results)
+            if budget[0] < 0:
+                return UNSURE
+        verdicts = [_walk(r, dotglob, known) for r in results]
     except Unsure:
         return UNSURE
     if REACH in verdicts:
@@ -1225,6 +1242,8 @@ def command_reaches(command: str, *more: str) -> bool:
     copies = (command, *more)
     dotglob = any(_DOTGLOB_RE.search(c) for c in copies)
     seen: set[str] = set()
+    known: dict[str, int] = {}
+    budget = [_MAX_WALKED]
     # a command with no quotes reads the same both ways: lex it once
     for k, copy in enumerate(dict.fromkeys(copies)):
         if not _WORTH_RE.search(copy):
@@ -1236,6 +1255,6 @@ def command_reaches(command: str, *more: str) -> bool:
             if w in seen:
                 continue
             seen.add(w)
-            if word_reach(w, dotglob) != CLEAR:
+            if word_reach(w, dotglob, known, budget) != CLEAR:
                 return True
     return False
