@@ -84,77 +84,514 @@ def _ansi_char(m: re.Match) -> str:
         return ""
 
 
-#: Unquoted text up to the next character that changes how words split
-#: or quote; seps are blanks and ``; & | < > )``.
-_LEX_RE = re.compile("|".join((
-    r"(?P<plain>[^\s;&|<>()`'\"\\$]+)",
-    r"(?P<sep>[\s;&|<>)]+)",
+#: Tokens where commands are read (the top level, ``$(...)``, a backtick
+#: body, an arithmetic or extended glob group). ``#`` starts a comment
+#: only where a word starts; ``<<`` is a here-document, ``<<<`` is not.
+_CMD_RE = re.compile("|".join((
+    r"(?P<plain>[^\s;&|<>()`'\"\\$#]+)",
+    r"(?P<nl>\n)",
+    r"(?P<hstr><<<)",
+    r"(?P<heredoc><<-?)",
+    r"(?P<blank>[^\S\n]+)",
+    r"(?P<sep>[;&|]+)",
+    r"(?P<redir>[<>])",
     r"(?P<sq>'[^']*'?)",
     r"(?P<ansi>\$'(?:[^'\\]|\\[\s\S])*'?)",
     r"(?P<dq>\$?\")",
     r"(?P<esc>\\[\s\S]?)",
     r"(?P<param>\$\{)",
-    r"(?P<subst>\$\(|`)",
+    r"(?P<subst>\$\()",
+    r"(?P<tick>`)",
     r"(?P<var>\$(?:[A-Za-z_]\w*|[0-9@*#?$!-]))",
+    r"(?P<oldarith>\$\[)",
     r"(?P<dollar>\$)",
     r"(?P<open>\()",
+    r"(?P<close>\))",
+    r"(?P<hash>#)",
 )))
+#: Tokens inside ``"..."`` (``"`` ends it) and in an unquoted
+#: here-document body (``"`` is plain there).
 _DQ_RE = re.compile("|".join((
     r"(?P<run>[^\"\\$`]+)",
     r"(?P<end>\")",
     r"(?P<esc>\\[\s\S]?)",
     r"(?P<param>\$\{)",
-    r"(?P<subst>\$\(|`)",
+    r"(?P<subst>\$\()",
+    r"(?P<tick>`)",
     r"(?P<var>\$(?:[A-Za-z_]\w*|[0-9@*#?$!-]))",
+    r"(?P<oldarith>\$\[)",
     r"(?P<dollar>\$)",
 )))
-_BRACES_RE = re.compile(r"[{}]")
-_PARENS_RE = re.compile(r"[()]")
+_HEREDOC_RE = re.compile(_DQ_RE.pattern.replace(
+    r'(?P<run>[^\"\\$`]+)', r'(?P<run>[^\\$`]+)'))
+#: Tokens inside ``${...}``. Bash closes it at the first ``}`` that is
+#: not quoted, escaped or inside a nested expansion: only ``${`` nests,
+#: a bare ``{`` does not (``${x#{}`` ends at its first ``}``). Single
+#: quotes quote here even inside double quotes; ``$'...'`` decodes only
+#: outside them.
+_PARAM_RE = re.compile("|".join((
+    r"(?P<run>[^}\\'\"$`]+)",
+    r"(?P<close>\})",
+    r"(?P<esc>\\[\s\S]?)",
+    r"(?P<ansi>\$'(?:[^'\\]|\\[\s\S])*'?)",
+    r"(?P<sq>'[^']*'?)",
+    r"(?P<dq>\$?\")",
+    r"(?P<param>\$\{)",
+    r"(?P<subst>\$\()",
+    r"(?P<tick>`)",
+    r"(?P<var>\$(?:[A-Za-z_]\w*|[0-9@*#?$!-]))",
+    r"(?P<oldarith>\$\[)",
+    r"(?P<dollar>\$)",
+)))
+#: ``${name:-word}`` and its kin: the word may become the value.
+_DEFAULT_HEAD_RE = re.compile(r"(?:[A-Za-z_]\w*|\d+|[@*#?$!-]):?[-=+]")
+#: A backtick body ends at the next backtick a backslash does not escape;
+#: quotes do not count there.
+_TICK_BODY_RE = re.compile(r"(?:[^`\\]|\\[\s\S])*")
+_TICK_UNESCAPE = re.compile(r"\\([\\`$])")
+_TICK_UNESCAPE_DQ = re.compile(r"\\([\\`$\"])")
+#: After these words a command may start again (``if case ...``).
+_KEEPS_COMMAND_START = frozenset(
+    ("if", "then", "else", "elif", "do", "while", "until", "!", "time",
+     "{", "}"))
+#: Nested quotes, expansions and groups deeper than this make the read
+#: unsure (the hook must not run out of stack).
+_MAX_NEST = 48
 
 
-def _skip(text: str, i: int, pairs: re.Pattern, opener: str) -> int:
-    """The index after the bracket that closes the one open before *i*
-    (``${...}``, ``$(...)``, ``@(...)``), or the end of *text*."""
-    depth = 1
-    for m in pairs.finditer(text, i):
-        depth += 1 if m.group() == opener else -1
-        if depth == 0:
-            return m.end()
-    return len(text)
+class _TooDeep(Exception):
+    pass
 
 
-def _double_quoted(text: str, i: int, cur: list[str]) -> int:
-    """Read ``"..."`` from *i* (after the quote) into *cur*; the index
-    after the closing quote."""
-    n = len(text)
-    while i < n:
-        m = _DQ_RE.match(text, i)
-        kind, tok, i = m.lastgroup, m.group(), m.end()
-        if kind == "run":
-            cur.append(_lit(tok))
-        elif kind == "end":
-            return i
-        elif kind == "esc":
-            ch = tok[1:]
-            if ch in ("$", "`", '"', "\\"):
-                cur.append(_lit(ch))
-            elif ch != "\n":
-                cur.append(_lit(tok))
-        elif kind == "param":
-            i = _skip(text, i, _BRACES_RE, "{")
-            cur.append(OPAQUE)
-        elif kind == "subst":
-            if tok == "`":
-                end = text.find("`", i)
-                i = n if end < 0 else end + 1
+class _Word:
+    """The pieces of the word being read and, when a ``${x:-word}``
+    default could become its value, a second reading with every such
+    default in place."""
+
+    __slots__ = ("pieces", "alt")
+
+    def __init__(self) -> None:
+        self.pieces: list[str] = []
+        self.alt: list[str] | None = None
+
+    def add(self, piece: str, alt: str | None = None) -> None:
+        self.pieces.append(piece)
+        if self.alt is not None:
+            self.alt.append(piece if alt is None else alt)
+        elif alt is not None and alt != piece:
+            self.alt = [*self.pieces[:-1], alt]
+
+    def last_char(self) -> str:
+        for p in reversed(self.pieces):
+            if p:
+                return p[-1]
+        return ""
+
+    def text(self) -> str:
+        return "".join(self.pieces)
+
+    def alt_text(self) -> str:
+        return "".join(self.alt if self.alt is not None else self.pieces)
+
+
+class _Lexer:
+    """Reads a command as bash's parser would, far enough to know which
+    text is a word and which is quoted, commented out or a here-document
+    body. ``sure`` turns False when something is left open at the end
+    (a quote, ``${``, ``$(``, a backtick, a here-document, a group) or
+    nests too deep: bash would then read the command differently or not
+    at all, and the words found here may hide part of it."""
+
+    def __init__(self, text: str, out: list[str], level: int = 0,
+                 dotglob: bool = False) -> None:
+        self.text = text
+        self.n = len(text)
+        self.out = out
+        self.level = level
+        self.dotglob = dotglob
+        self.sure = True
+        self.pending: list[tuple[str, bool, bool]] = []
+
+    # -- helpers --------------------------------------------------------
+
+    def _enter(self) -> None:
+        self.level += 1
+        if self.level > _MAX_NEST:
+            raise _TooDeep
+
+    def _emit(self, word: _Word) -> None:
+        text, alt = word.text(), word.alt_text()
+        for w in (text,) if alt == text else (text, alt):
+            if _WORTH_RE.search(w):
+                self.out.append(w)
+
+    def _sub(self, text: str) -> _Lexer:
+        if self.level + 1 > _MAX_NEST:
+            raise _TooDeep
+        return _Lexer(text, self.out, self.level + 1, self.dotglob)
+
+    def _body_read(self, sub: _Lexer) -> None:
+        """Bash parses a backtick, ``$[...]`` or here-document body on
+        its own: a body left open hides at most its own text, so the read
+        stays sure unless that text could name ``.config`` or
+        ``.local``."""
+        if not sub.sure and _mentions(sub.text, self.dotglob):
+            self.sure = False
+
+    # -- commands -------------------------------------------------------
+
+    def commands(self, i: int = 0, term: bool = False,
+                 arith: bool = False) -> int:
+        """Read commands from *i*. With *term*, stop after the ``)`` that
+        closes the group (``$(...)``, an arithmetic or extended glob
+        group); *arith* reads no comments, here-documents or ``case``."""
+        text, n = self.text, self.n
+        cur = _Word()
+        depth = case = 0
+        start = True
+
+        def flush() -> None:
+            nonlocal cur, case, start
+            if not cur.pieces:
+                return
+            w = cur.text()
+            if start and not arith:
+                if w == "case":
+                    case += 1
+                elif w == "esac" and case:
+                    case -= 1
+            start = w in _KEEPS_COMMAND_START
+            self._emit(cur)
+            cur = _Word()
+
+        while i < n:
+            m = _CMD_RE.match(text, i)
+            kind, tok, i = m.lastgroup, m.group(), m.end()
+            if kind == "plain":
+                cur.add(tok)
+            elif kind == "blank":
+                flush()
+            elif kind == "nl":
+                flush()
+                start = True
+                if self.pending and not arith:
+                    i = self._heredoc_bodies(i)
+            elif kind == "sep":
+                flush()
+                start = True
+            elif kind in ("redir", "hstr"):
+                flush()
+            elif kind == "heredoc":
+                flush()
+                if not arith:
+                    i = self._delimiter(i, tok == "<<-")
+            elif kind == "sq":
+                if len(tok) < 2 or not tok.endswith("'"):
+                    self.sure = False
+                    cur.add(_lit(tok[1:]))
+                else:
+                    cur.add(_lit(tok[1:-1]))
+            elif kind == "ansi":
+                closed = len(tok) > 2 and tok.endswith("'") and (
+                    _ANSI_CLOSED_RE.fullmatch(tok) is not None)
+                if not closed:
+                    self.sure = False
+                body = tok[2:-1] if closed else tok[2:]
+                cur.add(_lit(_ANSI_ESCAPE_RE.sub(_ansi_char, body)))
+            elif kind == "dq":
+                cur.add("")
+                i = self._double_quoted(i, cur)
+            elif kind == "esc":
+                if len(tok) == 2 and tok[1] != "\n":
+                    cur.add(_lit(tok[1]))
+            elif kind == "param":
+                i = self._param(i, cur, False)
+            elif kind == "subst":
+                i = self._comsub(i)
+                cur.add(OPAQUE)
+            elif kind == "tick":
+                i = self._backtick(i, False)
+                cur.add(OPAQUE)
+            elif kind == "var":
+                cur.add(OPAQUE)
+            elif kind == "oldarith":
+                i = self._old_arith(i)
+                cur.add(OPAQUE)
+            elif kind == "dollar":
+                cur.add("$")
+            elif kind == "open":
+                if cur.pieces and cur.last_char() != "=":
+                    # an extended glob (``@(a|b)``) or another shell's
+                    # group, glued to the word: kept in it as typed
+                    begin = i - 1
+                    self._enter()
+                    i = self.commands(i, True, True)
+                    self.level -= 1
+                    cur.add(text[begin:i])
+                    continue
+                flush()
+                start = True
+                if text.startswith("(", i) and not arith:
+                    # ``((...))``: arithmetic, where ``<<`` is a shift
+                    self._enter()
+                    i = self.commands(i, True, True)
+                    self.level -= 1
+                    continue
+                depth += 1
+            elif kind == "close":
+                flush()
+                start = True
+                if term and depth == 0 and (arith or case == 0):
+                    return i
+                if depth:
+                    depth -= 1
+            else:  # "#"
+                if cur.pieces or arith:
+                    cur.add("#")
+                else:
+                    end = text.find("\n", i)
+                    i = n if end < 0 else end
+        flush()
+        if term:
+            self.sure = False
+        return n
+
+    # -- quotes and expansions -----------------------------------------
+
+    def _double_quoted(self, i: int, cur: _Word,
+                       pattern: re.Pattern = _DQ_RE) -> int:
+        """Read ``"..."`` from *i* (after the quote) into *cur*; the index
+        after the closing quote. With :data:`_HEREDOC_RE`, a whole
+        here-document body (``"`` is plain)."""
+        text, n = self.text, self.n
+        in_dq = pattern is _DQ_RE
+        while i < n:
+            m = pattern.match(text, i)
+            kind, tok, i = m.lastgroup, m.group(), m.end()
+            if kind == "run":
+                cur.add(_lit(tok))
+            elif kind == "end":
+                return i
+            elif kind == "esc":
+                ch = tok[1:]
+                if ch in ("$", "`", "\\") or (ch == '"' and in_dq):
+                    cur.add(_lit(ch))
+                elif ch != "\n":
+                    cur.add(_lit(tok))
+            elif kind == "param":
+                i = self._param(i, cur, True)
+            elif kind == "subst":
+                i = self._comsub(i)
+                cur.add(OPAQUE)
+            elif kind == "tick":
+                i = self._backtick(i, in_dq)
+                cur.add(OPAQUE)
+            elif kind == "var":
+                cur.add(OPAQUE)
+            elif kind == "oldarith":
+                i = self._old_arith(i)
+                cur.add(OPAQUE)
             else:
-                i = _skip(text, i, _PARENS_RE, "(")
-            cur.append(OPAQUE)
-        elif kind == "var":
-            cur.append(OPAQUE)
-        else:
-            cur.append("$")
-    return n
+                cur.add("$")
+        if in_dq:
+            self.sure = False
+        return n
+
+    def _param(self, i: int, cur: _Word, quoted: bool) -> int:
+        """Read ``${...}`` from *i* (after ``${``); one :data:`OPAQUE` in
+        *cur*. Unquoted, a ``${x:-word}`` default may become the value:
+        the word's second reading takes it (see :class:`_Word`). A
+        command substitution inside is read as more words."""
+        text, n = self.text, self.n
+        self._enter()
+        head = _DEFAULT_HEAD_RE.match(text, i)
+        inline = not quoted and head is not None
+        word = _Word()
+        if head is not None:
+            i = head.end()
+        while i < n:
+            m = _PARAM_RE.match(text, i)
+            kind, tok, i = m.lastgroup, m.group(), m.end()
+            if kind == "close":
+                self.level -= 1
+                cur.add(OPAQUE, word.alt_text() if inline else None)
+                return i
+            if kind == "run":
+                word.add(tok)
+            elif kind == "esc":
+                if len(tok) == 2:
+                    word.add(_lit(tok[1]))
+            elif kind == "ansi" and quoted:
+                # inside double quotes ``$'`` is a ``$`` and a quote
+                word.add("$")
+                i -= len(tok) - 1
+            elif kind == "ansi":
+                closed = len(tok) > 2 and tok.endswith("'") and (
+                    _ANSI_CLOSED_RE.fullmatch(tok) is not None)
+                if not closed:
+                    self.sure = False
+                body = tok[2:-1] if closed else tok[2:]
+                word.add(_lit(_ANSI_ESCAPE_RE.sub(_ansi_char, body)))
+            elif kind == "sq":
+                closed = len(tok) > 1 and tok.endswith("'")
+                if not closed:
+                    self.sure = False
+                word.add(_lit(tok[1:-1] if closed else tok[1:]))
+            elif kind == "dq":
+                i = self._double_quoted(i, word)
+            elif kind == "param":
+                i = self._param(i, word, quoted)
+            elif kind == "subst":
+                i = self._comsub(i)
+                word.add(OPAQUE)
+            elif kind == "tick":
+                i = self._backtick(i, quoted)
+                word.add(OPAQUE)
+            elif kind == "var":
+                word.add(OPAQUE)
+            elif kind == "oldarith":
+                i = self._old_arith(i)
+                word.add(OPAQUE)
+            else:
+                word.add("$")
+        self.sure = False
+        self.level -= 1
+        cur.add(OPAQUE)
+        return n
+
+    def _comsub(self, i: int) -> int:
+        """Read ``$(...)`` (or ``$((...))``) from *i* (after ``$(``): its
+        commands are more words. The index after the closing ``)``."""
+        self._enter()
+        i = self.commands(i, True, self.text.startswith("(", i))
+        self.level -= 1
+        return i
+
+    def _backtick(self, i: int, quoted: bool) -> int:
+        """Read a backtick substitution from *i* (after the backtick): the
+        body runs to the next backtick a backslash does not escape, and,
+        its escapes taken out, is read as commands."""
+        end = _TICK_BODY_RE.match(self.text, i).end()
+        body = self.text[i:end]
+        if end >= self.n:
+            self.sure = False
+        unescape = _TICK_UNESCAPE_DQ if quoted else _TICK_UNESCAPE
+        sub = self._sub(unescape.sub(r"\1", body))
+        sub.commands()
+        self._body_read(sub)
+        return min(end + 1, self.n)
+
+    def _old_arith(self, i: int) -> int:
+        """``$[...]``: read to the matching ``]`` as arithmetic."""
+        text, n = self.text, self.n
+        depth = 1
+        j = i
+        while j < n:
+            c = text[j]
+            if c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        if j >= n:
+            self.sure = False
+        sub = self._sub(text[i:j])
+        sub.commands(0, False, True)
+        self._body_read(sub)
+        return min(j + 1, n)
+
+    # -- here-documents -------------------------------------------------
+
+    def _delimiter(self, i: int, strip: bool) -> int:
+        """Read a here-document's delimiter word from *i*; its body is
+        read at the next line end."""
+        text, n = self.text, self.n
+        while i < n and text[i] in " \t":
+            i += 1
+        parts: list[str] = []
+        quoted = False
+        while i < n and text[i] not in " \t\n;&|<>()":
+            c = text[i]
+            if c == "'":
+                end = text.find("'", i + 1)
+                if end < 0:
+                    self.sure = False
+                    end = n
+                parts.append(text[i + 1:end])
+                quoted, i = True, end + 1
+            elif c == '"' or text.startswith('$"', i):
+                i += 2 if c == "$" else 1
+                while i < n and text[i] != '"':
+                    if text[i] == "\\" and i + 1 < n:
+                        i += 1
+                    parts.append(text[i])
+                    i += 1
+                if i >= n:
+                    self.sure = False
+                quoted, i = True, i + 1
+            elif c == "\\":
+                parts.append(text[i + 1:i + 2])
+                quoted, i = True, i + 2
+            elif text.startswith("$'", i):
+                m = _ANSI_TOKEN_RE.match(text, i)
+                tok = m.group()
+                if _ANSI_CLOSED_RE.fullmatch(tok) is None:
+                    self.sure = False
+                parts.append(_ANSI_ESCAPE_RE.sub(_ansi_char, tok[2:-1]))
+                quoted, i = True, m.end()
+            else:
+                parts.append(c)
+                i += 1
+        if not parts:
+            # ``<<`` with no word: a syntax error
+            self.sure = False
+        self.pending.append(("".join(parts), strip, quoted))
+        return min(i, n)
+
+    def _heredoc_bodies(self, i: int) -> int:
+        """Skip the bodies of the here-documents opened on the line just
+        ended (*i* is after its newline). An unquoted body's expansions
+        are read; one with no closing line is unsure."""
+        text, n = self.text, self.n
+        pending, self.pending = self.pending, []
+        for delim, strip, quoted in pending:
+            begin = i
+            while True:
+                if i >= n:
+                    self.sure = False
+                    body_end = n
+                    break
+                line_start = i
+                logical: list[str] = []
+                while True:
+                    end = text.find("\n", i)
+                    end = n if end < 0 else end
+                    line = text[i:end]
+                    i = end + 1
+                    if quoted or end >= n:
+                        logical.append(line)
+                        break
+                    tail = len(line) - len(line.rstrip("\\"))
+                    if tail % 2 == 0:
+                        logical.append(line)
+                        break
+                    logical.append(line[:-1])
+                joined = "".join(logical)
+                if (joined.lstrip("\t") if strip else joined) == delim:
+                    body_end = line_start
+                    break
+            i = min(i, n)
+            if not quoted:
+                sub = self._sub(text[begin:body_end])
+                sub._double_quoted(0, _Word(), _HEREDOC_RE)
+                self._body_read(sub)
+        return i
+
+
+_ANSI_TOKEN_RE = re.compile(r"\$'(?:[^'\\]|\\[\s\S])*'?")
+_ANSI_CLOSED_RE = re.compile(r"\$'(?:[^'\\]|\\[\s\S])*'")
 
 
 #: The characters that make a word worth expanding: a glob, a brace, a
@@ -162,67 +599,32 @@ def _double_quoted(text: str, i: int, cur: list[str]) -> int:
 _WORTH_RE = re.compile("[{\\[*?(]|[.%s][.%s]" % (_QUOTED_DOT, _QUOTED_DOT))
 
 
+def lex(command: str, dotglob: bool = False) -> tuple[list[str], bool]:
+    """The words of *command* as bash splits them (see :func:`words`),
+    and whether the read is sure: False when a quote, expansion, group or
+    here-document is left open at the end, or nesting runs too deep (the
+    words may then miss part of the command)."""
+    out: list[str] = []
+    lexer = _Lexer(command, out, 0, dotglob)
+    try:
+        lexer.commands()
+    except _TooDeep:
+        return out, False
+    return out, lexer.sure
+
+
 def words(command: str) -> list[str]:
     """The words of *command* as bash splits them, quotes applied: a
     quoted or escaped special character moved out of the way (see
-    :data:`_SPECIAL`), every expansion one :data:`OPAQUE` character. A
-    command substitution ends the word before it and its text is read
-    as more words. ``(`` glued to a word (an extended glob or another
-    shell's group) stays in the word. Only words holding a glob, brace,
-    group or ``..`` are returned: nothing else can be expanded here."""
-    out: list[str] = []
-    cur: list[str] = []
-
-    def flush() -> None:
-        if cur:
-            w = "".join(cur)
-            if _WORTH_RE.search(w):
-                out.append(w)
-            cur.clear()
-
-    i, n = 0, len(command)
-    while i < n:
-        m = _LEX_RE.match(command, i)
-        kind, tok, i = m.lastgroup, m.group(), m.end()
-        if kind == "plain":
-            cur.append(tok)
-        elif kind == "sep":
-            flush()
-        elif kind == "sq":
-            cur.append(_lit(tok[1:-1] if len(tok) > 1 and tok.endswith("'")
-                            else tok[1:]))
-        elif kind == "ansi":
-            body = tok[2:-1] if len(tok) > 2 and tok.endswith("'") else tok[2:]
-            cur.append(_lit(_ANSI_ESCAPE_RE.sub(_ansi_char, body)))
-        elif kind == "dq":
-            cur.append("")
-            i = _double_quoted(command, i, cur)
-        elif kind == "esc":
-            if len(tok) == 2 and tok[1] != "\n":
-                cur.append(_lit(tok[1]))
-        elif kind == "param":
-            i = _skip(command, i, _BRACES_RE, "{")
-            cur.append(OPAQUE)
-        elif kind == "subst":
-            # ``$(`` glues an unknown value to the word before it; a
-            # backtick opens or closes, so it only ends the word
-            if tok != "`":
-                cur.append(OPAQUE)
-            flush()
-        elif kind == "var":
-            cur.append(OPAQUE)
-        elif kind == "dollar":
-            cur.append("$")
-        else:  # "("
-            last = cur[-1][-1:] if cur and cur[-1] else ""
-            if cur and last != "=":
-                end = _skip(command, i, _PARENS_RE, "(")
-                cur.append(command[i - 1:end])
-                i = end
-            else:
-                flush()
-    flush()
-    return out
+    :data:`_SPECIAL`), every expansion one :data:`OPAQUE` character.
+    Commands in a substitution (``$(...)``, a backtick body, an unquoted
+    here-document's expansions) are read as more words; comments and
+    here-document text are not words. ``(`` glued to a word (an extended
+    glob or another shell's group) stays in the word. An unquoted
+    ``${x:-word}`` gives the word a second reading with the default in
+    place. Only words holding a glob, brace, group or ``..`` are
+    returned: nothing else can be expanded here."""
+    return lex(command)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -700,6 +1102,18 @@ def may_name_start(word: str, dotglob: bool) -> bool:
     return dot >= 0 and _NAME_AFTER_DOT_RE.match(word, dot + 1) is not None
 
 
+def _mentions(text: str, dotglob: bool) -> bool:
+    """Whether any part of *text* (``$'...'`` decoded) could name
+    ``.config`` or ``.local``: :func:`may_name_start` on the whole text."""
+    if may_name_start(text, dotglob):
+        return True
+    if "$'" not in text:
+        return False
+    decoded = _ANSI_TOKEN_RE.sub(
+        lambda m: _ANSI_ESCAPE_RE.sub(_ansi_char, m.group()[2:]), text)
+    return may_name_start(decoded, dotglob)
+
+
 #: At most this many readings of one path at once (each glob that may be
 #: ``.`` or ``..`` triples them); beyond it the path is :data:`UNSURE`.
 _MAX_READINGS = 27
@@ -792,17 +1206,26 @@ def word_reach(word: str, dotglob: bool = False) -> str:
 _DOTGLOB_RE = re.compile(r"dotglob|GLOBIGNORE")
 
 
-def command_reaches(*copies: str) -> bool:
-    """Whether any word of any copy of a command (as typed, with quotes
-    taken out) can reach aipager's folders, or cannot be told apart from
-    one that does (:func:`word_reach`)."""
+def command_reaches(command: str, *more: str) -> bool:
+    """Whether any word of *command* (as typed) or of another copy of it
+    (*more*: with quotes taken out) can reach aipager's folders, or
+    cannot be told apart from one that does (:func:`word_reach`).
+
+    *command* is read as bash would read it; when that read is not sure
+    (something left open, see :func:`lex`), its words may hide part of
+    the command, so it counts as reaching whenever any copy could name
+    ``.config`` or ``.local`` at all. The other copies only add words."""
+    copies = (command, *more)
     dotglob = any(_DOTGLOB_RE.search(c) for c in copies)
     seen: set[str] = set()
     # a command with no quotes reads the same both ways: lex it once
-    for copy in dict.fromkeys(copies):
+    for k, copy in enumerate(dict.fromkeys(copies)):
         if not _WORTH_RE.search(copy):
             continue
-        for w in words(copy):
+        found, sure = lex(copy, dotglob)
+        if k == 0 and not sure and any(_mentions(c, dotglob) for c in copies):
+            return True
+        for w in found:
             if w in seen:
                 continue
             seen.add(w)

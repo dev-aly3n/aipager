@@ -80,7 +80,27 @@ def test_a_line_continued_inside_a_word_is_joined():
 
 def test_a_variable_or_substitution_is_opaque():
     assert _word("~/.config/$X/*").count(g.OPAQUE) == 1
-    assert _word("~/.config/${X:-a}/*").count(g.OPAQUE) == 1
+    assert _word("~/.config/${X#a}/*").count(g.OPAQUE) == 1
+    assert _word('"${X:-a}"/*').count(g.OPAQUE) == 1
+
+
+def test_a_default_value_is_a_second_reading():
+    # unquoted, ${x:-word} may become word, and that is globbed
+    assert g.words("~/.config/${X:-a}/*") == ["~/.config/" + g.OPAQUE + "/*",
+                                              "~/.config/a/*"]
+    assert g.command_reaches("echo ${x:-~/.config/[a]ipager/aipager.yaml}")
+    assert g.command_reaches("cat ~/.config/${x:=[a]ipager}/aipager.yaml")
+    assert g.command_reaches("cat ~/.config/${x:-${y:-[a]ipager}}/aipager.yaml")
+    # quoted, it is not globbed; a pattern is never a value
+    assert not g.command_reaches('echo "${x:-~/.config/[a]ipager/aipager.yaml}"')
+    assert not g.command_reaches("echo ${x#~/.config/[a]ipager/aipager.yaml}")
+
+
+def test_commands_inside_an_expansion_are_read():
+    assert g.command_reaches("echo ${x:-$(cat ~/.config/[a]ipager/x)}")
+    assert g.command_reaches('echo "${x:-`cat ~/.config/[a]ipager/x`}"')
+    assert g.command_reaches("echo $(( $(cat ~/.config/[a]ipager/x | wc -l) ))")
+    assert g.command_reaches("cat <<E\n$(cat ~/.config/[a]ipager/x)\nE")
 
 
 def test_a_command_substitution_is_read_as_more_words():
@@ -88,6 +108,9 @@ def test_a_command_substitution_is_read_as_more_words():
     assert g.command_reaches("echo `cat ~/.config/[a]ipager/x`")
     # the closing backtick does not glue an unknown value to the word
     assert g.command_reaches("echo `ls ~/.config/[a]ipager`")
+    # a substitution inside a word stays part of it
+    assert g.command_reaches("cat ~/.config/`echo x`/../aipager/x")
+    assert g.command_reaches("cat ~/.config/$(echo x)/../aipager/x")
 
 
 def test_a_group_glued_to_a_word_stays_in_it():
@@ -95,6 +118,174 @@ def test_a_group_glued_to_a_word_stays_in_it():
     assert _reach("~/.config/@(aipager|x)/y") == g.REACH
     # an array assignment's ( splits words
     assert g.words("a=(~/.config/nvim/*.lua)") == ["~/.config/nvim/*.lua"]
+
+
+# ----- where bash's parser ends things (checked in bash 5.2) -----
+
+T = "cat ~/.config/[a]ipager/aipager.yaml"
+
+
+@pytest.mark.parametrize("cmd", [
+    # review-5 rev-iter5-001: a bare { inside ${...} does not nest
+    "x=a; echo ${x#{} ; cat ~/.config/[a]ipager/aipager.yaml",
+    "echo ${#{} ; cat ~/.config/[a]ipager/aipager.yaml",
+    'echo "${x/{/}" ; cat ~/.local/share/[a]ipager/x',
+    "echo ${x:-{} && cat ~/.config/aip[a\\]]ger/aipager.yaml",
+    "echo hi # \"it's\" ${\ncat ~/.config/[[:a]ipager/aipager.yaml",
+])
+def test_the_review_5_commands_are_blocked(cmd):
+    assert g.command_reaches(cmd)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_REASON
+
+
+@pytest.mark.parametrize("pre", [
+    "echo ${x#'}'} ; ", "echo \"${x#'}'}\" ; ", 'echo ${x:-"}"} ; ',
+    "echo ${x:-$(echo })} ; ", "echo ${x:-`echo }`} ; ",
+    "echo ${x:-${y:-}}} ; ", "echo ${x/\\}/} ; ", "echo ${x:-$'\\''} ; ",
+])
+def test_a_dollar_brace_ends_where_bash_ends_it(pre):
+    words, sure = g.lex(pre + T)
+    assert sure
+    assert g.command_reaches(pre + T)
+
+
+def test_only_a_dollar_brace_nests():
+    assert g.lex("echo ${x#{}")[1]
+    assert g.lex("echo ${x:-${y}}")[1]
+    assert not g.lex("echo ${x:-${y}")[1]
+
+
+@pytest.mark.parametrize("cmd", [
+    "echo ${x", "echo $(x", "echo `x", "echo 'x", 'echo "x', "echo $'x",
+    "echo $'x\\'", "cat <<E\nx", "cat <<\nx", "cat << ; ls", "echo @(x", "echo $((1",
+    "echo $[1", "echo ${x:-'}", "echo \"${x:-'}\"", "cat <<'E\nx\nE",
+    # in double quotes $' is a $ and a quote
+    "echo \"${x:-$'\\''}\"",
+])
+def test_something_left_open_makes_the_read_unsure(cmd):
+    assert not g.lex(cmd)[1]
+
+
+@pytest.mark.parametrize("cmd", [
+    "echo ${x}", "echo $(x)", "echo `x`", "echo 'x'", 'echo "x"',
+    "echo $'x\\''", "cat <<E\nx\nE", "echo @(x)", "echo $((1))", "echo $[1]",
+    "cat <<E\nx\nE\n", "echo a # 'b", "cat <<<'x'",
+])
+def test_a_closed_command_reads_sure(cmd):
+    assert g.lex(cmd)[1]
+
+
+def test_an_unsure_read_refuses_a_command_that_could_name_a_folder():
+    assert g.command_reaches("echo ${x ; cat ~/.config/nvim/init.lua")
+    assert g.command_reaches("echo $'\\x2econfig' ${x")
+    assert not g.command_reaches("echo ${x ; cat ~/projects/a/*.py")
+    # only the first copy (as typed) is read for sureness: grep for ${
+    assert not g.command_reaches("grep -n '${' ~/.config/nvim/*.lua",
+                                 "grep -n ${ ~/.config/nvim/*.lua")
+
+
+def test_nesting_too_deep_is_unsure():
+    assert not g.lex("echo " + "$(" * 200 + "x" + ")" * 200)[1]
+    assert g.lex("echo " + "$(" * 20 + "x" + ")" * 20)[1]
+    assert g.command_reaches("echo " + "\"$(" * 200 + " ~/.config/x")
+
+
+def test_a_comment_starts_only_where_a_word_starts():
+    assert g.words("echo # ~/.config/[a]ipager/x") == []
+    assert g.command_reaches("echo # it's\n" + T + " # '")
+    assert g.command_reaches("echo a;#b'\n" + T)
+    # mid-word # is plain, so the quote after it is real
+    assert not g.command_reaches("echo a#b'c ; " + T + " '")
+    assert not g.command_reaches("echo $x#'\n" + T + "'")
+    assert not g.command_reaches("echo ${x}#'\n" + T + "'")
+    # a line continued before # still starts no word
+    assert not g.command_reaches("echo a\\\n#'\n" + T + "'")
+    assert g.command_reaches("echo \\\n# x\n" + T)
+
+
+def test_a_here_document_body_is_not_words():
+    assert g.command_reaches("cat <<EOF\nit's\nEOF\n" + T + " # '")
+    assert g.command_reaches("cat <<'EOF'\nit's\nEOF\n" + T)
+    assert g.command_reaches("cat <<-EOF\n\tit's\n\tEOF\n" + T)
+    assert g.lex("cat <<-EOF\n\tx\n\tEOF\nls")[1]
+    assert g.command_reaches("cat <<A <<B\n'\nA\n\"\nB\n" + T)
+    assert g.command_reaches("cat <<EOF ; " + T + "\nbody\nEOF")
+    assert g.command_reaches("cat <<\"E\"OF\n'\nEOF\n" + T)
+    assert g.command_reaches("cat <<E\\OF\n'\nEOF\n" + T)
+    assert g.command_reaches("cat <<$'EOF'\n'\nEOF\n" + T)
+    # text inside the body is never a path
+    assert not g.command_reaches("cat <<EOF\n" + T + "\nEOF")
+    # a quoted delimiter keeps the body's $( ) as text
+    assert not g.command_reaches("cat <<'EOF'\n$(" + T + ")\nEOF")
+    # the closing line must match exactly; one that never comes is unsure
+    assert not g.lex("cat <<EOF\nx\nEOF \n")[1]
+    assert g.command_reaches("cat <<EOF\nx\nEOF \n" + T)
+    # an unquoted body joins a continued line before comparing
+    assert g.lex("cat <<E\na\\\nE\nb\nE\n")[1]
+    assert not g.lex("cat <<E\na\\\nE\n")[1]
+    assert g.lex("cat <<'E'\na\\\nE\n")[1]
+
+
+def test_a_here_string_is_not_a_here_document():
+    assert g.command_reaches("cat <<<'x' ; " + T)
+    assert g.lex("cat <<<x\n" + T)[1]
+
+
+@pytest.mark.parametrize("cmd", [
+    "(( x = 1 << 2 ))\n" + T + "\n2",
+    "echo $((1<<2)); " + T + "\n2",
+    "echo $((1<<2))\n" + T + "\n2",
+    "echo $[1<<2]; " + T + "\n2",
+    "echo $[1<<2]\n" + T + "\n2",
+    "for ((i=0;i<1;i++)); do " + T + "; done",
+    "echo $(( (1) )) ; " + T,
+])
+def test_a_shift_in_arithmetic_is_not_a_here_document(cmd):
+    assert g.lex(cmd)[1]
+    assert g.command_reaches(cmd)
+
+
+@pytest.mark.parametrize("cmd", [
+    "echo $(case a in a) echo \"it's\";; esac) ; " + T + " ; echo \"'\"",
+    "echo \"$(case a in a) echo \"it's\";; esac)\" ; " + T + " ; echo \"'\"",
+    "echo $(case a in (a) echo;; esac) ; " + T,
+    "echo $(echo # )\n) ; " + T,
+    "echo $(echo ')') ; " + T,
+    'echo "$(echo ")")" ; ' + T,
+    "echo $(cat <<E\n)\nE\n) ; " + T,
+])
+def test_a_command_substitution_ends_where_bash_ends_it(cmd):
+    assert g.lex(cmd)[1]
+    assert g.command_reaches(cmd)
+
+
+def test_quotes_do_not_count_in_a_backtick_body():
+    # bash ends `echo '` at the second backtick
+    cmd = "echo `echo '`' ; " + T
+    assert not g.lex(cmd)[1]
+    assert g.command_reaches("echo `echo '` ; " + T)
+    assert g.lex("echo `echo '` ; echo '`'")[1]
+    assert g.command_reaches("echo `echo \\`` ; " + T)
+    assert g.command_reaches('echo "`echo \\"`" ; ' + T)
+
+
+def test_a_backtick_body_loses_its_escapes():
+    # \" becomes " only inside double quotes (checked in bash 5.2)
+    body = 'echo \\"; cat ~/.config/[a]ipager/x; echo \\"'
+    assert g.command_reaches("echo `" + body + "`")
+    assert not g.command_reaches('echo "`' + body + '`"')
+
+
+def test_a_body_left_open_counts_only_when_it_could_name_a_folder():
+    # bash parses a backtick body on its own: left open, it hides only
+    # its own text
+    assert not g.command_reaches("echo `echo '` ; cat ~/.config/nvim/*.lua")
+    assert g.command_reaches("echo `echo ' ~/.config/[a]ipager/x` ; ls")
+    assert not g.command_reaches("cat <<E\n`echo '`\nE\nls ~/.config/nvim/*")
+    assert g.command_reaches("cat <<E\n`echo ' ~/.config/[a]ipager/x`\nE\nls")
+    assert g.command_reaches("echo $[ ' ~/.config/[a]ipager/x ] ; ls")
+    # no comments in arithmetic: the quote after # still counts
+    assert g.command_reaches("echo $[ #' ~/.config/[a]ipager/x ] ; ls")
 
 
 # ----- brace expansion (results as bash 5.2 gives them) -----
@@ -443,3 +634,4 @@ def test_the_matcher_is_linear(prefix, unit):
     small, large = best(25_000), best(100_000)
     assert large < 0.5
     assert large < max(8 * small, 0.02)
+
