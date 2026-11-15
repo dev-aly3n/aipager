@@ -541,7 +541,7 @@ _ANSI_C_SIMPLE = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f",
 _EMPTY_SUBSTITUTION_RE = re.compile(r"`\s*`|\$\(\s*\)")
 #: One whole shell word (a match takes the whole word at once, so each
 #: word is read once).
-_SHELL_WORD_RE = re.compile(r"[^\s;&|()<>`]+")
+_SHELL_WORD_RE = re.compile(r"[^\x20\t\n;&|()<>`]+")
 
 
 def _keeps_its_place(part: str) -> bool:

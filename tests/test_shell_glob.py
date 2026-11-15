@@ -730,3 +730,15 @@ def test_many_costly_words_stay_fast(unit, tail):
     if "aipager" in tail:
         assert verdict is not None
 
+
+
+# ----- a reading may only add words (review-6, test-report-6; bash 5.2) -----
+
+@pytest.mark.parametrize("blank", [
+    "\r", "\v", "\f", "\x1c", "\x1f", "\x85", "\xa0", "\u2003", "\u3000"])
+def test_only_a_space_or_tab_is_a_blank(blank):
+    """rev-iter6-001: bash reads ``x<char>#*`` as one word, so the ``#``
+    starts no comment."""
+    assert g.words("ls x" + blank + "#*") == ["x" + blank + "#*"]
+    assert g.lex("echo x" + blank + "#' ; ls")[1] is False
+    assert g.command_reaches("echo x" + blank + "# ; " + T)

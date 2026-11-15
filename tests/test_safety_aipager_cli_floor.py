@@ -407,6 +407,9 @@ def test_the_nearest_neighbours_stay_allowed(cmd):
 #: match: each fails when that step is gone.
 NORMALISED = [
     "cat ~/.config//aipager/aipager.yaml",
+    # a no-break space is a word character to bash (only a space or a
+    # tab is a blank), so x\u00a0y/.. is one folder up
+    "cat ~/.config/x\u00a0y/../aipager/aipager.yaml",
     "sed -i s/user/owner/ ~/.config//aipager/aipager.yaml",
     "cat ~/.config/./aipager/aipager.yaml",
     "cat ~/.local/share/././aipager/x",

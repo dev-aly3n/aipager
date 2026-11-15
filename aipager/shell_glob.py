@@ -87,12 +87,15 @@ def _ansi_char(m: re.Match) -> str:
 #: Tokens where commands are read (the top level, ``$(...)``, a backtick
 #: body, an arithmetic or extended glob group). ``#`` starts a comment
 #: only where a word starts; ``<<`` is a here-document, ``<<<`` is not.
+#: Bash's blanks are a space and a tab only: ``\r``, ``\v``, ``\f``,
+#: ``\x1c``-``\x1f``, ``\x85``, a no-break space and the other Unicode
+#: spaces are word characters (``echo x\r# ; cat ...`` runs the cat).
 _CMD_RE = re.compile("|".join((
-    r"(?P<plain>[^\s;&|<>()`'\"\\$#]+)",
+    r"(?P<plain>[^\x20\t\n;&|<>()`'\"\\$#]+)",
     r"(?P<nl>\n)",
     r"(?P<hstr><<<)",
     r"(?P<heredoc><<-?)",
-    r"(?P<blank>[^\S\n]+)",
+    r"(?P<blank>[\x20\t]+)",
     r"(?P<sep>[;&|]+)",
     r"(?P<redir>[<>])",
     r"(?P<sq>'[^']*'?)",
