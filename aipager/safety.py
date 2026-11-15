@@ -314,31 +314,50 @@ _AIPAGER_SUBCOMMAND = r"(?:service|config|start|setup|uninstall)\b"
 #: option stops before another ``aipager`` inside it, which starts a
 #: match of its own: so ``aipager -aipager -aipager ...`` is read once.
 _OPTIONS = r"(?:\s+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
+#: The same options on one line (a blank, never a newline, before each),
+#: for a pattern that may start on every line.
+_LINE_OPTIONS = r"(?:[\x20\t]+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
 #: aipager's own commands named above: the program in any case (a macOS
 #: disk runs ``AIPAGER``), options between it and the subcommand; also
 #: through ``python -m aipager[.cli[.__main__]]`` and a path to the
 #: binary.
 BASH_AIPAGER_CLI = (rf"(?i:\baipager)(?:\.cli(?:\.__main__)?)?{_OPTIONS}"
                     rf"\s+{_AIPAGER_SUBCOMMAND}")
-#: Where a word is run as a program: the start of a command, after
-#: ``;``, ``&``, ``|``, ``(``, a backtick or ``$(``, behind ``env``,
-#: ``nohup``, ``exec``, ``command``, ``time``, ``nice`` or ``timeout``
-#: (with their options), and an optional path.
+#: One shell word's characters: never a blank or a separator, so a run
+#: of them stays inside one command.
+_TOKEN = r"[^\s;&|()<>`]"
+#: Where a word is run as a program: the start of a command (the start,
+#: after ``;``, ``&``, ``|``, ``(``, a backtick, ``$(`` or a newline),
+#: behind ``env``, ``nohup``, ``exec``, ``command``, ``time``, ``nice``,
+#: ``timeout``, ``sudo``, ``doas``, ``builtin``, the keywords ``if``,
+#: ``then``, ``do``, ``else``, ``elif``, ``while``, ``until``, ``!`` and
+#: ``{`` (with their options), and an optional path.
+#:
+#: Cost: a match starts only at a separator, and every piece after it
+#: (blanks, wrapper words, options) stays on that one command, so the
+#: commands are read once each: linear on any input.
 _PROGRAM_POSITION = (
     r"(?:^|[;&|(`\n])[\x20\t]*"
-    r"(?:(?:env|nohup|exec|command|time|nice|timeout)"
-    r"(?:\s+-\S+|\s+\w+=\S*|\s+\d+[smhd]?)*\s+)*"
-    r"(?:[^\s;&|()<>`]*/)?")
+    r"(?:(?:env|nohup|exec|command|time|nice|timeout|sudo|doas|builtin"
+    r"|if|then|do|else|elif|while|until|!|\{)"
+    rf"(?:[\x20\t]+-{_TOKEN}+|[\x20\t]+\w+={_TOKEN}*|[\x20\t]+\d+[smhd]?)*"
+    r"[\x20\t]+)*"
+    rf"(?:{_TOKEN}*/)?")
 #: A glob in the program name that could match aipager, run with one of
 #: those subcommands (``aip*r setup``, ``/usr/local/bin/aip* config``).
 BASH_AIPAGER_GLOB_PROGRAM = (rf"{_PROGRAM_POSITION}{_AIPAGER_GLOB}"
-                             rf"{_OPTIONS}\s+{_AIPAGER_SUBCOMMAND}")
-#: ``xargs`` running aipager (or a glob that could match it) with
-#: whatever arguments arrive on its input. ``xargs grep aipager`` (a
-#: search) is not this: there the program is ``grep``.
-BASH_XARGS_AIPAGER = (r"\bxargs(?:\s+-[IndPLsEa]\s+[^\s-]\S*|\s+-\S+)*\s+"
-                      rf"(?:[^\s;&|()<>`]*/)?(?:(?i:aipager)|{_AIPAGER_GLOB})"
-                      r"(?=$|[\s;&|)])")
+                             rf"{_LINE_OPTIONS}[\x20\t]+{_AIPAGER_SUBCOMMAND}")
+#: ``xargs`` (run as a program) running aipager (or a glob that could
+#: match it) with whatever arguments arrive on its input. ``xargs grep
+#: aipager`` (a search) is not this: there the program is ``grep``. An
+#: ``xargs`` that is an option's value (``xargs -n xargs``) starts no
+#: match of its own.
+BASH_XARGS_AIPAGER = (
+    rf"{_PROGRAM_POSITION}xargs"
+    rf"(?:[\x20\t]+-[IndPLsEa][\x20\t]+[^\s;&|()<>`-]{_TOKEN}*"
+    rf"|[\x20\t]+-{_TOKEN}+)*[\x20\t]+"
+    rf"(?:{_TOKEN}*/)?(?:(?i:aipager)|{_AIPAGER_GLOB})"
+    r"(?=$|[\s;&|)])")
 #: ``(?=(X))\1`` matches X once and never tries it again (an atomic
 #: group, which Python 3.10's ``re`` lacks): a pattern that has to find
 #: a command word and then a name later on the line looks for the word
@@ -391,15 +410,17 @@ BASH_GLOB_HIDDEN_PARENT = (
 #: Changing into the home folder's ``.config``, ``.local``,
 #: ``.local/share`` or ``.local/state`` itself (then ``aipager/...`` is a
 #: relative path no other pattern sees), options allowed (``cd -P``,
-#: ``cd --``, ``pushd -n``).
+#: ``cd --``, ``pushd -n``). ``cd`` inside an option word (``-cd``) is
+#: not a start: an option run never holds another start, so a run of
+#: ``cd -cd -cd ...`` is read once.
 BASH_CD_CONFIG_PARENT = (
-    r"\b(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+[\"']?"
+    r"(?<![\w-])(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+[\"']?"
     rf"{_HOME}"
     rf"[\"']?/{_HIDDEN_PARENT}/?[\"']?(?=$|[\s;&|)])")
 #: The same in two steps: into the home folder (``cd``, ``cd ~``, ``cd
 #: $HOME``), then into ``.config`` or ``.local`` by its relative name.
 BASH_CD_HOME_THEN_PARENT = (
-    rf"\b(?:cd|pushd)(?:[\x20\t]+-[A-Za-z-]*)*(?:[\x20\t]+{_HOME}/?)?[\x20\t]*"
+    rf"(?<![\w-])(?:cd|pushd)(?:[\x20\t]+-[A-Za-z-]*)*(?:[\x20\t]+{_HOME}/?)?[\x20\t]*"
     rf"(?:&&|;|\n|\|\|)\s*"
     rf"(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+{_HIDDEN_PARENT}/?(?=$|[\s;&|)])")
 #: A command that copies, archives, links or moves the whole home
