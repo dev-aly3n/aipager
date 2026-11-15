@@ -169,6 +169,266 @@ def test_dequote():
     assert safety.dequote("a\\i'p'\"a\"ger") == "aipager"
 
 
+
+# ----- iteration 2: options, program globs, xargs, case, path spellings -----
+
+#: (command, the pattern that alone blocks it). Each entry passes when
+#: that pattern is taken out, so a mutant of the pattern piece it names
+#: fails here.
+REACH = [
+    # options between the program and the subcommand
+    ("aipager -v setup group --chat-id -1001 --member 5:me:owner --force",
+     safety.BASH_AIPAGER_CLI),
+    ("aipager --verbose setup --token-stdin --chat-id 5 --role owner --force < f",
+     safety.BASH_AIPAGER_CLI),
+    ("aipager -v config", safety.BASH_AIPAGER_CLI),
+    ("aipager --verbose uninstall -y", safety.BASH_AIPAGER_CLI),
+    ("aipager -v service stop", safety.BASH_AIPAGER_CLI),
+    ("aipager --verbose start", safety.BASH_AIPAGER_CLI),
+    ("aipager --log=debug setup", safety.BASH_AIPAGER_CLI),
+    ("python3 -m aipager -v setup", safety.BASH_AIPAGER_CLI),
+    ("python3 -m aipager.cli -v setup group", safety.BASH_AIPAGER_CLI),
+    ("python3 -m aipager.cli.__main__ --verbose config", safety.BASH_AIPAGER_CLI),
+    # the program name in any case (a macOS disk runs it)
+    ("AIPAGER setup group", safety.BASH_AIPAGER_CLI),
+    ("Aipager config", safety.BASH_AIPAGER_CLI),
+    # ANSI-C quoted subcommand (the normaliser decodes it)
+    ("aipager $'setup' group", safety.BASH_AIPAGER_CLI),
+    # a glob in the program name
+    ("aip*r setup", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("aipage? setup", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("AIP*R setup", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("/usr/local/bin/aip* config", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("~/.local/bin/aip*r setup group --chat-id -1001 --member 5:me:owner --force",
+     safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("~/.local/share/pipx/venvs/aip*/bin/aip* setup",
+     safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("env A=1 aip* setup", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("timeout 5 aip* -v setup", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("true; aipa?er start", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("true\naipa?er start", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    # xargs
+    ("echo setup group --chat-id -1001 --member 5:me:owner --force | xargs aipager",
+     safety.BASH_XARGS_AIPAGER),
+    ("xargs -n 1 aipager", safety.BASH_XARGS_AIPAGER),
+    ("xargs -0 ~/.local/bin/aipager", safety.BASH_XARGS_AIPAGER),
+    ("xargs aip*", safety.BASH_XARGS_AIPAGER),
+    # Python
+    ("python3 -c 'import sys, aipager.wizard.scope_io as s'",
+     safety.BASH_PYTHON_IMPORTS_AIPAGER),
+    ("python3 -c 'import os,aipager.scope'", safety.BASH_PYTHON_IMPORTS_AIPAGER),
+    ("python3 -c 'import os as o, aipager'", safety.BASH_PYTHON_IMPORTS_AIPAGER),
+    ("python3 -c \"import runpy; runpy.run_module('aipager.cli')\" setup",
+     safety.BASH_PYTHON_IMPORTS_AIPAGER),
+    ("python3 -c \"import runpy; runpy.run_path('/x/venvs/aipager/lib/cli.py')\"",
+     safety.BASH_PYTHON_IMPORTS_AIPAGER),
+    # a glob in the hidden folder itself or in .local's second folder
+    ("sed -i s/user/owner/ ~/.c*/aipager/aipager.yaml",
+     safety.BASH_GLOB_HIDDEN_PARENT),
+    ("cat ~/.co?fig/aipager/aipager.yaml", safety.BASH_GLOB_HIDDEN_PARENT),
+    ("cat ~/.*/aipager/aipager.yaml", safety.BASH_GLOB_HIDDEN_PARENT),
+    ("cat ~/.local/*/aipager/x", safety.BASH_GLOB_HIDDEN_PARENT),
+    ("cat ~/.local/s*/aipager/x", safety.BASH_GLOB_HIDDEN_PARENT),
+    ("cat ~/.l*/share/aipager/x", safety.BASH_GLOB_HIDDEN_PARENT),
+    ("cat ~/.c*/aipage?/aipager.yaml", safety.BASH_GLOB_HIDDEN_PARENT),
+    # cd with options, or in two steps
+    ("cd -P ~/.config", safety.BASH_CD_CONFIG_PARENT),
+    ("cd -- ~/.config", safety.BASH_CD_CONFIG_PARENT),
+    ("cd -L $HOME/.local", safety.BASH_CD_CONFIG_PARENT),
+    ("pushd -n ~/.config", safety.BASH_CD_CONFIG_PARENT),
+    ("cd ~ && cd .config", safety.BASH_CD_HOME_THEN_PARENT),
+    ("cd $HOME; cd .config", safety.BASH_CD_HOME_THEN_PARENT),
+    ("cd && cd .local/share", safety.BASH_CD_HOME_THEN_PARENT),
+    ("cd ~/ && cd -P .config/", safety.BASH_CD_HOME_THEN_PARENT),
+    # the whole .config or .local folder handed over
+    ("cp -r ~/.config /tmp/x", safety.BASH_COPY_CONFIG_PARENT),
+    ("cp -r ~/.config/ /tmp/x", safety.BASH_COPY_CONFIG_PARENT),
+    ("cp -r ~/.config/. /tmp/x", safety.BASH_COPY_CONFIG_PARENT),
+    ("rsync -a ~/.config/ /tmp/x/", safety.BASH_COPY_CONFIG_PARENT),
+    ("rsync -a /tmp/x/ ~/.config/", safety.BASH_COPY_CONFIG_PARENT),
+    ("tar cf - ~/.config", safety.BASH_COPY_CONFIG_PARENT),
+    ("tar xf x.tar -C ~/.config", safety.BASH_COPY_CONFIG_PARENT),
+    ("zip -r x.zip ~/.local", safety.BASH_COPY_CONFIG_PARENT),
+    ("ln -s ~/.config /tmp/c", safety.BASH_COPY_CONFIG_PARENT),
+    ("mv ~/.local/share /tmp/s", safety.BASH_COPY_CONFIG_PARENT),
+    ("scp -r ~/.config host:", safety.BASH_COPY_CONFIG_PARENT),
+    ('cp -r "$HOME/.config" /tmp/x', safety.BASH_COPY_CONFIG_PARENT),
+    # the folder names in any case
+    ("cat ~/.Config/aipager/aipager.yaml", safety.BASH_CONFIG_DIR),
+    ("cat ~/.local/share/AIPAGER/x", safety.BASH_SHARE_DIR),
+    ("cat ~/.local/State/aipager/x", safety.BASH_STATE_DIR),
+]
+
+#: The nearest neighbours of REACH that must stay allowed.
+NEIGHBOURS = [
+    "aipager -v status",
+    "aipager --version",
+    "aipager doctor --json",
+    "ls ~/.config",
+    "ls ~/.local/share",
+    "cp -r ~/.config/nvim /tmp/x",
+    "cp ~/.config/git/config /tmp",
+    "rsync -a ~/.config/nvim/ /tmp/x/",
+    "tar cf x.tar ~/.config/nvim",
+    "ln -s ~/.local/bin/x /tmp/y",
+    "cd ~/.config/nvim",
+    "cd project && cd .config",
+    "cd .config",
+    "xargs grep",
+    "xargs grep aipager",
+    "find . -name '*.py' | xargs grep -l aipager",
+    "git add * setup.py",
+    "ls a* setup/",
+    "grep -rn 'aip*' .",
+    "cat ~/.cache/x",
+    "cat ~/.git*/aipager",
+    "ls .*/x",
+    'python3 -c "import os, json"',
+    "python3 -c 'import runpy; runpy.run_module(\"pytest\")'",
+    "grep -rn setup_group aipager/",
+    'rg "import aipager" tests/',
+    "git grep -n run_module aipager/",
+    "git show HEAD:aipager/setup_cmd.py",
+    "curl https://example.com//x",
+    "echo $'hello\\n'",
+]
+
+
+@pytest.mark.parametrize("cmd,pat", REACH, ids=[c for c, _ in REACH])
+def test_reach_is_blocked_by_its_own_pattern(cmd, pat):
+    assert pat in DENY_BASH_PATTERNS and pat in safety.DEQUOTED_BASH_PATTERNS
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    without = tuple(p for p in DENY_BASH_PATTERNS if p != pat)
+    assert bash_violation(cmd, without) is None
+
+
+@pytest.mark.parametrize("cmd", NEIGHBOURS)
+def test_the_nearest_neighbours_stay_allowed(cmd):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+
+
+#: Spellings only the normaliser (:func:`safety.dequote`) turns into a
+#: match: each fails when that step is gone.
+NORMALISED = [
+    "cat ~/.config//aipager/aipager.yaml",
+    "sed -i s/user/owner/ ~/.config//aipager/aipager.yaml",
+    "cat ~/.config/./aipager/aipager.yaml",
+    "cat ~/.local/share/././aipager/x",
+    "cat ~/.config/$'aipager'/aipager.yaml",
+    r"cat ~/.config/$'\x61ipager'/aipager.yaml",
+    r"cat ~/.config/$'\141ipager'/aipager.yaml",
+    r"cat ~/.config/$'\u0061ipager'/aipager.yaml",
+    r"cat ~/.config/$'\U00000061ipager'/aipager.yaml",
+    "cat ~/.config/$\"aipager\"/aipager.yaml",
+    "aipager $'setup' group",
+    "aip``ager setup",
+    "aip` `ager setup",
+    "aip$()ager setup",
+    'aip$("")ager setup',
+]
+
+
+@pytest.mark.parametrize("cmd", NORMALISED)
+def test_the_normalised_copy_is_what_blocks(cmd, monkeypatch):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    monkeypatch.setattr(safety, "DEQUOTED_BASH_PATTERNS", ())
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+
+
+@pytest.mark.parametrize("raw,out", [
+    ("~/.config//aipager", "~/.config/aipager"),
+    ("~/.config///./aipager", "~/.config/aipager"),
+    ("a/./././b", "a/b"),
+    ("$'aipager'", "aipager"),
+    (r"$'\x61ipager'", "aipager"),
+    (r"$'\141ipager'", "aipager"),
+    (r"$'\u0061ipager'", "aipager"),
+    (r"$'\U00000061ipager'", "aipager"),
+    (r"$'a\tb'", "a\tb"),
+    (r"$'it\'s'", "its"),
+    ('$"aipager"', "aipager"),
+    ("aip``ager", "aipager"),
+    ("aip` `ager", "aipager"),
+    ("aip$()ager", "aipager"),
+    ("aip$( )ager", "aipager"),
+    ("echo `date`", "echo `date`"),
+    ("echo $(date)", "echo $(date)"),
+    ("https://x", "https:/x"),
+])
+def test_dequote_normalises(raw, out):
+    assert safety.dequote(raw) == out
+
+
+def test_dequote_survives_a_bad_escape():
+    assert safety.dequote(r"$'\U7fffffff'x") == "x"
+
+
+#: Inputs built to make the new patterns backtrack: each must still be
+#: decided well under a second (a hook that times out decides nothing).
+_SLOW_NEW = [
+    "aipager " + "-v " * 20_000 + "x",
+    "aipager" + " -" * 20_000,
+    "aipager.cli" + " -x" * 20_000 + " y",
+    "xargs " + "-n 1 " * 10_000 + "x",
+    "xargs" + " -a" * 20_000,
+    "xargs " * 10_000 + "x",
+    "cd " + "-P " * 20_000 + "x",
+    "cd ~ " + "&& cd ~ " * 5_000,
+    "cp " + "~/.config/x " * 5_000,
+    "cp" + " ~" * 20_000,
+    "$'" * 20_000,
+    "$'\\" * 20_000,
+    "`" * 50_000,
+    "$(" * 20_000,
+    "/./" * 20_000,
+    "/" * 50_000,
+    "a*" * 20_000 + " x",
+    "aip*" + "?" * 50_000 + " x",
+    ".c*/" * 20_000,
+    " .[" * 20_000,
+    "env " * 10_000 + "x",
+    "\n" * 20_000 + "aip* x",
+    "timeout 1 " * 10_000 + "x",
+    "python3 " + "import a, " * 10_000,
+    "python3 run_path(" + "a" * 50_000,
+    ";" * 50_000 + "x",
+    "~/.local/" + "s*/" * 10_000,
+    "{a" * 20_000,
+    "[a" * 20_000,
+    "kill " * 10_000,
+    "launchctl " * 10_000,
+    "systemctl " * 10_000,
+    "rm " * 10_000,
+    "python " * 10_000,
+    "python3 -c " + "run_path(" * 10_000,
+    "aipager" + " -aipager" * 5_000,
+    "aipager" + " -a/aipager" * 5_000,
+    "(cp " * 6_000,
+    "xargs -a" * 10_000,
+    "$'\\x" * 20_000,
+    "=." * 20_000,
+    ":.[" * 15_000,
+    "=.{" * 15_000,
+    "'." * 20_000,
+    "=.c*/[" * 8_000,
+    ".config/[" * 6_000,
+    "x; [" * 10_000,
+    "aip*[" * 10_000 + " x",
+    "xargs [" + "a" * 50_000,
+    "cd" + "\n" * 20_000,
+    "cd" + " \n" * 20_000,
+    "cd ~ " + "|| " * 10_000,
+]
+
+
+@pytest.mark.parametrize("cmd", _SLOW_NEW, ids=range(len(_SLOW_NEW)))
+def test_the_new_patterns_never_backtrack_badly(cmd):
+    import time
+    start = time.monotonic()
+    bash_violation(cmd, DENY_BASH_PATTERNS)
+    assert time.monotonic() - start < 1.0
+
+
 # ----- per role -----
 
 def _denied(snap: dict, cmd: str) -> bool:
