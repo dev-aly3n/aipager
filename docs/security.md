@@ -583,12 +583,25 @@ expression or POSIX class could match `.config` and then `aipager`, or
 `~/.config/a=b/../aipager` are all refused, while `~/.config/*.conf`,
 `~/.config/nvim*`, `~/.config/[[:lower:]]ip` (three letters can't be
 `aipager`) and `~/.config/{git/config,nvim/init.lua}` are fine. A glob
-that may be `.` or `..` (`.*`) is followed every way it can go. When the
-floor can't be sure what bash would do with a word that could name
-`.config` or `.local`, it refuses the word: an extended glob or another
-shell's group (`~/.config/@(aipager)`), a bracket bash reads in more than
-one way (`[[.a]`), a `..` after a variable, or more brace results than
-it lists (256).
+that may be `.` or `..` (`.*`) is followed every way it can go, and a
+`..` after a variable is read both as one folder up and as the variable
+itself. Words are found the way bash's parser finds them: quotes,
+comments, here-document bodies and `${...}` end where bash ends them,
+the commands inside `$(...)`, backticks and `${x:-...}` are read as more
+words, and the default of an unquoted `${x:-default}` counts as a
+possible value.
+
+When the floor can't be sure what bash would do with a word that could
+name `.config` or `.local`, it refuses the word. For example: an
+extended glob or another shell's group anywhere in a folder name
+(`~/.config/@(aipager)`, `~/.config?(x)/aipager`), a bracket bash reads
+in more than one way (`[[.a]`, `aip[a[=[=]ger`) or that holds a plain
+`[` (`[[]ipager`), more brace results than it lists (256 for one word,
+4,096 for the whole command), braces nested more than 32 deep, or a word
+with braces longer than 8 KB. When a quote, `${`, `$(`, a backtick or a
+here-document is still open at the end of the command, bash would read
+it differently or not at all, so the whole command is refused if any
+part of it could name `.config` or `.local`.
 
 Searching aipager's code by module name stays allowed
 (`grep -rn "from aipager import" .`, `rg setup_group`). The patterns
@@ -601,7 +614,8 @@ list with no `/` in it right under `~/.config`, `~/.local/share` or
 does not read what such a list holds; a list of paths there
 (`cp ~/.config/{git/config,nvim/init.lua} /tmp/x`) or a list deeper in
 (`ls ~/.config/nvim/{lua,after}`) is fine. A word the floor can't read,
-as above, is refused even when bash would not reach the folders with it.
+or a command left open, as above, is refused even when bash would not
+reach the folders with it.
 
 What still gets through: a command name, path or any other word of the
 command built from a variable, `$@` or a command substitution
