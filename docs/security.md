@@ -553,23 +553,25 @@ non-owner turn with Bash from changing who controls the machine. They
 deny `aipager setup` in any form (it grants roles), `aipager config`,
 `aipager uninstall`, `aipager service` and `aipager start`, also with
 options before the subcommand (`aipager -v setup`), in any letter case,
-as `python -m aipager.cli`, through a path to the binary, through a glob
-that could match its name (`aip*r setup`) and through `xargs aipager`;
-`systemctl`, `launchctl`, `kill`, `pkill` or `killall` naming aipager;
-a Python interpreter running code that imports aipager's own modules
-(`python3 -c "import os, aipager.scope"`, a here-document, `runpy`); any
-mention of `~/.config/aipager`, `~/.local/share/aipager` or
+as `python -m aipager` (`-maipager`), through a path to the binary,
+through a glob that could match its name (`aip*r setup`) and through
+`xargs aipager`; `systemctl`, `launchctl`, `kill`, `pkill` or `killall`
+naming aipager; a Python interpreter running code that imports aipager's
+own modules (`python3 -c "import os, aipager.scope"`, a here-document,
+`runpy`); any mention of `~/.config/aipager`, `~/.local/share/aipager` or
 `~/.local/state/aipager`, also when quotes, backslashes, `$'...'` or an
 empty substitution split the name (`"aipager"`, `aip""ager`,
-`$'\x61ipager'`, `aip$()ager`), when the path has `//` or `/./` in it,
-or when a glob or brace could match it (`~/.config/aipage?`,
-`~/.config/*`, `~/.c*/aipager`, `~/.local/*/aipager`;
-`~/.config/*.conf` and `nvim*` are fine); `cd` or `pushd` into the home
-folder's `.config`, `.local`, `.local/share` or `.local/state` itself,
-also with an option or in two steps (`cd ~ && cd .config`); and `cp`,
-`rsync`, `tar`, `zip`, `ln`, `mv` or `scp` given that whole folder
-(`cp -r ~/.config /tmp/x`; a folder inside it, such as
-`~/.config/nvim`, is fine).
+`$'\x61ipager'`, `aip$()ager`), when the path has `//`, `/./` or
+`name/..` in it (`~/.config/nvim/../aipager`), when a glob, bracket or
+brace in the folder's own name could match it (`~/.config/aipage?`,
+`~/.config/*`, `~/.config/{aipager,a.b}`), or when a glob in `.config`
+or `.local` stands right before the name `aipager` (`~/.c*/aipager`,
+`~/.local/*/aipager`; `~/.config/*.conf` and `nvim*` are fine); `cd` or
+`pushd` into the home folder's `.config`, `.local`, `.local/share` or
+`.local/state` itself, also with an option or in two steps
+(`cd ~ && cd .config`); and `cp`, `rsync`, `tar`, `zip`, `ln`, `mv` or
+`scp` given that whole folder (`cp -r ~/.config /tmp/x`; a folder inside
+it, such as `~/.config/nvim`, is fine).
 
 Searching aipager's code by module name stays allowed
 (`grep -rn "from aipager import" .`, `rg setup_group`). The patterns
@@ -586,8 +588,22 @@ symbolic link made earlier by another route, a process named by part of
 its name (`pkill -f aip`) or signalled by its number,
 `systemctl --user stop 'aip*'` (systemctl matches the glob itself), a
 copy of the aipager program under another name, and relative paths
-after reaching a folder by another route. The real boundary stays
-having no shell: the built-in `user` and `read_only` roles have none.
+after reaching a folder by another route. These are examples, not every
+route. Plain ones that also still work: a program not named above that
+copies or writes a whole folder (`unzip -d ~/.config`, `cpio`, `ditto`,
+`pax`); `.config` or `.local` itself written as a glob or in another
+letter case (`cp -r ~/.c* /tmp/x`, `cd ~/.Config`); copying the whole
+home folder (`cp -r ~ /tmp/x`, `tar cf x.tar ~`); `cd ~/.config/.`,
+`cd ~alice/.config` or `cd ~ && ls && cd .config`; a folder handed over
+through another command's words (`xargs -I{} cp -r {} ~/.config`,
+`find . -exec cp -r {} ~/.config \;`, `tar -C ~ -xf x.tar .config`);
+`xargs --max-args 1 aipager`, `xargs env aipager` and
+`parallel aipager`; a Python loader under another name
+(`from runpy import run_module as r`); and a glob program name after a
+prefix the patterns do not read (`X=1 aip* setup`,
+`timeout -s KILL 5 aip* setup`, `env -u X aip* setup`). The real
+boundary stays having no shell: the built-in `user` and `read_only`
+roles have none.
 
 **The built-in command rules.** Among the `Bash` patterns every
 non-owner Telegram turn with Bash is held to, one blocks the word `claude`: it
