@@ -1293,3 +1293,36 @@ def test_a_regex_pattern_is_never_a_path():
     assert not g.command_reaches("[[ $p =~ ^~/.config/(nvim|(fish)) ]]")
     assert g.command_reaches("[[ $p =~ ~/.config/@(aipager) ]]")
     assert g.command_reaches("[[ $p =~ ~/.config/[a]ipager ]]")
+
+
+def test_a_repeated_backtick_body_is_read_once(monkeypatch):
+    """The same backtick body adds the same words and sureness, so it is
+    read once per read; a body that may set text aside, or one read while
+    spelled text is collected, is read at each place."""
+    calls = []
+    real = g._Lexer.commands
+
+    def spy(self, *a, **k):
+        calls.append(self.text)
+        return real(self, *a, **k)
+
+    monkeypatch.setattr(g._Lexer, "commands", spy)
+    assert g.words("echo `ls *.py` " * 50) == ["*.py"]
+    assert calls.count("ls *.py") == 1
+    calls.clear()
+    g.words("echo `ls # x` " * 5)
+    assert calls.count("ls # x") == 5
+    calls.clear()
+    g._read("echo `ls *.py` " * 5, False, None, True)
+    assert calls.count("ls *.py") == 5
+    # a body left open makes every read that meets it unsure
+    assert not g.lex("echo `echo \\`x ~/.config/nvim` ; " * 3)[1]
+
+
+def test_a_cached_body_keeps_its_effect_on_sureness():
+    """A body recorded as leaving the read unsure makes it unsure again
+    where it is met again (the cache keeps that, not only the words)."""
+    for recorded in (False, True):
+        lexer = g._Lexer("echo `ls` ; ls *.py", [], bodies={"ls": recorded})
+        lexer.commands()
+        assert lexer.sure is recorded

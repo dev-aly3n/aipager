@@ -162,6 +162,9 @@ _PARAM_HEAD_RE = re.compile(
 _TICK_BODY_RE = re.compile(r"(?:[^`\\]|\\[\s\S])*")
 _TICK_UNESCAPE = re.compile(r"\\([\\`$])")
 _TICK_UNESCAPE_DQ = re.compile(r"\\([\\`$\"])")
+#: What may make a body set text aside (a comment, a here-document, a
+#: subscript or ``$[``, a ``${...}``, a ``=~`` group).
+_SETS_ASIDE_RE = re.compile(r"[#\[]|<<|\$\{|=~")
 #: After these words a command may start again (``if case ...``).
 _KEEPS_COMMAND_START = frozenset(
     ("if", "then", "else", "elif", "do", "while", "until", "!", "time",
@@ -325,7 +328,8 @@ class _Lexer:
                  dotglob: bool = False, flat: bool = False,
                  spell: list[str] | None = None,
                  spans: _Spans | None = None, base: int = 0,
-                 groups: list[_Spans] | None = None) -> None:
+                 groups: list[_Spans] | None = None,
+                 bodies: dict[str, bool] | None = None) -> None:
         self.text = text
         self.n = len(text)
         self.out = out
@@ -349,6 +353,8 @@ class _Lexer:
         # it starts there (:meth:`_old_arith`)
         self.brackets: _Brackets | None = None
         self.boff = 0
+        # backtick bodies read so far in this read (:meth:`_backtick`)
+        self.bodies: dict[str, bool] = {} if bodies is None else bodies
 
     # -- helpers --------------------------------------------------------
 
@@ -379,16 +385,17 @@ class _Lexer:
         if self.level + 1 > _MAX_NEST:
             raise _TooDeep
         if self.flat:
-            sub = _Lexer(text, self.out, self.level + 1, self.dotglob, True)
+            sub = _Lexer(text, self.out, self.level + 1, self.dotglob, True,
+                         bodies=self.bodies)
         elif base is None:
             spans = _Spans(text)
             self.groups.append(spans)
             sub = _Lexer(text, self.out, self.level + 1, self.dotglob, False,
-                         self.spell, spans, 0, self.groups)
+                         self.spell, spans, 0, self.groups, self.bodies)
         else:
             sub = _Lexer(text, self.out, self.level + 1, self.dotglob, False,
                          self.spell, self.spans, self.base + base,
-                         self.groups)
+                         self.groups, self.bodies)
         if base is not None:
             # a slice: its brackets pair as they do in this text
             if self.brackets is None:
@@ -763,11 +770,24 @@ class _Lexer:
             self.sure = False
         unescape = _TICK_UNESCAPE_DQ if quoted else _TICK_UNESCAPE
         plain = unescape.sub(r"\1", body)
+        # The same body read again adds the same words (one list for the
+        # whole read) and the same sureness: read once. Not when spelled
+        # text is collected (each place needs its words), nor for a body
+        # that may set text aside (each place's text is read again).
+        cache = self.spell is None and not _SETS_ASIDE_RE.search(plain)
+        if cache and plain in self.bodies:
+            if not self.bodies[plain]:
+                self.sure = False
+            return min(end + 1, self.n)
         sub = self._sub(plain, i if plain == body else None)
         self._mark("(")
         sub.commands()
         self._mark(")")
         self._body_read(sub)
+        if cache:
+            # True: this body leaves the read sure (see :meth:`_body_read`)
+            self.bodies[plain] = sub.sure or not _mentions(sub.text,
+                                                           self.dotglob)
         return min(end + 1, self.n)
 
     def _old_arith(self, i: int) -> int:
