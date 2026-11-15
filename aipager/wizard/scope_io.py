@@ -148,7 +148,7 @@ def append_member(chat_id: int, member: Member, token: str) -> str | None:
                 f"{current.label}.")
     out = [replace(s, members=(*s.members, member))
            if s.chat_id == chat_id else s for s in scopes]
-    _write(scopes, out, token or existing_token)
+    _write(scopes, out, existing_token or token)
     return None
 
 
@@ -168,7 +168,9 @@ def put_group_scope(new: Scope, token: str, *,
     must still equal it. Anything else (the wizard or another run edited
     the same group meanwhile) is refused rather than overwritten. Other
     scopes are kept as they are on disk; some may gain an explicit
-    ``root`` so their folder does not move (:func:`_write`)."""
+    ``root`` so their folder does not move (:func:`_write`). So is the
+    bot token: one changed meanwhile (``aipager setup --token-file`` or
+    the wizard) is kept, and *token* only fills a file that has none."""
     scopes, existing_token = read_config()
     current = configured_scope_for(new.chat_id, scopes)
     if expected is None:
@@ -179,5 +181,5 @@ def put_group_scope(new: Scope, token: str, *,
         if current is None or current != expected:
             return GROUP_CHANGED_MEANWHILE
         out = [new if s is current else s for s in scopes]
-    _write(scopes, out, token or existing_token)
+    _write(scopes, out, existing_token or token)
     return None
