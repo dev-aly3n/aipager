@@ -724,6 +724,8 @@ def _walk(path: str, dotglob: bool) -> str:
     segs = [s for s in path.split("/") if s and s != "."]
     last = len(segs) - 1
     readings: list[tuple | None] = [None]
+    # a long path repeats its segments: classify each kind once
+    known: dict[str, int] = {}
     for k, seg in enumerate(segs):
         if seg == "..":
             nxt = []
@@ -738,11 +740,13 @@ def _walk(path: str, dotglob: bool) -> str:
             continue
         if seg == "**" and dotglob:
             return UNSURE
-        flags = _classify(seg, dotglob)
+        flags = known.get(seg)
+        if flags is None:
+            flags = known[seg] = _classify(seg, dotglob)
         nxt = []
         for node in readings:
             pushed = (flags, node)
-            if _reaches(pushed):
+            if flags & _A and _reaches(pushed):
                 return REACH
             # globstar: ``.local/**`` may be ``.local/share/aipager``
             if seg == "**" and node is not None and node[0] & _L:
