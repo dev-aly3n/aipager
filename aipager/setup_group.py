@@ -599,14 +599,16 @@ def _bot_checks(token: str, chat_id: int) -> tuple[dict, list[dict]]:
             return skipped(chat.description)
         return doc, warnings
     ctype = chat.result.get("type")
+    if not isinstance(ctype, str) or not ctype:
+        return skipped("getChat gave no chat type")
     title = chat.result.get("title")
-    doc.update(checked=True, chat_type=ctype if isinstance(ctype, str) else None,
+    doc.update(checked=True, chat_type=ctype,
                chat_title=title if isinstance(title, str) else None,
                privacy_mode=not bool(can_read_all))
     if ctype not in ("group", "supergroup"):
         warnings.append({
             "code": "chat_not_a_group",
-            "message": (f"Chat {chat_id} is a {ctype or 'chat'}, not a group or "
+            "message": (f"Chat {chat_id} is a {ctype}, not a group or "
                         "supergroup."),
         })
         return doc, warnings
@@ -620,7 +622,8 @@ def _bot_checks(token: str, chat_id: int) -> tuple[dict, list[dict]]:
             return doc, warnings
         return skipped(member.description)
     status = member.result.get("status")
-    status = status if isinstance(status, str) else None
+    if not isinstance(status, str) or not status:
+        return skipped("getChatMember gave no status")
     can_pin = (status == "creator"
                or (status == "administrator"
                    and member.result.get("can_pin_messages") is True))

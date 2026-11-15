@@ -87,7 +87,7 @@
  "aipager/session_store.py": 9,
  "aipager/setup_cmd.py": 133,
  "aipager/setup_detect.py": 67,
- "aipager/setup_group.py": 137,
+ "aipager/setup_group.py": 139,
  "aipager/state.py": 1,
  "aipager/status.py": 41,
  "aipager/team.py": 24,
