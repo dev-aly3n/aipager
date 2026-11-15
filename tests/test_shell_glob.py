@@ -497,8 +497,20 @@ def test_paths_elsewhere(path):
     assert g._walk(path, False) == g.CLEAR
 
 
-def test_a_dot_step_after_a_value_not_seen_is_unsure():
-    assert g._walk("~/.config/" + g.OPAQUE + "/../aipager", False) == g.UNSURE
+def test_a_dot_step_after_a_value_not_seen_reads_both_ways():
+    # one segment up, or still somewhere not seen: $X/../x reads like $X/x
+    o = g.OPAQUE
+    assert g._walk("~/.config/" + o + "/../aipager", False) == g.REACH
+    assert g._walk(o + "/../.config/[a]ipager", False) == g.REACH
+    assert g._walk(o + "/../.config/nvim", False) == g.CLEAR
+    assert g._walk(o + "/.config/nvim", False) == g.CLEAR
+    assert g._walk(o + "/../../x/aipager", False) == g.CLEAR
+    # $X may be two folders: ~/.config/a/b/../../aipager
+    assert g._walk("~/.config/" + o + "/../../aipager", False) == g.REACH
+    # each .. after it adds a reading: past the cap the path is unsure
+    assert g._walk("~/" + o + "/.." * 30, False) == g.UNSURE
+    assert g._walk("~/.config/" + o + "/.*/aipager", False) == g.REACH
+    assert not g.command_reaches("cp -r $PROJECT/../.config/nvim /tmp/x")
 
 
 def test_a_dot_step_glob_with_nothing_before_it_is_read_all_ways():
@@ -536,7 +548,7 @@ def test_only_a_word_that_could_name_a_hidden_folder_is_expanded():
 def test_unsure_counts_only_on_a_word_that_could_name_one():
     w = "~/.config/" + "{a,b}" * 9
     assert g.word_reach(w) == g.UNSURE
-    assert g.word_reach(_word("~/.config/$X/../aipager")) == g.UNSURE
+    assert g.word_reach("~/.config/x/" + ".*/" * 4 + "y") == g.UNSURE
     assert g.word_reach("~/projects/" + "{a,b}" * 9) == g.CLEAR
 
 

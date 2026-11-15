@@ -1138,14 +1138,25 @@ def _reaches(node: tuple) -> bool:
     return bool(f2 & _S and below2 is not None and below2[0] & _L)
 
 
+def _up(node: tuple | None) -> list[tuple | None]:
+    """The readings after a ``..`` on top of *node*. Above the start it
+    stacks (``a/../..``); after a value the floor cannot see (``$X``, an
+    unsure segment) it is either one segment up or still somewhere not
+    seen, as if ``$X`` were there (``$X/../x`` reads like ``$X/x``)."""
+    if node is None or node[0] & _UP:
+        return [(_UP, node)]
+    if node[0] & _O:
+        return [node[1], node]
+    return [node[1]]
+
+
 def _walk(path: str, dotglob: bool) -> str:
     """Read *path*'s segments in order, keeping every way the path can
-    resolve: ``//`` and ``/./`` drop out, ``name/..`` cancels (a ``..``
-    after a value the floor cannot see is :data:`UNSURE`), and a glob
-    that may be ``.`` or ``..`` (``.*``) is read all three ways. Each
-    reading is a linked stack, so a long path costs one step a segment.
-    :data:`REACH` as soon as one reading passes through aipager's
-    folders."""
+    resolve: ``//`` and ``/./`` drop out, ``name/..`` cancels (see
+    :func:`_up`), and a glob that may be ``.`` or ``..`` (``.*``) is read
+    all three ways. Each reading is a linked stack, so a long path costs
+    one step a segment. :data:`REACH` as soon as one reading passes
+    through aipager's folders."""
     segs = [s for s in path.split("/") if s and s != "."]
     last = len(segs) - 1
     readings: list[tuple | None] = [None]
@@ -1153,14 +1164,9 @@ def _walk(path: str, dotglob: bool) -> str:
     known: dict[str, int] = {}
     for k, seg in enumerate(segs):
         if seg == "..":
-            nxt = []
-            for node in readings:
-                if node is None or node[0] & _UP:
-                    nxt.append((_UP, node))
-                elif node[0] & _O:
-                    return UNSURE
-                else:
-                    nxt.append(node[1])
+            nxt = [r for node in readings for r in _up(node)]
+            if len(nxt) > _MAX_READINGS:
+                return UNSURE
             readings = nxt
             continue
         if seg == "**" and dotglob:
@@ -1179,12 +1185,7 @@ def _walk(path: str, dotglob: bool) -> str:
             nxt.append(pushed)
             if flags & _D and k < last:
                 nxt.append(node)
-                if node is None or node[0] & _UP:
-                    nxt.append((_UP, node))
-                elif node[0] & _O:
-                    return UNSURE
-                else:
-                    nxt.append(node[1])
+                nxt.extend(_up(node))
         if len(nxt) > _MAX_READINGS:
             return UNSURE
         readings = nxt
