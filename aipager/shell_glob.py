@@ -798,7 +798,8 @@ def command_reaches(*copies: str) -> bool:
     one that does (:func:`word_reach`)."""
     dotglob = any(_DOTGLOB_RE.search(c) for c in copies)
     seen: set[str] = set()
-    for copy in copies:
+    # a command with no quotes reads the same both ways: lex it once
+    for copy in dict.fromkeys(copies):
         if not _WORTH_RE.search(copy):
             continue
         for w in words(copy):
