@@ -62,6 +62,14 @@ def test_double_quotes_keep_their_escapes_and_hide_expansions():
     assert g.OPAQUE in _word('"$HOME"/x*')
 
 
+def test_a_quoted_dot_step_still_climbs():
+    # a quoted .. never makes a brace sequence, but it is still a path step
+    assert g.command_reaches('cat ~/.config/nvim/".."/[a]ipager/x')
+    assert g.command_reaches("cat ~/.config/nvim/'.'/../[a]ipager/x")
+    # also once braces were expanded
+    assert g.command_reaches('cat ~/.config/nvim/".."/{[a]ipager,x}/y')
+
+
 def test_ansi_c_quoting_is_decoded():
     assert _reach(r"~/.config/$'\x61'ipage?/x") == g.REACH
 
@@ -177,6 +185,7 @@ def test_a_glob_that_matches_aipager(seg):
 
 @pytest.mark.parametrize("seg", [
     "[[:lower:]]ip", "nvim*", "*.conf", "[!a]ipager", "[b-z]ipager",
+    "[[:x]ipager", "[[=x]ipager",
     "[[:digit:]]ipager", "[[:foo:]]ipager", "aipage", "[[]ipager",
     "a?????????", "????????",
 ])
@@ -313,6 +322,7 @@ def test_only_a_word_that_could_name_a_hidden_folder_is_expanded():
 def test_unsure_counts_only_on_a_word_that_could_name_one():
     w = "~/.config/" + "{a,b}" * 9
     assert g.word_reach(w) == g.UNSURE
+    assert g.word_reach(_word("~/.config/$X/../aipager")) == g.UNSURE
     assert g.word_reach("~/projects/" + "{a,b}" * 9) == g.CLEAR
 
 
