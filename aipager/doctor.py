@@ -1032,7 +1032,9 @@ def _print_safety_policy() -> None:
     """Render the active safety policy (paths + bash patterns + roles)."""
     from rich.markup import escape
 
+    from aipager import shell_glob
     from aipager.config import POLICY
+    from aipager.safety import BASH_GLOB_REACHES_AIPAGER_DIR
     from aipager.ui import console
 
     # Escaped: a glob or regex holds `[...]`, which rich reads as markup
@@ -1047,6 +1049,11 @@ def _print_safety_policy() -> None:
             console.print(f"    • {escape(p)}")
     console.print("  Blocked bash patterns:")
     for p in POLICY.safety_deny_bash_patterns:
+        if p == BASH_GLOB_REACHES_AIPAGER_DIR:
+            # not a regex: the place where the glob and brace matcher runs
+            check = shell_glob.command_reaches
+            console.print(f"    • {check.__module__}.{check.__qualname__}()")
+            continue
         console.print(f"    • /{escape(p)}/")
     console.print("  These apply to every role except owner (built-in, plus "
                   "the safety: section of policy.yaml).")

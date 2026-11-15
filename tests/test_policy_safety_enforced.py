@@ -870,6 +870,9 @@ def test_safety_check_prints_the_effective_lists(monkeypatch, capsys, home,
     for p in (*safety.DENY_PATHS_NO_ACCESS, "/srv/secrets/**", "~/notes/**"):
         assert f"• {p}" in out, p
     assert "• /\\bcurl\\b/" in out
+    # the glob matcher's marker is named, not printed as a regex
+    assert "• aipager.shell_glob.command_reaches()" in out
+    assert "aipager-shell-glob" not in out
     assert ("These apply to every role except owner (built-in, plus the "
             "safety: section of policy.yaml).") in flat
     assert "no leading / or ~" not in flat
