@@ -197,9 +197,25 @@ def test_open_route_is_named_on_the_docs_page(example):
     assert example in _docs_text()
 
 
+#: Rows closed in iteration 5: no xfail, must be blocked.
+CLOSED_ITER5 = {
+    "extglob", "dotdot-after-eq", "nested-brace", "braces-side-by-side",
+    "brace-across-local", "posix-after-hidden-glob",
+    "posix-unclosed-colon", "posix-unclosed-equals", "posix-unclosed-name",
+    "posix-unclosed-last", "posix-unclosed-two", "posix-unclosed-end-letter",
+    "posix-unclosed-share", "posix-unclosed-in-brace",
+    "brace-item-dot-slash", "brace-item-dot-slash-first",
+    "brace-item-dot-slash-name", "brace-item-dot-then-name",
+    "brace-item-dot-slash-glued", "brace-item-dot-double-slash",
+    "brace-item-name-dotdot", "brace-item-name-dot-dotdot",
+    "brace-item-dot-slash-bracket", "brace-item-dot-slash-share",
+    "brace-item-dot-slash-state",
+}
+
+
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(r[1], marks=pytest.mark.xfail(
+    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER5 else pytest.mark.xfail(
         strict=True, reason="documented gap")) for r in DOCUMENTED_OPEN],
     ids=[r[0] for r in DOCUMENTED_OPEN])
 def test_documented_open_route_is_blocked(cmd):
@@ -247,8 +263,8 @@ NEW_GAPS = [
 
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(r[1], marks=pytest.mark.xfail(strict=True,
-                                                reason=UNDOCUMENTED))
+    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER5
+                  else pytest.mark.xfail(strict=True, reason=UNDOCUMENTED))
      for r in NEW_GAPS],
     ids=[r[0] for r in NEW_GAPS])
 def test_new_gap_is_blocked(cmd):

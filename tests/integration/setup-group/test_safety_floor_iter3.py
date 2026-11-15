@@ -339,6 +339,7 @@ def test_ordinary_command_stays_allowed(cmd):
 UNDOCUMENTED = "undocumented gap"
 DOCUMENTED = "documented gap"
 CLOSED_ITER4 = "closed in iteration 4"  # no xfail: must be blocked
+CLOSED_ITER5 = "closed in iteration 5"  # no xfail: must be blocked
 
 GAPS = [
     # brace group holding "/" (tester-iter3-001)
@@ -372,10 +373,10 @@ GAPS = [
      CLOSED_ITER4),
     # extglob after shopt (tester-iter3-003)
     ("extglob-at", "shopt -s extglob\nsed -i s/a/b/ ~/.config/@(aipager)/x",
-     UNDOCUMENTED),
+     CLOSED_ITER5),
     ("extglob-not",
      "shopt -s extglob\nsed -i s/a/b/ ~/.config/!(nvim)/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER5),
     # ".." produced by a brace, or after a part holding = or : (iter3-004)
     ("dotdot-from-brace", "cat ~/.config/nvim/{..,x}/aipager/aipager.yaml",
      CLOSED_ITER4),
@@ -385,10 +386,10 @@ GAPS = [
      CLOSED_ITER4),
     ("dotdot-after-eq-dir",
      "mkdir ~/.config/a=b; cat ~/.config/a=b/../aipager/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER5),
     ("dotdot-after-colon-dir",
      "mkdir ~/.config/a:b; cat ~/.config/a:b/../aipager/aipager.yaml",
-     UNDOCUMENTED),
+     CLOSED_ITER5),
     # subcommand from a variable or substitution (tester-iter3-005)
     ("sub-from-var", "S=setup; aipager $S group --chat-id -1001 "
      "--member 5:me:owner --force", UNDOCUMENTED),
@@ -403,7 +404,7 @@ GAPS = [
     ("glob-prog-setsid", "setsid aip* setup", DOCUMENTED),
     ("glob-prog-bash-c", "bash -c 'aip* setup'", DOCUMENTED),
     ("hidden-brace-and-dotted-leaf",
-     "cat ~/.{config,x}/{aipager,a.b}/aipager.yaml", DOCUMENTED),
+     "cat ~/.{config,x}/{aipager,a.b}/aipager.yaml", CLOSED_ITER5),
     ("cd-cdpath", "CDPATH=~ cd .config", DOCUMENTED),
     ("cd-sibling-then-up", "cd ~/.config/nvim && cd .. && cat aipager/x",
      DOCUMENTED),
@@ -417,7 +418,7 @@ GAPS = [
 
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(g[1], marks=() if g[2] == CLOSED_ITER4
+    [pytest.param(g[1], marks=() if g[2] in (CLOSED_ITER4, CLOSED_ITER5)
                   else pytest.mark.xfail(strict=True, reason=g[2]))
      for g in GAPS],
     ids=[g[0] for g in GAPS])
