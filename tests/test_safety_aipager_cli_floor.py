@@ -540,6 +540,18 @@ _SLOW_NEW = [
     "cat ~/.config/a" + "[a]" * 15_000 + "{",
     "cat a/" + "{..,x" * 10_000,
     "cat a/" + "{" * 50_000,
+    # ``[]`` and ``[!]`` read two ways made these exponential; each ends
+    # on a letter no pattern takes, so no earlier match cuts the search
+    "cat ~/.config/" + "[]" * 40 + "x",
+    "cat ~/.config/" + "[!]" * 18 + "x",
+    "cat ~/.config/" + "[^]" * 18 + "x",
+    "cat ~/.config/" + "[]" * 20_000 + "x",
+    "cat ~/.config/" + "[!]" * 15_000 + "x",
+    "cat ~/.config/a" + "[]]" * 15_000 + "x",
+    "cat ~/.config/{" + "[!]" * 15_000 + "x",
+    # a ``!`` or ``^`` alone read two ways grows more slowly: 34 is seconds
+    "cat ~/.config/" + "[!]" * 34 + "x",
+    "cat ~/.config/" + "[^]" * 34 + "x",
 ]
 
 
