@@ -561,20 +561,34 @@ own modules (`python3 -c "import os, aipager.scope"`, a here-document,
 `runpy`); any mention of `~/.config/aipager`, `~/.local/share/aipager` or
 `~/.local/state/aipager`, also when quotes, backslashes, `$'...'` or an
 empty substitution split the name (`"aipager"`, `aip""ager`,
-`$'\x61ipager'`, `aip$()ager`), when the path has `//`, `/./` or
-`name/..` in it (`~/.config/nvim/../aipager`, also a `..` one brace
-makes: `nvim/{..,x}`), when a `*` or `?`, a bracket expression or a
-brace in the folder's own name could match it (`~/.config/aipage?`,
-`~/.config/*`, `~/.config/[[:alpha:]]ipager`, `~/.config/{aipager,a.b}`,
-also a brace of whole paths: `~/.config/{aipager/aipager.yaml,x}`), or
-when a glob in `.config` or `.local` stands right before the name
-`aipager` (`~/.c*/aipager`, `~/.local/*/aipager`; `~/.config/*.conf`
-and `nvim*` are fine); `cd` or
-`pushd` into the home folder's `.config`, `.local`, `.local/share` or
-`.local/state` itself, also with an option or in two steps
-(`cd ~ && cd .config`); and `cp`, `rsync`, `tar`, `zip`, `ln`, `mv` or
-`scp` given that whole folder (`cp -r ~/.config /tmp/x`; a folder inside
-it, such as `~/.config/nvim`, is fine).
+`$'\x61ipager'`, `aip$()ager`); `cd` or `pushd` into the home folder's
+`.config`, `.local`, `.local/share` or `.local/state` itself, also with
+an option or in two steps (`cd ~ && cd .config`); and `cp`, `rsync`,
+`tar`, `zip`, `ln`, `mv` or `scp` given that whole folder
+(`cp -r ~/.config /tmp/x`; a folder inside it, such as `~/.config/nvim`,
+is fine).
+
+Globs and braces in a path are read the way bash expands them. For each
+word of the command, the floor expands the braces as bash does (lists,
+braces inside braces or side by side, `{a..c}`), takes out `//`, `/./`
+and `name/..`, and then matches each folder of the path against the
+folder names themselves. It refuses the word when a `*`, `?`, bracket
+expression or POSIX class could match `.config` and then `aipager`, or
+`.local`, then `share` or `state`, then `aipager`. So
+`~/.config/aipage?`, `~/.config/*`, `~/.config/[[:alpha:]]ipager`,
+`~/.config/{aipager,a.b}`, `~/.config/{aipager/aipager.yaml,x}`,
+`~/.config/{x{a,b},aipager/x}`, `nvim/{.,x}{.,y}/`,
+`~/.local{/share/aipager,}`, `~/.{config,x}/{aipager,a.b}`,
+`~/.c*/[[:alpha:]]ipager`, `~/.config/nvim/../aipager` and
+`~/.config/a=b/../aipager` are all refused, while `~/.config/*.conf`,
+`~/.config/nvim*`, `~/.config/[[:lower:]]ip` (three letters can't be
+`aipager`) and `~/.config/{git/config,nvim/init.lua}` are fine. A glob
+that may be `.` or `..` (`.*`) is followed every way it can go. When the
+floor can't be sure what bash would do with a word that could name
+`.config` or `.local`, it refuses the word: an extended glob or another
+shell's group (`~/.config/@(aipager)`), a bracket bash reads in more than
+one way (`[[.a]`), a `..` after a variable, or more brace results than
+it lists (256).
 
 Searching aipager's code by module name stays allowed
 (`grep -rn "from aipager import" .`, `rg setup_group`). The patterns
@@ -582,17 +596,21 @@ cannot tell a search from a command, though: a `grep`, `git grep`,
 `git log --grep` or commit message that contains the words
 `aipager setup`, `aipager config`, `aipager uninstall` or
 `.config/aipager` is refused for a non-owner turn too. So is a brace
-list right under `~/.config` or `~/.local/share`
-(`ls ~/.config/{nvim,fish}`), since the patterns do not read what the
-list holds; one deeper in (`ls ~/.config/nvim/{lua,after}`) is fine.
+list with no `/` in it right under `~/.config`, `~/.local/share` or
+`~/.local/state` (`ls ~/.config/{nvim,fish}`), since one of the patterns
+does not read what such a list holds; a list of paths there
+(`cp ~/.config/{git/config,nvim/init.lua} /tmp/x`) or a list deeper in
+(`ls ~/.config/nvim/{lua,after}`) is fine. A word the floor can't read,
+as above, is refused even when bash would not reach the folders with it.
 
 What still gets through: a command name, path or any other word of the
 command built from a variable, `$@` or a command substitution
 (`A=aipager; $A setup`, `aipager $S group`, `aipager "$@"`,
-`aipager $(echo setup)`), a shell function or alias, an encoded or `eval`'d command (`base64 -d | sh`), a path built
-inside a script, or a script written with a file tool and then run, a
-symbolic link made earlier by another route, a process named by part of
-its name (`pkill -f aip`) or signalled by its number,
+`aipager $(echo setup)`, `~/.config/$D/aipager.yaml`), a shell function
+or alias, an encoded or `eval`'d command (`base64 -d | sh`), a path
+built inside a script, or a script written with a file tool and then
+run, a symbolic link made earlier by another route, a process named by
+part of its name (`pkill -f aip`) or signalled by its number,
 `systemctl --user stop 'aip*'` (systemctl matches the glob itself), a
 copy of the aipager program under another name, and relative paths
 after reaching a folder by another route. These are examples, not every
@@ -601,17 +619,14 @@ copies or writes a whole folder (`unzip -d ~/.config`, `cpio`, `ditto`,
 `pax`); `.config` or `.local` itself written as a glob or in another
 letter case (`cp -r ~/.c* /tmp/x`, `cd ~/.Config`); copying the whole
 home folder (`cp -r ~ /tmp/x`, `tar cf x.tar ~`); `cd ~/.config/.`,
-`cd ~alice/.config` or `cd ~ && ls && cd .config`; a relative path from
-a folder inside `~/.config`
+`cd ~alice/.config`, `cd ~ && ls && cd .config` or
+`CDPATH=~ cd .config`; a relative path from a folder inside `~/.config`
 (`cd ~/.config/systemd && sed -i s/a/b/ ../aipager/aipager.yaml`); a
-`..` after a folder whose name holds a blank, `=`, `:`, `;` or `$`
-(`~/.config/a=b/../aipager`, once that folder exists); extended globs
-after `shopt -s extglob` (`~/.config/@(aipager)`); a brace inside
-another brace, two braces side by side or a brace across `.local/` and
-the next folder (`~/.config/{x{a,b},aipager/x}`, `nvim/{.,x}{.,y}/`,
-`~/.local{/share/aipager,}`); a bracket expression after a glob in
-`.config` (`~/.c*/[[:alpha:]]ipager`); a folder handed over
-through another command's words (`xargs -I{} cp -r {} ~/.config`,
+glob that relies on `dotglob` or another option turned on in the
+shell's own startup files (`cat ~/*/aipager/aipager.yaml`), or glob
+syntax only another shell has (zsh's `~/.config/^nvim/aipager.yaml`
+with `extendedglob`); a folder handed over through another command's
+words (`xargs -I{} cp -r {} ~/.config`,
 `find . -exec cp -r {} ~/.config \;`, `tar -C ~ -xf x.tar .config`);
 `xargs` with a long option that takes a separate value or a wrapper
 before aipager (`xargs --max-args 1 aipager`, `xargs nice aipager`,
@@ -622,8 +637,8 @@ prefix the patterns do not read (`X=1 aip* setup`,
 `timeout -s KILL 5 aip* setup`, `env -u X aip* setup`,
 `setsid aip* setup`, `stdbuf -o0 aip* setup`, `watch aip* setup`,
 `bash -c 'aip* setup'`) or inside a function body or a `case` branch
-(`f(){ aip* setup; }; f`). The real boundary stays having no shell: the built-in `user` and `read_only`
-roles have none.
+(`f(){ aip* setup; }; f`). The real boundary stays having no shell: the
+built-in `user` and `read_only` roles have none.
 
 **The built-in command rules.** Among the `Bash` patterns every
 non-owner Telegram turn with Bash is held to, one blocks the word `claude`: it
