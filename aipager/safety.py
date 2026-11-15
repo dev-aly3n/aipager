@@ -297,11 +297,16 @@ def _bracket(also_not: str = "") -> str:
     """A bracket expression in one path folder: an optional ``!`` or
     ``^``, an optional ``]`` first (``[]a]``), then characters and POSIX
     items (``[:alpha:]``, ``[=a=]``, ``[.a.]``) up to the closing ``]``.
-    Never ``/``, a blank or a character in *also_not*. Each piece starts
+    Never ``/``, a blank or a character in *also_not*.
+
+    Read one way only, as bash reads it: a ``!`` or ``^`` right after
+    ``[`` is always the negation and a ``]`` right after that is always a
+    literal (so ``[]`` is never a whole bracket), each later piece starts
     with a different character (a ``[`` opens a POSIX item only before
-    ``:``, ``=`` or ``.``; only the first ``!`` or ``^`` reads two ways),
-    so a run of brackets is read once."""
-    return (rf"\[[!^]?\]?(?:[^\]\[/\s{also_not}]|\[(?![:=.])"
+    ``:``, ``=`` or ``.``). Two readings of ``[]`` or ``[!]`` made
+    ``[][][]...`` exponential."""
+    return (rf"\[(?:[!^]|(?![!^]))(?:\]|(?!\]))"
+            rf"(?:[^\]\[/\s{also_not}]|\[(?![:=.])"
             rf"|\[[:=.][^\]/\s{also_not}]*\])*\]")
 
 
