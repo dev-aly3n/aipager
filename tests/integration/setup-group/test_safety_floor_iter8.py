@@ -375,7 +375,7 @@ ESCAPED_SEPARATOR_REGRESSION = [
 ]
 
 
-@_xfail_params(ESCAPED_SEPARATOR_REGRESSION, ESC_REGRESSION)
+@_params(ESCAPED_SEPARATOR_REGRESSION)
 def test_collapsed_escape_before_separator_still_starts_a_search(cmd):
     assert _blocked(cmd) is True
 
@@ -426,6 +426,27 @@ def test_real_separator_before_a_home_search_is_refused(cmd):
 # Allowed: bash never starts a command there (checked in bash: no search
 # runs), so the search rules must not see one.
 ESCAPED_SEPARATOR_ALLOWED = [
+    ("continuation-joins-words", "echo x" + B + "\ngrep -rn aipager ~"),
+    ("blank-continuation", "echo x " + B + "\ngrep -rn aipager ~"),
+    ("single-quoted-semicolon", "echo ';' grep -rn aipager ~"),
+    ("double-quoted-semicolon", 'echo ";" grep -rn aipager ~'),
+    ("glued-quoted-semicolon", "echo x';' grep -rn aipager ~"),
+    ("escaped-paren-and-backtick",
+     "echo x" + B + "(grep -rn aipager ~" + B + ")"),
+]
+
+
+@_params(ESCAPED_SEPARATOR_ALLOWED)
+def test_escaped_separator_starts_no_search(cmd):
+    assert _blocked(cmd) is False
+
+
+# Refused as on main (iteration 9, rev-iter8-001): bash runs no search
+# here as typed, but a re-parse (``eval``, ``bash -c "..."``, backticks,
+# ``$'...'``) turns an escaped separator into a real one, so the search
+# rules read the command as typed and start a command after it. These
+# rows were allowed at d6d18a17 only.
+ESCAPED_SEPARATOR_REFUSED_AS_ON_MAIN = [
     ("escaped-semicolon", "echo x" + B + "; grep -rn aipager ~"),
     ("three-backslashes", "echo x" + B * 3 + "; grep -rn aipager ~"),
     ("escaped-amp", "echo x" + B + "& grep -rn aipager ~"),
@@ -433,11 +454,6 @@ ESCAPED_SEPARATOR_ALLOWED = [
     ("escaped-semicolon-no-blank", "echo x" + B + ";grep -rn aipager ~"),
     ("escaped-amp-no-blank", "echo x" + B + "&grep -rn aipager ~"),
     ("escaped-pipe-no-blank", "echo x" + B + "|grep -rn aipager ~"),
-    ("continuation-joins-words", "echo x" + B + "\ngrep -rn aipager ~"),
-    ("blank-continuation", "echo x " + B + "\ngrep -rn aipager ~"),
-    ("single-quoted-semicolon", "echo ';' grep -rn aipager ~"),
-    ("double-quoted-semicolon", 'echo ";" grep -rn aipager ~'),
-    ("glued-quoted-semicolon", "echo x';' grep -rn aipager ~"),
     ("lone-escaped-semicolon", "echo x " + B + "; grep -rn aipager ~"),
     ("escaped-rg", "echo x" + B + "; rg aipager ~"),
     ("escaped-find", "echo x" + B + "; find ~ -name aipager"),
@@ -446,8 +462,6 @@ ESCAPED_SEPARATOR_ALLOWED = [
     ("escaped-after-escape", "echo a" + B + "b" + B + "; grep -rn aipager ~"),
     ("seven-backslashes", "echo " + B * 7 + "; grep -rn aipager ~"),
     ("var-then-escaped", "echo ${x}" + B + "; grep -rn aipager ~"),
-    ("escaped-paren-and-backtick",
-     "echo x" + B + "(grep -rn aipager ~" + B + ")"),
     ("bash-c-dq-one", 'bash -c "echo x' + B + '; grep -rn aipager ~"'),
     ("bash-c-sq-one", "bash -c 'echo x" + B + "; grep -rn aipager ~'"),
     ("backticks-one", "echo `echo x" + B + "; grep -rn aipager ~`"),
@@ -455,9 +469,9 @@ ESCAPED_SEPARATOR_ALLOWED = [
 ]
 
 
-@_params(ESCAPED_SEPARATOR_ALLOWED)
-def test_escaped_separator_starts_no_search(cmd):
-    assert _blocked(cmd) is False
+@_params(ESCAPED_SEPARATOR_REFUSED_AS_ON_MAIN)
+def test_escaped_separator_is_read_as_a_search_start_as_on_main(cmd):
+    assert _blocked(cmd) is True
 
 
 # ---- gap: brackets bash reads with a range the floor does not see ----

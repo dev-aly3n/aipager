@@ -274,6 +274,213 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
     LIST_FILES,
 )
 
+# ----- the search rules, read in linear time ------------------------------
+#
+# The patterns above start a command after every ``;&|(`` and backtick,
+# escaped or not (a re-parse through ``eval``, ``bash -c "..."``,
+# backticks or ``$'...'`` turns ``\;`` into a real ``;``), and their words
+# read an escaped character as part of the word. So in one long word each
+# escaped separator started a scan of the rest of it: ``\`a=`` repeated
+# to 8 KB took about 1 s, to 100 KB about a minute. :func:`_search_hit`
+# gives the same verdict (never a more permissive one) from three linear
+# searches of a copy in which each escaped separator is ``\`` and
+# :data:`_ESCAPED_MARK` (:func:`_escaped_starts_plain`):
+#
+# 1. the pattern from every other start (the mark is a plain character
+#    there, and an escaped character of a word either way);
+# 2. the pattern from every escaped separator, its words stopping at the
+#    next one, so every escaped start reads only up to the next;
+# 3. the pattern from every escaped separator up to the point where it
+#    would read past the next one, taken as a match when a home or ``/``
+#    folder word comes later (a refusal main's patterns might not give,
+#    never an allow they would not give).
+#
+# One difference of the copy is visible to the patterns: a user name in
+# ``/home/<user>`` stops at ``;`` but takes the mark, so a folder word
+# there may also end at the mark.
+
+#: Stands for the separator of an escaped ``\;``, ``\&``, ``\|``, ``\(``
+#: or ``\``` in the copy the search rules read (a private-use character).
+_ESCAPED_MARK = "\uf8fe"
+#: A backslash and the character it escapes, read left to right (so
+#: ``\\\\;`` is an escaped backslash, then a real ``;``).
+_ESCAPED_RE = re.compile(r"\\(.)", re.S)
+#: Each separator a search rule starts a command after, as the mark.
+_ESCAPED_START = {c: _ESCAPED_MARK for c in ";&|(`"}
+
+
+def _escaped_starts_plain(text: str) -> str:
+    """*text* with each escaped separator, ``(`` or backtick written as
+    ``\\`` and :data:`_ESCAPED_MARK` (see the notes above)."""
+    if "\\" not in text:
+        return text
+    return _ESCAPED_RE.sub(
+        lambda m: "\\" + _ESCAPED_START.get(m[1], m[1]), text)
+
+
+#: An escaped separator in that copy.
+_CROSS = r"\\" + _ESCAPED_MARK
+#: A command start right after one (taken in, so ``re`` finds the
+#: starts by their first character).
+_ESCAPED_CMD_START = _CROSS
+#: A folder word that may also end at the mark (see the notes above).
+_MARK_TARGET = _TARGET.replace(r"""(?=[\s;&|()<>`"']""",
+                               r"""(?=[\s;&|()<>`"'""" + _ESCAPED_MARK + "]")
+#: A word unit and a command unit that stop at an escaped separator.
+_STOP_UNIT = (r"""(?:[^\s;&|()<>`"'\\]|\\[^\n""" + _ESCAPED_MARK
+              + r"""]|'[^'\n]*'|"[^"\n]*")""")
+_STOP_SEG = rf"(?:{_STOP_UNIT}|{_SP}|[<>])"
+_STOP_WRAP_ARG = rf"(?:-{_STOP_UNIT}*|\d{_STOP_UNIT}*)"
+
+
+def _loop(unit: str, k: str, cross: bool, *, lazy: bool = False) -> str:
+    """*unit* repeated, then *k*; with *cross*, reaching an escaped
+    separator instead is a match too."""
+    if not cross:
+        return unit + ("*?" if lazy else "*") + k
+    return unit + ("*?" if lazy else "*") + rf"(?:{_CROSS}|{k})"
+
+
+def _seek(want: str) -> str:
+    """A lookahead for *want* later in the command, taken as found at an
+    escaped separator (the scan stops there)."""
+    return rf"(?={_STOP_SEG}*?(?:{want}|{_CROSS}))"
+
+
+def _escaped_command(rest: str, cross: bool) -> str:
+    """:data:`_CMD` from an escaped separator, then *rest* (the name and
+    what follows it); with *cross*, only the ways of reading past the
+    next escaped separator in a setting or a wrapper's option."""
+    items = (rf"(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*{_SP}+|{_SHELL_C}"
+             rf"|[A-Za-z_]\w*={_STOP_UNIT}*{_SP}+)*")
+    if not cross:
+        return rf"{_ESCAPED_CMD_START}{_SP}*{items}(?:[\w.~+-]*/)*{rest}"
+    return (rf"{_ESCAPED_CMD_START}{_SP}*{items}"
+            rf"(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*{_SP}+[-\d]{_STOP_UNIT}*"
+            rf"|[A-Za-z_]\w*={_STOP_UNIT}*){_CROSS}")
+
+
+def _escaped_folder_after_text(k: str, cross: bool) -> str:
+    """:data:`_FOLDER_AFTER_TEXT` with :func:`_loop` words, then *k*.
+    With *cross*, only its first way: a scan that reads past an escaped
+    separator in the options or the text word reaches it by that way too
+    (the lookahead for ``-e`` is taken as found there)."""
+    rest = (rf"(?<!-e)(?<!-f)(?<!--regexp)(?<!--file){_SP}{_MARK_TARGET}"
+            + k)
+    by_option = _seek(rf"{_SP}(?:-[A-Za-z0-9]*[ef]|--regexp\b|--file\b)")
+    after = _loop(_STOP_SEG, rest, cross, lazy=True)
+    if cross:
+        return by_option + after
+    word = rf"(?!-){_STOP_UNIT}+{_WORD_END}{after}"
+    return rf"(?:{by_option}{after}|(?:{_SP}+-{_STOP_UNIT}*)*{_SP}+{word})"
+
+
+def _escaped_folder_anywhere(k: str, cross: bool) -> str:
+    return _loop(_STOP_SEG, rf"{_SP}{_MARK_TARGET}{k}", cross, lazy=True)
+
+
+def _escaped_find(k: str, cross: bool) -> str:
+    """:data:`SEARCH_FIND`'s words after ``find``, then *k*."""
+    word = rf"{_SP}+(?![-(!\\]){_STOP_UNIT}+{_WORD_END}"
+    if cross:
+        last = (rf"(?:{_SP}+(?![-(!\\]){_STOP_UNIT}+{_CROSS}"
+                rf"|{_SP}+{_MARK_TARGET}{k})")
+    else:
+        last = rf"{_SP}+{_MARK_TARGET}{k}"
+    rest = rf"(?:{_SP}+-O\d*)?(?:{word})*?{last}"
+    if cross:
+        debug = (rf"(?:{_SP}+-D{_SP}+(?:{_CROSS}|{_STOP_UNIT}+"
+                 rf"(?:{_CROSS}|{rest}))|{rest})")
+    else:
+        debug = rf"(?:{_SP}+-D{_SP}+{_STOP_UNIT}+)?{rest}"
+    return rf"(?:{_SP}+-[HLP])*{debug}"
+
+
+#: Each search rule's command names.
+_SEARCH_NAMES = {
+    SEARCH_TEXT_FIRST: r"(?:rgrep|rg|ag|ack|ack-grep|fd|fdfind)",
+    SEARCH_GREP_RECURSIVE: r"(?:[ef]?grep)",
+    SEARCH_FIND: r"(?:find)",
+    LIST_TREE_DU: r"(?:tree|du)",
+    LIST_LS_RECURSIVE: r"(?:ls)",
+    LIST_FILES: r"(?:rg|ack|ack-grep)",
+}
+
+
+def _escaped_variant(pat: str, cross: bool) -> str:
+    """*pat* (one of :data:`DENY_BASH_SEARCH_PATTERNS`) from an escaped
+    separator, its words stopping at the next one: search 2 of the notes
+    above, or with *cross* search 3's reading past it after the name."""
+    k = "(?!)" if cross else ""
+    name = r"(?![\w./-])"
+    recursive = _seek(
+        rf"{_SP}(?:-[A-Za-z0-9]*[rR]|--recursive|--dereference-recursive"
+        rf"|-d{_SP}*recurse|--directories(?:=|{_SP}+)recurse)")
+    rest = {
+        SEARCH_TEXT_FIRST: (_SEARCH_NAMES[pat] + name
+                            + _escaped_folder_after_text(k, cross)),
+        SEARCH_GREP_RECURSIVE: (_SEARCH_NAMES[pat] + name + recursive
+                                + _escaped_folder_after_text(k, cross)),
+        SEARCH_FIND: _SEARCH_NAMES[pat] + name + _escaped_find(k, cross),
+        LIST_TREE_DU: (_SEARCH_NAMES[pat] + name
+                       + _escaped_folder_anywhere(k, cross)),
+        LIST_LS_RECURSIVE: (
+            _SEARCH_NAMES[pat] + name
+            + _seek(rf"{_SP}(?:-[A-Za-z0-9]*R|--recursive)")
+            + _escaped_folder_anywhere(k, cross)),
+        LIST_FILES: (
+            "(?:(?:rg)" + name + _seek(_SP + r"--files(?![\w-])")
+            + "|(?:ack|ack-grep)" + name + _seek(_SP + r"-f(?![\w-])") + ")"
+            + _escaped_folder_anywhere(k, cross)),
+    }[pat]
+    return _escaped_command(rest, False)
+
+
+#: Each search rule's searches (see the notes above): the whole pattern
+#: on the copy, from an escaped separator, from one reading past the
+#: next after the name, from one reading past it before the name, and
+#: the name alone.
+_SEARCH_VARIANTS: dict[str, tuple[re.Pattern, ...]] = {
+    pat: (re.compile(pat.replace(_TARGET, _MARK_TARGET)),
+          re.compile(_escaped_variant(pat, False)),
+          re.compile(_escaped_variant(pat, True)),
+          re.compile(_escaped_command("", True)),
+          re.compile(_SEARCH_NAMES[pat] + r"(?![\w./-])"))
+    for pat in DENY_BASH_SEARCH_PATTERNS
+}
+#: Where a home or ``/`` folder word may start (for search 3).
+_TARGET_AHEAD_RE = re.compile(rf"(?={_SP}{_MARK_TARGET})")
+
+
+def _search_hit(pat: str, normalized: str, memo: dict) -> bool:
+    """Whether search rule *pat* matches *normalized* as main's pattern
+    would (or might: see the notes above), in linear time. *memo* keeps
+    the copy and the last folder word's place across the rules."""
+    if "plain" not in memo:
+        memo["plain"] = _escaped_starts_plain(normalized)
+    plain = memo["plain"]
+    whole, escaped, after_name, before_name, names = _SEARCH_VARIANTS[pat]
+    if whole.search(plain):
+        return True
+    if "\\" + _ESCAPED_MARK not in plain:
+        return False
+    if escaped.search(plain):
+        return True
+    # search 3: the escaped separator read past comes before a folder
+    # word, and before the name too when it is read past before the name
+    if "folder" not in memo:
+        memo["folder"] = max(
+            (m.start() for m in _TARGET_AHEAD_RE.finditer(plain)), default=0)
+    folder = memo["folder"]
+    if not folder:
+        return False
+    if after_name.search(plain, 0, folder):
+        return True
+    name = max((m.start() for m in names.finditer(plain, 0, folder)),
+               default=0)
+    return bool(name) and before_name.search(plain, 0, name) is not None
+
+
 # ---------------------------------------------------------------------------
 # Bash command patterns denied from Telegram (case-sensitive regex).
 # Covers daemon manipulation, escalation, pipe-to-shell, and — critically —
@@ -568,27 +775,6 @@ _PATTERN_NEEDS: dict[str, tuple[tuple[str, ...], ...]] = {
     LIST_LS_RECURSIVE: (("ls",),),
     LIST_FILES: (("rg", "ack"),),
 }
-
-
-#: A backslash and the character it escapes, read left to right (so
-#: ``\\\\;`` is an escaped backslash, then a real ``;``).
-_ESCAPED_RE = re.compile(r"\\(.)", re.S)
-#: What the search rules' command start looks behind for, escaped: bash
-#: reads ``\\;`` as a plain ``;``, which starts no command.
-_ESCAPED_START = {c: "" for c in ";&|(`"}
-
-
-def _escaped_starts_plain(text: str) -> str:
-    """*text* for :data:`DENY_BASH_SEARCH_PATTERNS`: a separator, ``(`` or
-    backtick behind a backslash becomes a plain character, so it starts
-    no command there (as in bash). Those patterns read an escaped
-    character as part of a word, so otherwise each such character in one
-    long word started a scan of the rest of it: ``\\`a=`` repeated to 8 KB
-    took 0.74 s, to 100 KB minutes."""
-    if "\\" not in text:
-        return text
-    return _ESCAPED_RE.sub(
-        lambda m: "\\" + _ESCAPED_START.get(m[1], m[1]), text)
 
 
 def _may_match(pat: str, subject: str, lowered: dict[str, str | None],
@@ -1697,8 +1883,8 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
     read: dict = {}
     # each subject's lower case, for the patterns' needed text
     lowered: dict[str, str | None] = {}
-    # the command for the search rules (see _escaped_starts_plain)
-    search_subject: str | None = None
+    # the search rules' copy of the command (see _search_hit)
+    search_memo: dict = {}
     if any(pat in dequoted_patterns or pat == BASH_GLOB_REACHES_AIPAGER_DIR
            for pat in patterns):
         copies = (dequote(normalized),)
@@ -1714,16 +1900,18 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
                 log.info("bash_violation: command blocked by pattern %r", pat)
                 return BASH_REASON
             continue
+        if pat in _SEARCH_VARIANTS:
+            if (_may_match(pat, normalized, lowered)
+                    and _search_hit(pat, normalized, search_memo)):
+                log.info("bash_violation: command blocked by pattern %r", pat)
+                return BASH_SEARCH_REASON
+            continue
         if pat in dequoted_patterns:
             subjects: tuple[str, ...] = (normalized, *copies)
             if spelled:
                 subjects += (spelled,)
             # a command with no quotes is its own quote-free copy
             subjects = tuple(dict.fromkeys(subjects))
-        elif pat in DENY_BASH_SEARCH_PATTERNS:
-            if search_subject is None:
-                search_subject = _escaped_starts_plain(normalized)
-            subjects = (search_subject,)
         elif pat in DENY_BASH_PATTERNS:
             subjects = (normalized,)
         else:

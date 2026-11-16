@@ -878,27 +878,141 @@ def test_each_pattern_meets_each_distinct_subject_once(monkeypatch):
     assert len(seen) == len(DENY_BASH_PATTERNS) - 1
 
 
-# ----- an escaped separator starts no command for the search rules -----
+# ----- the search rules read the command as typed, in linear time -----
 
-def test_an_escaped_separator_starts_no_search_command():
-    """Bash reads ``\\;`` as a plain ``;`` (no command starts after it);
-    ``\\\\;`` is an escaped backslash, then a real ``;``."""
-    assert bash_violation("echo x\\; grep -rn aipager ~", DENY_BASH_PATTERNS) is None
-    assert bash_violation("echo x\\| grep -rn aipager ~", DENY_BASH_PATTERNS) is None
-    assert bash_violation("echo x\\\\; grep -rn aipager ~", DENY_BASH_PATTERNS) == (
+B = chr(92)
+
+#: An escaped separator another parser turns into a real one: ``eval``,
+#: ``bash -c "..."`` (whose quotes make ``\\\\`` one backslash), a
+#: backtick body, ``$'...'`` (review-8 rev-iter8-001, test-report-8
+#: tester-iter8-003). Bash runs the home search in each; main refuses
+#: each; d6d18a17 allowed each.
+ESCAPED_REPARSED = [
+    'bash -c "echo x' + B * 3 + '; grep -rn aipager ~"',
+    'sh -c "echo x' + B * 3 + '; grep -rn aipager ~"',
+    'bash -c "echo x' + B * 3 + '& grep -rn aipager ~"',
+    'bash -c "cd /tmp' + B * 3 + '; grep -rn aipager ~"',
+    'sh -c "true' + B * 3 + ';find ~ -name aipager.yaml"',
+    "echo `echo x" + B * 3 + "; grep -rn aipager ~`",
+    'echo "`echo x' + B * 3 + '; grep -rn aipager ~`"',
+    "x=`echo x" + B * 3 + "& grep -rn token ~`",
+    "cat <<E\n`echo x" + B * 3 + "; grep -rn aipager ~`\nE",
+    "eval echo x" + B + "; grep -rn token ~",
+    "eval echo x" + B + "&& grep -rn token ~",
+    "bash -c $'echo x" + B * 3 + "| grep -rn token ~'",
+]
+
+
+@pytest.mark.parametrize("cmd", ESCAPED_REPARSED)
+def test_an_escaped_separator_a_later_parser_reads_starts_a_search(cmd):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_SEARCH_REASON
+    assert bash_violation(cmd, safety.DENY_BASH_SEARCH_PATTERNS) == (
         safety.BASH_SEARCH_REASON)
-    assert bash_violation("find ~ \\( -name a -o -name b \\)", DENY_BASH_PATTERNS) == (
-        safety.BASH_SEARCH_REASON)
-    assert safety._escaped_starts_plain("a\\;b\\\\;c\\x") == (
-        "a\\\uf8feb\\\\;c\\x")
 
 
-@pytest.mark.parametrize("unit", ["\\`a=", "\\;a=", "\\|ls\\;", "\\(a=", "\\&a="])
+#: One row per search of :func:`safety._search_hit` that alone finds main's
+#: match (each fails when that search is taken out).
+ONE_SEARCH = [
+    # 1: a user name ends at the separator of ``\;`` (the mark in the copy)
+    ("whole", "grep -rn x /home/a" + B + ";b/src"),
+    # 2: from an escaped separator
+    ("escaped", "echo x" + B + "; grep -rn aipager ~"),
+    ("escaped", "echo x" + B + "|ls -R /"),
+    ("escaped", "echo x" + B + "(du -sh ~"),
+    ("escaped", "echo x" + B + "`find ~ -name a"),
+    ("escaped", "echo x" + B + "&rg --files ~"),
+    # a lookahead reading past the next one finds what it looks for there
+    ("escaped", "echo x" + B + "; grep x ~ a" + B + ";b -r"),
+    # 3: reading past the next escaped separator after the name ...
+    ("after_name", "echo x" + B + "; grep -rn a" + B + ";b ~"),
+    ("after_name", "echo x" + B + "; find a" + B + ";b ~"),
+    ("after_name", "echo x" + B + "; find -D a" + B + ";b ~"),
+    ("after_name", "echo x" + B + "; ls a" + B + "; -R ~"),
+    ("after_name", "echo x" + B + "; rg -e a" + B + ";b ~"),
+    ("after_name", "echo x" + B + "; grep -rn -a" + B + ";b x ~"),
+    # ... and before it, in a setting or a wrapper's option
+    ("before_name", "echo x" + B + "; X=a" + B + ";b grep -rn x ~"),
+    ("before_name", "echo x" + B + "; timeout -k1" + B + ";b du ~"),
+]
+
+
+@pytest.mark.parametrize("which,cmd", ONE_SEARCH)
+def test_each_search_finds_what_main_finds(which, cmd, monkeypatch):
+    import re
+    assert any(re.search(p, cmd) for p in safety.DENY_BASH_SEARCH_PATTERNS)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_SEARCH_REASON
+    index = ["whole", "escaped", "after_name", "before_name"].index(which)
+    never = re.compile("(?!)")
+    variants = {pat: tuple(never if i == index else v
+                           for i, v in enumerate(vs))
+                for pat, vs in safety._SEARCH_VARIANTS.items()}
+    monkeypatch.setattr(safety, "_SEARCH_VARIANTS", variants)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+
+
+@pytest.mark.parametrize("cmd", [
+    # read past only when a home or ``/`` folder word comes later ...
+    "echo " + B + ";a=" + B + ";b ; ls -R src",
+    "echo " + B + ";grep -r a" + B + ";b src",
+    # ... and, read past before the name, only when the name comes later
+    "ls -R x; echo " + B + ";a=" + B + ";b /",
+    # the 57 s shape of iteration 8, short
+    (B + "`a=") * 50 + " ; ls ~/.config/nvim x",
+])
+def test_reading_past_an_escaped_separator_needs_what_could_follow(cmd):
+    import re
+    assert not any(re.search(p, cmd) for p in safety.DENY_BASH_SEARCH_PATTERNS)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+
+
+def _search_corpus(seed: int, count: int) -> list[str]:
+    import random
+    vocab = [" ", " ", "\t", "\n", ";", "&", "|", "(", ")", "`", "<", B,
+             B + ";", B + "&", B + "|", B + "(", B + "`", B * 2, B + "\n",
+             "'", '"', "x", "a=", "-r", "-R", "-e", "-D", "--files", "-f",
+             "grep", "rg", "find", "ls", "du", "tree", "ack", "env", "timeout",
+             "sh -c ", "~", "/", "$HOME", "/home/a" + B, "/root", "src", "y"]
+    rnd = random.Random(seed)
+    out = []
+    for _ in range(count):
+        parts = [rnd.choice(vocab) for _ in range(rnd.randint(1, 10))]
+        parts.insert(rnd.randrange(len(parts) + 1), " " + rnd.choice(
+            ["grep -r", "rg", "find", "ls -R", "du", "rg --files"]) + " ")
+        parts.append(" " + rnd.choice(["~", "/", "$HOME", "src"]))
+        out.append("".join(parts))
+    return out
+
+
+def test_the_search_rules_are_never_more_permissive_than_main():
+    """Main's patterns searched on the command as typed against the three
+    linear searches, on commands full of escaped separators: every match
+    of main's is found (some commands are refused that main allows)."""
+    import re
+    compiled = [(p, re.compile(p)) for p in safety.DENY_BASH_SEARCH_PATTERNS]
+    found = 0
+    for cmd in _search_corpus(9, 4000):
+        for pat, rx in compiled:
+            if rx.search(cmd):
+                found += 1
+                assert safety._search_hit(pat, cmd, {}), (pat, cmd)
+    assert found > 300
+
+
+def test_the_copy_marks_each_escaped_separator():
+    assert safety._escaped_starts_plain("a" + B + ";b" + B * 2 + ";c" + B + "x") == (
+        "a" + B + "\uf8feb" + B * 2 + ";c" + B + "x")
+
+
+@pytest.mark.parametrize("unit", [
+    B + "`a=", B + ";a=", B + "|ls" + B + ";", B + "(a=", B + "&a=",
+    B + ";grep -r ", B + ";rg x ", B + "`env -", B + ";ls -R ", B + ";tree ",
+    B + "`du -a ", "x" + B + ";find ", B + ";a=" + B + " ", '"' + B + "`a="])
 @pytest.mark.parametrize("tail", ["; cat ~/.config/aipager/x",
-                                  "; ls ~/.config/nvim x"])
+                                  "; ls ~/.config/nvim x", " ~"])
 def test_escaped_separators_in_one_word_stay_fast(unit, tail):
-    """The iteration 8 timing sweep: ``\\`a=`` repeated to 100 KB took 57 s, every
-    escaped backtick starting a search rule's scan of the rest."""
+    """Main's search patterns start a command at every escaped separator
+    and read the rest of the word from each: ``\\`a=`` repeated to 100 KB
+    took 57 s, ``\\;grep -r `` and ``\\;rg x `` minutes."""
     import time
     cmd = unit * (100_000 // len(unit)) + tail
     best = float("inf")
@@ -906,6 +1020,8 @@ def test_escaped_separators_in_one_word_stay_fast(unit, tail):
         start = time.perf_counter()
         verdict = bash_violation(": r%d ; %s" % (k, cmd), DENY_BASH_PATTERNS)
         best = min(best, time.perf_counter() - start)
+        if best < 0.5:
+            break
     assert best < 0.5
     if "aipager" in tail:
         assert verdict is not None
