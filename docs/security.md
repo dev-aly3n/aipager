@@ -556,7 +556,10 @@ options before the subcommand (`aipager -v setup`), in any letter case,
 as `python -m aipager` (`-maipager`), through a path to the binary,
 through a glob that could match its name (`aip*r setup`, also in a
 function body: `f(){ aip* setup; }; f` or
-`function f { aip* setup; }; f`) and through `xargs aipager`;
+`function f { aip* setup; }; f`, wherever a command can start, such as
+after `{`, `then` or `time`, and in a body that is another compound
+command: `f() while aip* setup; do break; done; f`) and through
+`xargs aipager`;
 `systemctl`, `launchctl`, `kill`, `pkill` or `killall` naming aipager; a
 Python interpreter running code that imports aipager's own modules
 (`python3 -c "import os, aipager.scope"`, a here-document, `runpy`); any
@@ -593,7 +596,10 @@ quotes, comments, here-document bodies, `${...}`, an assignment's
 commands inside `$(...)`, backticks and `${x:-...}` are read as more
 words, and the default of an unquoted `${x:-default}` (or `${x-...}`,
 `${x:=...}`, `${x:+...}`) and the replacement of `${x/pattern/new}` (or
-`${x//...}`, `${x/#...}`, `${x/%...}`) count as possible values. It
+`${x//...}`, `${x/#...}`, `${x/%...}`) count as possible values. A bare
+`&` in that replacement stands for the text the pattern matched, as in
+bash 5.2 (`${x/a/&ipager}`), and a variable or `${...}` right next to a
+glob may be empty (`[a]ipager$x`). It
 can't be sure it reads every command as bash does, so text it sets aside
 (a comment, a here-document body, the text inside any `${...}`, open or
 closed) is checked as words anyway when it could name `.config` or
@@ -604,7 +610,8 @@ When the floor can't be sure what bash would do with a word that could
 name `.config` or `.local`, it refuses the word. For example: an
 extended glob or another shell's group anywhere in a folder name
 (`~/.config/@(aipager)`, `~/.config?(x)/aipager`), a bracket bash reads
-in more than one way (`[[.a]`, `aip[a[=[=]ger`) or that holds a plain
+in more than one way (`[[.a]`, `aip[a[=[=]ger`), with a range from a
+POSIX item (`[[.a.]-z]`, `[[=a=]]h-j]`) or that holds a plain
 `[` (`[[]ipager`), more brace results than it lists (256 for one word,
 4,096 for the whole command), braces nested more than 32 deep, or a word
 with braces longer than 8 KB. When a quote, `${`, `$(`, a backtick or a
@@ -710,16 +717,23 @@ sees the words, not where the shell runs them, so it cannot see a search
 with no folder, or `.` or `..`, run from (or below) the home folder
 (`cd ~ && grep -r x .`), a home folder reached through another variable
 or a glob, nor one written out in full outside `/home`, `/Users` and
-`/root`, nor `\grep`, nor a folder right after a word ending in `-e`
-or `-f` (taken for the text `-e`/`-f` gives grep and rg, so
-`ag x -f ~` gets through). It also does not know which options take a
+`/root`, nor `\grep`, nor a search run through `eval` or `find -exec`
+(`find . -exec grep -r x ~ \;`), nor one on the line after a comment
+that ends in a backslash or after a `\\` that ends a line, nor one
+inside an escaped backtick within backticks, nor a folder right after a
+word ending in `-e` or `-f` (taken for the text `-e`/`-f` gives grep and
+rg, so `ag x -f ~` gets through). It also does not know which options take a
 separate value, so `rg -t py "$HOME" .` or `grep -rn -A 3 "/home/you"
 src` reads `py` or `3` as the text and the home path as a folder, and is
 denied (write `-A3`, `--include=*.py`, or put the option after the
 text), and so is a home path given to `-e` inside a cluster
 (`grep -rne "/home" src`; `-r -n -e` is fine); a command quoted inside
 another command's text (`echo "a; rg x ~"`) is denied too, and so is
-`du -sh ~` (sizes only).
+`du -sh ~` (sizes only). A `;`, `&`, `|`, `(` or backtick behind a
+backslash also counts as the start of a command, since `eval`,
+`bash -c "..."` or backticks read it again as a real one, so
+`echo x\; grep -rn x ~` is denied even though bash alone runs no search
+there.
 
 **Why one block halts the whole turn.** After a tool call is blocked,
 every later call in the same turn is denied too, until the next
