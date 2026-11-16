@@ -218,3 +218,29 @@ def test_a_bad_reading_in_the_file_is_dropped(bad):
     _write(json.dumps(doc))
     usage_store.load()
     assert usage_store.snapshot(None, now=NOW).plan == ()
+
+
+def test_an_empty_reading_never_erases_a_stored_one():
+    usage_store.note_plan("frontend", _windows(42.0), SAVED, now=NOW)
+    assert usage_store.note_plan("backend", {}, SAVED, now=NOW + 120) is False
+    (reading,) = usage_store.snapshot(None, now=NOW + 120).plan
+    assert reading.windows == {"seven_day": Window(42.0, LATER)}
+    assert reading.session == "frontend"
+
+
+def test_the_daemons_stop_writes_the_store_at_once(mk_bot, run_async):
+    """There is no next tick after a stop to debounce onto: the stop
+    forces the write, even within ``MIN_SAVE_INTERVAL`` of the last one."""
+    from unittest.mock import AsyncMock
+
+    usage_store.note_plan("frontend", _windows(42.0), SAVED, now=NOW)
+    assert usage_store.save_if_dirty(force=True)
+    usage_store.note_plan("frontend", _windows(43.0), SAVED, now=NOW + 1)
+    assert usage_store.save_if_dirty() is False          # debounced
+    bot = mk_bot()
+    bot._app.updater.stop = AsyncMock()
+    bot._app.stop = AsyncMock()
+    bot._app.shutdown = AsyncMock()
+    run_async(bot.stop())
+    saved = usage_store.read()
+    assert saved["plan"][0]["windows"]["seven_day"]["pct"] == 43.0
