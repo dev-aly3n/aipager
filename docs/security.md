@@ -598,8 +598,9 @@ words, and the default of an unquoted `${x:-default}` (or `${x-...}`,
 `${x:=...}`, `${x:+...}`) and the replacement of `${x/pattern/new}` (or
 `${x//...}`, `${x/#...}`, `${x/%...}`) count as possible values. A bare
 `&` in that replacement stands for the text the pattern matched, as in
-bash 5.2 (`${x/a/&ipager}`), and a variable or `${...}` right next to a
-glob may be empty (`[a]ipager$x`). It
+bash 5.2 (`${x/a/&ipager}`, inside double quotes too, and when a default
+inside the replacement gives it: `${x/a/${z:-&}ipager}`), and a variable
+or `${...}` right next to a glob may be empty (`[a]ipager$x`). It
 can't be sure it reads every command as bash does, so text it sets aside
 (a comment, a here-document body, the text inside any `${...}`, open or
 closed) is checked as words anyway when it could name `.config` or
@@ -613,8 +614,9 @@ extended glob or another shell's group anywhere in a folder name
 in more than one way (`[[.a]`, `aip[a[=[=]ger`), with a range from a
 POSIX item (`[[.a.]-z]`, `[[=a=]]h-j]`) or that holds a plain
 `[` (`[[]ipager`), more brace results than it lists (256 for one word,
-4,096 for the whole command), braces nested more than 32 deep, or a word
-with braces longer than 8 KB. When a quote, `${`, `$(`, a backtick or a
+4,096 for the whole command), braces nested more than 32 deep, a word
+with braces longer than 8 KB, or more than 8 KB of matched text put in
+place of `&` in one command. When a quote, `${`, `$(`, a backtick or a
 here-document is still open at the end of the command, bash would read
 it differently or not at all, so the whole command is refused if any
 part of it could name `.config` or `.local`.
@@ -705,8 +707,10 @@ whose folder is `~`, `~user`, `$HOME`, `${HOME}` or `"$HOME"`, `/home`,
 `/home/<user>` (or `/home/$USER`), `/Users`, `/Users/<user>`, `/root` or
 `/` (with or without a trailing `/`, `/.` or `/*`), or `~/.config` or
 `~/.local`, which hold aipager's folders. This holds after `cd x &&`,
-in a pipe, inside `bash -c "..."`, after `xargs`, `env` or `timeout` and
-after `LC_ALL=C`-style settings.
+in a pipe, inside `bash -c "..."` (where the home folder may also be
+written `\$HOME`, or end in an escaped quote of a `bash -c \"...\"`
+inside it), after `xargs`, `env` or `timeout` and after
+`LC_ALL=C`-style settings.
 The reply says to search inside a project folder instead. Searches of a
 project folder (`grep -rn x ~/proj`, `rg x src/`, `find . -name y`),
 searches inside a project FOR a home path (`grep -rn "$HOME" src`, the
@@ -718,8 +722,12 @@ with no folder, or `.` or `..`, run from (or below) the home folder
 (`cd ~ && grep -r x .`), a home folder reached through another variable
 or a glob, nor one written out in full outside `/home`, `/Users` and
 `/root`, nor `\grep`, nor a search run through `eval` or `find -exec`
-(`find . -exec grep -r x ~ \;`), nor one on the line after a comment
-that ends in a backslash or after a `\\` that ends a line, nor one
+(`find . -exec grep -r x ~ \;`) or through `bash -c` with an unquoted
+argument (`bash -c echo\ x\;grep\ -rn\ x\ \~`), nor one
+on the line after a comment that ends in a backslash or after a `\\`
+that ends a line, including where a later reading (inside
+`bash -c $'...'`, backticks or a here-document) takes a backslash out
+first and so ends a line or a setting early, nor one
 inside an escaped backtick within backticks, nor a folder right after a
 word ending in `-e` or `-f` (taken for the text `-e`/`-f` gives grep and
 rg, so `ag x -f ~` gets through). It also does not know which options take a
