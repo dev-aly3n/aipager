@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Iterator
 
 from aipager import peer_auth, safety, send_check
+from aipager.dtach import timed_check
 from aipager.policy_snapshot import (
     LOOP_SENTINELS,
     SCHEDULING_TOOLS,
@@ -2034,7 +2035,7 @@ def _decide(data: dict):
                               wide_cwd=wide_cwd,
                               home_read_roots=home_read_roots,
                               root_cwd=root_cwd)
-        or (safety.bash_violation(tool_input.get("command", ""), bash_pats)
+        or (timed_check.bash_violation(tool_input.get("command", ""), bash_pats)
             if tool_name == "Bash" else None)
         or safety.tool_violation(tool_name, deny_tools, allow_tools)
     )

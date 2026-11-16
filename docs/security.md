@@ -440,6 +440,10 @@ cover):
   error (a NUL byte in a path, a bug), or the hook runs out of memory
   while deciding, the call is denied - unless the session's rules could
   be read and grant the owner's bypass. It used to be let through.
+  A Bash command longer than 1 KB is checked in a separate process that
+  gets 3 seconds; one that takes longer (a command built to slow the
+  check down) is denied the same way, so it can neither hang the
+  session nor run unchecked when Claude Code gives up on the hook.
 
 **Your own protected paths.** The `safety:` section of `policy.yaml`
 (`deny_paths_no_access`, `deny_paths_no_write`, `deny_bash_patterns`)
