@@ -1607,9 +1607,9 @@
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "حسب النموذج، آخر ٧ أيام"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "تظهر حدود الاشتراك هنا بعد أن يجيب Claude في جلسة مسجّلة باشتراك Claude. مفاتيح API والبوابات التي ليس لها حد إنفاق لا تُبلغ عنها."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "حدود الاشتراك"}
-{"k": "usage.resets.days", "src": "8ec71dd7", "v": "يُعاد الضبط بعد {days} يوم و{hours} ساعة"}
-{"k": "usage.resets.hours", "src": "80940941", "v": "يُعاد الضبط بعد {hours} ساعة و{minutes} دقيقة، الساعة {time}"}
-{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "يُعاد الضبط بعد {minutes} دقيقة، الساعة {time}"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "يُعاد الضبط بعد {days} ي {hours} س"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "يُعاد الضبط بعد {hours} س {minutes} د، الساعة {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "يُعاد الضبط بعد {minutes} د، الساعة {time}"}
 {"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"few": "قبل {n} أيام", "many": "قبل {n} يومًا", "one": "قبل يوم", "other": "قبل {n} يوم", "two": "قبل يومين", "zero": "اليوم"}}
 {"k": "usage.row.today", "src": "24345a14", "v": "اليوم"}
 {"k": "usage.row.week", "src": "df833fe8", "v": "آخر ٧ أيام"}
