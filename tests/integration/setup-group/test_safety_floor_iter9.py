@@ -35,11 +35,11 @@ Known gaps found this round (strict xfail, the project's convention):
   (100 KB: 4.5 s to about 40 s; b5153bd7: 0.06 s). Measured here at 25 KB,
   where a linear reading takes about 0.02 s.
 
-- AMP_DQ_OPEN: inside double quotes (``~/.config/"${x/a/&ipager}"/x``,
-  ``"$HOME/.config/${x/a/&ipager}/x"``) bash 5.2 still turns the bare
-  ``&`` into the matched text; so does a ``&`` that comes from a default
-  inside the replacement (``${x/a/${z:-&}ipager}``). The floor reads the
-  bare ``&`` only outside double quotes.
+- AMP_DQ_OPEN (closed in iteration 10): inside double quotes
+  (``~/.config/"${x/a/&ipager}"/x``, ``"$HOME/.config/${x/a/&ipager}/x"``)
+  bash 5.2 still turns the bare ``&`` into the matched text; so does a
+  ``&`` that comes from a default inside the replacement
+  (``${x/a/${z:-&}ipager}``). The floor now reads both.
 - SEARCH_OPEN: inside ``bash -c "..."`` an escaped ``\\$HOME`` (the usual
   way to keep the outer shell from expanding it) or a nested ``bash -c
   \\"...\\"`` whose escaped quote follows the folder word: the inner bash
@@ -246,9 +246,9 @@ def test_bare_ampersand_reaching_command_is_blocked(cmd):
     assert _blocked(cmd) is True
 
 
-AMP_DQ = ("undocumented gap (tester iteration 9): bash 5.2 replaces a bare & "
-          "in a ${x/pat/new} replacement inside double quotes too, and a & "
-          "that comes from a default inside the replacement")
+# Closed in iteration 10 (were strict xfails): bash 5.2 replaces a bare &
+# in a ${x/pat/new} replacement inside double quotes too, and a & that
+# comes from a default inside the replacement.
 PATSUB_AMP_OPEN = [
     ('amp-dq-01', 'cat ~/.config/"${x/a/&ipager}"/x'),
     ('amp-dq-02', 'cat "$HOME/.config/${x/a/&ipager}/x"'),
@@ -260,10 +260,15 @@ PATSUB_AMP_OPEN = [
     ('amp-dq-08', 'f=~/.config/"${x/a/&ipager}"/x; cat "$f"'),
     ('amp-dq-09', 'cat ~/.local/share/"${x/a/&ipager}"/x'),
     ('amp-dq-10', 'cat ~/.config/${x/a/${z:-&}ipager}/x'),
+    # Iteration 10: was amp-ok-09 (allowed). A here-string names the path
+    # without reading it, but the floor refuses any command naming
+    # aipager's folders (``cat <<<"$HOME/.config/aipager/x"`` is refused by
+    # the plain-path rule), so the same text spelled through ``&`` is too.
+    ('amp-here-string', 'cat <<<"$HOME/.config/${x/a/&ipager}/x"'),
 ]
 
 
-@_xfail_params(PATSUB_AMP_OPEN, AMP_DQ)
+@_params(PATSUB_AMP_OPEN)
 def test_ampersand_in_double_quotes_or_from_a_default_is_blocked(cmd):
     assert _blocked(cmd) is True
 
@@ -277,7 +282,6 @@ PATSUB_AMP_ALLOWED = [
     ('amp-ok-06', 'cat ~/.local/state/${x/a/&i&pager}/x'),
     ('amp-ok-07', 'echo ${x/a/&b}'),
     ('amp-ok-08', 'echo "${x//-/&&}"'),
-    ('amp-ok-09', 'cat <<<"$HOME/.config/${x/a/&ipager}/x"'),
     ('amp-ok-10', 'echo "${x/a/&b}"'),
     ('amp-ok-11', 'echo "${PATH//:/&&}"'),
 ]

@@ -681,7 +681,8 @@ class _Lexer:
             self.sure = False
         return n
 
-    def _param(self, i: int, cur: _Word, quoted: bool) -> int:
+    def _param(self, i: int, cur: _Word, quoted: bool,
+               amp: _Stand | None = None) -> int:
         """Read ``${...}`` from *i* (after ``${``); one :data:`OPAQUE` in
         *cur*. Unquoted, a default (``${x:-word}``) or a replacement
         (``${x/pat/rep}``) may put its text in the value: the word's
@@ -690,7 +691,15 @@ class _Lexer:
         operation's text is also a word of its own, and it is set aside
         to be read again as plain words (:meth:`_set_aside`), to the end
         of the command when nothing closes it. A command substitution
-        inside is read as more words."""
+        inside is read as more words.
+
+        Bash 5.2 puts the matched text where a replacement has a bare
+        ``&``, inside double quotes too, and where a default inside the
+        replacement gives one (``${x/a/${z:-&}ipager}``; a quoted ``"&"``,
+        ``'&'`` or ``\\&`` stays plain): *amp* is the replacement around
+        this one, for such a default. A replacement whose ``&`` stood for
+        its pattern puts its text in the value inside double quotes too,
+        and so does a default inside it."""
         text, n = self.text, self.n
         begin = i - 2
         self._enter()
@@ -698,7 +707,10 @@ class _Lexer:
         head = _PARAM_HEAD_RE.match(text, i)
         value = head.group("value") if head is not None else None
         replacement = bool(value) and value[0] == "/"
-        stand: _Stand | None = None
+        # what a bare ``&`` here stands for: a default's is the pattern of
+        # the replacement around it, a replacement's its own (set where
+        # its pattern ends)
+        stand = amp if value and not replacement else None
         # a replacement's value is the text after the pattern's end, the
         # first unquoted ``/`` (None until it is met)
         rep_at: int | None = None if replacement else 0
@@ -712,7 +724,8 @@ class _Lexer:
                 self.level -= 1
                 self.params -= 1
                 inline = value is not None and rep_at is not None and (
-                    not quoted)
+                    not quoted or amp is not None
+                    or (replacement and stand is not None and stand.met))
                 own = word.alt_text()
                 if not inline and _WORTH_RE.search(own):
                     # not in the value: a word of its own (a value's text
@@ -765,7 +778,7 @@ class _Lexer:
             elif kind == "dq":
                 i = self._double_quoted(i, word)
             elif kind == "param":
-                i = self._param(i, word, quoted)
+                i = self._param(i, word, quoted, stand)
             elif kind == "subst":
                 i = self._comsub(i)
                 word.add(OPAQUE)

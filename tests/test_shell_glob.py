@@ -1375,6 +1375,37 @@ def test_an_ampersand_that_is_no_matched_text_is_plain(cmd):
     assert not g.command_reaches(cmd)
 
 
+@pytest.mark.parametrize("cmd", [
+    # tester-iter9-002: bash 5.2 replaces a bare ``&`` in double quotes too
+    'cat ~/.config/"${x/a/&ipager}"/x',
+    'cat "$HOME/.config/${x/a/&ipager}/x"',
+    'cat ~/.config/"${x//a/&ipager}"/x',
+    'cat ~/.config/"${x/a/&}ipager"/x',
+    # ... and a ``&`` a default inside the replacement gives
+    "cat ~/.config/${x/a/${z:-&}ipager}/x",
+    'cat ~/.config/"${x/a/${z:-&}ipager}"/x',
+    "cat ~/.config/${x/a/${z:-${w:-&}}ipager}/x",
+])
+def test_an_ampersand_in_double_quotes_or_a_default_is_the_matched_text(cmd):
+    assert g.command_reaches(cmd)
+
+
+@pytest.mark.parametrize("cmd", [
+    # bash 5.2 leaves these plain (checked with the real shell)
+    "cat ~/.config/\"${x/a/'&'ipager}\"/x",
+    'cat ~/.config/"${x/a/\\&ipager}"/x',
+    'cat ~/.config/"${x/a/"&"ipager}"/x',
+    "cat ~/.config/${x/a/${z:-\\&}ipager}/x",
+    'cat ~/.config/${x/a/"${z:-&}"ipager}/x',
+    "cat ~/.config/\"${x/a/${z:-'&'}ipager}\"/x",
+    # a default not inside a replacement has no matched text
+    "cat ~/.config/${z:-&ipager}/x",
+    'cat ~/.config/"${x/b/&ipager}"/x',
+])
+def test_a_quoted_or_outside_ampersand_stays_plain(cmd):
+    assert not g.command_reaches(cmd)
+
+
 def test_the_pattern_stands_for_the_matched_text():
     assert "~/.config/aipager/x" in g.words("cat ~/.config/${x/a/&ipager}/x")
     assert "~/.config/[a]ipager/x" in g.words("cat ~/.config/${x/[a]/&ipager}/x")
