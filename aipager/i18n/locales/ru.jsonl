@@ -293,6 +293,7 @@
 {"k": "cmd.status", "src": "b3ddc08d", "v": "Твои сессии"}
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "Остановить то, что делает Claude"}
 {"k": "cmd.talk", "src": "a0173425", "v": "Общаться с {session}"}
+{"k": "cmd.usage", "src": "0311ee6e", "v": "Лимиты плана и токены"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"few": "<i>…и ещё {n} строки</i>", "many": "<i>…и ещё {n} строк</i>", "one": "<i>…и ещё {n} строка</i>", "other": "<i>…и ещё {n} строки</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Завершено (фоновый агент пропал)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Завершено ({clock}, фоновый агент пропал)"}
@@ -317,7 +318,7 @@
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Пиши от своего аккаунта, чтобы пользоваться ботом."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"few": "⏳ пришло с опозданием: задержано на {n} минуты из-за лимита Telegram", "many": "⏳ пришло с опозданием: задержано на {n} минут из-за лимита Telegram", "one": "⏳ пришло с опозданием: задержано на {n} минуту из-за лимита Telegram", "other": "⏳ пришло с опозданием: задержано на {n} минуты из-за лимита Telegram"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "Это сообщение слишком старое и не отправлено; отправь его ещё раз."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>Админ:</b> /update (обновить aipager и Claude Code)"}
+{"k": "help.admin", "src": "67882dc1", "v": "<b>Админ:</b> /update (обновить aipager и Claude Code) · /usage (лимиты плана и токены)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>Управление:</b> /stop · /now (отправить очередь сейчас) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>Сессии:</b> /status, затем ⋮ (перезапуск, переименование, diff, завершение, удаление)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>Настройки:</b> /settings · /mode (режим «Спрашивать», Авто или «Полный доступ»)"}
@@ -1156,6 +1157,7 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Включить режим Авто"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Включить режим «Полный доступ»"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Повторить"}
+{"k": "ui.btn.usage", "src": "0bb18642", "v": "Использование"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Подождать ещё 10 мин"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Очистить переписку в {session}?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude начнёт новую переписку и забудет эту; старая останется сохранённой на компьютере, но продолжить её отсюда нельзя."}
@@ -1476,6 +1478,7 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Обновлено до {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"few": "Обновлено до {version}; снова подключены {n} сессии.", "many": "Обновлено до {version}; снова подключено {n} сессий.", "one": "Обновлено до {version}; снова подключена {n} сессия.", "other": "Обновлено до {version}; снова подключены {n} сессии."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} установлен и ждёт перезапуска."}
+{"k": "ui.usage.title", "src": "0bb18642", "v": "Использование"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude тебя спрашивает"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude нужно твоё разрешение"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "В чате открыт запрос разрешения."}
@@ -1580,6 +1583,46 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Перезапусти aipager, чтобы завершить обновление."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Обновление остановилось из-за непредвиденной ошибки (подробности в логе aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Запланированный перезапуск не произошёл: новая версия установлена, но всё ещё работает старая. Перезапусти вручную: {command}"}
+{"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Из кэша"}
+{"k": "usage.col.cache_write", "src": "d725b361", "v": "В кэш"}
+{"k": "usage.col.input", "src": "aef36502", "v": "Вход"}
+{"k": "usage.col.output", "src": "220e06ba", "v": "Выход"}
+{"k": "usage.days.title", "src": "d27d4f9b", "v": "По дням"}
+{"k": "usage.denied", "src": "573cfa99", "v": "🚫 Использование может смотреть только админ."}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"few": "Данные на {time} ({n} дня назад), из сессии {session}.", "many": "Данные на {time} ({n} дней назад), из сессии {session}.", "one": "Данные на {time} ({n} день назад), из сессии {session}.", "other": "Данные на {time} ({n} дня назад), из сессии {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"few": "Данные на {time} ({n} часа назад), из сессии {session}.", "many": "Данные на {time} ({n} часов назад), из сессии {session}.", "one": "Данные на {time} ({n} час назад), из сессии {session}.", "other": "Данные на {time} ({n} часа назад), из сессии {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"few": "Данные на {time} ({n} минуты назад), из сессии {session}.", "many": "Данные на {time} ({n} минут назад), из сессии {session}.", "one": "Данные на {time} ({n} минуту назад), из сессии {session}.", "other": "Данные на {time} ({n} минуты назад), из сессии {session}."}}
+{"k": "usage.fresh.now", "src": "eb614feb", "v": "Данные на {time} (только что), из сессии {session}."}
+{"k": "usage.group_note", "src": "827f3d0c", "v": "Лимиты плана в группе не показываются. Отправь /usage в личном чате с ботом или открой Mini App."}
+{"k": "usage.login.cloud", "src": "db9bd808", "v": "Облачный провайдер"}
+{"k": "usage.login.gateway", "src": "c45b6181", "v": "Шлюз {host}"}
+{"k": "usage.login.saved", "src": "8ebcb721", "v": "Вход в Claude, сохранённый на этом компьютере"}
+{"k": "usage.login.token", "src": "64d01959", "v": "Токен входа Claude"}
+{"k": "usage.login.unknown", "src": "1bf1c689", "v": "Неизвестный вход"}
+{"k": "usage.models.title", "src": "cd5eb0b5", "v": "По моделям, за 7 дней"}
+{"k": "usage.plan.none", "src": "dbfa3286", "v": "Лимиты плана появятся здесь, когда Claude ответит в сессии, где вход выполнен по подписке Claude. API-ключи и шлюзы без лимита расходов их не сообщают."}
+{"k": "usage.plan.title", "src": "f65ebee7", "v": "Лимиты плана"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "Сброс через {days} д {hours} ч"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "Сброс через {hours} ч {minutes} мин, в {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "Сброс через {minutes} мин, в {time}"}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"few": "{n} дня назад", "many": "{n} дней назад", "one": "{n} день назад", "other": "{n} дня назад"}}
+{"k": "usage.row.today", "src": "24345a14", "v": "Сегодня"}
+{"k": "usage.row.week", "src": "df833fe8", "v": "За 7 дней"}
+{"k": "usage.row.yesterday", "src": "da24830f", "v": "Вчера"}
+{"k": "usage.title", "src": "0bb18642", "v": "Использование"}
+{"k": "usage.tokens.behind", "src": "f5039b88", "v": "aipager ещё читает прошлые разговоры, так что итоги могут вырасти."}
+{"k": "usage.tokens.none", "src": "43bf5b4d", "v": "Токенов пока не записано."}
+{"k": "usage.tokens.title", "src": "c38c6c1f", "v": "Токены"}
+{"k": "usage.tokens.title_chat", "src": "fe5e7335", "v": "Токены в этом чате"}
+{"k": "usage.tokens.title_managed", "src": "3285044d", "v": "Токены в чатах, которыми ты управляешь"}
+{"k": "usage.tokens.today", "src": "9463a013", "v": "Сегодня: {input} на входе, {output} на выходе, {cache_read} прочитано из кэша, {cache_write} записано в кэш"}
+{"k": "usage.tokens.week", "src": "c70b981a", "v": "За 7 дней: {input} на входе, {output} на выходе, {cache_read} прочитано из кэша, {cache_write} записано в кэш"}
+{"k": "usage.window.five_hour", "src": "a0eb1726", "v": "Окно 5 часов: использовано {pct}"}
+{"k": "usage.window.five_hour_reset", "src": "a673c8fd", "v": "Окно 5 часов: сбросилось после последнего замера"}
+{"k": "usage.window.seven_day", "src": "9d526d84", "v": "Эта неделя (все модели): использовано {pct}"}
+{"k": "usage.window.seven_day_reset", "src": "f42ff03c", "v": "Эта неделя (все модели): лимит сбросился после последнего замера"}
+{"k": "usage.window.spend_limit", "src": "5de9218d", "v": "Лимит расходов: использовано {pct}"}
+{"k": "usage.window.spend_limit_reset", "src": "6994710b", "v": "Лимит расходов: сбросился после последнего замера"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(любые)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}

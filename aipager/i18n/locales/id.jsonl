@@ -293,6 +293,7 @@
 {"k": "cmd.status", "src": "b3ddc08d", "v": "Sesi-sesimu"}
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "Hentikan yang sedang Claude kerjakan"}
 {"k": "cmd.talk", "src": "a0173425", "v": "Bicara dengan {session}"}
+{"k": "cmd.usage", "src": "0311ee6e", "v": "Batas paket dan token"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"other": "<i>…dan {n} baris lagi</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Selesai (agen latar belakang hilang)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Selesai ({clock}, agen latar belakang hilang)"}
@@ -317,7 +318,7 @@
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Kirim pesan atas namamu sendiri untuk memakai bot."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"other": "⏳ terlambat sampai: tertahan {n} menit karena batas Telegram"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "Pesan itu sudah terlalu lama dan tidak dikirim; kirim lagi."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>Admin:</b> /update (perbarui aipager dan Claude Code)"}
+{"k": "help.admin", "src": "67882dc1", "v": "<b>Admin:</b> /update (perbarui aipager dan Claude Code) · /usage (batas paket dan token)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>Kontrol:</b> /stop · /now (kirim pesan antrean) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>Kelola:</b> /status, lalu ⋮ (mulai ulang, ganti nama, diff, akhiri, hapus)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>Pengaturan:</b> /settings · /mode (Mode Tanya, Auto, atau Akses penuh)"}
@@ -1156,6 +1157,7 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Beralih ke Mode Auto"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Beralih ke Mode Akses penuh"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Coba lagi"}
+{"k": "ui.btn.usage", "src": "0bb18642", "v": "Pemakaian"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Tunggu 10 menit lagi"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Hapus percakapan di {session}?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude memulai percakapan baru dan melupakan yang ini; percakapan lama tetap tersimpan di komputer, tapi tidak bisa dilanjutkan dari sini."}
@@ -1476,6 +1478,7 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Diperbarui ke {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "Diperbarui ke {version}, {n} sesi tersambung lagi."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} sudah terpasang dan menunggu dimulai ulang."}
+{"k": "ui.usage.title", "src": "0bb18642", "v": "Pemakaian"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude sedang bertanya kepadamu"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude butuh izinmu"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Ada permintaan izin yang terbuka di chat."}
@@ -1580,6 +1583,46 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Mulai ulang aipager untuk menyelesaikan pembaruan."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Pembaruan berhenti karena error yang tidak terduga (lihat log aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Mulai ulang yang dijadwalkan tidak terjadi - versi baru sudah terpasang, tapi versi lama masih berjalan. Mulai ulang sendiri: {command}"}
+{"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Cache dibaca"}
+{"k": "usage.col.cache_write", "src": "d725b361", "v": "Cache ditulis"}
+{"k": "usage.col.input", "src": "aef36502", "v": "Masuk"}
+{"k": "usage.col.output", "src": "220e06ba", "v": "Keluar"}
+{"k": "usage.days.title", "src": "d27d4f9b", "v": "Per hari"}
+{"k": "usage.denied", "src": "573cfa99", "v": "🚫 Hanya admin yang bisa melihat pemakaian."}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"other": "Per pukul {time} ({n} hari lalu), dari sesi {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"other": "Per pukul {time} ({n} jam lalu), dari sesi {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"other": "Per pukul {time} ({n} menit lalu), dari sesi {session}."}}
+{"k": "usage.fresh.now", "src": "eb614feb", "v": "Per pukul {time} (baru saja), dari sesi {session}."}
+{"k": "usage.group_note", "src": "827f3d0c", "v": "Batas paket tidak ditampilkan di grup. Kirim /usage di chat pribadimu dengan bot, atau buka Mini App."}
+{"k": "usage.login.cloud", "src": "db9bd808", "v": "Penyedia cloud"}
+{"k": "usage.login.gateway", "src": "c45b6181", "v": "Gateway {host}"}
+{"k": "usage.login.saved", "src": "8ebcb721", "v": "Login Claude yang tersimpan di komputer ini"}
+{"k": "usage.login.token", "src": "64d01959", "v": "Token login Claude"}
+{"k": "usage.login.unknown", "src": "1bf1c689", "v": "Login tidak dikenal"}
+{"k": "usage.models.title", "src": "cd5eb0b5", "v": "Per model, 7 hari terakhir"}
+{"k": "usage.plan.none", "src": "dbfa3286", "v": "Batas paket muncul di sini setelah Claude menjawab di sesi yang masuk dengan langganan Claude. Kunci API dan gateway tanpa batas biaya tidak melaporkannya."}
+{"k": "usage.plan.title", "src": "f65ebee7", "v": "Batas paket"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "Direset dalam {days} hari {hours} jam"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "Direset dalam {hours} jam {minutes} menit, pukul {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "Direset dalam {minutes} menit, pukul {time}"}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"other": "{n} hari lalu"}}
+{"k": "usage.row.today", "src": "24345a14", "v": "Hari ini"}
+{"k": "usage.row.week", "src": "df833fe8", "v": "7 hari terakhir"}
+{"k": "usage.row.yesterday", "src": "da24830f", "v": "Kemarin"}
+{"k": "usage.title", "src": "0bb18642", "v": "Pemakaian"}
+{"k": "usage.tokens.behind", "src": "f5039b88", "v": "aipager masih membaca percakapan sebelumnya, jadi total ini bisa bertambah."}
+{"k": "usage.tokens.none", "src": "43bf5b4d", "v": "Belum ada token yang tercatat."}
+{"k": "usage.tokens.title", "src": "c38c6c1f", "v": "Token"}
+{"k": "usage.tokens.title_chat", "src": "fe5e7335", "v": "Token di chat ini"}
+{"k": "usage.tokens.title_managed", "src": "3285044d", "v": "Token di chat yang kamu kelola"}
+{"k": "usage.tokens.today", "src": "9463a013", "v": "Hari ini: {input} masuk, {output} keluar, {cache_read} dibaca dari cache, {cache_write} ditulis ke cache"}
+{"k": "usage.tokens.week", "src": "c70b981a", "v": "7 hari terakhir: {input} masuk, {output} keluar, {cache_read} dibaca dari cache, {cache_write} ditulis ke cache"}
+{"k": "usage.window.five_hour", "src": "a0eb1726", "v": "Jendela 5 jam: {pct} terpakai"}
+{"k": "usage.window.five_hour_reset", "src": "a673c8fd", "v": "Jendela 5 jam: sudah direset sejak pembacaan terakhir"}
+{"k": "usage.window.seven_day", "src": "9d526d84", "v": "Minggu ini (semua model): {pct} terpakai"}
+{"k": "usage.window.seven_day_reset", "src": "f42ff03c", "v": "Minggu ini (semua model): sudah direset sejak pembacaan terakhir"}
+{"k": "usage.window.spend_limit", "src": "5de9218d", "v": "Batas biaya: {pct} terpakai"}
+{"k": "usage.window.spend_limit_reset", "src": "6994710b", "v": "Batas biaya: sudah direset sejak pembacaan terakhir"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(semua)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}

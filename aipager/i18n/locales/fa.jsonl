@@ -293,6 +293,7 @@
 {"k": "cmd.status", "src": "b3ddc08d", "v": "سشن‌های شما"}
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "متوقف کردن کار Claude"}
 {"k": "cmd.talk", "src": "a0173425", "v": "گفتگو با {session}"}
+{"k": "cmd.usage", "src": "0311ee6e", "v": "محدودیت اشتراک و توکن‌ها"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"one": "<i>…و {n} خط دیگر</i>", "other": "<i>…و {n} خط دیگر</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · تمام شد (ایجنت پس‌زمینه از بین رفت)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · تمام شد ({clock}، ایجنت پس‌زمینه از بین رفت)"}
@@ -317,7 +318,7 @@
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "برای استفاده از ربات، با نام خودتان پیام بفرستید."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"one": "⏳ دیر رسید: {n} دقیقه پشت محدودیت Telegram ماند", "other": "⏳ دیر رسید: {n} دقیقه پشت محدودیت Telegram ماند"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "این پیام دیگر قدیمی شده و فرستاده نشد؛ دوباره بفرستید."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>ادمین:</b> /update (آپدیت aipager و Claude Code)"}
+{"k": "help.admin", "src": "67882dc1", "v": "<b>ادمین:</b> /update (آپدیت aipager و Claude Code) · /usage (محدودیت اشتراک و توکن‌ها)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>کنترل:</b> /stop · /now (ارسال پیام‌های صف) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>مدیریت:</b> /status، بعد ⋮ (ری‌استارت، تغییر نام، diff، بستن، حذف)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>تنظیمات:</b> /settings · /mode (مود پرسش، خودکار یا دسترسی کامل)"}
@@ -1156,6 +1157,7 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "تغییر به مود خودکار"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "تغییر به مود دسترسی کامل"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "دوباره امتحان کن"}
+{"k": "ui.btn.usage", "src": "0bb18642", "v": "مصرف"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "۱۰ دقیقهٔ دیگر صبر کن"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "گفتگوی {session} پاک شود؟"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude گفتگوی جدیدی شروع می‌کند و این یکی را فراموش می‌کند؛ گفتگوی قبلی روی کامپیوتر ذخیره می‌ماند، ولی از اینجا نمی‌شود ادامه‌اش داد."}
@@ -1476,6 +1478,7 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "به {version} آپدیت شد."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "به {version} آپدیت شد و {n} سشن دوباره وصل شد.", "other": "به {version} آپدیت شد و {n} سشن دوباره وصل شد."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} نصب شده و منتظر ری‌استارت است."}
+{"k": "ui.usage.title", "src": "0bb18642", "v": "مصرف"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude از شما می‌پرسد"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude اجازهٔ شما را می‌خواهد"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "یک درخواست اجازه در چت باز است."}
@@ -1580,6 +1583,46 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "برای تمام شدن آپدیت، aipager را ری‌استارت کنید."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ آپدیت با یک خطای غیرمنتظره متوقف شد (log خود aipager را ببینید)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ ری‌استارت زمان‌بندی‌شده انجام نشد - نسخهٔ جدید نصب شده اما نسخهٔ قدیمی هنوز اجرا می‌شود. خودتان ری‌استارتش کنید: {command}"}
+{"k": "usage.col.cache_read", "src": "62df4f2a", "v": "خواندن کش"}
+{"k": "usage.col.cache_write", "src": "d725b361", "v": "نوشتن کش"}
+{"k": "usage.col.input", "src": "aef36502", "v": "ورودی"}
+{"k": "usage.col.output", "src": "220e06ba", "v": "خروجی"}
+{"k": "usage.days.title", "src": "d27d4f9b", "v": "روزبه‌روز"}
+{"k": "usage.denied", "src": "573cfa99", "v": "🚫 فقط ادمین می‌تواند مصرف را ببیند."}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"one": "آخرین گزارش: ساعت {time} ({n} روز پیش)، از سشن {session}.", "other": "آخرین گزارش: ساعت {time} ({n} روز پیش)، از سشن {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"one": "آخرین گزارش: ساعت {time} ({n} ساعت پیش)، از سشن {session}.", "other": "آخرین گزارش: ساعت {time} ({n} ساعت پیش)، از سشن {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"one": "آخرین گزارش: ساعت {time} ({n} دقیقه پیش)، از سشن {session}.", "other": "آخرین گزارش: ساعت {time} ({n} دقیقه پیش)، از سشن {session}."}}
+{"k": "usage.fresh.now", "src": "eb614feb", "v": "آخرین گزارش: ساعت {time} (همین الان)، از سشن {session}."}
+{"k": "usage.group_note", "src": "827f3d0c", "v": "محدودیت‌های اشتراک در گروه نشان داده نمی‌شوند. /usage را در چت خصوصی با ربات بفرستید یا Mini App را باز کنید."}
+{"k": "usage.login.cloud", "src": "db9bd808", "v": "سرویس ابری"}
+{"k": "usage.login.gateway", "src": "c45b6181", "v": "گیت‌وی {host}"}
+{"k": "usage.login.saved", "src": "8ebcb721", "v": "ورود Claude ذخیره‌شده روی این کامپیوتر"}
+{"k": "usage.login.token", "src": "64d01959", "v": "توکن ورود Claude"}
+{"k": "usage.login.unknown", "src": "1bf1c689", "v": "ورود نامشخص"}
+{"k": "usage.models.title", "src": "cd5eb0b5", "v": "به تفکیک مدل، ۷ روز اخیر"}
+{"k": "usage.plan.none", "src": "dbfa3286", "v": "محدودیت‌های اشتراک وقتی Claude در سشنی که با اشتراک Claude وارد شده جواب بدهد، اینجا نشان داده می‌شوند. کلیدهای API و گیت‌وی‌های بدون سقف هزینه آن‌ها را گزارش نمی‌دهند."}
+{"k": "usage.plan.title", "src": "f65ebee7", "v": "محدودیت‌های اشتراک"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "ریست در {days} روز و {hours} ساعت دیگر"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "ریست در {hours} ساعت و {minutes} دقیقهٔ دیگر، ساعت {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "ریست در {minutes} دقیقهٔ دیگر، ساعت {time}"}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"one": "{n} روز پیش", "other": "{n} روز پیش"}}
+{"k": "usage.row.today", "src": "24345a14", "v": "امروز"}
+{"k": "usage.row.week", "src": "df833fe8", "v": "۷ روز اخیر"}
+{"k": "usage.row.yesterday", "src": "da24830f", "v": "دیروز"}
+{"k": "usage.title", "src": "0bb18642", "v": "مصرف"}
+{"k": "usage.tokens.behind", "src": "f5039b88", "v": "aipager هنوز گفتگوهای قبلی را می‌خواند، پس این اعداد ممکن است بیشتر شوند."}
+{"k": "usage.tokens.none", "src": "43bf5b4d", "v": "هنوز توکنی ثبت نشده."}
+{"k": "usage.tokens.title", "src": "c38c6c1f", "v": "توکن‌ها"}
+{"k": "usage.tokens.title_chat", "src": "fe5e7335", "v": "توکن‌ها در این چت"}
+{"k": "usage.tokens.title_managed", "src": "3285044d", "v": "توکن‌ها در چت‌هایی که ادمینش هستید"}
+{"k": "usage.tokens.today", "src": "9463a013", "v": "امروز: {input} ورودی، {output} خروجی، {cache_read} خواندن از کش، {cache_write} نوشتن در کش"}
+{"k": "usage.tokens.week", "src": "c70b981a", "v": "۷ روز اخیر: {input} ورودی، {output} خروجی، {cache_read} خواندن از کش، {cache_write} نوشتن در کش"}
+{"k": "usage.window.five_hour", "src": "a0eb1726", "v": "بازهٔ ۵ ساعته: {pct} مصرف شده"}
+{"k": "usage.window.five_hour_reset", "src": "a673c8fd", "v": "بازهٔ ۵ ساعته: از آخرین گزارش تا حالا ریست شده"}
+{"k": "usage.window.seven_day", "src": "9d526d84", "v": "این هفته (همهٔ مدل‌ها): {pct} مصرف شده"}
+{"k": "usage.window.seven_day_reset", "src": "f42ff03c", "v": "این هفته (همهٔ مدل‌ها): از آخرین گزارش تا حالا ریست شده"}
+{"k": "usage.window.spend_limit", "src": "5de9218d", "v": "سقف هزینه: {pct} مصرف شده"}
+{"k": "usage.window.spend_limit_reset", "src": "6994710b", "v": "سقف هزینه: از آخرین گزارش تا حالا ریست شده"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(همه)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}

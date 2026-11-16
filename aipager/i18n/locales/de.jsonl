@@ -293,6 +293,7 @@
 {"k": "cmd.status", "src": "b3ddc08d", "v": "Deine Sitzungen"}
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "Stoppen, was Claude gerade tut"}
 {"k": "cmd.talk", "src": "a0173425", "v": "Mit {session} sprechen"}
+{"k": "cmd.usage", "src": "0311ee6e", "v": "Planlimits und Tokens"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"one": "<i>…und {n} weitere Zeile</i>", "other": "<i>…und {n} weitere Zeilen</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Fertig (Hintergrund-Agent ist weg)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Fertig ({clock}, Hintergrund-Agent ist weg)"}
@@ -317,7 +318,7 @@
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Schreib mit deinem eigenen Konto, um den Bot zu nutzen."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"one": "⏳ verspätet angekommen: {n} Min. wegen eines Telegram-Limits zurückgehalten", "other": "⏳ verspätet angekommen: {n} Min. wegen eines Telegram-Limits zurückgehalten"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "Diese Nachricht ist zu alt und wurde nicht gesendet; sende sie noch einmal."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>Admin:</b> /update (aktualisiert aipager und Claude Code)"}
+{"k": "help.admin", "src": "67882dc1", "v": "<b>Admin:</b> /update (aktualisiert aipager und Claude Code) · /usage (Planlimits und Tokens)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>Steuern:</b> /stop · /now (wartende Nachrichten senden) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>Verwalten:</b> /status, dann ⋮ (neu starten, umbenennen, diff, beenden, löschen)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>Einstellungen:</b> /settings · /mode (Fragen-, Auto- oder Vollzugriff-Modus)"}
@@ -1156,6 +1157,7 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Zum Auto-Modus wechseln"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Zum Vollzugriff-Modus wechseln"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Erneut versuchen"}
+{"k": "ui.btn.usage", "src": "0bb18642", "v": "Nutzung"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Noch 10 Min. warten"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Unterhaltung in {session} leeren?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude beginnt eine neue Unterhaltung und vergisst diese; die alte bleibt auf dem Computer gespeichert, lässt sich aber von hier aus nicht fortsetzen."}
@@ -1476,6 +1478,7 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Aktualisiert auf {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "Aktualisiert auf {version}, {n} Sitzung wieder verbunden.", "other": "Aktualisiert auf {version}, {n} Sitzungen wieder verbunden."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} ist installiert und wartet auf einen Neustart."}
+{"k": "ui.usage.title", "src": "0bb18642", "v": "Nutzung"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude fragt dich"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude braucht deine Erlaubnis"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Im Chat ist eine Berechtigungsanfrage offen."}
@@ -1580,6 +1583,46 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Starte aipager neu, um das Update abzuschließen."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Das Update wurde durch einen unerwarteten Fehler gestoppt (siehe Log von aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Der geplante Neustart hat nicht stattgefunden: Die neue Version ist installiert, aber die alte läuft noch. Starte es selbst neu: {command}"}
+{"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Cache gelesen"}
+{"k": "usage.col.cache_write", "src": "d725b361", "v": "Cache geschrieben"}
+{"k": "usage.col.input", "src": "aef36502", "v": "Rein"}
+{"k": "usage.col.output", "src": "220e06ba", "v": "Raus"}
+{"k": "usage.days.title", "src": "d27d4f9b", "v": "Nach Tag"}
+{"k": "usage.denied", "src": "573cfa99", "v": "🚫 Nur ein Admin kann die Nutzung sehen."}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"one": "Stand {time} (vor {n} Tag), aus der Sitzung {session}.", "other": "Stand {time} (vor {n} Tagen), aus der Sitzung {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"one": "Stand {time} (vor {n} Stunde), aus der Sitzung {session}.", "other": "Stand {time} (vor {n} Stunden), aus der Sitzung {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"one": "Stand {time} (vor {n} Minute), aus der Sitzung {session}.", "other": "Stand {time} (vor {n} Minuten), aus der Sitzung {session}."}}
+{"k": "usage.fresh.now", "src": "eb614feb", "v": "Stand {time} (gerade eben), aus der Sitzung {session}."}
+{"k": "usage.group_note", "src": "827f3d0c", "v": "Planlimits werden in einer Gruppe nicht angezeigt. Sende /usage in deinem privaten Chat mit dem Bot oder öffne die Mini App."}
+{"k": "usage.login.cloud", "src": "db9bd808", "v": "Cloud-Anbieter"}
+{"k": "usage.login.gateway", "src": "c45b6181", "v": "Gateway {host}"}
+{"k": "usage.login.saved", "src": "8ebcb721", "v": "Auf diesem Computer gespeicherte Claude-Anmeldung"}
+{"k": "usage.login.token", "src": "64d01959", "v": "Claude-Login-Token"}
+{"k": "usage.login.unknown", "src": "1bf1c689", "v": "Unbekannte Anmeldung"}
+{"k": "usage.models.title", "src": "cd5eb0b5", "v": "Nach Modell, letzte 7 Tage"}
+{"k": "usage.plan.none", "src": "dbfa3286", "v": "Planlimits erscheinen hier, sobald Claude in einer Sitzung antwortet, die mit einem Claude-Abo angemeldet ist. API-Schlüssel und Gateways ohne Ausgabenlimit melden keine."}
+{"k": "usage.plan.title", "src": "f65ebee7", "v": "Planlimits"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "Wird in {days} T. {hours} Std. zurückgesetzt"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "Wird in {hours} Std. {minutes} Min. zurückgesetzt, um {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "Wird in {minutes} Min. zurückgesetzt, um {time}"}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"one": "vor {n} Tag", "other": "vor {n} Tagen"}}
+{"k": "usage.row.today", "src": "24345a14", "v": "Heute"}
+{"k": "usage.row.week", "src": "df833fe8", "v": "Letzte 7 Tage"}
+{"k": "usage.row.yesterday", "src": "da24830f", "v": "Gestern"}
+{"k": "usage.title", "src": "0bb18642", "v": "Nutzung"}
+{"k": "usage.tokens.behind", "src": "f5039b88", "v": "aipager liest noch ältere Gespräche, die Summen können also noch steigen."}
+{"k": "usage.tokens.none", "src": "43bf5b4d", "v": "Noch keine Tokens erfasst."}
+{"k": "usage.tokens.title", "src": "c38c6c1f", "v": "Tokens"}
+{"k": "usage.tokens.title_chat", "src": "fe5e7335", "v": "Tokens in diesem Chat"}
+{"k": "usage.tokens.title_managed", "src": "3285044d", "v": "Tokens in den Chats, die du verwaltest"}
+{"k": "usage.tokens.today", "src": "9463a013", "v": "Heute: {input} rein, {output} raus, {cache_read} aus dem Cache gelesen, {cache_write} in den Cache geschrieben"}
+{"k": "usage.tokens.week", "src": "c70b981a", "v": "Letzte 7 Tage: {input} rein, {output} raus, {cache_read} aus dem Cache gelesen, {cache_write} in den Cache geschrieben"}
+{"k": "usage.window.five_hour", "src": "a0eb1726", "v": "5-Stunden-Fenster: {pct} verbraucht"}
+{"k": "usage.window.five_hour_reset", "src": "a673c8fd", "v": "5-Stunden-Fenster: seit dem letzten Stand zurückgesetzt"}
+{"k": "usage.window.seven_day", "src": "9d526d84", "v": "Diese Woche (alle Modelle): {pct} verbraucht"}
+{"k": "usage.window.seven_day_reset", "src": "f42ff03c", "v": "Diese Woche (alle Modelle): seit dem letzten Stand zurückgesetzt"}
+{"k": "usage.window.spend_limit", "src": "5de9218d", "v": "Ausgabenlimit: {pct} verbraucht"}
+{"k": "usage.window.spend_limit_reset", "src": "6994710b", "v": "Ausgabenlimit: seit dem letzten Stand zurückgesetzt"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(alle)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}
