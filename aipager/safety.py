@@ -11,7 +11,6 @@ rationale behind every entry.
 
 from __future__ import annotations
 
-import bisect
 import fnmatch
 import logging
 import os
@@ -576,6 +575,19 @@ _STEPS_RE = re.compile("(?:" + _STEP_RE.pattern + ")*")
 _QUICK = 512
 
 
+def _first_from(found: list[int], at: int) -> int:
+    """The index of the first of the sorted *found* at or after *at* (the
+    hook's import closure stays as it is: no ``bisect`` here)."""
+    lo, hi = 0, len(found)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if found[mid] < at:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
 def _absent(plain: str, at: int, features: list[int], memo: dict) -> bool:
     """True when some of *features* surely does not start in main's
     reading from *at*: the reading stops within :data:`_QUICK` characters
@@ -594,7 +606,7 @@ def _absent(plain: str, at: int, features: list[int], memo: dict) -> bool:
             [m.start() for m in rx.finditer(plain)] for rx in _FEATURE_RES]
     for f in features:
         found = places[f]
-        k = bisect.bisect_left(found, at)
+        k = _first_from(found, at)
         if k == len(found) or found[k] >= end:
             return True
     return False
@@ -746,7 +758,7 @@ def _lines(plain: str, memo: dict) -> list[tuple[int, int]]:
         stops.append(len(plain))
         lines = []
         for t in _FEATURE_RES[_TARGET_FEATURE].finditer(plain):
-            k = bisect.bisect_left(stops, t.start())
+            k = _first_from(stops, t.start())
             line = (stops[k - 1] + 1 if k else 0, stops[k])
             if not lines or lines[-1] != line:
                 lines.append(line)
