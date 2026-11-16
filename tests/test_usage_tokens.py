@@ -341,11 +341,12 @@ def test_without_force_a_scan_waits_its_interval(world):
 
 def test_models_past_the_cap_go_to_other(world, monkeypatch):
     registry, session = world
-    monkeypatch.setattr(usage_store, "MAX_MODELS", 2)
+    monkeypatch.setattr(usage_store, "MAX_MODELS", 3)
     _sess, path = session("frontend")
     _append(path, *(_line(f"m{i}", model=f"model-{i}") for i in range(4)))
     _scan(registry)
     models = dict(usage_store.snapshot(None, now=NOW).models)
+    # MAX_MODELS rows in all, other among them.
     assert set(models) == {"model-0", "model-1", "other"}
     assert models["other"] == (20, 10, 200, 40)
 

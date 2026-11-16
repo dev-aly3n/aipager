@@ -89,12 +89,26 @@ MAX_LINE_BYTES = 4 * 1024 * 1024
 #: Days kept (today and the 7 before): a reading or a transcript older
 #: than this cannot change anything shown.
 KEEP_DAYS = 8
+#: Days kept at most, whatever the clock did (today, the 7 before and
+#: tomorrow, which a clock a little behind a transcript's can see).
+MAX_DAYS = KEEP_DAYS + 1
 MAX_READINGS = 8
+#: Model rows per scope and day, the ``other`` row included.
 MAX_MODELS = 16
-MAX_IDS_PER_DAY = 50_000
+#: Chat scopes counted per day; a scope past it is not counted that day.
+MAX_SCOPES_PER_DAY = 32
+MAX_IDS_PER_DAY = 20_000
 MAX_CURSORS = 2_000
+#: A transcript path longer than this is not followed (real ones are a
+#: few hundred characters at most).
+MAX_PATH_CHARS = 1024
 MIN_SAVE_INTERVAL = 30.0
-MAX_FILE_BYTES = 8_000_000
+#: A file above this reads as empty. The caps above keep the largest
+#: document they allow well under it (about 22 MB with every text field
+#: at its cap in characters JSON escapes to six bytes; about 9 MB with
+#: plain ones), so a file aipager wrote always loads again
+#: (tests/test_usage_store_bounds.py).
+MAX_FILE_BYTES = 32_000_000
 STATE_DIR_MODE = 0o700
 #: How long a session's sign-in is taken as known (it reads settings
 #: files; a status-line datagram arrives after every answer).
@@ -102,8 +116,8 @@ LOGIN_CACHE_SECONDS = 300.0
 #: A plan reading whose windows did not change is still rewritten when it
 #: is this much newer, so "as of" survives a restart roughly right.
 PLAN_RESAVE_SECONDS = 60.0
-#: Model ids are stored at most this long; past ``MAX_MODELS`` models in
-#: one scope and day, the rest are counted under this name.
+#: Model ids are stored at most this long; past ``MAX_MODELS - 1`` models
+#: in one scope and day, the rest are counted under this name.
 MODEL_MAX_CHARS = 64
 OTHER_MODEL = "other"
 UNKNOWN_MODEL = "unknown"
@@ -282,7 +296,7 @@ def note_plan(session_label: str, windows: dict[str, Window], login: SessionLogi
                        or old.get("scope") != entry["scope"]
                        or ts - _plan_marked.get(key, 0.0) >= PLAN_RESAVE_SECONDS)
             while len(_plan) > MAX_READINGS:
-                del _plan[min(_plan, key=lambda k: _plan[k]["seen_at"])]
+                _drop_reading(min(_plan, key=lambda k: _plan[k]["seen_at"]))
             if changed:
                 _plan_marked[key] = ts
                 _dirty = True
@@ -290,6 +304,11 @@ def note_plan(session_label: str, windows: dict[str, Window], login: SessionLogi
     except Exception:  # noqa: BLE001 - a reading must never break the handler
         log.debug("usage: plan reading not kept", exc_info=True)
         return False
+
+
+def _drop_reading(key: str) -> None:
+    _plan.pop(key, None)
+    _plan_marked.pop(key, None)
 
 
 # ---- the token tally -------------------------------------------------------------
@@ -312,10 +331,19 @@ def _dedupe_key(message: dict, timestamp: Any, counts: Counts) -> str:
 
 
 def _model_slot(day: str, scope: int, model: str) -> list[int]:
-    bucket = _days.setdefault(day, {}).setdefault(scope, {})
+    """The counts of *model* in *scope* on *day*. Past ``MAX_MODELS - 1``
+    models a scope's day counts the rest under ``other``; past
+    ``MAX_SCOPES_PER_DAY`` scopes a day's new scope is not counted (a
+    throwaway slot), so the file stays within what loads again."""
+    scopes = _days.setdefault(day, {})
+    bucket = scopes.get(scope)
+    if bucket is None:
+        if len(scopes) >= MAX_SCOPES_PER_DAY:
+            return [0, 0, 0, 0]
+        bucket = scopes[scope] = {}
     slot = bucket.get(model)
     if slot is None:
-        if len(bucket) >= MAX_MODELS and model != OTHER_MODEL:
+        if len(bucket) >= MAX_MODELS - 1 and model != OTHER_MODEL:
             return _model_slot(day, scope, OTHER_MODEL)
         slot = bucket[model] = [0, 0, 0, 0]
     return slot
@@ -407,7 +435,7 @@ def _discover(registry: Any, now: float) -> None:
         except OSError:
             pass
         for candidate in candidates:
-            if candidate in _cursors:
+            if candidate in _cursors or len(candidate) > MAX_PATH_CHARS:
                 continue
             try:
                 st = os.stat(candidate)
@@ -518,17 +546,22 @@ def _prune(ts: float) -> None:
     """Drop what can no longer change anything shown."""
     global _dirty
     oldest_day = _day_key(_date_of(ts) - _dt.timedelta(days=KEEP_DAYS - 1))
-    for day in [d for d in _days if d < oldest_day]:
-        del _days[day]
-        _dirty = True
-    for day in [d for d in _seen if d < oldest_day]:
-        for key in _seen.pop(day):
+    # Past days go, and so do the oldest of more than MAX_DAYS (a clock
+    # set back leaves later days behind it).
+    for day in [d for d in _days if d < oldest_day] + sorted(_days)[:-MAX_DAYS]:
+        if _days.pop(day, None) is not None:
+            _dirty = True
+    for day in [d for d in _seen if d < oldest_day] + sorted(_seen)[:-MAX_DAYS]:
+        ids = _seen.pop(day, None)
+        if ids is None:
+            continue
+        for key in ids:
             if _seen_day.get(key) == day:
                 del _seen_day[key]
         _dirty = True
     oldest = ts - KEEP_DAYS * 86400
     for key in [k for k, r in _plan.items() if r["seen_at"] < oldest]:
-        del _plan[key]
+        _drop_reading(key)
         _dirty = True
     for path in [p for p, c in _cursors.items() if c["grown_at"] < oldest]:
         del _cursors[path]
@@ -646,7 +679,7 @@ def _clean_counts(raw: Any) -> list[int] | None:
 
 
 def _clean_cursor(path: Any, raw: Any) -> dict | None:
-    if not (isinstance(path, str) and os.path.isabs(path) and len(path) <= 4096
+    if not (isinstance(path, str) and os.path.isabs(path) and len(path) <= MAX_PATH_CHARS
             and path.endswith(".jsonl") and isinstance(raw, dict)):
         return None
     ints = ("ino", "dev", "offset", "scope")
@@ -706,11 +739,18 @@ def _clean_document(document: dict) -> dict:
                     and isinstance(models, dict)):
                 continue
             kept: dict[str, list[int]] = {}
+            named = 0
             for model, counts in models.items():
                 clean = _clean_counts(counts)
-                if (clean is not None and isinstance(model, str)
-                        and 0 < len(model) <= MODEL_MAX_CHARS and len(kept) <= MAX_MODELS):
-                    kept[model] = clean
+                if not (clean is not None and isinstance(model, str)
+                        and 0 < len(model) <= MODEL_MAX_CHARS):
+                    continue
+                if model != OTHER_MODEL:
+                    # The rows a scan makes: MAX_MODELS - 1 models and other.
+                    if named >= MAX_MODELS - 1:
+                        continue
+                    named += 1
+                kept[model] = clean
             if kept:
                 days.setdefault(day, {})[int(scope)] = kept
     seen: dict[str, dict[str, int]] = {}
@@ -805,7 +845,9 @@ def save_if_dirty(*, path: Path | str | None = None, force: bool = False) -> boo
                 return False
             target = _path(path)
             check_write(target)
-            write_private(target, json.dumps(_document(), allow_nan=False),
+            # Not ASCII-escaped: a character takes at most six bytes, the
+            # bound MAX_FILE_BYTES is worked out on.
+            write_private(target, json.dumps(_document(), allow_nan=False, ensure_ascii=False),
                           dir_mode=STATE_DIR_MODE)
             _dirty = False
             _last_write = mono
