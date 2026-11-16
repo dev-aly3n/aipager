@@ -548,25 +548,33 @@ BASH_AIPAGER_CLI = (r"(?:\b|(?<=-)[A-Za-z]*m)(?i:aipager)"
 #: One shell word's characters: never a blank or a separator, so a run
 #: of them stays inside one command.
 _TOKEN = r"[^\s;&|()<>`]"
+#: A function's body may be any compound command: ``{``, ``(``,
+#: ``((``, ``[[``, ``if``, ``while``, ``until``, ``for``, ``select`` or
+#: ``case`` next (``f() while aip*r setup; do break; done``).
+_COMPOUND_AHEAD = (r"(?=[\x20\t]*(?:[{(]|\[\[|if|while|until|for|select"
+                   r"|case))")
 #: Where a word is run as a program: the start of a command (the start,
 #: after ``;``, ``&``, ``|``, ``(``, a backtick, ``$(``, a newline, or
-#: the ``()`` of a function's ``name()`` before its ``{``), after a
-#: function's ``function NAME`` before its ``{``,
-#: behind ``env``, ``nohup``, ``exec``, ``command``, ``time``, ``nice``,
-#: ``timeout``, ``sudo``, ``doas``, ``builtin``, the keywords ``if``,
-#: ``then``, ``do``, ``else``, ``elif``, ``while``, ``until``, ``!`` and
-#: ``{`` (with their options), and an optional path.
+#: the ``()`` of a function's ``name()`` before its body), then any run
+#: of: a function's ``function NAME`` before its body, ``env``,
+#: ``nohup``, ``exec``, ``command``, ``time``, ``nice``, ``timeout``,
+#: ``sudo``, ``doas``, ``builtin``, the keywords ``if``, ``then``,
+#: ``do``, ``else``, ``elif``, ``while``, ``until``, ``!`` and ``{``
+#: (with their options); and an optional path. So ``{ function f {``,
+#: ``if function f {``, ``then function f {`` and ``time function f {``
+#: are program positions after the last ``{`` too.
 #:
 #: Cost: a match starts only at a separator, and every piece after it
-#: (``function NAME``, blanks, wrapper words, options) stays on that one
-#: command, so the commands are read once each: linear on any input.
+#: (``function NAME``, blanks, wrapper words, options) takes text of its
+#: own and stays on that one command, so the commands are read once
+#: each: linear on any input.
 _PROGRAM_POSITION = (
-    r"(?:^|[;&|(`\n]|\([\x20\t]*\)(?=[\x20\t]*\{))[\x20\t]*"
-    rf"(?:function[\x20\t]+{_TOKEN}+[\x20\t]*(?=\{{))?"
+    rf"(?:^|[;&|(`\n]|\([\x20\t]*\){_COMPOUND_AHEAD})[\x20\t]*"
     r"(?:(?:env|nohup|exec|command|time|nice|timeout|sudo|doas|builtin"
     r"|if|then|do|else|elif|while|until|!|\{)"
     rf"(?:[\x20\t]+-{_TOKEN}+|[\x20\t]+\w+={_TOKEN}*|[\x20\t]+\d+[smhd]?)*"
-    r"[\x20\t]+)*"
+    r"[\x20\t]+"
+    rf"|function[\x20\t]+{_TOKEN}+[\x20\t]*{_COMPOUND_AHEAD})*"
     rf"(?:{_TOKEN}*/)?")
 #: A glob in the program name that could match aipager, run with one of
 #: those subcommands (``aip*r setup``, ``/usr/local/bin/aip* config``).

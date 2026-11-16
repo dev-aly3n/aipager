@@ -294,7 +294,7 @@ FUNCTION_KEYWORD_POSITIONS = [
 ]
 
 
-@_xfail_params(FUNCTION_KEYWORD_POSITIONS, FN_POSITION)
+@_params(FUNCTION_KEYWORD_POSITIONS)
 def test_function_keyword_after_any_command_start_is_blocked(cmd):
     assert _blocked(cmd) is True
 
@@ -337,7 +337,7 @@ FUNCTION_COMPOUND_BODY = [
 ]
 
 
-@_xfail_params(FUNCTION_COMPOUND_BODY, FN_COMPOUND)
+@_params(FUNCTION_COMPOUND_BODY)
 def test_function_compound_body_condition_is_blocked(cmd):
     assert _blocked(cmd) is True
 
