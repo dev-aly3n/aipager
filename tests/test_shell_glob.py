@@ -1400,3 +1400,19 @@ def test_an_empty_value_changes_only_a_glob_segment():
     # a plain name split by a value stays the documented open route
     assert not g._classify("aip" + g.OPAQUE + "ager", False) & g._A
     assert not g.command_reaches("cat ~/.config/[n]vim$x/init.lua")
+
+
+@pytest.mark.parametrize("cmd", [
+    # iteration 9 gate (cmdfuzz seed 9302): a quote in a comment threw the
+    # quote-free copies off, and the value's path is plain text
+    "echo # it'\"s 5$'\ntrue\ncat ${x:+~/.local/st\\ate/aipager/'.'/x}\necho '}'",
+    "cat ${x:-~/.local/state/aipager/x}",
+    "cat ${x/a/~/.config/aipager/x}",
+])
+def test_a_plain_path_in_a_value_is_checked(cmd):
+    assert bash_violation(cmd, (safety.BASH_GLOB_REACHES_AIPAGER_DIR,)) is not None
+
+
+def test_a_plain_value_elsewhere_is_fine():
+    assert bash_violation("cat ${x:-~/.config/nvim/x}",
+                          (safety.BASH_GLOB_REACHES_AIPAGER_DIR,)) is None

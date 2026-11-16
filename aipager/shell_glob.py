@@ -368,7 +368,10 @@ class _Lexer:
             self.out.append(text)
         if word.alt is not None:
             alt = word.alt_text()
-            if alt != text and _WORTH_RE.search(alt):
+            # a value's text, plain or not: the regex rules may not see
+            # it whole (a quote earlier, in a comment, throws their
+            # quote-free copies off)
+            if alt != text:
                 self.out.append(alt)
         if self.spell is not None:
             self.spell.append(word.spell_text())
