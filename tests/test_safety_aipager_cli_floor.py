@@ -301,6 +301,11 @@ REACH = [
     # ... at every program position, not only after a separator
     # (review-8 rev-iter8-002, test-report-8 tester-iter8-001)
     ("{ function f { aip*r setup; }; f; }", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    # the name is the whole word: ``f{`` here, then a ``{`` body (bash
+    # runs it; rev-iter9-002)
+    ("function f{ { aip*r setup; }; f{", safety.BASH_AIPAGER_GLOB_PROGRAM),
+    ("function ifif if aip*r setup; then :; fi; ifif",
+     safety.BASH_AIPAGER_GLOB_PROGRAM),
     ("if :; then function f { aip*r setup; }; fi; f",
      safety.BASH_AIPAGER_GLOB_PROGRAM),
     ("if false; then :; else function f { aip*r setup; }; fi; f",
@@ -348,6 +353,10 @@ REACH = [
 
 #: The nearest neighbours of REACH that must stay allowed.
 NEIGHBOURS = [
+    # ``function f{`` names ``f{``; a body that is no compound command is
+    # a syntax error in bash, so nothing runs (rev-iter9-002)
+    "function f{ aip*r setup; }; f{",
+    "function g{ aip*r setup; }; g",
     # brackets that cannot spell aipager (the bash matcher counts them)
     "ls ~/.config/[[:lower:]]ip",
     "ls ~/.config/[xy]ip",
@@ -662,6 +671,14 @@ _SLOW_NEW = [
     "function f " * 10_000 + "while",
     "() if " * 20_000 + "x",
     "; time function f " * 6_000 + "x",
+    # one long name word after ``function``, read once (rev-iter9-002:
+    # every split of it was tried, 17 s at 100 KB)
+    "function " + "if" * 25_000 + " ; aip*r setup group",
+    "function " + "f{" * 25_000 + " setup",
+    "function " + "a[[" * 16_000 + " cp -r ~/.config x",
+    "function " + "{" * 50_000 + " setup",
+    "; function " + "{" * 50_000 + " xargs aipager",
+    "if function " + "while" * 10_000 + " setup",
     # each bare ``&`` a copy of a long pattern (rev-iter9-001)
     "cat ~/.config/${x/" + "a" * 50_000 + "/" + "&" * 49_000 + "}",
     "echo $'x' ${x/" + "a" * 50_000 + "/" + "&" * 49_000 + "}",

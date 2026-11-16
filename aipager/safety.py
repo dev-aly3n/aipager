@@ -564,6 +564,11 @@ _COMPOUND_AHEAD = (r"(?=[\x20\t]*(?:[{(]|\[\[|if|while|until|for|select"
 #: ``if function f {``, ``then function f {`` and ``time function f {``
 #: are program positions after the last ``{`` too.
 #:
+#: The name after ``function`` is one whole word, as bash reads it
+#: (``function f{ ...`` names ``f{``): read whole, it is never split, so
+#: a long name word (``function ifif...``, ``function f{f{...``) is read
+#: once instead of once per place a compound word could start in it.
+#:
 #: Cost: a match starts only at a separator, and every piece after it
 #: (``function NAME``, blanks, wrapper words, options) takes text of its
 #: own and stays on that one command, so the commands are read once
@@ -574,7 +579,7 @@ _PROGRAM_POSITION = (
     r"|if|then|do|else|elif|while|until|!|\{)"
     rf"(?:[\x20\t]+-{_TOKEN}+|[\x20\t]+\w+={_TOKEN}*|[\x20\t]+\d+[smhd]?)*"
     r"[\x20\t]+"
-    rf"|function[\x20\t]+{_TOKEN}+[\x20\t]*{_COMPOUND_AHEAD})*"
+    rf"|function[\x20\t]+{_TOKEN}+(?!{_TOKEN})[\x20\t]*{_COMPOUND_AHEAD})*"
     rf"(?:{_TOKEN}*/)?")
 #: A glob in the program name that could match aipager, run with one of
 #: those subcommands (``aip*r setup``, ``/usr/local/bin/aip* config``).
