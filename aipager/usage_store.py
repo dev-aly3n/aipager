@@ -456,14 +456,14 @@ def _discover(registry: Any, now: float) -> None:
         try:
             candidates += sorted(os.path.join(subdir, f) for f in os.listdir(subdir)
                                  if f.startswith("agent-") and f.endswith(".jsonl"))
-        except OSError:
+        except (OSError, ValueError):   # ValueError: a path the file system cannot name
             pass
         for candidate in candidates:
             if candidate in _cursors or len(candidate) > MAX_PATH_CHARS:
                 continue
             try:
                 st = os.stat(candidate)
-            except OSError:
+            except (OSError, ValueError):
                 continue
             if st.st_mtime < oldest:
                 continue

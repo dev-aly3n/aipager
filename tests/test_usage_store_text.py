@@ -183,3 +183,22 @@ def test_a_plan_key_past_1024_chars_is_cut_with_a_hash_and_survives_a_restart():
     assert all(len(k) <= 1024 for k in keys)
     _save_and_reload()
     assert set(usage_store._plan) == keys
+
+
+# ---- a transcript path the file system cannot name -------------------------------------------
+
+def test_a_transcript_path_with_a_high_surrogate_never_stops_the_other_sessions(tmp_path):
+    registry = SessionRegistry()
+    bad = registry.get_or_create("claude-broken")
+    bad.label, bad.scope_chat_id = "broken", -1
+    # A high surrogate cannot be encoded even with surrogateescape, so
+    # os.listdir and os.stat raise UnicodeEncodeError (a ValueError).
+    bad.transcript_path = str(tmp_path / "x\ud800.jsonl")
+    good = registry.get_or_create("claude-frontend")
+    good.label, good.scope_chat_id = "frontend", -1
+    path = tmp_path / "t.jsonl"
+    path.write_text(_line("m-1"), encoding="ascii")
+    good.transcript_path = str(path)
+    usage_store.scan(registry, now=NOW, force=True)
+    assert usage_store.snapshot(None, now=NOW).today == (10, 1, 0, 0)
+    assert list(usage_store._cursors) == [str(path)]
