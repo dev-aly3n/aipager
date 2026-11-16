@@ -837,6 +837,12 @@ NEW_FOLDER_FORBIDDEN = Msg("ui.new.folder_forbidden", "You're not allowed to cre
 NEW_FOLDER_FAILED = Msg("ui.new.folder_failed", "Couldn't create that folder.")
 NEW_FOLDER_EXISTED = Msg("ui.new.folder_existed",
                          "That folder already existed, so it is selected.")
+# Plan limits and tokens (roadmap 8.131): the page's sentences come
+# rendered from GET /api/usage; only its heading and button live here.
+USAGE_TITLE = Msg("ui.usage.title", "Usage",
+                  note="Mini App: the Usage page's heading (plan limits and tokens)")
+BTN_USAGE = Msg("ui.btn.usage", "Usage",
+                note="Mini App button on the home page: opens the plan limits and tokens page")
 NEW_FOLDER_CREATED = Msg("ui.new.folder_created", "Folder created.")
 NEW_FOLDER_UNREACHABLE = Msg("ui.new.folder_unreachable",
                              "Couldn't reach the server. No folder was created.")

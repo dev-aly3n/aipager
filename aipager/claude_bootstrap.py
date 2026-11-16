@@ -525,6 +525,87 @@ def _session_credential(env: Mapping[str, str], *, folder: str | None = None,
                               on_purpose=bool(key) and _key_set_on_purpose(key, layers))
 
 
+#: What :func:`session_login` can tell about a session's sign-in.
+LOGIN_KINDS = ("token", "saved", "gateway", "cloud", "unknown")
+
+
+@dataclass(frozen=True)
+class SessionLogin:
+    """Which sign-in a session runs under, as far as aipager can tell from
+    its launch environment, without any credential in it (roadmap 8.131):
+
+    - ``kind``: ``token`` (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_AUTH_TOKEN),
+      ``saved`` (a sign-in saved in the config home), ``gateway`` (an
+      ANTHROPIC_BASE_URL that is not Anthropic's), ``cloud`` (Bedrock,
+      Vertex and the like) or ``unknown``;
+    - ``source``: for a token, the settings layer that set it (``env``,
+      ``user``, ``project:<folder>``, ``local:<folder>``, ``managed``); for
+      a gateway, its host name; otherwise ``""``;
+    - ``config_home``: Claude Code's config home for the session.
+
+    Two tokens of one kind from one layer cannot be told apart: telling
+    them apart would take a fingerprint of the credential, which aipager
+    never derives (decisions.md 5)."""
+
+    kind: str
+    source: str = ""
+    config_home: str = ""
+
+
+def _token_source(layers: list[tuple[str, dict]], var: str, folder: str) -> str:
+    """The settings layer whose ``env`` block sets *var* last (the one that
+    wins), else ``"env"`` (the environment the session was started with)."""
+    source = "env"
+    for (name, _), block in zip(layers, claude_paths.layer_env(layers)):
+        if (block.get(var) or "").strip():
+            source = f"{name}:{folder}" if name in ("project", "local") else name
+    return source
+
+
+def session_login(env: Mapping[str, str], *, folder: str | None) -> SessionLogin:
+    """The sign-in a session started in *folder* with *env* runs under
+    (see :class:`SessionLogin`), with Claude Code's settings ``env`` layers
+    laid over *env* as :func:`_session_credential` lays them: the folder's
+    own layers count only in a trusted folder.
+
+    A CLAUDE_CODE_OAUTH_TOKEN from *env* itself is stripped at launch when
+    the session's credentials file is fresh (``inject.launch_session``),
+    so that session runs on the saved sign-in. Never raises, never logs,
+    and nothing in the result is, or is derived from, a credential value:
+    an error or no *folder* gives ``unknown``."""
+    try:
+        if not folder:
+            return SessionLogin("unknown")
+        paths = claude_paths.locate(env, cwd=folder)
+        layers = claude_paths.settings_layers(
+            paths, folder, project=_already_trusted(folder, paths))
+        run_env = claude_paths.layered_env(env, layers)
+        home = str(paths.config_home)
+        if any(_switch_on(run_env.get(var)) for var in _CLOUD_SWITCHES):
+            return SessionLogin("cloud", "", home)
+        from aipager import claude_resolve
+        if claude_resolve.uses_custom_endpoint(run_env):
+            from urllib.parse import urlsplit
+            url = (run_env.get("ANTHROPIC_BASE_URL") or "").strip()
+            try:
+                host = urlsplit(url if "//" in url else "//" + url).hostname or ""
+            except ValueError:
+                host = ""
+            return SessionLogin("gateway", host.lower(), home)
+        for var in _TOKEN_VARS:
+            if not (run_env.get(var) or "").strip():
+                continue
+            source = _token_source(layers, var, folder)
+            if source == "env" and var == "CLAUDE_CODE_OAUTH_TOKEN":
+                from aipager.dtach.inject import credentials_file_is_fresh
+                if credentials_file_is_fresh(paths.credentials):
+                    continue  # unset at launch: the saved sign-in is used
+            return SessionLogin("token", source, home)
+        return SessionLogin("saved", "", home)
+    except Exception:  # noqa: BLE001 - an unreadable setup is "unknown"
+        return SessionLogin("unknown")
+
+
 def refused_key_strands_sessions(env: Mapping[str, str]) -> bool:
     """Read only, for ``aipager doctor``: sessions started now would get an
     ANTHROPIC_API_KEY that Claude Code was told not to use, aipager would

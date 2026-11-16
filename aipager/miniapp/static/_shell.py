@@ -110,6 +110,7 @@ HTML_BODY = """\
     <div id="grid-totals" class="pulse" aria-live="polite"></div>
     <button type="button" id="new-session-btn" class="fab" aria-label="New session" data-i18n-label="ui.shell.new_session_aria"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></button>
   </div>
+  <button type="button" id="usage-open" class="usage-link" data-i18n="ui.btn.usage" hidden>Usage</button>
   <div id="needs-you" class="needs-you" hidden>
     <h2 class="sect-title sect-need"><span class="beacon-dot" aria-hidden="true"></span><span data-i18n="ui.grid.needs_you">Needs you</span></h2>
     <div id="needs-you-list" class="beacon-list"></div>
@@ -212,6 +213,15 @@ HTML_BODY = """\
     <p id="rp-copy-hint" class="rp-foot" data-i18n="ui.report.copy_hint" hidden>Long-press the reference to copy it.</p>
     <button type="button" class="primary block mb-mirror" id="rp-done" data-i18n="ui.btn.done">Done</button>
   </div>
+</section>
+
+<section id="view-usage" hidden>
+  <div class="view-hero">
+    <div>
+      <h2 class="view-title" data-i18n="ui.usage.title">Usage</h2>
+    </div>
+  </div>
+  <div id="usage-body" class="usage-body" aria-live="polite"></div>
 </section>
 
 <!--

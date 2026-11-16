@@ -1368,6 +1368,29 @@ CSS = """
     background: var(--fill);
   }
 
+  /* ---- the usage page (roadmap 8.131) --------------------------------- */
+  .usage-link {
+    min-height: 36px;
+    margin: 0 0 var(--s4);
+    padding: 0 var(--s4);
+    border-radius: var(--r-pill);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--fill);
+  }
+  .usage-card { margin: 0 0 var(--s3); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); }
+  .usage-name { margin: 0 0 var(--s2); font-weight: 600; }
+  .usage-line { margin: var(--s2) 0 var(--s1); font-size: var(--fs-sm); line-height: var(--lh-sm); }
+  .usage-sub { margin: var(--s1) 0 0; font-size: 13px; line-height: 18px; color: var(--ink-3); }
+  .ubar { block-size: 8px; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
+  .ubar-fill { block-size: 100%; inline-size: calc(var(--pct, 0) * 1%); border-radius: var(--r-pill); background: var(--accent); }
+  .utable { display: grid; gap: 1px; border-radius: var(--r-card); overflow: hidden; background: var(--line); border: 1px solid var(--line); }
+  .utable-row { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); font-size: 13px; line-height: 18px; }
+  .utable-head { color: var(--ink-3); font-weight: 600; }
+  .utable-label { min-width: 0; overflow-wrap: anywhere; }
+  .utable-num { text-align: end; font-variant-numeric: tabular-nums; }
+
   /* ---- the problem report page ---------------------------------------- */
   .rp-text { min-height: 88px; max-height: 220px; padding: var(--s3) 14px; resize: none; }
   .rp-meta { display: flex; justify-content: space-between; gap: var(--s3); margin: 6px var(--s1) 0; font-size: 13px; line-height: 18px; color: var(--ink-3); }

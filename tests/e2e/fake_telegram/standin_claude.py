@@ -35,6 +35,11 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
 - Hooks run in their own process group and a key kills the whole group,
   so the hook really stops (``sh -c`` under dash forks it, and killing
   only the shell left the hook waiting out its deadline).
+- A test can put plan usage into the status-line payload with
+  ``standin-rate-limits-<session>`` in the instance folder: a JSON object,
+  sent verbatim as the payload's ``rate_limits`` after each turn
+  (roadmap 8.131). Absent, the payload has no ``rate_limits``, as for an
+  API key.
 - A test can hold the next tool call with ``standin-hold-<session>`` in
   the instance folder, to choose when the permission is asked, and give
   the PermissionRequest hook a shorter reply deadline with
@@ -180,6 +185,8 @@ class StandIn:
         # older scenario): it simply runs after the turn, with its hook then.
         self.cc_queue_path = os.path.join(
             inst, f"standin-cc-queue-{self.session or 'nosession'}")
+        self.rate_limits_path = os.path.join(
+            inst, f"standin-rate-limits-{self.session or 'nosession'}")
         self.dialog_answer: str | None = None
         self.in_permission = False
         self.dialog_row = 0
@@ -329,6 +336,13 @@ class StandIn:
                    "context_window": {"used_percentage": 1, "total_input_tokens": 10,
                                       "total_output_tokens": 5},
                    "cost": {"total_cost_usd": 0.0}}
+        try:
+            with open(self.rate_limits_path, encoding="utf-8") as f:
+                limits = json.load(f)
+            if isinstance(limits, dict):
+                payload["rate_limits"] = limits
+        except (OSError, ValueError):
+            pass
         try:
             subprocess.run(cmd, shell=True, input=json.dumps(payload), text=True,
                            capture_output=True, timeout=10)

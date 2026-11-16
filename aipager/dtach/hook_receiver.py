@@ -24,7 +24,7 @@ from urllib.parse import urlsplit
 
 from aipager import (
     agent_tree, bg_shells, bidi_guard, perm_modes, prompt_stack, rm_countdown, safety,
-    send_check, statusline_file,
+    send_check, statusline_file, usage_store,
 )
 from aipager.dtach import hook_spill
 from aipager.config import (
@@ -1613,6 +1613,23 @@ class HookReceiver:
                 else:
                     _DIALOG_DATAGRAMS.pop(session, None)
 
+    @staticmethod
+    def _note_plan_usage(sess) -> None:
+        """Keep the plan usage (``rate_limits``) of the payload this
+        ``statusline`` datagram announced (roadmap 8.131). The hook wrote
+        the raw payload to the status file before it sent the datagram,
+        so the file holds this payload or a newer one; the datagram itself
+        does not carry ``rate_limits`` (the hook stays as it is). A payload
+        without them (the first of every session, an API key, a gateway
+        without a spend limit) changes nothing. A bad file never breaks
+        the branch."""
+        try:
+            windows = statusline_file.parse_rate_limits(statusline_file.read_raw(sess.name))
+            if windows:
+                usage_store.note_plan(sess.label, windows, usage_store.login_for(sess))
+        except Exception:
+            log.debug("[%s] plan usage not read", getattr(sess, "label", "?"), exc_info=True)
+
     async def _on_datagram(self, data: bytes, *, spilled: int = 0) -> None:
         """Handle one hook datagram (:meth:`_handle_datagram`). A wake of
         aipager's kill chord it routed is marked routed when it is done,
@@ -3190,6 +3207,7 @@ class HookReceiver:
             log.debug("[%s] statusline: %d%% ctx, ↓%d out (base=%d, total=%d)",
                       sess.label, ctx_pct, sess.last_output_tokens,
                       sess.output_baseline or 0, total_out)
+            self._note_plan_usage(sess)
             return  # no further notification — animation reads cached values
 
         elif event == "StopFailure":

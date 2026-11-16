@@ -850,6 +850,45 @@ if (SCENARIO === "answer_403") {
     body: { error: "forbidden" } };
 }
 
+// ===== the Usage page (roadmap 8.131) ===================================
+// A canned GET /api/usage body: every sentence already rendered by the
+// server, a week window with a bar, a 5-hour window that has reset (no
+// bar), and the token tables.
+const USAGE_BODY = {
+  plan: {
+    shown: true, title: "Plan limits", empty: null,
+    logins: [{ name: null, fresh: "As of 20:15 (4 minutes ago), from session frontend.",
+      windows: [
+        { id: "five_hour", state: "reset", line: "5-hour window: reset since the last reading",
+          reset: "" },
+        { id: "seven_day", state: "ok", pct: 42, line: "This week (all models): 42% used",
+          reset: "Resets in 2 d 5 h" },
+        { id: "spend_limit", state: "ok", pct: 140, line: "Spend limit: 140% used",
+          reset: "Resets in 3 h 10 min, at 21:00" },
+      ] }],
+  },
+  tokens: {
+    title: "Tokens", columns: ["", "In", "Out", "Cache read", "Cache write"],
+    rows: [{ label: "Today", cells: ["1.2k", "45", "30.0k", "2.1k"] },
+           { label: "Last 7 days", cells: ["5.4M", "9.0k", "120k", "2.1k"] }],
+    days_title: "By day",
+    days: [{ label: "Today", cells: ["1.2k", "45", "30.0k", "2.1k"] },
+           { label: "Yesterday", cells: ["0", "0", "0", "0"] }],
+    models_title: "By model, last 7 days",
+    models: [{ label: "claude-haiku-4-5", cells: ["1.2k", "45", "30.0k", "2.1k"] }],
+    note: null, empty: null,
+  },
+};
+if (SCENARIO.indexOf("usage_") === 0) {
+  FIXTURES["/api/sessions"] = gridOf([row("alpha", "idle")],
+                                     { can_usage: SCENARIO !== "usage_hidden" });
+  FIXTURES["/api/usage"] = USAGE_BODY;
+}
+if (SCENARIO === "usage_refused") {
+  POST_STATUS_OVERRIDE = { path: "/api/usage", method: "GET", status: 403,
+    body: { error: "forbidden" } };
+}
+
 // ===== the chat switcher (roadmap 8.73) =================================
 // Two chats (a group listed first, the viewer's DM the server's default)
 // or one. Each chat has its own grid, chosen by the X-Aipager-Scope header
@@ -3248,6 +3287,70 @@ function driveSchemaPlain() {
   }, 10);
 }
 
+// ---- the Usage page (roadmap 8.131) -------------------------------------
+function usageNodes(cls) {
+  return [...byId["usage-body"].walk()].filter(n => n.className.split(" ").includes(cls));
+}
+
+function driveUsageOpen() {
+  setTimeoutReal(() => {
+    const btn = byId["usage-open"];
+    if (btn.hidden) fail("can_usage:true but the Usage button is hidden");
+    const before = fetchCalls.length;
+    btn.click();
+    if (byId["view-usage"].hidden) fail("tapping Usage did not open the Usage page");
+    if (!byId["view-grid"].hidden) fail("the grid stayed on screen under the Usage page");
+    if (!byId["tabbar"].hidden) fail("the tab bar shows on the Usage sub-page");
+    setTimeoutReal(() => {
+      const asked = fetchCalls.slice(before).filter(f => f.url.split("?")[0] === "/api/usage");
+      if (asked.length !== 1) fail("expected one GET /api/usage, got " + asked.length);
+      const text = byId["usage-body"].textContent;
+      for (const want of ["Plan limits", "This week (all models): 42% used", "Resets in 2 d 5 h",
+                          "5-hour window: reset since the last reading",
+                          "from session frontend.", "Tokens", "Cache write", "By day",
+                          "By model, last 7 days", "claude-haiku-4-5", "5.4M"]) {
+        if (text.indexOf(want) === -1) fail("the Usage page lacks " + JSON.stringify(want));
+      }
+      const fills = usageNodes("ubar-fill");
+      if (fills.length !== 2) fail("expected 2 bars (a reset window has none), got " + fills.length);
+      if (fills[0].attrs.style !== "--pct:42") fail("bar 1 style: " + fills[0].attrs.style);
+      if (fills[1].attrs.style !== "--pct:100") fail("an over-limit bar is not capped: " +
+                                                    fills[1].attrs.style);
+      const tables = usageNodes("utable");
+      if (tables.length !== 3) fail("expected 3 tables, got " + tables.length);
+      if (tables[0].children[1].children.length !== 5) fail("a row has not 1 label + 4 cells");
+      global.__back();
+      if (byId["view-grid"].hidden || !byId["view-usage"].hidden)
+        fail("Back did not return to the grid");
+      console.log("ok: usage -> bars, tables, back to the grid");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveUsageHidden() {
+  setTimeoutReal(() => {
+    if (!byId["usage-open"].hidden) fail("can_usage:false but the Usage button shows");
+    console.log("ok: no can_usage -> no Usage button");
+    process.exit(0);
+  }, 10);
+}
+
+function driveUsageRefused() {
+  setTimeoutReal(() => {
+    byId["usage-open"].click();
+    setTimeoutReal(() => {
+      if (byId["view-grid"].hidden) fail("a refused Usage page did not return to the grid");
+      if (byId["notice"].textContent.indexOf("Couldn't complete that.") === -1)
+        fail("a refused Usage page said nothing: " + byId["notice"].textContent);
+      if ((byId["error"].textContent || "").indexOf("expired") !== -1)
+        fail("a 403 expired the whole app");
+      console.log("ok: usage 403 -> back to the grid with a notice, app not expired");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 const DRIVERS = {
   scope_save: driveScopeSave,
   appearance_save: driveAppearanceSave,
@@ -4260,5 +4363,8 @@ Object.assign(DRIVERS, {
   chats_saved_stale: driveChatsSavedStale,
   chats_storage_throws: driveChatsStorageThrows,
   chats_late: driveChatsLate,
+  usage_open: driveUsageOpen,
+  usage_hidden: driveUsageHidden,
+  usage_refused: driveUsageRefused,
 });
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

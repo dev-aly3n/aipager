@@ -197,6 +197,10 @@ _BUDGETS: tuple[tuple[str, str, str, int, str], ...] = (
     (r"rdlg\.[a-z0-9_.]+", "message", "chars", 300, ""),
     # The command line's own lines (aipager session / aipager resume).
     (r"cli\.[a-z0-9_.]+", "message", "chars", 400, ""),
+    # /usage and the Mini App's Usage page (roadmap 8.131): the token
+    # table's column and row names, then the lines.
+    (r"usage\.(?:col|row)\.[a-z0-9_]+", "label", "cells", 24, ""),
+    (r"usage\.[a-z0-9_.]+", "message", "chars", 300, ""),
 )
 
 

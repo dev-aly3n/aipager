@@ -34,7 +34,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
-from aipager import bidi_guard, telegram_endpoint
+from aipager import bidi_guard, telegram_endpoint, usage_store
 from aipager.dtach import inject
 from aipager.i18n import Msg
 
@@ -42,7 +42,7 @@ from aipager.bot import (
     card_owner, chat_migration, group_intake, new_flow, session_parity, update_flow,
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
-from aipager.bot import flood_state, language_launch
+from aipager.bot import flood_state, language_launch, usage_cmd
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
@@ -187,6 +187,9 @@ _CMD_DESCRIPTIONS = (
     ("settings", Msg("cmd.settings", "Message layout, formatting, new sessions",
                      note="/ menu description of /settings")),
     ("language", _CMD_LANGUAGE),
+    ("usage", Msg("cmd.usage", "Plan limits and tokens",
+                  note="/ menu description of /usage: the plan's usage limits and the tokens "
+                       "sessions used")),
     ("help", Msg("cmd.help", "What you can do", note="/ menu description of /help")),
 )
 _CMD_APP = Msg("cmd.app", "Open the Mini App dashboard", note="/ menu description of /app")
@@ -541,6 +544,9 @@ class LifecycleMixin:
         # act. Never raises: a corrupt state file must leave the daemon
         # running.
         flood_state.load()
+        # Plan usage and the token tally (8.131): what the last daemon
+        # counted, so a restart neither forgets nor counts it again.
+        usage_store.load()
         # Multilingual launch (phase 5): who existed before languages were
         # switched on, recorded once, before any update is handled.
         language_launch.ensure_marker(self)
@@ -592,6 +598,10 @@ class LifecycleMixin:
         # Admin-only self-update (roadmap 8.36); the handler gates itself.
         self._app.add_handler(CommandHandler(
             "update", functools.partial(update_flow.handle_update_cmd, self)))
+        # Plan limits and tokens (roadmap 8.131); the handler gates itself
+        # (owner and admins).
+        self._app.add_handler(CommandHandler(
+            "usage", functools.partial(usage_cmd.handle_usage_cmd, self)))
         # Chat parity with the Mini App — each of these mirrors a route
         # the Mini App already exposes. Handlers live in session_parity
         # so this file stays a registration table.
@@ -735,6 +745,8 @@ class LifecycleMixin:
         # an empty document over a live ban. `force=True` because there is
         # no next monitor tick to debounce onto.
         flood_state.save_if_dirty(force=True)
+        # The token tally's offsets and counts (8.131): no next tick either.
+        usage_store.save_if_dirty(force=True)
         # Held answers are NOT persisted (accepted for this ship — the
         # text can be large and the state file is a status artefact, not a
         # queue). Say so once rather than losing them silently.

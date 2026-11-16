@@ -2436,3 +2436,50 @@ def test_the_report_harness_detects_a_broken_page(node_bin, tmp_path):
     broken = SOURCE_INDEX_HTML.replace(old, "  function rpSend() {\n    return;\n", 1)
     proc = _drive_report(node_bin, tmp_path, broken, "send_ok")
     assert proc.returncode != 0, "harness passed a page whose Send does nothing"
+
+
+# ----- the Usage page (roadmap 8.131) -------------------------------------------
+
+@pytest.mark.parametrize("scenario, expected", [
+    ("usage_open", "ok: usage -> bars, tables, back to the grid"),
+    ("usage_hidden", "ok: no can_usage -> no Usage button"),
+    ("usage_refused", "ok: usage 403 -> back to the grid with a notice, app not expired"),
+])
+def test_usage_page_scenarios(node_bin, tmp_path, scenario, expected):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert expected in proc.stdout, proc.stdout
+
+
+_USAGE_MUTANTS = [
+    pytest.param(
+        '    document.getElementById("usage-open").hidden = data.can_usage !== true;',
+        '    document.getElementById("usage-open").hidden = false;',
+        "usage_hidden", id="button-follows-can-usage"),
+    pytest.param(
+        '          if (w.state !== "reset") {',
+        "          if (true) {",
+        "usage_open", id="no-bar-for-a-reset-window"),
+    pytest.param(
+        '"--pct:" + Math.max(0, Math.min(100, Number(w.pct) || 0))',
+        '"--pct:" + Math.max(0, Number(w.pct) || 0)',
+        "usage_open", id="bar-capped"),
+    pytest.param(
+        "        if (res.status === 401) {",
+        "        if (res.status === 401 || res.status === 403) {",
+        "usage_refused", id="403-does-not-expire"),
+]
+
+
+@pytest.mark.parametrize("old, new, scenario", _USAGE_MUTANTS)
+def test_the_usage_harness_detects_a_broken_page(node_bin, tmp_path, old, new, scenario):
+    from aipager.miniapp.static import SOURCE_INDEX_HTML
+
+    assert SOURCE_INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = SOURCE_INDEX_HTML.replace(old, new, 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
+    assert proc.returncode != 0, (
+        f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
+    )

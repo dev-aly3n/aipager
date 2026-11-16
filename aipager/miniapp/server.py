@@ -580,6 +580,9 @@ class MiniAppServer:
         # operator-only, via the same `_is_update_admin` rule `/update` uses.
         # Both drive the bot's one UpdateManager, so the chat and the app
         # always show the same job.
+        # Plan limits and tokens (roadmap 8.131): owner and admins, the
+        # same rule and the same rendered view as the chat's /usage.
+        app.router.add_get("/api/usage", self._handle_usage)
         app.router.add_get("/api/update", self._handle_update_get)
         app.router.add_post("/api/update/{action}", self._handle_update_post)
         # Problem reports (roadmap 8.112): the Mini App's own report page.
@@ -892,6 +895,9 @@ class MiniAppServer:
         # "needs you" tray can grey out "Answer in chat" with a reason
         # instead of offering a tap that would only 403.
         payload["can_act"] = bool(self.bot._can_prompt_user(user_id, scope_chat_id))
+        # Whether the home's Usage button shows (a hint: /api/usage itself
+        # enforces the rule).
+        payload["can_usage"] = self._usage_access(user_id, scope_chat_id) is not None
         return web.json_response(payload)
 
     async def _handle_session_create(self, request):
@@ -1492,6 +1498,38 @@ class MiniAppServer:
         line = report_drafts.reply_for(reply.outcome, reply.reference, tr=viewer).line
         return web.json_response({"outcome": reply.outcome, "reference": reply.reference,
                                   "line": line, "retry": reply.retry, "repeat": False})
+
+    # ---- usage (roadmap 8.131) ------------------------------------------
+
+    def _usage_access(self, user_id, scope_chat_id):
+        """The /usage access rule for the Mini App. The page is private to
+        its viewer, so it never narrows to a group's view."""
+        from aipager.bot import usage_cmd
+        return usage_cmd.usage_access(self.bot, user_id, scope_chat_id, for_group=False)
+
+    async def _handle_usage(self, request):
+        """Plan limits and tokens, rendered in the viewer's language by
+        the same view the chat's /usage uses. 403 for anyone but the
+        owner and admins (personal mode: the operator)."""
+        from aiohttp import web
+
+        from aipager import usage_store
+        from aipager.bot import usage_cmd
+
+        result = await self._authenticate_user(request, "/api/usage")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+        access = self._usage_access(user_id, scope_chat_id)
+        if access is None:
+            log.info("miniapp: usage rejected (403) - not an admin")
+            return web.json_response({"error": "forbidden"}, status=403)
+        usage_store.scan(self.bot.registry, force=True)
+        now = time.time()
+        tr = self._viewer_tr(request, user_id)
+        body = usage_cmd.usage_view(usage_store.snapshot(access.scopes, now=now), access, tr,
+                                    now)
+        return web.json_response(self._with_ui(body, tr))
 
     # ---- self-update -----------------------------------------------------
 
