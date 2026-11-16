@@ -188,6 +188,24 @@ class Snapshot:
     behind: bool                                  # transcripts still being read
 
 
+# ---- text ------------------------------------------------------------------------
+
+def clean_text(value: str) -> str:
+    """*value* with every code point UTF-8 cannot encode (a lone
+    surrogate: a broken escape in a transcript, a non-UTF-8 file name)
+    replaced by ``?``, so it can be saved, shown and sent."""
+    try:
+        value.encode("utf-8")
+        return value
+    except UnicodeEncodeError:
+        return value.encode("utf-8", "replace").decode("utf-8")
+
+
+def _plan_key(login: SessionLogin) -> str:
+    """:func:`login_key`, encodable."""
+    return clean_text(login_key(login))
+
+
 # ---- time ------------------------------------------------------------------------
 
 def _now(now: float | None) -> float:
@@ -281,14 +299,14 @@ def note_plan(session_label: str, windows: dict[str, Window], login: SessionLogi
         doc = _windows_doc(windows)
         if not doc:
             return False
-        key = login_key(login)
+        key = _plan_key(login)
         kind = login.kind if key != "unknown" else "unknown"
-        host = login.source if kind == "gateway" else ""
+        host = clean_text(str(login.source))[:255] if kind == "gateway" else ""
         with _lock:
             _ensure_loaded()
             old = _plan.pop(key, None)
-            entry = {"key": key, "kind": kind, "host": str(host)[:255],
-                     "session": str(session_label)[:128], "scope": _scope_value(scope),
+            entry = {"key": key, "kind": kind, "host": host,
+                     "session": clean_text(str(session_label)[:128]), "scope": _scope_value(scope),
                      "seen_at": ts, "windows": doc}
             _plan[key] = entry   # most recently seen last
             changed = (old is None or old["windows"] != doc
@@ -369,7 +387,7 @@ def _count_line(line: bytes, scope: int, today: _dt.date) -> bool:
     model = message.get("model")
     if model == SYNTHETIC_MODEL:
         return False
-    model = model[:MODEL_MAX_CHARS] if isinstance(model, str) and model.strip() \
+    model = clean_text(model[:MODEL_MAX_CHARS]) if isinstance(model, str) and model.strip() \
         else UNKNOWN_MODEL
     when = _entry_time(entry.get("timestamp"))
     if when is None:
@@ -405,7 +423,7 @@ def _count_line(line: bytes, scope: int, today: _dt.date) -> bool:
 
 def _new_cursor(st: os.stat_result, scope: int, session: str) -> dict:
     return {"ino": int(st.st_ino), "dev": int(st.st_dev), "offset": 0, "skip": False,
-            "scope": int(scope), "session": str(session)[:128],
+            "scope": int(scope), "session": clean_text(str(session)[:128]),
             "grown_at": float(st.st_mtime), "read_at": 0.0}
 
 
@@ -666,8 +684,9 @@ def _clean_reading(raw: Any) -> dict | None:
             clean[name] = {"pct": float(pct), "resets_at": resets}
     if not clean:
         return None
-    return {"key": key, "kind": kind, "host": host if kind == "gateway" else "",
-            "session": session, "scope": scope, "seen_at": float(raw["seen_at"]),
+    return {"key": clean_text(key), "kind": kind,
+            "host": clean_text(host) if kind == "gateway" else "",
+            "session": clean_text(session), "scope": scope, "seen_at": float(raw["seen_at"]),
             "windows": clean}
 
 
@@ -694,7 +713,8 @@ def _clean_cursor(path: Any, raw: Any) -> dict | None:
                 and 0 <= v <= TS_MAX):
             return None
     return {"ino": raw["ino"], "dev": raw["dev"], "offset": raw["offset"],
-            "skip": raw["skip"], "scope": raw["scope"], "session": raw["session"][:128],
+            "skip": raw["skip"], "scope": raw["scope"],
+            "session": clean_text(raw["session"][:128]),
             "grown_at": float(raw["grown_at"]), "read_at": float(raw["read_at"])}
 
 
@@ -744,6 +764,9 @@ def _clean_document(document: dict) -> dict:
                 clean = _clean_counts(counts)
                 if not (clean is not None and isinstance(model, str)
                         and 0 < len(model) <= MODEL_MAX_CHARS):
+                    continue
+                model = clean_text(model)
+                if model in kept:
                     continue
                 if model != OTHER_MODEL:
                     # The rows a scan makes: MAX_MODELS - 1 models and other.
@@ -831,6 +854,23 @@ def _document() -> dict:
     }
 
 
+def _serialize(document: dict) -> str:
+    """*document* as JSON text UTF-8 can always encode. Not ASCII-escaped:
+    a character takes at most six bytes, the bound MAX_FILE_BYTES is
+    worked out on. A lone surrogate still left (a transcript path from a
+    non-UTF-8 file name, which must stay exact to be opened again) is
+    written as its JSON escape ``\\udcXX`` (six bytes), which loads back
+    as the same string; one bad value never stops the whole save."""
+    text = json.dumps(document, allow_nan=False, ensure_ascii=False)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        # Outside a string json.dumps writes only ASCII, so every
+        # surrogate is inside one, where its backslash escape is JSON.
+        text = text.encode("utf-8", "backslashreplace").decode("utf-8")
+    return text
+
+
 def save_if_dirty(*, path: Path | str | None = None, force: bool = False) -> bool:
     """Write the file when something changed, at most every
     ``MIN_SAVE_INTERVAL`` seconds unless *force*. Returns whether it
@@ -845,10 +885,7 @@ def save_if_dirty(*, path: Path | str | None = None, force: bool = False) -> boo
                 return False
             target = _path(path)
             check_write(target)
-            # Not ASCII-escaped: a character takes at most six bytes, the
-            # bound MAX_FILE_BYTES is worked out on.
-            write_private(target, json.dumps(_document(), allow_nan=False, ensure_ascii=False),
-                          dir_mode=STATE_DIR_MODE)
+            write_private(target, _serialize(_document()), dir_mode=STATE_DIR_MODE)
             _dirty = False
             _last_write = mono
             return True

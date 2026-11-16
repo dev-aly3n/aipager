@@ -64,8 +64,8 @@ def _fill_to_the_caps(ch: str) -> dict:
             "seen": sum(len(v) for v in s._seen.values()), "cursors": len(s._cursors)}
 
 
-@pytest.mark.parametrize("ch", ["\x01", "\U0001F600", "a"],
-                         ids=["escaped-control", "astral", "plain"])
+@pytest.mark.parametrize("ch", ["\x01", "\U0001F600", "a", "\udc80"],
+                         ids=["escaped-control", "astral", "plain", "lone-surrogate"])
 def test_the_largest_document_the_caps_allow_loads_again(ch):
     usage_store.load()                # an empty, loaded store
     put = _fill_to_the_caps(ch)
