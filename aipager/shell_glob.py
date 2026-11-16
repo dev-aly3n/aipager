@@ -699,6 +699,25 @@ class _Lexer:
                     tok = tok[k:]
                     if not tok:
                         continue
+                if rep_at and "&" in tok:
+                    # bash 5.2 puts the matched text where a replacement
+                    # has a bare ``&``: a glob pattern stands for it as
+                    # itself, a plain one as one bracket per character
+                    # (so the word is checked and matches only it), one
+                    # holding a value as a value not known here
+                    pattern = "".join(word.pieces[:rep_at])[:-1]
+                    if OPAQUE in pattern:
+                        stand = _NESTED
+                    elif any(c in pattern for c in "*?["):
+                        stand = pattern
+                    else:
+                        stand = "".join("[" + _lit(c) + "]" for c in pattern)
+                    for k, part in enumerate(tok.split("&")):
+                        if k:
+                            word.add(stand)
+                        if part:
+                            word.add(part)
+                    continue
                 word.add(tok)
             elif kind == "esc":
                 if len(tok) == 2:

@@ -1348,3 +1348,35 @@ def test_an_item_without_such_a_range_is_still_read(seg):
     assert g._classify(seg, False) != g._ALL
 
 
+@pytest.mark.parametrize("cmd", [
+    # tester-iter8-005: bash 5.2 puts the matched text at a bare ``&``
+    "cat ~/.config/${x/a/&ipager}/x",
+    "cat ~/.config/${x/a/&i}pager/x",
+    "cat ${x/a/~/.config/&ipager/x}",
+    "cat ${x//a/~/.config/&ipager/x}",
+    # a glob pattern stands for the matched text as itself
+    "cat ${x/[a]/~/.config/&ipager/x}",
+    "cat ${x/a*/~/.config/&/x}",
+    # a pattern holding a value: the matched text is not known
+    "cat ~/.config/${x/$y/&ipager}/x",
+])
+def test_a_bare_ampersand_in_a_replacement_is_the_matched_text(cmd):
+    assert g.command_reaches(cmd)
+
+
+@pytest.mark.parametrize("cmd", [
+    "cat ~/.config/${x/a/\\&ipager}/x",
+    "cat ~/.config/${x/a/'&'ipager}/x",
+    "cat ~/.config/${x/b/&ipager}/x",
+    "cat ~/.config/${x/a/&nvim}/x",
+    "cat ~/.config/${x#&ipager}/x",
+])
+def test_an_ampersand_that_is_no_matched_text_is_plain(cmd):
+    assert not g.command_reaches(cmd)
+
+
+def test_a_plain_pattern_stands_as_one_bracket_per_character():
+    assert "~/.config/[a]ipager/x" in g.words("cat ~/.config/${x/a/&ipager}/x")
+    assert "[a][b]" in g.words("echo ${x/ab/&}")
+
+

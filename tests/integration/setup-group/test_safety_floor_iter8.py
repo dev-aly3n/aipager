@@ -533,7 +533,7 @@ PATSUB_AMPERSAND = [
 ]
 
 
-@_xfail_params(PATSUB_AMPERSAND, AMP)
+@_params(PATSUB_AMPERSAND)
 def test_replacement_ampersand_is_read_as_the_match(cmd):
     assert _blocked(cmd) is True
 
