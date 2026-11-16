@@ -174,8 +174,9 @@ _WRAP = (r"(?:sudo|doas|xargs|env|nice|nohup|time|command|exec|builtin"
 _WRAP_ARG = rf"(?:-{_UNIT}*|\d{_UNIT}*)"
 #: A variable set for the command alone: ``LC_ALL=C grep …``.
 _ASSIGN = rf"[A-Za-z_]\w*={_UNIT}*{_SP}+"
-#: A shell running a quoted command: ``bash -c "``, ``sh -lc '``.
-_SHELL_C = rf"""(?:ba|da|z|k)?sh(?:{_SP}+-[A-Za-z]+)+{_SP}+["']{_SP}*"""
+#: A shell running a quoted command: ``bash -c "``, ``sh -lc '``, also
+#: with escaped quotes inside another one (``bash -c "bash -c \"...\""``).
+_SHELL_C = rf"""(?:ba|da|z|k)?sh(?:{_SP}+-[A-Za-z]+)+{_SP}+\\*["']{_SP}*"""
 #: Where a command word starts (the start, or after ``;``, ``&``, ``|``,
 #: ``(``, a backquote or a newline that does not continue a line), then
 #: variables set for it, wrappers (``{ `` is one) and a path
@@ -197,8 +198,10 @@ _USER = r"""(?:[^/\s"'`;&|()<>$]+|\$\{?(?:USER|LOGNAME)\}?)"""
 #: The home folder as a path: ``/home``, ``/home/<user>``, ``/Users``,
 #: ``/Users/<user>`` or ``/root`` (quoted or not, the shell reads it so).
 _HOME_PATH = rf"(?:/home(?:/{_USER})?|/Users(?:/{_USER})?|/root)"
-#: The home folder as a variable: expanded bare or in double quotes only.
-_HOME_VAR = r"(?:\$HOME|\$\{HOME\})"
+#: The home folder as a variable: expanded bare or in double quotes only;
+#: also with the ``$`` escaped, as inside ``bash -c "..."`` (``\$HOME``,
+#: the usual way to leave it to the inner shell).
+_HOME_VAR = r"(?:\\?\$HOME|\\?\$\{HOME\})"
 #: The home folder as a tilde (``~``, ``~user``): expanded bare only.
 _HOME_TILDE = r"(?:~(?:[A-Za-z_][\w.-]*)?)"
 #: Folders in the home folder that hold aipager's protected folders.
@@ -216,14 +219,15 @@ def _target_body(*homes: str) -> str:
 #: after it, so ``'/ x'`` is not a folder, and ``'~'`` or ``'$HOME'`` is
 #: plain text), then an optional unquoted ``/.config``-style folder and
 #: ``/``, ``/.`` or ``/*`` (``"$HOME"/.config``), ending where the shell
-#: word ends (or the string around a ``bash -c "…"``).
+#: word ends (or the string around a ``bash -c "…"``, or an escaped quote
+#: that closes one inside another: ``bash -c "bash -c \"grep -r x ~\""``).
 _TARGET = (
     r"(?:"
     rf"{_target_body(_HOME_TILDE, _HOME_VAR, _HOME_PATH)}"
-    rf'|"{_target_body(_HOME_VAR, _HOME_PATH)}"'
+    rf'|\\?"{_target_body(_HOME_VAR, _HOME_PATH)}\\?"'
     rf"|'{_target_body(_HOME_PATH)}'"
     rf"){_HOME_PARENTS}?/?[.*]?"
-    r"""(?=[\s;&|()<>`"']|\\\n|$)""")
+    r"""(?=[\s;&|()<>`"']|\\["'\n]|$)""")
 
 #: The text to find is given by an option (``-e x``, ``-f file``,
 #: ``--regexp``, ``--file``), so every other word may be a folder.

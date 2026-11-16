@@ -980,6 +980,40 @@ def test_an_escaped_separator_a_later_parser_reads_starts_a_search(cmd):
         safety.BASH_SEARCH_REASON)
 
 
+#: Inside ``bash -c "..."`` the home folder is often written ``\$HOME`` (so
+#: the outer shell leaves it to the inner one), and a nested ``bash -c
+#: \"...\"`` closes on an escaped quote right after the folder word
+#: (tester-iter9-003): bash runs the home search in each.
+ESCAPED_IN_BASH_C = [
+    'bash -c "grep -rn tok ' + B + '$HOME"',
+    'sh -c "grep -rn tok ' + B + '${HOME}"',
+    'bash -c "find ' + B + '$HOME -name aipager.yaml"',
+    'bash -c "rg tok ' + B + '$HOME/.config"',
+    'bash -c "ls -R ' + B + '$HOME"',
+    'bash -c "grep -rn tok ' + B + '"' + B + '$HOME' + B + '""',
+    'bash -c "bash -c ' + B + '"grep -rn tok ~' + B + '""',
+    'bash -c "grep -rn tok ~/' + B + '"' + B + '""',
+    "bash -c 'bash -c " + B + "'grep -rn tok ~" + B + "''",
+]
+
+
+@pytest.mark.parametrize("cmd", ESCAPED_IN_BASH_C)
+def test_an_escaped_home_or_quote_inside_bash_c_is_a_search(cmd):
+    import re
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_SEARCH_REASON
+    assert any(re.search(p, cmd) for p in safety.DENY_BASH_SEARCH_PATTERNS)
+
+
+@pytest.mark.parametrize("cmd", [
+    'grep -rn "$HOME" src',
+    'bash -c "grep -rn ' + B + '"$HOME' + B + '" src"',
+    'bash -c "echo ' + B + '$HOME"',
+    'bash -c "grep -n tok ' + B + '$HOME/.bashrc"',
+])
+def test_the_home_as_text_inside_bash_c_is_still_fine(cmd):
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
+
+
 #: One row per search of :func:`safety._search_hit` that alone finds main's
 #: match (each fails when that search is taken out): search 1 (``first``,
 #: no unit that holds a start), search 2 after the name (``second``) and

@@ -40,12 +40,12 @@ Known gaps found this round (strict xfail, the project's convention):
   bash 5.2 still turns the bare ``&`` into the matched text; so does a
   ``&`` that comes from a default inside the replacement
   (``${x/a/${z:-&}ipager}``). The floor now reads both.
-- SEARCH_OPEN: inside ``bash -c "..."`` an escaped ``\\$HOME`` (the usual
-  way to keep the outer shell from expanding it) or a nested ``bash -c
-  \\"...\\"`` whose escaped quote follows the folder word: the inner bash
-  runs ``grep -rn tok ~``. Allowed on main 5c286755 as well (not a
-  regression); docs/security.md says the search rule holds inside
-  ``bash -c "..."`` for ``$HOME``.
+- SEARCH_OPEN (closed in iteration 10): inside ``bash -c "..."`` an
+  escaped ``\\$HOME`` (the usual way to keep the outer shell from
+  expanding it) or a nested ``bash -c \\"...\\"`` whose escaped quote
+  follows the folder word: the inner bash runs ``grep -rn tok ~``. Allowed
+  on main 5c286755 as well (not a regression); docs/security.md says the
+  search rule holds inside ``bash -c "..."`` for ``$HOME``.
 
 Only the documented surface is used: ``safety.bash_violation`` with
 ``safety.DENY_BASH_PATTERNS`` (entrypoints.md "Safety check surface").
@@ -477,10 +477,10 @@ def test_ordinary_escaped_separator_is_allowed(cmd):
     assert _blocked(cmd) is False
 
 
-SRCH = ("undocumented gap (tester iteration 9, also on main 5c286755): the "
-        "search rule misses an escaped $HOME or a folder word ended by an "
-        "escaped quote inside bash -c \"...\"; docs/security.md says the rule "
-        "holds inside bash -c \"...\" for $HOME")
+# Closed in iteration 10 (were strict xfails, also open on main 5c286755):
+# the search rule missed an escaped $HOME or a folder word ended by an
+# escaped quote inside bash -c "..."; docs/security.md says the rule holds
+# inside bash -c "..." for $HOME.
 SEARCH_OPEN_ITER9 = [
     ('srch-open-01', 'bash -c "bash -c \\"grep -rn tok ~\\""'),
     ('srch-open-02', 'bash -c "bash -c \\"grep -rn tok ~ \\""'),
@@ -494,7 +494,7 @@ SEARCH_OPEN_ITER9 = [
 ]
 
 
-@_xfail_params(SEARCH_OPEN_ITER9, SRCH)
+@_params(SEARCH_OPEN_ITER9)
 def test_search_inside_bash_c_with_escaped_dollar_or_quote_is_blocked(cmd):
     assert _blocked(cmd) is True
 
