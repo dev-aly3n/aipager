@@ -136,6 +136,10 @@ def _isolate_wizard_config(tmp_path, monkeypatch):
     monkeypatch.setattr(_scope_mod, "load_scopes", _load_scopes)
     monkeypatch.setattr("aipager.policy.POLICY_PATH",
                         tmp_path / "policy.yaml")
+    # The roles `aipager setup group` checks (group_rules.load_roles_strict)
+    # read policy.d too: never the operator's real one.
+    monkeypatch.setattr("aipager.policy.POLICY_D_DIR",
+                        tmp_path / "policy.d")
 
 
 #: Modules holding an import-time copy of ``aipager.config.CHAT_ID``.

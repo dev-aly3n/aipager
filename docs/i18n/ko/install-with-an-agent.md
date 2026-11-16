@@ -1,6 +1,6 @@
 # 에이전트로 설치하기
 
-<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
+<!-- i18n-source: docs/install-with-an-agent.md @ d63d62ef -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../install-with-an-agent.md))
 
@@ -127,13 +127,83 @@ aipager doctor --json
 ## <a id="4-what-you-must-not-do"></a>4. 절대 하면 안 되는 일
 
 - token을 출력하거나 `echo`나 `cat`으로 보여 주지 말고, 명령줄에 절대 넣지 마세요(`--token`은 어차피 거부돼요). 파일이나 stdin으로만 넘기세요.
-- `~/.config/aipager/`(2단계의 token 파일은 예외)나 `~/.claude/settings.json` 파일을 직접 편집하지 마세요. 이 파일들은 `aipager setup`과 `aipager config`가 써요.
-- 사용자에게 묻지 않고 `--force`를 붙이지 마세요. 사용자의 기존 token, 채팅, 역할을 바꿔 버려요.
+- `~/.config/aipager/`(2단계의 token 파일은 예외)나 `~/.claude/settings.json` 파일을 직접 편집하지 마세요. 이 파일들은 `aipager setup`과 `aipager config`가 써요. 단 하나의 예외는 이것보다 오래된 aipager에서 그룹을 추가하는 경우로, 이때는 `aipager setup group --help`가 실패해요. [5.5](#55-older-installs)를 보세요.
+- 사용자에게 묻지 않고 `--force`를 붙이지 마세요. 사용자의 기존 token, 채팅, 역할을 바꿔 버려요. `setup group`에서는 역할을 바꾸거나 빼거나 `owner` 역할을 줘요.
+- aipager를 통해서는 소유자의 작업만 `aipager setup`(어떤 형태든), `aipager config`, `aipager uninstall`을 실행할 수 있어요. aipager의 안전 규칙이 다른 모든 역할에서는 이 명령들을 막아요. 사용자가 aipager를 통해 에이전트와 대화하고 있는데 소유자가 아니라면, 터미널에서 직접 명령을 실행해 달라고 부탁하세요.
 - 에이전트 자신이 있는 Claude Code 세션을 재시작하거나 종료하지 마세요. 처음 설치할 때 에이전트의 세션은 aipager 아래에 있지 않고, 그럴 필요도 없어요. 새 세션은 Telegram의 `/new`나 `aipager session <name>`으로 만들어요. aipager가 이미 설정되어 있고 사용자가 aipager를 통해 에이전트와 대화하고 있다면(예: 새 token으로 `setup --force`를 실행하려는 경우), aipager를 직접 멈추거나 재시작하지 마세요. 에이전트의 작업과 답변이 끊겨요. 작업을 마친 뒤 사용자에게 직접 재시작해 달라고 하세요.
 
 ## <a id="5-groups"></a>5. 그룹
 
-`aipager setup`은 사용자와 봇의 개인 채팅을 설정해요. 여러 사람이 각자 역할을 가지는 Telegram 그룹을 추가하려면 사용자가 `aipager config`를 실행해요(그룹 설정은 아직 스크립트로 할 수 없어요). [팀 모드와 그룹](groups.md)을 보세요.
+`aipager setup`은 사용자와 봇의 개인 채팅을 설정해요. `aipager setup group`은 이미 설정된 설치에 Telegram 그룹과 그 멤버, 멤버의 역할을 질문 없이 추가해요(`aipager config`는 같은 일을 질문하며 해요). 봇 token은 설치에서 읽고, aipager를 절대 재시작하지 않으며, 그룹에는 아무것도 보내지 않아요. [팀 모드와 그룹](groups.md)과 [명령 설명](commands.md#aipager-setup-group)을 보세요.
+
+### <a id="51-what-only-the-person-can-do"></a>5.1 사용자만 할 수 있는 일
+
+이 단계들은 에이전트가 할 수 없어요. 사용자에게 Telegram에서 해 달라고 부탁하세요.
+
+1. 봇을 그룹에 추가해요.
+2. 봇을 메시지 고정 권한이 있는 그룹 관리자로 만들어요(aipager가 그곳에 상태 표시줄을 고정해요. 이 권한이 없어도 그룹은 동작하지만 상태 표시줄은 없어요). 그룹 관리자만 할 수 있어요.
+3. 그룹에서 `/start`를 보내요. 그래야 에이전트가 그룹 ID를 찾을 수 있어요(5.2).
+4. 멤버마다 숫자 Telegram 사용자 ID, 짧은 이름(aipager가 그 사람을 `@label`로 보여 줄 때 쓰는 이름), 역할을 알려 줘요. 역할은 `owner`, `admin`, `user`, `read_only`, 또는 `policy.yaml`에 직접 정의한 역할이에요. `owner` 역할은 이 컴퓨터를 완전히 제어할 수 있어요. 컴퓨터를 운영하는 사람의 것이고 다른 누구의 것도 아니에요. 어떤 ID를 모른다면, 그 사람이 그룹에 글을 쓰는 동안 `aipager config`가 찾아 줄 수 있어요.
+
+### <a id="52-find-the-group"></a>5.2 그룹 찾기
+
+```sh
+aipager setup detect-group --json
+```
+
+아직 설정되지 않은 그룹에서, 실행하기 전 10분 안에 보낸 메시지를 기다리고(최대 300초, `--timeout SECONDS`) 그 그룹을 출력해요(`candidate.id`, `candidate.title`). 아무것도 저장하지 않아요. 사용자에게 그룹 이름을 보여 주고, 맞는 그룹이라고 확인한 뒤에만 ID를 쓰세요. 종료 코드 8은 아무것도 오지 않았다는 뜻이에요. 그룹에서 `/start`를 다시 보내 달라고 하세요.
+
+### <a id="53-set-it-up"></a>5.3 그룹 설정하기
+
+먼저 `--dry-run`으로 실행하고, 그다음 같은 명령을 `--dry-run` 없이 실행하세요.
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+- `--member ID:LABEL:ROLE`은 사람마다 한 번씩 써요. 나중에 누군가를 추가하려면 새 `--member`만 넣어 다시 실행하세요. 다른 사람들은 그대로 남아요.
+- `--remove-member ID`는 한 사람을 빼요.
+- `--label NAME`은 그룹 이름을 정하고, `--root PATH`는 그룹의 `user`와 `read_only` 멤버가 일하는 폴더를 정하며(기본값 `~/aipager-users/group-<label>`), `--block-edits`는 그룹의 `user` 멤버에게 Write와 Edit를 막아요.
+- 같은 명령을 다시 실행해도 아무것도 바뀌지 않아요(`unchanged`).
+- 종료 코드 6(`needs_force`)은 그 변경에 `--force`가 필요하다는 뜻이에요. `force_reasons`가 이유를 알려 줘요(역할 변경, 소유자 부여·강등·제거, 위험한 루트 폴더). 사용자에게 보여 주고, 동의할 때만 `--force`를 붙이세요.
+
+### <a id="54-read-the-result"></a>5.4 결과 읽기
+
+| 종료 코드 | 할 일 |
+|---|---|
+| 0 | 완료(`created`, `updated`, `unchanged`, `dry_run`). 사용자에게 그룹의 `label`, `members`, 그리고 `daemon.outcome`이 말하는 내용을 알려 주세요. |
+| 2 | 옵션이 잘못됐어요. `error`, `message`, `fix`가 어떤 옵션인지 알려 줘요. 고친 뒤 다시 실행하세요. |
+| 6 | `needs_force`: `force_reasons`의 항목마다 사용자에게 물어보세요. |
+| 11 | `not_set_up`: 먼저 aipager를 설정하세요([3](#3-your-steps)). |
+| 1 | 그 밖의 경우(`config_malformed`, `policy_malformed`, `last_member`, `config_changed`...): `message`와 `fix`를 보여 주세요. `config_changed` 뒤에는 다시 실행하세요. |
+
+`daemon.outcome`은 실행 중인 aipager가 한 일을 알려 줘요. `reloaded_live`(그룹이 지금 동작해요), `no_daemon`(aipager가 시작되면 동작해요), `restart_needed`나 `not_applied`(사용자에게 `next_step`을 보여 주세요. aipager를 직접 재시작하지 마세요). 경고는 종료 코드를 절대 바꾸지 않지만 보여 주세요. `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin`, `group_not_found`는 사용자에게 5.1의 단계가 남았다는 뜻이고, `owner_granted`는 분명하게 말해 주는 게 좋아요.
+
+### <a id="55-older-installs"></a>5.5 오래된 설치
+
+`aipager setup group --help`가 실패하면 이 aipager는 이 명령보다 오래된 버전이에요. 사용자에게 aipager를 업데이트해 달라고 하거나(`aipager update`), 지금 바로 그룹이 필요하다면 직접 추가하세요.
+
+1. [구조](groups.md#aipageryaml-schema-team-parts)에 맞춰 `~/.config/aipager/aipager.yaml`에 그룹 항목을 추가하세요. 이 파일에는 봇 token이 들어 있어요. 절대 출력하거나 `cat`으로 보지 말고, 권한은 0600으로 유지하세요(`chmod 600 ~/.config/aipager/aipager.yaml`).
+2. `aipager policy validate`로 확인하고, `aipager doctor`의 `scope mode: ...` 줄이 새 그룹을 세는지 확인하세요.
+3. 아래처럼 aipager에 재시작 없이 다시 불러오라는 신호를 보내세요.
+
+Linux에서 백그라운드 서비스를 쓸 때:
+
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
+
+macOS에서:
+
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+`-gt 0` 확인이 중요해요. aipager가 실행 중이 아니면 `kill -USR1 0`이 내 셸의 프로세스들에 신호를 보내요. aipager 세션 안에서 aipager를 절대 재시작하지 마세요. 에이전트의 작업이 끊겨요.
 
 ## <a id="see-also"></a>함께 보기
 

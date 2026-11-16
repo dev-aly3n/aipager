@@ -548,6 +548,132 @@ the command patterns below, which a determined user can get around.
 `aipager doctor` warns once for every such role a member holds. Only
 give Bash to someone you would give a shell on the machine.
 
+**aipager's own commands and folders.** The command patterns keep a
+non-owner turn with Bash from changing who controls the machine. They
+deny `aipager setup` in any form (it grants roles), `aipager config`,
+`aipager uninstall`, `aipager service` and `aipager start`, also with
+options before the subcommand (`aipager -v setup`), in any letter case,
+as `python -m aipager` (`-maipager`), through a path to the binary,
+through a glob that could match its name (`aip*r setup`, also in a
+function body: `f(){ aip* setup; }; f` or
+`function f { aip* setup; }; f`, wherever a command can start, such as
+after `{`, `then` or `time`, and in a body that is another compound
+command: `f() while aip* setup; do break; done; f`) and through
+`xargs aipager`;
+`systemctl`, `launchctl`, `kill`, `pkill` or `killall` naming aipager; a
+Python interpreter running code that imports aipager's own modules
+(`python3 -c "import os, aipager.scope"`, a here-document, `runpy`); any
+mention of `~/.config/aipager`, `~/.local/share/aipager` or
+`~/.local/state/aipager`, also when quotes, backslashes, `$'...'` or an
+empty substitution split the name (`"aipager"`, `aip""ager`,
+`$'\x61ipager'`, `aip$()ager`); `cd` or `pushd` into the home folder's
+`.config`, `.local`, `.local/share` or `.local/state` itself, also with
+an option or in two steps (`cd ~ && cd .config`); and `cp`, `rsync`,
+`tar`, `zip`, `ln`, `mv` or `scp` given that whole folder
+(`cp -r ~/.config /tmp/x`; a folder inside it, such as `~/.config/nvim`,
+is fine).
+
+Globs and braces in a path are read the way bash expands them. For each
+word of the command, the floor expands the braces as bash does (lists,
+braces inside braces or side by side, `{a..c}`), takes out `//`, `/./`
+and `name/..`, and then matches each folder of the path against the
+folder names themselves. It refuses the word when a `*`, `?`, bracket
+expression or POSIX class could match `.config` and then `aipager`, or
+`.local`, then `share` or `state`, then `aipager`. So
+`~/.config/aipage?`, `~/.config/*`, `~/.config/[[:alpha:]]ipager`,
+`~/.config/{aipager,a.b}`, `~/.config/{aipager/aipager.yaml,x}`,
+`~/.config/{x{a,b},aipager/x}`, `nvim/{.,x}{.,y}/`,
+`~/.local{/share/aipager,}`, `~/.{config,x}/{aipager,a.b}`,
+`~/.c*/[[:alpha:]]ipager`, `~/.config/nvim/../aipager` and
+`~/.config/a=b/../aipager` are all refused, while `~/.config/*.conf`,
+`~/.config/nvim*`, `~/.config/[[:lower:]]ip` (three letters can't be
+`aipager`) and `~/.config/{git/config,nvim/init.lua}` are fine. A glob
+that may be `.` or `..` (`.*`) is followed every way it can go, and a
+`..` after a variable is read both as one folder up and as the variable
+itself. The floor reads a command the way bash does, as far as it can:
+quotes, comments, here-document bodies, `${...}`, an assignment's
+`a[...]` and a `[[ x =~ ... ]]` pattern end where bash ends them, the
+commands inside `$(...)`, backticks and `${x:-...}` are read as more
+words, and the default of an unquoted `${x:-default}` (or `${x-...}`,
+`${x:=...}`, `${x:+...}`) and the replacement of `${x/pattern/new}` (or
+`${x//...}`, `${x/#...}`, `${x/%...}`) count as possible values. A bare
+`&` in that replacement stands for the text the pattern matched, as in
+bash 5.2 (`${x/a/&ipager}`, inside double quotes too, and when a default
+inside the replacement gives it: `${x/a/${z:-&}ipager}`), and a variable
+or `${...}` right next to a glob may be empty (`[a]ipager$x`). It
+can't be sure it reads every command as bash does, so text it sets aside
+(a comment, a here-document body, the text inside any `${...}`, open or
+closed) is checked as words anyway when it could name `.config` or
+`.local`, and a `$'...'` is read both ways: decoded only where bash
+decodes it, and decoded everywhere.
+
+When the floor can't be sure what bash would do with a word that could
+name `.config` or `.local`, it refuses the word. For example: an
+extended glob or another shell's group anywhere in a folder name
+(`~/.config/@(aipager)`, `~/.config?(x)/aipager`), a bracket bash reads
+in more than one way (`[[.a]`, `aip[a[=[=]ger`), with a range from a
+POSIX item (`[[.a.]-z]`, `[[=a=]]h-j]`) or that holds a plain
+`[` (`[[]ipager`), more brace results than it lists (256 for one word,
+4,096 for the whole command), braces nested more than 32 deep, a word
+with braces longer than 8 KB, or more than 8 KB of matched text put in
+place of `&` in one command. When a quote, `${`, `$(`, a backtick or a
+here-document is still open at the end of the command, bash would read
+it differently or not at all, so the whole command is refused if any
+part of it could name `.config` or `.local`.
+
+Searching aipager's code by module name stays allowed
+(`grep -rn "from aipager import" .`, `rg setup_group`). The patterns
+cannot tell a search from a command, though: a `grep`, `git grep`,
+`git log --grep` or commit message that contains the words
+`aipager setup`, `aipager config`, `aipager uninstall` or
+`.config/aipager` is refused for a non-owner turn too. So is a brace
+list with no `/` in it right under `~/.config`, `~/.local/share` or
+`~/.local/state` (`ls ~/.config/{nvim,fish}`), since one of the patterns
+does not read what such a list holds; a list of paths there
+(`cp ~/.config/{git/config,nvim/init.lua} /tmp/x`) or a list deeper in
+(`ls ~/.config/nvim/{lua,after}`) is fine. A word the floor can't read,
+or a command left open, as above, is refused even when bash would not
+reach the folders with it, and so is a comment or here-document that
+names aipager's folders through a glob, or a `${...}` whose text does
+(`${f#~/.config/[a]ipager/}`).
+
+What still gets through: a command name, path or any other word of the
+command built from a variable, `$@` or a command substitution
+(`A=aipager; $A setup`, `aipager $S group`, `aipager "$@"`,
+`aipager $(echo setup)`, `~/.config/$D/aipager.yaml`), a shell function
+or alias, an encoded or `eval`'d command (`base64 -d | sh`), a path
+built inside a script, or a script written with a file tool and then
+run, a symbolic link made earlier by another route, a process named by
+part of its name (`pkill -f aip`) or signalled by its number,
+`systemctl --user stop 'aip*'` (systemctl matches the glob itself), a
+copy of the aipager program under another name, and relative paths
+after reaching a folder by another route. These are examples, not every
+route. Plain ones that also still work: a program not named above that
+copies or writes a whole folder (`unzip -d ~/.config`, `cpio`, `ditto`,
+`pax`); `.config` or `.local` itself written as a glob or in another
+letter case (`cp -r ~/.c* /tmp/x`, `cd ~/.Config`); copying the whole
+home folder (`cp -r ~ /tmp/x`, `tar cf x.tar ~`); `cd ~/.config/.`,
+`cd ~alice/.config`, `cd ~ && ls && cd .config` or
+`CDPATH=~ cd .config`; a relative path from a folder inside `~/.config`
+(`cd ~/.config/systemd && sed -i s/a/b/ ../aipager/aipager.yaml`); a
+glob that relies on `dotglob` or another option turned on in the
+shell's own startup files (`cat ~/*/aipager/aipager.yaml`), or glob
+syntax only another shell has (zsh's `~/.config/^nvim/aipager.yaml`
+with `extendedglob`); a folder handed over through another command's
+words (`xargs -I{} cp -r {} ~/.config`,
+`find . -exec cp -r {} ~/.config \;`, `tar -C ~ -xf x.tar .config`);
+`xargs` with a long option that takes a separate value or a wrapper
+before aipager (`xargs --max-args 1 aipager`, `xargs nice aipager`,
+`xargs -n 1 python3 -m aipager`), `xargs env aipager` and
+`parallel aipager`; a Python loader under another name
+(`from runpy import run_module as r`); and a glob program name after a
+prefix the patterns do not read (`X=1 aip* setup`,
+`timeout -s KILL 5 aip* setup`, `env -u X aip* setup`,
+`setsid aip* setup`, `stdbuf -o0 aip* setup`, `watch aip* setup`,
+`bash -c 'aip* setup'`) or inside a `case` branch
+(`case $x in *) aip* setup;; esac`). The real boundary stays having no shell: the
+built-in `user` and `read_only` roles have none.
+
 **The built-in command rules.** Among the `Bash` patterns every
 non-owner Telegram turn with Bash is held to, one blocks the word `claude`: it
 stops a nested `claude` (with any path, wrapper or flag) and any
@@ -581,8 +707,10 @@ whose folder is `~`, `~user`, `$HOME`, `${HOME}` or `"$HOME"`, `/home`,
 `/home/<user>` (or `/home/$USER`), `/Users`, `/Users/<user>`, `/root` or
 `/` (with or without a trailing `/`, `/.` or `/*`), or `~/.config` or
 `~/.local`, which hold aipager's folders. This holds after `cd x &&`,
-in a pipe, inside `bash -c "..."`, after `xargs`, `env` or `timeout` and
-after `LC_ALL=C`-style settings.
+in a pipe, inside `bash -c "..."` (where the home folder may also be
+written `\$HOME`, or end in an escaped quote of a `bash -c \"...\"`
+inside it), after `xargs`, `env` or `timeout` and after
+`LC_ALL=C`-style settings.
 The reply says to search inside a project folder instead. Searches of a
 project folder (`grep -rn x ~/proj`, `rg x src/`, `find . -name y`),
 searches inside a project FOR a home path (`grep -rn "$HOME" src`, the
@@ -593,16 +721,27 @@ sees the words, not where the shell runs them, so it cannot see a search
 with no folder, or `.` or `..`, run from (or below) the home folder
 (`cd ~ && grep -r x .`), a home folder reached through another variable
 or a glob, nor one written out in full outside `/home`, `/Users` and
-`/root`, nor `\grep`, nor a folder right after a word ending in `-e`
-or `-f` (taken for the text `-e`/`-f` gives grep and rg, so
-`ag x -f ~` gets through). It also does not know which options take a
+`/root`, nor `\grep`, nor a search run through `eval` or `find -exec`
+(`find . -exec grep -r x ~ \;`) or through `bash -c` with an unquoted
+argument (`bash -c echo\ x\;grep\ -rn\ x\ \~`), nor one
+on the line after a comment that ends in a backslash or after a `\\`
+that ends a line, including where a later reading (inside
+`bash -c $'...'`, backticks or a here-document) takes a backslash out
+first and so ends a line or a setting early, nor one
+inside an escaped backtick within backticks, nor a folder right after a
+word ending in `-e` or `-f` (taken for the text `-e`/`-f` gives grep and
+rg, so `ag x -f ~` gets through). It also does not know which options take a
 separate value, so `rg -t py "$HOME" .` or `grep -rn -A 3 "/home/you"
 src` reads `py` or `3` as the text and the home path as a folder, and is
 denied (write `-A3`, `--include=*.py`, or put the option after the
 text), and so is a home path given to `-e` inside a cluster
 (`grep -rne "/home" src`; `-r -n -e` is fine); a command quoted inside
 another command's text (`echo "a; rg x ~"`) is denied too, and so is
-`du -sh ~` (sizes only).
+`du -sh ~` (sizes only). A `;`, `&`, `|`, `(` or backtick behind a
+backslash also counts as the start of a command, since `eval`,
+`bash -c "..."` or backticks read it again as a real one, so
+`echo x\; grep -rn x ~` is denied even though bash alone runs no search
+there.
 
 **Why one block halts the whole turn.** After a tool call is blocked,
 every later call in the same turn is denied too, until the next
@@ -1011,6 +1150,7 @@ Known limits:
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | aipager's safety check refuses what a Telegram turn's rules deny; in Ask, Claude Code's own rules in `settings.json` decide what it asks about and a person's tap is the only allow; in Auto (the default for every new session) Claude Code's own safety check runs the calls it judges safe without a prompt and stops the risky ones for a person; a Full access session (admins, and a person in their own private chat) asks nothing, so only aipager's safety check stands in the way, and for an owner's own turns and terminal prompts nothing does ([who decides](#who-decides-whether-a-tool-call-runs)) |
 | Restricted Telegram user escalates to the owner | No shell, sessions started only inside the member's own root folder, writes and searches confined to the project inside it (never the home folder), no reads in the home folder outside the root folder, other members' root folders and other chats' uploads unreachable, credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| A non-owner Telegram turn changes who controls the machine (`aipager setup`, `aipager config`, an edit of `aipager.yaml`) | No shell for restricted roles; the file tools never reach aipager's folders; for a role given Bash, only best-effort command patterns, which a determined user can get around: they block aipager's setup, config and uninstall commands, killing the daemon, Python that imports aipager, and aipager's folders through globs, quotes, a `cd` into their parent or a copy of it ([team-mode enforcement](#team-mode-enforcement)) |
 | A session's message claims an owner's authority | The message runs with the sending turn's proven rights, never the receiving session's earlier ones; without proof, read and think only ([messages between sessions](#messages-between-claude-sessions)) |
 | A group member borrows someone else's rights | Each message runs with its own sender's role in the chat it came from; a different sender's message waits for the running turn; if one joins anyway, the strictest rules win; slash commands from restricted roles are limited to the keyboard's ([team-mode enforcement](#team-mode-enforcement)) |
 | Group chatter reaches a session | In a group only commands, replies to the bot, mentions of it and marked keyboard taps are acted on ([groups](groups.md#what-the-bot-reads-in-a-group)) |

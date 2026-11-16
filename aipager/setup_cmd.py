@@ -19,7 +19,11 @@ file as it was. Each outcome has its own exit code (``EXIT_*``) and, with
 
 The token is never printed, logged, put in the environment or in an
 exception message: every line setup emits goes through :func:`_scrub`.
-``aipager setup detect-chat`` lives in :mod:`aipager.setup_detect`.
+``aipager setup detect-chat`` and ``detect-group`` live in
+:mod:`aipager.setup_detect`, ``aipager setup group`` in
+:mod:`aipager.setup_group`; both group forms read the token from the
+install (never from the command line) and share this module's flag
+checks, reload and output.
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ EXIT_TELEGRAM_UNREACHABLE = 7
 EXIT_DETECT_TIMEOUT = 8
 EXIT_DAEMON_RUNNING = 9
 EXIT_UPDATES_CONFLICT = 10
+EXIT_NOT_SET_UP = 11
 EXIT_INTERRUPTED = 130
 
 #: Sent to the person's DM once, before anything is written.
@@ -93,6 +98,8 @@ class _Run:
     token_hint: str = "--token-file PATH"
     plain_out: list[str] = field(default_factory=list)
     plain_err: list[str] = field(default_factory=list)
+    #: ``aipager setup group``: the parsed request (set by the flag check).
+    request: object = None
 
 
 @dataclass
@@ -249,16 +256,43 @@ def _read_stdin(stdin) -> str | bytes:
 
 # ----- flag validation -----
 
+#: Flags only ``aipager setup group`` takes: (flag, attribute).
+GROUP_ONLY_FLAGS = (("--member", "member"), ("--remove-member", "remove_member"),
+                    ("--label", "label"), ("--root", "root"),
+                    ("--block-edits", "block_edits"))
+#: The forms that read the bot token from the install.
+INSTALL_TOKEN_COMMANDS = ("group", "detect-group")
+
+
+def _given(args: argparse.Namespace, pairs) -> list[str]:
+    """The flags of *pairs* (``(flag, attribute)``) set on the command
+    line: a value given (even an empty one) or a switch turned on."""
+    out = []
+    for flag, attr in pairs:
+        value = getattr(args, attr, None)
+        if value is not None and value is not False:
+            out.append(flag)
+    return out
+
+
 def _validate_flags(args: argparse.Namespace, run: _Run) -> None:
     """Refuse bad or misplaced flags (exit 2) before anything is read.
     Sets ``chat_id``/``role`` in the document once they are valid."""
+    install_token = run.command in INSTALL_TOKEN_COMMANDS
     if getattr(args, "token_flag", None) is not None:
         raise SetupError(
             EXIT_USAGE, "token_on_command_line",
             "The bot token cannot be given on the command line (it would "
             "show in the process list and the shell history).",
-            "Put the token in a file and pass --token-file PATH, or pipe it "
-            "in with --token-stdin.")
+            (f"Remove it: `aipager setup {run.command}` uses the bot token "
+             "aipager is already set up with.") if install_token else
+            ("Put the token in a file and pass --token-file PATH, or pipe it "
+             "in with --token-stdin."))
+    if install_token:
+        from aipager.setup_group import validate_group_flags
+        validate_group_flags(args, run)
+        return
+    group_given = _given(args, GROUP_ONLY_FLAGS)
     detect = run.command == "detect-chat"
     if detect:
         wrong = [flag for flag, attr in (
@@ -267,17 +301,26 @@ def _validate_flags(args: argparse.Namespace, run: _Run) -> None:
         wrong += [flag for flag, attr in (
             ("--service", "service"), ("--force", "force"),
             ("--dry-run", "dry_run")) if getattr(args, attr, False)]
+        wrong += group_given
         if wrong:
             raise SetupError(
                 EXIT_USAGE, "usage",
                 f"{', '.join(wrong)} cannot be used with `aipager setup detect-chat`.",
                 f"Remove {', '.join(wrong)}; detect-chat only takes --token-file "
                 "PATH or --token-stdin, --timeout SECONDS and --json.")
+    elif group_given:
+        raise SetupError(
+            EXIT_USAGE, "usage",
+            f"{', '.join(group_given)} only apply to `aipager setup group`.",
+            f"Remove {', '.join(group_given)}, or set a group up with "
+            "`aipager setup group --chat-id N --member ID:LABEL:ROLE`.")
     elif getattr(args, "timeout", None) is not None:
         raise SetupError(
             EXIT_USAGE, "usage",
-            "--timeout only applies to `aipager setup detect-chat`.",
-            "Remove --timeout, or run `aipager setup detect-chat --timeout SECONDS`.")
+            "--timeout only applies to `aipager setup detect-chat` and "
+            "`aipager setup detect-group`.",
+            "Remove --timeout, or run `aipager setup detect-chat --timeout "
+            "SECONDS` (or detect-group).")
 
     has_file = getattr(args, "token_file", None) is not None
     has_stdin = bool(getattr(args, "token_stdin", False))
@@ -305,8 +348,11 @@ def _validate_flags(args: argparse.Namespace, run: _Run) -> None:
         raise SetupError(
             EXIT_USAGE, "bad_chat_id",
             "--chat-id must be a person's id (a positive number); groups "
-            "are added with `aipager config`.",
-            "Pass --chat-id N with the person's numeric Telegram user id.")
+            "are set up with `aipager setup group --chat-id N --member "
+            "ID:LABEL:ROLE`.",
+            "Pass --chat-id N with the person's numeric Telegram user id, or "
+            "run `aipager setup group --chat-id N --member ID:LABEL:ROLE` "
+            "for a group.")
     if not _CHAT_ID_RE.fullmatch(raw_chat) or int(raw_chat) <= 0:
         raise SetupError(
             EXIT_USAGE, "bad_chat_id",
@@ -439,9 +485,12 @@ def _force_fix(plan: _Plan) -> tuple[str, str]:
 # ----- the run -----
 
 def _base_doc(command: str, args: argparse.Namespace) -> dict:
-    if command == "detect-chat":
+    if command == "group":
+        from aipager.setup_group import base_doc
+        return base_doc(args)
+    if command in ("detect-chat", "detect-group"):
         return {
-            "command": "detect-chat", "status": None, "ok": False,
+            "command": command, "status": None, "ok": False,
             "exit_code": None, "error": None, "message": None, "fix": None,
             "bot_username": None, "source": None, "candidate": None,
             "other_candidates": 0, "warnings": [], "next_step": None,
@@ -771,16 +820,27 @@ def _write_config(run: _Run, plan: _Plan, from_v1: bool, chat_id: int,
 def _after_yaml_change(run: _Run, plan: _Plan, changed: list[str],
                        running: bool, *, unknown: bool = False) -> None:
     """Live-reload a running daemon after a scope change; a new token
-    needs a restart, which setup never does itself.
+    needs a restart, which setup never does itself
+    (:func:`_reload_after_write`)."""
+    if not any(c in changed for c in _YAML_CHANGES):
+        return
+    _reload_after_write(run, running, unknown=unknown,
+                        token_changed="bot_token" in changed)
 
+
+def _reload_after_write(run: _Run, running: bool, *, unknown: bool,
+                        token_changed: bool = False) -> None:
+    """After ``aipager.yaml`` was written: live-reload a running daemon
+    and record the outcome in ``run.doc["daemon"]``. Shared by the DM
+    setup and ``aipager setup group``; never restarts anything.
+
+    *token_changed*: a new token needs a restart, so no reload is tried.
     *unknown*: daemon detection failed. No reload is tried (it would
     detect again, and signal a PID nobody could confirm); a restart is
     asked for instead. A reload that raises is reported the same way:
     the yaml is already written, so the run must not fail over it."""
     daemon = run.doc["daemon"]
-    if not any(c in changed for c in _YAML_CHANGES):
-        return
-    if "bot_token" in changed or unknown:
+    if token_changed or unknown:
         daemon["reload"] = "not_reloaded" if running else "not_needed"
         daemon["restart_needed"] = running
         return
@@ -846,7 +906,9 @@ _START_HOW = ("`aipager service install` (background service) or "
               "`aipager start` (foreground)")
 
 
-def _next_step(doc: dict) -> str:
+def _restart_or_refused_step(doc: dict) -> str | None:
+    """The next step when a restart is needed or the reload was refused
+    (shared by the DM setup and ``aipager setup group``), else ``None``."""
     daemon = doc.get("daemon") or {}
     unknown = any(w.get("code") == "daemon_unknown" for w in doc["warnings"])
     if daemon.get("restart_needed"):
@@ -861,6 +923,15 @@ def _next_step(doc: dict) -> str:
     if any(w.get("code") == "reload_refused" for w in doc["warnings"]):
         return ("Fix the problem in the warning (run `aipager config`), then "
                 "check with `aipager doctor --json`.")
+    return None
+
+
+def _next_step(doc: dict) -> str:
+    shared = _restart_or_refused_step(doc)
+    if shared is not None:
+        return shared
+    daemon = doc.get("daemon") or {}
+    unknown = any(w.get("code") == "daemon_unknown" for w in doc["warnings"])
     if doc["service"]["result"] in ("installed", "already_installed"):
         return ("aipager runs as a background service. Check the install with "
                 "`aipager doctor --json`.")
@@ -934,9 +1005,11 @@ def _emit(run: _Run, out) -> None:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
-    """`aipager setup [detect-chat]`. Returns the exit code; never raises
-    (every exception is reported, scrubbed, as ``internal_error``)."""
-    command = ("detect-chat" if getattr(args, "setup_action", None) == "detect-chat"
+    """`aipager setup [detect-chat|group|detect-group]`. Returns the exit
+    code; never raises (every exception is reported, scrubbed, as
+    ``internal_error``)."""
+    action = getattr(args, "setup_action", None)
+    command = (action if action in ("detect-chat", "group", "detect-group")
                else "setup")
     as_json = bool(getattr(args, "as_json", False))
     out = sys.stdout
@@ -975,6 +1048,13 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 def _dispatch(args: argparse.Namespace, run: _Run) -> int:
     _validate_flags(args, run)
+    if run.command == "group":
+        # The token comes from the install, never the command line.
+        from aipager.setup_group import cmd_group
+        return cmd_group(args, run)
+    if run.command == "detect-group":
+        from aipager.setup_detect import cmd_detect_group
+        return cmd_detect_group(args, run)
     run.token, warnings = _read_token(args)
     run.doc["warnings"].extend(warnings)
     if run.command == "detect-chat":

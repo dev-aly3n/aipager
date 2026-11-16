@@ -2,7 +2,7 @@
 
 # فرمان‌ها و رابط ربات
 
-<!-- i18n-source: docs/commands.md @ 08e5ce80 -->
+<!-- i18n-source: docs/commands.md @ ace40cd4 -->
 
 > این صفحه ترجمهٔ صفحهٔ انگلیسی است؛ اگر جایی با هم فرق داشتند، نسخهٔ انگلیسی درست است. ([English](../../commands.md))
 
@@ -508,7 +508,7 @@ Claude گفتگوی جدیدی شروع می‌کند و این یکی را فر
 | دستور | چه کار می‌کند |
 |---|---|
 | `aipager config` | ویزارد تنظیمات با سؤال و جواب: توکن ربات، چت‌ها، اعضا و نقش‌ها، هوک‌های Claude Code. برای عوض کردن هر چیزی دوباره اجرایش کنید ([استفادهٔ تیمی](groups.md#setup) را ببینید). |
-| `aipager setup` | همان راه‌اندازی اول بدون هیچ سؤالی، برای اسکریپت‌ها و ایجنت‌های برنامه‌نویسی ([پایین](#command-line-aipager-setup-for-coding-agents) را ببینید). |
+| `aipager setup` | همان راه‌اندازی اول بدون هیچ سؤالی، برای اسکریپت‌ها و ایجنت‌های برنامه‌نویسی؛ `aipager setup group` به همین شکل یک گروه تلگرام، اعضایش و نقش‌هایشان را اضافه می‌کند ([پایین](#command-line-aipager-setup-for-coding-agents) را ببینید). |
 | `aipager start` | aipager را در همان ترمینال اجرا می‌کند. وقتی aipager دیگری اجرا می‌شود شروع نمی‌شود. |
 | `aipager service install [--yes]` | aipager را به‌شکل سرویس پس‌زمینه نصب و اجرا می‌کند (سرویس systemd کاربری روی Linux، ایجنت launchd روی macOS). &lrm;`--yes` از سؤال وقتی سرویس نصب‌شده فرق دارد رد می‌شود. |
 | `aipager service start\|stop\|status\|logs\|uninstall` | سرویس را شروع، متوقف یا نشان می‌دهد، لاگش را دنبال می‌کند، یا برش می‌دارد. |
@@ -530,7 +530,7 @@ Claude گفتگوی جدیدی شروع می‌کند و این یکی را فر
 
 ## <a id="command-line-aipager-setup-for-coding-agents"></a>خط فرمان: `aipager setup` (برای ایجنت‌های برنامه‌نویسی)
 
-بخش‌های بالا ربات تلگرام را توضیح می‌دهند. این بخش دستوری را توضیح می‌دهد که در ترمینال اجرا می‌کنید، یا یک اسکریپت یا ایجنت برنامه‌نویسی برایتان اجرا می‌کند: `aipager setup` aipager را بدون هیچ سؤالی راه می‌اندازد و همان نتیجهٔ اولین اجرای `aipager config` را می‌دهد.
+بخش‌های بالا ربات تلگرام را توضیح می‌دهند. این بخش دستوری را توضیح می‌دهد که در ترمینال اجرا می‌کنید، یا یک اسکریپت یا ایجنت برنامه‌نویسی برایتان اجرا می‌کند: `aipager setup` aipager را بدون هیچ سؤالی راه می‌اندازد و همان نتیجهٔ اولین اجرای `aipager config` را می‌دهد. روی نصبی که از قبل راه‌اندازی شده، `aipager setup group` یک گروه تلگرام را با اعضا و نقش‌هایشان اضافه می‌کند، آن هم بدون سؤال ([`aipager setup group`](#aipager-setup-group) را ببینید).
 
 <div dir="ltr">
 
@@ -541,6 +541,9 @@ aipager setup detect-chat --token-file ~/bot-token.txt --json
 aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 # 3. نصب را چک کنید
 aipager doctor --json
+# بعداً: یک گروه را پیدا کنید (در آن /start بفرستید)، بعد راهش بیندازید
+aipager setup detect-group --json
+aipager setup group --chat-id -1001234567890 --member 123456789:alice:owner --json
 ```
 
 </div>
@@ -561,12 +564,17 @@ aipager doctor --json
 |---|---|
 | &lrm;`--token-file PATH` | توکن ربات را از این فایل می‌خواند (حداکثر ۴۰۹۶ بایت؛ متن اطراف یک توکن مشکلی ندارد). فایلی که کاربرهای دیگر می‌توانند بخوانند کار می‌کند ولی هشدار `token_file_shared` می‌دهد: `chmod 600` کنید، یا وقتی setup موفق شد پاکش کنید. |
 | &lrm;`--token-stdin` | توکن ربات را از stdin می‌خواند (یک pipe یا فایل redirect‌شده، هیچ‌وقت ترمینال). pipe باید بسته شود: setup حداکثر ۳۰ ثانیه منتظر پایان stdin می‌ماند و بعد با `token_stdin_timeout` و کد ۲ خارج می‌شود. `printf '%s\n' "$TOKEN" \| aipager setup --token-stdin ...`&lrm; و &lrm;`< token.txt` هر دو آن را می‌بندند. |
-| &lrm;`--chat-id N` | الزامی. آیدی عددی کاربر تلگرام آن شخص، که همان آیدی چت خصوصی‌اش هم هست. گروه‌ها با `aipager config` اضافه می‌شوند. |
+| &lrm;`--chat-id N` | الزامی. آیدی عددی کاربر تلگرام آن شخص، که همان آیدی چت خصوصی‌اش هم هست. با `setup group`: آیدی گروه، یک عدد منفی. |
 | &lrm;`--role owner\|admin` | نقش آن شخص (پیش‌فرض `owner`). |
 | &lrm;`--service` | سرویس پس‌زمینه را هم نصب و اجرا می‌کند (وقتی aipagerی اجرا می‌شود رد می‌شود). |
-| &lrm;`--force` | اجازه می‌دهد توکن ربات، چت خصوصی مالک، یا نقش یک نصب موجود عوض شود. چت‌های گروهی و بقیهٔ چت‌های خصوصی می‌مانند. |
+| &lrm;`--force` | اجازه می‌دهد توکن ربات، چت خصوصی مالک، یا نقش یک نصب موجود عوض شود. چت‌های گروهی و بقیهٔ چت‌های خصوصی می‌مانند. با `setup group`: تغییرهایی را مجاز می‌کند که `force_reasons` فهرست کرده. |
 | &lrm;`--dry-run` | همهٔ بررسی‌ها را اجرا می‌کند، هیچ چیزی نمی‌فرستد، هیچ چیزی نمی‌نویسد، و گزارش می‌دهد چه چیزی عوض می‌شد. |
 | &lrm;`--json` | دقیقاً یک شیء JSON روی stdout چاپ می‌کند؛ بقیه به stderr می‌رود. |
+| &lrm;`--member ID:LABEL:ROLE` | فقط `setup group`، قابل تکرار: آیدی عددی کاربر تلگرام، اسم و نقش یک عضو. |
+| &lrm;`--remove-member ID` | فقط `setup group`، قابل تکرار: این عضو را برمی‌دارد. |
+| &lrm;`--label NAME` | فقط `setup group`: اسم گروه. |
+| &lrm;`--root PATH` | فقط `setup group`: پوشهٔ root اعضا. |
+| &lrm;`--block-edits` | فقط `setup group`: جلوی Write و Edit را برای اعضای `user` گروه می‌گیرد. |
 
 دقیقاً یکی از &lrm;`--token-file` و &lrm;`--token-stdin` را بدهید. توکن هیچ‌وقت به‌عنوان مقدار یک فلگ پذیرفته نمی‌شود: &lrm;`--token` و &lrm;`--bot-token` رد می‌شوند (`token_on_command_line`) و مقدار نشان داده نمی‌شود. فلگ‌های کوتاه‌شده (&lrm;`--token-f`،&rlm; &lrm;`--dry`) پذیرفته نمی‌شوند. setup هیچ‌وقت سؤالی نمی‌پرسد، هیچ‌وقت ترمینال لازم ندارد، و هیچ‌وقت توکن را از یک متغیر محیطی نمی‌خواند.
 
@@ -588,24 +596,60 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 محدودیت: چون detect-chat هیچ‌وقت پیامی را تأیید نمی‌کند، تلگرام فقط ۱۰۰ آپدیت خوانده‌نشدهٔ قدیمی‌تر ۲۴ ساعت گذشته را نشانش می‌دهد. وقتی ربات این‌قدر پیام منتظر دارد، یک &lrm;`/start` جدید دیده نمی‌شود: detect-chat آن‌وقت با مهلت تمام‌شده (کد ۸) و هشدار `updates_backlog` خارج می‌شود، و زدن دوبارهٔ Start کمکی نمی‌کند. به جایش آیدی عددی تلگرام آن شخص را از خودش بپرسید (یا یک بار aipager را اجرا کنید که آن پیام‌ها را می‌خواند و پاک می‌کند).
 
+### <a id="aipager-setup-group"></a>`aipager setup group`
+
+<div dir="ltr">
+
+```sh
+aipager setup group --chat-id N [--member ID:LABEL:ROLE ...] [--remove-member ID ...]
+                    [--label NAME] [--root PATH] [--block-edits]
+                    [--force] [--dry-run] [--json]
+```
+
+</div>
+
+یک گروه تلگرام را روی نصبی که از قبل راه‌اندازی شده تنظیم می‌کند، با همان بررسی‌ها، همان نوشتن فایل و همان خواندن دوبارهٔ تنظیمات بدون ری‌استارت که `aipager config` دارد. توکن ربات را از `aipager.yaml` می‌خواند (بدون &lrm;`--token-file` یا &lrm;`--token-stdin`)، ترمینال لازم ندارد، هیچ‌وقت aipager را ری‌استارت نمی‌کند و هیچ‌وقت چیزی در گروه نمی‌فرستد.
+
+- &rlm;&lrm;`--chat-id N`: آیدی گروه، یک عدد منفی ([`detect-group`](#aipager-setup-detect-group) پیدایش می‌کند).
+- &rlm;&lrm;`--member ID:LABEL:ROLE`: یک آیدی مثبت کاربر تلگرام، یک اسم (می‌تواند `:` داشته باشد) و یک نقش: `owner`،&rlm; `admin`،&rlm; `user`،&rlm; `read_only` یا نقشی که در `policy.yaml` تعریف شده. آیدی‌های فرستندهٔ مشترک تلگرام (1087968824، 136817688، 777000) رد می‌شوند.
+- گروه جدید دست‌کم یک &lrm;`--member` لازم دارد. اسمش &lrm;`--label` است، وگرنه `group-<رقم‌های آیدی>`؛ پوشهٔ rootاش &lrm;`--root` است، وگرنه &lrm;`~/aipager-users/group-<label>`&lrm;، و در فایل نوشته می‌شود.
+- گروهی که از قبل تنظیم شده (حتی با آیدی دیگرش بعد از اینکه تلگرام ارتقایش داد، با هشدار `group_moved`) کامل‌تر می‌شود: اعضایی که اسمشان را نمی‌آورید می‌مانند، آیدی جدید اضافه می‌شود، آیدی آشنا با اسم جدید تغییر اسم می‌دهد، و &lrm;`--remove-member` برای کسی که عضو نیست هشدار `not_a_member` می‌دهد. &lrm;`--block-edits` ابزارهای `Write` و `Edit` را به `deny_tools` گروه اضافه می‌کند و هیچ‌وقت چیزی برنمی‌دارد. آخرین عضو را نمی‌شود برداشت (`last_member`، حتی با &lrm;`--force`): کل گروه را در `aipager config` حذف کنید.
+- این تغییرها &lrm;`--force` لازم دارند، وگرنه کد خروج ۶ `needs_force` (`force_reasons` فهرستشان را می‌دهد): `owner_granted` (عضو جدید نقشی با `bypass_safety` می‌گیرد و هنوز در هیچ چتی چنین نقشی ندارد؛ اضافه کردن مالک چت خصوصی خودتان لازمش ندارد)، `role_changed`،&rlm; `owner_demoted`،&rlm; `owner_removed`،&rlm; `root_code_loading` (پوشهٔ root داخل &lrm;`~/bin`،&rlm; &lrm;`~/.local/bin`،&rlm; &lrm;`~/.config/systemd` یا &lrm;`~/.config/autostart` است) و `root_overlap` (همان پوشهٔ root یک چت دیگر است، آن را در خودش دارد یا داخلش است).
+- اجرای دوباره با همان گزینه‌ها چیزی را عوض نمی‌کند (`unchanged`): نه نوشتنی، نه خواندن دوباره‌ای.
+- هر بار که نقش `owner` داده می‌شود، یک رکورد `grant-owner` در لاگ ممیزی ثبت می‌شود.
+- فقط با خواندن و بدون اینکه گروه چیزی ببیند از تلگرام می‌پرسد (getMe،&rlm; getChat،&rlm; getChatMember برای ربات) که ربات در گروه هست، ادمین است و اجازهٔ پین کردن پیام دارد یا نه. هر چه پیدا کند فقط هشدار است، هیچ‌وقت کد خروج نیست؛ بعد از خطای شبکه بقیه رد می‌شود (`telegram_checks_skipped`).
+
+### <a id="aipager-setup-detect-group"></a>`aipager setup detect-group`
+
+<div dir="ltr">
+
+```sh
+aipager setup detect-group [--timeout SECONDS] [--json]
+```
+
+</div>
+
+منتظر جدیدترین پیام در گروه یا سوپرگروهی می‌ماند که هنوز تنظیم نشده (کسی در آن &lrm;`/start` می‌فرستد) و گروه را چاپ می‌کند: آیدی، اسم و نوع. چیزی ذخیره نمی‌کند، پس گروه را به کاربر نشان بدهید و `aipager setup group --chat-id` را فقط وقتی اجرا کنید که تأیید کرد. فقط پیام‌هایی حساب می‌شوند که حداکثر ۱۰ دقیقه قبل از شروع دستور فرستاده شده‌اند؛ &lrm;`--timeout` مثل detect-chat کار می‌کند. توکن را از `aipager.yaml` می‌خواند و هیچ گزینهٔ دیگری نمی‌گیرد. وقتی یک aipager برای این ربات روشن است، آنچه aipager یادداشت کرده را می‌خواند (`source: "daemon"`&lrm;، که گروه‌ها را می‌بیند)؛ وگرنه تلگرام را بدون تأیید کردن هیچ پیامی می‌خواند (`source: "telegram"`&lrm;).
+
 ### <a id="exit-codes"></a>کدهای خروج
 
 | کد | `error` | معنی |
 |---|---|---|
-| 0 | | موفق (`installed`،&rlm; `updated`،&rlm; `unchanged`،&rlm; `dry_run`، یا detect-chat با `found`). |
-| 1 | `config_malformed`،&rlm; `ambiguous_install`،&rlm; `settings_invalid`،&rlm; `test_send_failed`،&rlm; `write_failed`،&rlm; `service_failed`،&rlm; `internal_error` | شکست. `ambiguous_install`: بیش از یک چت خصوصی می‌تواند مال مالک باشد؛ در `aipager config` درستش کنید. |
-| 2 | `usage`،&rlm; `missing_token_source`،&rlm; `token_source_conflict`،&rlm; `token_file_unreadable`،&rlm; `token_stdin_is_tty`،&rlm; `token_stdin_timeout`،&rlm; `token_malformed`،&rlm; `token_on_command_line`،&rlm; `bad_chat_id`،&rlm; `bad_role`،&rlm; `bad_timeout` | ورودی بد یا ناقص؛ `fix` فلگ را نام می‌برد. یک فلگ ناشناخته یا کلمهٔ اشتباه بعد از `setup` را پردازشگر آرگومان‌ها گزارش می‌دهد (متن ساده، بدون JSON)، باز هم با کد ۲. |
+| 0 | | موفق (`installed`،&rlm; `created`،&rlm; `updated`،&rlm; `unchanged`،&rlm; `dry_run`، یا detect-chat و detect-group با `found`). |
+| 1 | `config_malformed`،&rlm; `ambiguous_install`،&rlm; `settings_invalid`،&rlm; `test_send_failed`،&rlm; `write_failed`،&rlm; `service_failed`،&rlm; `policy_malformed`،&rlm; `not_a_group_scope`،&rlm; `last_member`،&rlm; `config_changed`،&rlm; `internal_error` | شکست. `ambiguous_install`: بیش از یک چت خصوصی می‌تواند مال مالک باشد؛ در `aipager config` درستش کنید. `config_changed`: وقتی `setup group` در حال اجرا بود، گروه در `aipager.yaml` عوض شد، برای همین چیزی نوشته نشد؛ دوباره اجرا کنید. |
+| 2 | `usage`،&rlm; `missing_token_source`،&rlm; `token_source_conflict`،&rlm; `token_file_unreadable`،&rlm; `token_stdin_is_tty`،&rlm; `token_stdin_timeout`،&rlm; `token_malformed`،&rlm; `token_on_command_line`،&rlm; `bad_chat_id`،&rlm; `bad_role`،&rlm; `bad_timeout`،&rlm; `bad_member`،&rlm; `bad_member_id`،&rlm; `shared_sender_id`،&rlm; `duplicate_member`،&rlm; `bad_label`،&rlm; `duplicate_label`،&rlm; `unknown_role`،&rlm; `bad_root` | ورودی بد یا ناقص؛ `fix` فلگ را نام می‌برد. یک فلگ ناشناخته یا کلمهٔ اشتباه بعد از `setup` را پردازشگر آرگومان‌ها گزارش می‌دهد (متن ساده، بدون JSON)، باز هم با کد ۲. |
 | 3 | `deps_missing` | dtach،&rlm; claude،&rlm; aipager-hook یا aipager-statusline نیست؛ `fix` دستورها را دارد. چیزی نوشته نشد. |
 | 4 | `token_rejected` | تلگرام توکن را رد کرد. |
 | 5 | `chat_not_started`،&rlm; `bot_blocked` | آن شخص در ربات Start را نزده ("Open t.me/&lt;bot&gt; and press Start, then run this again.")، یا ربات را بلاک کرده. چیزی نوشته نشد. |
-| 6 | `existing_install` | یک توکن، چت یا نقش متفاوت از قبل تنظیم شده؛ &lrm;`--force` اضافه کنید. |
+| 6 | `existing_install`،&rlm; `needs_force` | یک توکن، چت یا نقش متفاوت از قبل تنظیم شده، یا `setup group` تغییری می‌دهد که در `force_reasons` آمده؛ &lrm;`--force` اضافه کنید (بعد از پرسیدن از آن شخص). |
 | 7 | `telegram_unreachable` | خطای شبکه، یا تلگرام با 429 یا &lrm;5xx جواب داد. |
-| 8 | `detect_timeout` | detect-chat قبل از &lrm;`--timeout` هیچ پیام خصوصی‌ای ندید (با هشدار `updates_backlog` وقتی ۱۰۰ آپدیت خوانده‌نشدهٔ قدیمی جدیدترها را پنهان کرده‌اند). |
+| 8 | `detect_timeout` | detect-chat قبل از &lrm;`--timeout` هیچ پیام خصوصی‌ای ندید (detect-group: هیچ پیامی در یک گروه جدید ندید) (با هشدار `updates_backlog` وقتی ۱۰۰ آپدیت خوانده‌نشدهٔ قدیمی جدیدترها را پنهان کرده‌اند). |
 | 9 | `daemon_running` | detect-chat: یک aipager در حال اجرا پیام‌های ربات را می‌گیرد. |
-| 10 | `updates_conflict` | detect-chat: برنامهٔ دیگری پیام‌های این ربات را می‌خواند. |
+| 10 | `updates_conflict` | detect-chat یا detect-group: برنامهٔ دیگری پیام‌های این ربات را می‌خواند. |
+| 11 | `not_set_up` | `setup group` یا `detect-group`: هنوز `aipager.yaml` با توکن ربات وجود ندارد (نصب قدیمی با `config.env` هم همین‌طور: یک بار `aipager config` را اجرا کنید تا منتقلش کند). اول aipager را راه بیندازید. |
 | 130 | `interrupted` | Ctrl-C. |
 
-وقتی چند بررسی با هم شکست بخورند، کد از این ترتیب پیروی می‌کند: `config_malformed`،&rlm; `ambiguous_install`،&rlm; `existing_install`،&rlm; `settings_invalid`،&rlm; `deps_missing`.&rlm; &lrm;`--dry-run` با همان کدی خارج می‌شود که اجرای واقعی از این بررسی‌ها می‌گرفت.
+وقتی چند بررسی با هم شکست بخورند، کد از این ترتیب پیروی می‌کند: `config_malformed`،&rlm; `ambiguous_install`،&rlm; `existing_install`،&rlm; `settings_invalid`،&rlm; `deps_missing`. برای `setup group`:&rlm; `config_malformed` یا `not_set_up`،&rlm; `policy_malformed`،&rlm; `unknown_role`،&rlm; `usage`،&rlm; `duplicate_label`،&rlm; `not_a_group_scope`،&rlm; `last_member`،&rlm; `needs_force`.&rlm; &lrm;`--dry-run` با همان کدی خارج می‌شود که اجرای واقعی از این بررسی‌ها می‌گرفت.
 
 ### <a id="json-aipager-setup---json"></a>JSON: `aipager setup --json`
 
@@ -675,6 +719,82 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 </div>
 
 &rlm;`candidate` فقط وقتی `status` برابر `found` است `null` نیست. `warnings` شیءهایی با `code` (`token_file_shared`،&rlm; `updates_backlog`) و `message` دارد. `other_candidates` آدم‌های دیگری را می‌شمارد که در همان ۱۰ دقیقه به ربات پیام داده‌اند: وقتی ۰ نیست، مطمئن شوید شخص درستی را دارید. `next_step` فلگ توکنی را که استفاده کردید تکرار می‌کند، هیچ‌وقت خود توکن را.
+
+### <a id="json-aipager-setup-group---json"></a>JSON: `aipager setup group --json`
+
+همهٔ کلیدها همیشه هستند؛ مقداری که هنوز معلوم نیست `null` است.
+
+<div dir="ltr">
+
+```json
+{
+  "command": "group",
+  "status": "created",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Group team (chat -1001234567890) is set up with 2 members.",
+  "fix": null,
+  "dry_run": false,
+  "force": false,
+  "bot_username": "example_bot",
+  "chat_id": -1001234567890,
+  "scope_chat_id": -1001234567890,
+  "label": "team",
+  "root": "/home/alice/aipager-users/group-team",
+  "block_edits": false,
+  "members": [{"id": 111111111, "label": "alice", "role": "owner"},
+              {"id": 222222222, "label": "bob", "role": "user"}],
+  "changed": ["group"],
+  "member_changes": [{"id": 222222222, "change": "added", "label": "bob", "role": "user", "previous_role": null}],
+  "force_reasons": [],
+  "pinned_roots": [],
+  "telegram": {"checked": true, "chat_type": "supergroup", "chat_title": "Team",
+               "bot_status": "administrator", "bot_can_pin": true, "privacy_mode": true},
+  "daemon": {"running": true, "reload": "reloaded", "restart_needed": false, "outcome": "reloaded_live"},
+  "warnings": [],
+  "next_step": "Check the group with `aipager doctor --json`."
+}
+```
+
+</div>
+
+- &rlm;`status`:&rlm; `created`،&rlm; `updated`،&rlm; `unchanged`،&rlm; `dry_run` یا `error`.
+- &rlm;`scope_chat_id`: آیدی‌ای که گروه با آن ذخیره شده (بعد از ارتقا به سوپرگروه با &lrm;`--chat-id` فرق دارد).
+- &rlm;`changed`: چه چیزی عوض شد (یا در اجرای آزمایشی عوض می‌شد)، به این ترتیب: `group` (گروه جدید)، `label`،&rlm; `root`،&rlm; `deny_tools`،&rlm; `member_added`،&rlm; `member_relabeled`،&rlm; `role`،&rlm; `member_removed`.
+- &rlm;`member_changes[].change`:&rlm; `added`،&rlm; `relabeled`،&rlm; `role` یا `removed`.
+- &rlm;`members`: اعضای گروه بعد از تغییر (در اجرای آزمایشی، برنامه‌ریزی‌شده‌ها)؛ اگر اجرا زودتر متوقف شد `null`.
+- &rlm;`pinned_roots`: چت‌های دیگری که پوشهٔ rootشان در فایل نوشته می‌شود تا جابه‌جا نشود.
+- وقتی بررسی‌ها رد شده باشند `telegram.checked` برابر false است و بقیهٔ کلیدهای `telegram` هم `null` هستند. `privacy_mode` فقط گزارش می‌شود: چیزی از آنچه aipager به آن واکنش نشان می‌دهد را عوض نمی‌کند.
+- &rlm;`daemon.reload` مثل `setup`؛&rlm; `daemon.outcome`:&rlm; `reloaded_live`،&rlm; `not_applied`،&rlm; `restart_needed`،&rlm; `no_daemon` یا `not_needed` (چیزی نوشته نشد). خروجی ساده می‌نویسد `daemon: reloaded live`،&rlm; `daemon: not applied: <reason>`&lrm;،&rlm; `daemon: restart needed` یا `daemon: no daemon running`.
+- &rlm;`warnings` (`code` و `message`؛ هیچ‌کدام کد خروج را عوض نمی‌کند): `owner_granted`،&rlm; `no_manager` (نقش هیچ عضوی نمی‌تواند گروه را مدیریت کند)، `not_a_member`،&rlm; `group_moved`،&rlm; `group_not_found`،&rlm; `bot_not_in_group`،&rlm; `bot_not_admin`،&rlm; `bot_cannot_pin`،&rlm; `group_upgraded`،&rlm; `chat_not_a_group`،&rlm; `token_rejected`،&rlm; `telegram_checks_skipped`،&rlm; `daemon_unknown`،&rlm; `reload_refused`،&rlm; `audit_write_failed`.
+- با `bot_not_in_group`،&rlm; `bot_not_admin`،&rlm; `bot_cannot_pin` یا `group_not_found`،&rlm; `next_step` کاری را می‌گوید که فقط خود آن شخص در تلگرام می‌تواند بکند: ربات را به گروه اضافه کند و ادمینش کند، با اجازهٔ پین کردن پیام.
+
+### <a id="json-aipager-setup-detect-group---json"></a>JSON: `aipager setup detect-group --json`
+
+<div dir="ltr">
+
+```json
+{
+  "command": "detect-group",
+  "status": "found",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Found the group Team, chat id -1001234567890.",
+  "fix": null,
+  "bot_username": "example_bot",
+  "source": "telegram",
+  "candidate": {"id": -1001234567890, "title": "Team", "type": "supergroup", "date": 1700000000},
+  "other_candidates": 0,
+  "warnings": [],
+  "next_step": "Show this group to the user; once they confirm, run: aipager setup group --chat-id -1001234567890 --member ID:LABEL:ROLE"
+}
+```
+
+</div>
+
+&rlm;`candidate` همیشه `null` است مگر اینکه `status` برابر `found` باشد؛ از منبع aipager،&rlm; `date` آن `null` است. `other_candidates` گروه‌های جدید دیگری را می‌شمارد که در همان ۱۰ دقیقه پیام داده‌اند. `warnings` ممکن است `updates_backlog` داشته باشد.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

@@ -17,7 +17,7 @@ import questionary
 from aipager.errors import friendly_warn
 from aipager.scope import Member, Scope
 from aipager.ui import console, ok, step, warn
-from aipager.wizard import daemon_io
+from aipager.wizard import daemon_io, group_rules
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.display import _ask
 from aipager.wizard.draft import clear_draft, load_draft, save_draft
@@ -30,24 +30,23 @@ _ROLE_GLOSS = {
     "user": "prompt + approve; full safety + deny rules apply",
     "read_only": "/status only; no prompting",
 }
-_BUILTIN_ORDER = ("owner", "admin", "user", "read_only")
+_BUILTIN_ORDER = group_rules.BUILTIN_ORDER
 
 
 def _role_choices(*, include_owner: bool = True) -> list[questionary.Choice]:
     """Built-in roles + any custom roles from ``policy.yaml``.
 
-    Built-ins first (canonical order), then custom names. Reads the
-    merged policy; falls back to the built-in names if it can't load.
+    Built-ins first (canonical order), then custom names
+    (:func:`group_rules.role_names`). Reads the merged policy; falls back
+    to the built-in names if it can't load (``aipager setup group``
+    refuses instead).
     """
     try:
-        from aipager.policy import load_policy
-        names = list(load_policy().roles)
+        names = group_rules.role_names(group_rules.load_roles_strict())
     except Exception:
         names = list(_BUILTIN_ORDER)
-    builtin = [n for n in _BUILTIN_ORDER if n in names]
-    custom = [n for n in names if n not in _BUILTIN_ORDER]
     choices: list[questionary.Choice] = []
-    for n in (*builtin, *custom):
+    for n in names:
         if n == "owner" and not include_owner:
             continue
         gloss = _ROLE_GLOSS.get(n, "custom role")
@@ -82,9 +81,8 @@ def _dm_refusal(chat_id: int) -> str | None:
 
 
 # Shown above a group's role picker, where owner is offered (roadmap 8.83).
-OWNER_WARNING = ("owner has full control of this machine, including "
-                 "aipager's config, the bot token and Claude's credentials. "
-                 "Give it only to yourself.")
+# Lives in group_rules (shared with `aipager setup group`).
+OWNER_WARNING = group_rules.OWNER_WARNING
 
 
 def _pick_role(prompt: str, *, default: str = "user",
@@ -187,7 +185,8 @@ def add_group_scope(token: str, bot_username: str,
                           "The unfinished draft for it was discarded.")
             clear_draft()
             return False
-        label = str(resume.get("label") or f"group-{abs(chat_id)}")
+        label = str(resume.get("label")
+                    or group_rules.default_group_label(chat_id))
         members: list[dict] = list(resume.get("members", []))
         console.print(
             f"Resuming group '{label}' "
@@ -199,10 +198,11 @@ def add_group_scope(token: str, bot_username: str,
         if configured_scope_for(chat_id) is not None:
             friendly_warn(GROUP_ALREADY_SET_UP)
             return False
+        default_label = group_rules.default_group_label(chat_id)
         label = _ask(questionary.text(
             "Label for this group (shown in status):",
-            default=f"group-{abs(chat_id)}", qmark="?", style=_PROMPT_STYLE,
-        )).strip() or f"group-{abs(chat_id)}"
+            default=default_label, qmark="?", style=_PROMPT_STYLE,
+        )).strip() or default_label
         members = []
 
     def _persist() -> None:

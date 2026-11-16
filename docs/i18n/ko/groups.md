@@ -1,6 +1,6 @@
 # 팀 모드와 그룹
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../groups.md))
 
@@ -20,7 +20,7 @@ Telegram 사용자를 채팅에 추가하면 그 사람이 **aipager가 실행�
 
 ## <a id="setup"></a>설정
 
-모든 것은 `aipager config`로 설정해요. 파일을 직접 편집할 일은 없어요.
+모든 것은 `aipager config`로 설정하거나, 질문 없이(스크립트와 코딩 에이전트용) `aipager setup group`으로 설정해요([아래](#without-prompts-aipager-setup-group) 참고). 파일을 직접 편집할 일은 없어요.
 
 **처음 실행할 때**(아직 설정이 없을 때). 설정 마법사가 네 단계를 물어요:
 
@@ -51,12 +51,26 @@ Telegram 사용자를 채팅에 추가하면 그 사람이 **aipager가 실행�
 
 이미 설정된 그룹에 누군가를 추가하려면 Edit a scope → 그 그룹 → Add a member를 쓰세요. 그룹에 이미 있는 사람은 모두 자리와 역할이 그대로예요.
 
+### <a id="without-prompts-aipager-setup-group"></a>질문 없이: `aipager setup group`
+
+`aipager setup group`은 이미 설정된 설치에서 같은 일을 질문 없이 해요. 확인, 파일, 재시작 없는 다시 불러오기가 모두 같아요. 봇을 그룹에 추가하고, 메시지 고정 권한이 있는 관리자로 만들고, 그곳에서 `/start`를 보낸 다음:
+
+```sh
+aipager setup detect-group --json      # 그룹 ID를 찾아요. 아무것도 저장하지 않아요
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+누군가를 추가하려면 다른 `--member`를 넣어 다시 실행하고(다른 사람들은 자리와 역할이 그대로예요), 빼려면 `--remove-member ID`, 선택 규칙은 `--block-edits`를 쓰세요. 역할 변경, 소유자 강등이나 제거, 아직 어디에서도 소유자가 아닌 사람을 소유자로 만드는 일에는 `--force`가 필요해요. 같은 명령을 두 번 실행해도 아무것도 바뀌지 않아요. 그룹에 아무것도 보내지 않고 봇이 그룹에 있는지, 메시지를 고정할 수 있는지 확인하고, 아니면 경고해요. 옵션, 종료 코드, JSON 출력은 [명령어](commands.md#aipager-setup-group)를 보세요.
+
 ### <a id="finding-ids-auto-detect"></a>ID 찾기 (자동 감지)
 
 멤버를 자동 감지하면 아직 추가되지 않은 사람의 가장 최근 메시지를 가져와서, 쓰기 전에 "Is this the person to add?"(추가할 사람이 이 사람인가요?)라고 물어요(아니요라고 하면 그 사람을 건너뛰고 계속 찾아요). 그 사람의 Telegram 사용자 이름을 라벨로 제안해요. 그룹에서는 그 사람이 봇을 불러야 해요. 봇을 멘션하거나 `/start`를 보내세요([봇이 읽는 것](#what-the-bot-reads-in-a-group) 참고). 설정 마법사는 어디서 보고 있는지 알려 줘요:
 
 - **"Watching through the running daemon"**(실행 중인 aipager를 통해): `aipager start`가 실행 중인 동안 aipager가 봇에게 오는 모든 메시지를 받으니, 설정 마법사는 aipager가 `~/.claude/aipager-pending-users.json`에 기록한 것을 읽어요. aipager는 아직 서비스하지 않는 그룹에서 봇을 부른 사람(그룹의 ID, 제목, 종류, 그리고 그 사람의 ID, 사용자 이름, 이름)과, 서비스하는 그룹에서 멤버가 아닌 사람을 기록해요. 서비스하지 않는 그룹에서는 절대 답하지 않아요. 아직 설정되지 않은 사람의 개인 메시지에는 답하고 기록하지 않으니, aipager가 실행 중일 때 누군가의 개인 채팅을 추가하려면 그 사람의 ID를 붙여 넣으세요(또는 먼저 aipager를 멈추세요).
 - **"Watching Telegram directly"**(Telegram에서 직접): aipager가 멈춰 있을 때는 설정 마법사가 직접 Telegram에 봇의 최근 메시지를 물어봐요.
+
+`aipager setup detect-group`도 같은 방식으로 질문 없이 그룹 ID를 찾아요. 최근 10분 동안 아직 설정되지 않은 그룹에 온 가장 최근 메시지예요.
 
 처음 실행할 때 내 개인 채팅은 항상 Telegram에서 읽어요. 익명 그룹 관리자의 메시지, 또는 그룹이나 채널 이름으로 올린 메시지는 세지 않아요. 보낸 사람 ID(1087968824, 136817688, 777000)가 그렇게 올리는 모든 사람에게 같아서, 입력했든 감지했든 설정 마법사가 거부해요. 그 사람에게 자기 이름으로 올려 달라고 하세요.
 
@@ -74,6 +88,8 @@ Telegram 사용자를 채팅에 추가하면 그 사람이 **aipager가 실행�
 - 새 그룹이나 개인 채팅이 메시지를 받기 시작하고 자기 `/` 메뉴를 받아요. 지운 채팅은 멈춰요(그 세션은 내가 종료할 때까지 계속 실행돼요).
 - 그 채팅에서 더 이상 메시지를 보낼 수 없는 사람의 보류 중인 메시지(요청에 답하기를 기다리거나 다른 사람의 작업이 끝나기를 기다리는 것)는 버려져요. 🤷를 받고 봇은 “Claude에게 보내지 않았어요: @bob 님은 이제 여기서 메시지를 보낼 수 없어요.”라고 답해요.
 - 지워졌거나 권한을 잃은 사람의 실행 중인 작업은 남은 부분 동안 예전 규칙과 새 규칙 가운데 더 엄격한 것만 유지해요(지워진 사람이라면 제한된 최소 권한). 터미널에서 입력한 작업은 Telegram 메시지가 합쳐지지 않았다면 바뀌지 않아요. aipager는 그것이 누구의 것인지 기록하지 않으니, 그 채팅의 소유자 누구든(또는 개인 채팅이라면 그 멤버가) 권한을 잃으면 그런 작업이 좁혀져요. aipager가 재시작할 때 이미 실행 중이던 작업(아직 작업 중이거나 질문이나 권한 요청을 기다리는 중)은 그 채팅에서 권한을 잃은 모든 멤버에 맞춰 좁혀져요. 권한이 올라가도 실행 중인 작업이 넓어지는 일은 절대 없어요. 새 권한은 그 사람의 다음 작업부터 적용돼요.
+
+`aipager setup group`도 파일을 쓴 뒤 같은 다시 불러오기를 보내고, 무슨 일이 있었는지 알려 줘요(`daemon: reloaded live`, `not applied`, `restart needed`, `no daemon running`).
 
 재시작이 필요한 것은 **봇 token**뿐이에요(Refresh bot token 뒤에 `aipager config`가 그렇게 알려 줘요). 실행 중인 aipager가 없으면 다시 불러오기 지시를 보내지 않아요. 다음 `aipager start`가 새 설정을 읽어요.
 
@@ -118,7 +134,7 @@ aipager 내부의 세션 이름은 예전 ID를 유지하고(나는 절대 보�
 
 ## <a id="roles"></a>역할
 
-기본 역할이 네 개 있어요(`aipager/safety.py` 참고). 사람의 역할은 **지금 다루고 있는 채팅에서의** 역할이에요. Telegram이나 Mini App에서는 아무도 멤버나 역할을 바꿀 수 없어요. 컴퓨터의 `aipager config`만 할 수 있고, 그래서 이 일은 소유자의 손에 남아요.
+기본 역할이 네 개 있어요(`aipager/safety.py` 참고). 사람의 역할은 **지금 다루고 있는 채팅에서의** 역할이에요. Telegram이나 Mini App에서는 아무도 멤버나 역할을 바꿀 수 없어요. 컴퓨터의 `aipager config`나 `aipager setup group`만 할 수 있고, 그래서 이 일은 소유자의 손에 남아요(aipager의 안전 규칙은 소유자의 것이 아닌 모든 Telegram 작업에서 두 명령을 막아요).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ aipager 내부의 세션 이름은 예전 ID를 유지하고(나는 절대 보�
 
 - **owner**: 기본 안전 기준선까지 포함한 완전한 권한. 딱 한 사람이어야 해요. 이 컴퓨터를 다루는 사람이에요.
 - **admin**: 소유자가 Telegram과 Mini App에서 할 수 있는 모든 것. 세션을 전체 권한 모드로 바꾸기(그리고 이 모드로 세션 시작하기), 전체 권한 모드로 세션 재개하기, 그룹의 `/settings` 바꾸기, `/update` 실행, 음성 메시지 기능 설치, 모든 슬래시 명령 보내기예요. 관리자는 역할의 금지 규칙도 건너뛰어요(채팅과 멤버의 `deny_tools`가 적용되지 않아요). 두 가지는 여전히 소유자의 것이에요:
-  - 멤버와 역할 바꾸기: 컴퓨터의 `aipager config`만 할 수 있고, Telegram이나 Mini App의 어떤 것도 할 수 없어요.
+  - 멤버와 역할 바꾸기: 컴퓨터의 `aipager config`나 `aipager setup group`만 할 수 있고, Telegram이나 Mini App의 어떤 것도 할 수 없어요.
   - 안전 기준선 건너뛰기(aipager 설정과 봇 token, Claude Code 로그인 정보, aipager의 제어 파일). 관리자의 `Grep`과 `Glob`은 그 밖의 어디든 검색할 수 있지만, 그런 폴더 가운데 하나이거나, 그 안에 있거나, 그것을 품은 폴더에서는 검색하지 못해요. `~`, `/`, `/tmp`에 대한 `Grep`(또는 홈 폴더의 세션에서 폴더 없이)은 거부되고, 패턴이 그런 폴더에서 시작하는 `Glob`도 그래요(예: `/home/you/.config/aipager/*`). 프로젝트 폴더 안에서 검색하세요. `Grep` 도구가 없는 Claude Code 버전에서는 Claude가 Bash로 검색해요. 거기서도 홈 폴더 전체나 `/`를 재귀적으로 검색하거나 나열하는 것(`grep -rn x ~`, `rg x $HOME`, `find / -name x`)은 최선의 노력으로 거부되고(홈 폴더나 그 아래에서 실행하는, 폴더가 없거나 `..`인 검색은 보이지 않아요), 프로젝트 안의 검색은 영향을 받지 않아요. 프로젝트 안에서 홈 경로라는 글을 찾는 것(`grep -rn "$HOME" src`)도 마찬가지예요([보안](security.md#team-mode-enforcement)).
 
   관리자에게는 여전히 Bash가 있고, shell이 있으면 최소 권한의 명령 패턴은 경계가 아니라 최선의 노력일 뿐이에요. 이 컴퓨터의 shell을 줘도 되는 사람만 관리자로 만드세요.
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-개인 채팅 항목과 그룹 항목은 함께 있을 수 있어요. 봇은 나열된 모든 채팅을 서비스하고, 채팅마다의 세션은 따로 유지돼요. 이 파일은 `aipager config`가 써요. 직접 편집할 일은 없어요.
+개인 채팅 항목과 그룹 항목은 함께 있을 수 있어요. 봇은 나열된 모든 채팅을 서비스하고, 채팅마다의 세션은 따로 유지돼요. 이 파일은 `aipager config`와 `aipager setup group`이 써요. `aipager setup group`보다 오래된 aipager에서만 직접 편집하세요. 권한은 0600으로 유지하고, `aipager policy validate`로 확인하고, aipager에 다시 불러오기를 보내세요([재시작 없이 다시 불러오기](#live-reload) 참고).
 
 ## <a id="how-rules-work"></a>규칙이 작동하는 방식
 
@@ -359,7 +375,7 @@ safety:
 
 ## <a id="revoking-a-user"></a>사용자의 권한 거두기
 
-1. `aipager config` → Edit a member → 그 채팅 → 그 사람 → Remove member를 실행하세요. 메시지 보내기 권한만 거두고 읽기는 계속하게 하려면 Set role로 `read_only`를 고르세요. (나중에 다시 추가하려면: Edit a scope → 그 그룹 → Add a member.) 누군가의 개인 채팅이라면 먼저 그 세션을 종료하고, Edit a scope → 그 사람의 개인 채팅 → Remove this scope를 하세요.
+1. `aipager config` → Edit a member → 그 채팅 → 그 사람 → Remove member를 실행하세요. 메시지 보내기 권한만 거두고 읽기는 계속하게 하려면 Set role로 `read_only`를 고르세요. (나중에 다시 추가하려면: Edit a scope → 그 그룹 → Add a member.) 누군가의 개인 채팅이라면 먼저 그 세션을 종료하고, Edit a scope → 그 사람의 개인 채팅 → Remove this scope를 하세요. 질문 없이: `aipager setup group --chat-id <그룹 ID> --remove-member <그 사람의 ID>`(소유자라면 `--force`가 필요해요).
 2. 설정 마법사가 aipager를 재시작 없이 다시 불러오고 "Scopes reloaded live"를 보여 줘요. 그 사람의 보류된 메시지는 바로 버려지고(🤷와 “Claude에게 보내지 않았어요” 답), 아직 실행 중인 작업은 끝날 때까지 제한된 최소 권한에 묶여요. 그 작업을 바로 끝내려면 `/stop`을 보내세요.
 3. Telegram 그룹에서도 그 사람을 내보내세요. 그룹에 있는 한 그 사람은 거기 올라오는 모든 것을 여전히 읽을 수 있어요. 카드, 답변, 도구 입력, 권한 요청이에요.
 

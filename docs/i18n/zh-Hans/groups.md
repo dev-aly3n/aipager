@@ -1,6 +1,6 @@
 # 团队模式与群组
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../groups.md)）
 
@@ -20,7 +20,7 @@
 
 ## <a id="setup"></a>设置
 
-一切都用 `aipager config` 设置。你永远不需要自己编辑文件。
+一切都用 `aipager config` 设置，或者不提问题地（供脚本和编程代理使用）用 `aipager setup group` 设置（见[下文](#without-prompts-aipager-setup-group)）。你永远不需要自己编辑文件。
 
 **第一次运行**（还没有配置）。设置向导会问四个步骤：
 
@@ -51,12 +51,26 @@
 
 要把某人加入已经设置好的群组，用 Edit a scope → 那个群组 → Add a member。群组里已有的每个人都保持原来的位置和角色。
 
+### <a id="without-prompts-aipager-setup-group"></a>不提问题：`aipager setup group`
+
+`aipager setup group` 在已经设置好的安装上不提问题地做同样的事：同样的检查、同样的文件、同样的不重启重新加载。把机器人加进群组，设为有置顶消息权限的管理员，在群组里发送 `/start`，然后：
+
+```sh
+aipager setup detect-group --json      # 找到群组的 ID；不保存任何东西
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+要加人，就带另一个 `--member` 再运行一次（其他人保持原来的位置和角色）；要移除某人，用 `--remove-member ID`；可选规则用 `--block-edits`。修改角色、降级或移除所有者，或者让一个在哪里都还不是所有者的人成为所有者，都需要 `--force`。同一个命令运行两次不会改变任何东西。它会在不往群组发任何东西的情况下检查机器人是否在群组里、能否置顶消息，不行就发出警告。选项、退出码和 JSON 输出：[命令](commands.md#aipager-setup-group)。
+
 ### <a id="finding-ids-auto-detect"></a>找到 ID（自动检测）
 
 自动检测成员时，会取一个还没被添加的人最新的消息，并在使用之前问 "Is this the person to add?"（这是要添加的人吗？）（回答否，它会跳过这个人继续找）。它会建议用这个人的 Telegram 用户名作为标签。在群组里，这个人必须呼叫机器人：提及机器人或发送 `/start`（见[机器人读取什么](#what-the-bot-reads-in-a-group)）。设置向导会说明它在哪里查看：
 
 - **"Watching through the running daemon"**（通过正在运行的 aipager）：在 `aipager start` 运行期间，aipager 会收到发给机器人的所有消息，所以设置向导会读取 aipager 在 `~/.claude/aipager-pending-users.json` 里记录的内容。aipager 会记录在它尚未服务的群组里呼叫机器人的人（群组的 ID、标题和类型，以及这个人的 ID、用户名和名字），以及在它服务的群组里任何不是成员的人。它从不在自己不服务的群组里回复。来自尚未设置的人的私聊消息会得到回复，但不会被记录，所以要在 aipager 运行期间添加某人的私聊，请粘贴对方的 ID（或者先停止 aipager）。
 - **"Watching Telegram directly"**（直接从 Telegram）：aipager 停止时，设置向导会自己向 Telegram 查询机器人最近的消息。
+
+`aipager setup detect-group` 用同样的方式、不提问题地找到群组的 ID：最近 10 分钟里还没设置的群组中的最新消息。
 
 第一次运行时，你自己的私聊总是从 Telegram 读取。来自匿名群组管理员的消息，或者以群组名义、频道名义发布的消息不算数：它的发送者 ID（1087968824、136817688 或 777000）是所有这样发布的人共用的，所以设置向导会拒绝它，无论是输入的还是检测到的。请让这个人用自己的名义发消息。
 
@@ -74,6 +88,8 @@
 - 新的群组或私聊开始接收消息，并得到它的 `/` 菜单；被删除的聊天会停止（它的会话会继续运行，直到你结束它们）；
 - 来自一个在那个聊天里已不能再发消息的人、正被暂缓的消息（在等某个请求被回答，或者在等别人的任务结束）会被丢弃：它会得到一个 🤷，机器人会回复“没有发给 Claude：@bob 已不能再在这里发消息。”；
 - 被删除或失去权限的人正在运行的任务，在剩余的部分里只保留新旧规则中更严格的那部分（对被删除的人来说是受限的最低权限）。在终端里输入的任务不会被改变，除非有一条 Telegram 消息并入了它：aipager 不记录那是谁的，所以当那个聊天的任何一个所有者（或者在私聊里，它的成员）失去权限时，这样的任务就会被收紧。aipager 重启时已经在运行的任务（仍在工作，或者在等一个问题或权限请求）会按那个聊天里所有失去权限的成员来收紧。权限提升绝不会放宽正在运行的任务：新的权限从这个人的下一个任务开始生效。
+
+`aipager setup group` 写完文件后会发送同样的重新加载，并报告发生了什么（`daemon: reloaded live`、`not applied`、`restart needed` 或 `no daemon running`）。
 
 只有**机器人 token** 需要重启（`aipager config` 在 Refresh bot token 之后会这样说）。没有 aipager 在运行时，不会发送重新加载的指令：下一次 `aipager start` 会读取新配置。
 
@@ -118,7 +134,7 @@ aipager 内部的会话名称保留旧 ID（你永远看不到它们），`aipag
 
 ## <a id="roles"></a>角色
 
-有四个内置角色（见 `aipager/safety.py`）。一个人的角色，是这个人**在当前操作的那个聊天里**的角色。没有人能从 Telegram 或 Mini App 修改成员或角色：只有电脑上的 `aipager config` 能做到，这让这件事掌握在所有者手里。
+有四个内置角色（见 `aipager/safety.py`）。一个人的角色，是这个人**在当前操作的那个聊天里**的角色。没有人能从 Telegram 或 Mini App 修改成员或角色：只有电脑上的 `aipager config` 或 `aipager setup group` 能做到，这让这件事掌握在所有者手里（aipager 的安全规则会对每个不是所有者发起的 Telegram 任务拦下这两个命令）。
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ aipager 内部的会话名称保留旧 ID（你永远看不到它们），`aipag
 
 - **owner**：完全掌控，包括内置的安全底线。应该恰好有一个人：操作这台电脑的人。
 - **admin**：所有者在 Telegram 和 Mini App 里能做的一切：把会话切换到完全访问模式（以及以这个模式启动会话）、在完全访问模式下恢复会话、修改群组的 `/settings`、运行 `/update`、安装语音消息功能、发送任何斜杠命令。管理员还会绕过角色的禁止规则（scope 和成员的 `deny_tools` 对他们不适用）。有两样东西仍然属于所有者：
-  - 修改成员和角色：只有电脑上的 `aipager config` 能做到，Telegram 和 Mini App 里的任何东西都做不到；
+  - 修改成员和角色：只有电脑上的 `aipager config` 或 `aipager setup group` 能做到，Telegram 和 Mini App 里的任何东西都做不到；
   - 绕过安全底线（aipager 的配置和机器人 token、Claude Code 的登录信息、aipager 的控制文件）。管理员的 `Grep` 和 `Glob` 可以在其他任何地方搜索，但不能在这些文件夹之一、位于其中或包含它的文件夹里搜索：在 `~`、`/` 或 `/tmp` 上（或者在主文件夹里的会话中不指定文件夹）运行 `Grep` 会被拒绝，模式从这样的文件夹开始的 `Glob` 也一样（例如 `/home/you/.config/aipager/*`）。请在项目文件夹里搜索。在没有 `Grep` 工具的 Claude Code 版本上，Claude 会通过 Bash 搜索；在那里，对整个主文件夹或 `/` 的递归搜索或列出（`grep -rn x ~`、`rg x $HOME`、`find / -name x`）也会被拒绝，这是尽力而为的（从主文件夹或其下运行的、不指定文件夹或用 `..` 的搜索看不到），而在项目里的搜索不受影响，包括在项目里搜索主文件夹路径这个文字（`grep -rn "$HOME" src`）（[安全](security.md#team-mode-enforcement)）。
 
   管理员仍然有 Bash，而有了 shell，最低权限的命令模式就只是尽力而为，不是边界：只有在你愿意把这台电脑的 shell 交给某人时，才让这个人当管理员。
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-私聊 scope 和群组 scope 可以同时存在：机器人服务列出的每个聊天，每个聊天的会话彼此分开。`aipager config` 会写这个文件；你永远不需要编辑它。
+私聊 scope 和群组 scope 可以同时存在：机器人服务列出的每个聊天，每个聊天的会话彼此分开。`aipager config` 和 `aipager setup group` 会写这个文件。只有在比 `aipager setup group` 更旧的 aipager 上才手动编辑它：保持权限为 0600，用 `aipager policy validate` 检查，再让 aipager 重新加载（见[不重启地重新加载](#live-reload)）。
 
 ## <a id="how-rules-work"></a>规则如何运作
 
@@ -359,7 +375,7 @@ safety:
 
 ## <a id="revoking-a-user"></a>撤销一个人的权限
 
-1. 运行 `aipager config` → Edit a member → 那个聊天 → 那个人 → Remove member。如果要拿走发送消息的权限、但仍让对方能阅读，使用 Set role 并选择 `read_only`。（之后要重新添加某人：Edit a scope → 那个群组 → Add a member。）对于某人的私聊，先结束它的会话，然后 Edit a scope → 那个人的私聊 → Remove this scope。
+1. 运行 `aipager config` → Edit a member → 那个聊天 → 那个人 → Remove member。如果要拿走发送消息的权限、但仍让对方能阅读，使用 Set role 并选择 `read_only`。（之后要重新添加某人：Edit a scope → 那个群组 → Add a member。）对于某人的私聊，先结束它的会话，然后 Edit a scope → 那个人的私聊 → Remove this scope。不提问题的方式：`aipager setup group --chat-id <群组 ID> --remove-member <对方的 ID>`（移除所有者需要 `--force`）。
 2. 设置向导会不重启地重新加载 aipager；它会显示 "Scopes reloaded live"。这个人被暂缓的消息会立即被丢弃（🤷 和一条“没有发给 Claude”的回复），其仍在运行的任务在完成之前会被限制在受限的最低权限。发送 `/stop` 可以立即结束那个任务。
 3. 也把这个人移出 Telegram 群组。只要还在群组里，对方就仍然能读到那里发出的一切：卡片、回答、工具的输入和权限请求。
 

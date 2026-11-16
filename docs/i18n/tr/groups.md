@@ -1,6 +1,6 @@
 # Ekip modu ve gruplar
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../groups.md))
 
@@ -20,7 +20,7 @@ Bir Telegram kişisini bir sohbete eklemek, ona **aipager'ın çalıştığı bi
 
 ## <a id="setup"></a>Kurulum
 
-Her şey `aipager config` ile kurulur. Dosyaları elle düzenlemen hiç gerekmez.
+Her şey `aipager config` ile ya da soru sormadan (betikler ve kodlama ajanları için) `aipager setup group` ile kurulur (bkz. [aşağısı](#without-prompts-aipager-setup-group)). Dosyaları elle düzenlemen hiç gerekmez.
 
 **İlk çalıştırma** (henüz yapılandırma yok). Sihirbaz dört adımda sorar:
 
@@ -51,12 +51,26 @@ Her şey `aipager config` ile kurulur. Dosyaları elle düzenlemen hiç gerekmez
 
 Zaten yapılandırılmış bir gruba birini eklemek için Edit a scope → grup → Add a member kullan. Grupta zaten olan herkes yerini ve rolünü korur.
 
+### <a id="without-prompts-aipager-setup-group"></a>Soru sormadan: `aipager setup group`
+
+`aipager setup group` aynısını, zaten yapılandırılmış bir kurulumda soru sormadan yapar: aynı kontroller, aynı dosya ve aynı yeniden başlatmadan yeniden yükleme. Botu gruba ekle, mesaj sabitleme hakkıyla yönetici yap ve orada `/start` gönder, sonra:
+
+```sh
+aipager setup detect-group --json      # grubun kimliğini bulur; hiçbir şey kaydetmez
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+Birini eklemek için başka bir `--member` ile yeniden çalıştır (diğerleri yerini ve rolünü korur), birini çıkarmak için `--remove-member ID` ile, isteğe bağlı kural için `--block-edits` ile. Bir rol değişikliği, bir sahibi düşürmek ya da çıkarmak veya henüz hiçbir yerde sahip olmayan birini sahip yapmak `--force` gerektirir. Aynı komut iki kez hiçbir şeyi değiştirmez. Gruba hiçbir şey göndermeden botun grupta olup olmadığını ve mesaj sabitleyip sabitleyemeyeceğini kontrol eder, değilse uyarır. Seçenekler, çıkış kodları ve JSON çıktısı: [komutlar](commands.md#aipager-setup-group).
+
 ### <a id="finding-ids-auto-detect"></a>Kimlikleri bulmak (otomatik algılama)
 
 Bir üyeyi otomatik algılama, henüz eklenmemiş birinden gelen en yeni mesajı alır ve onu kullanmadan önce "Is this the person to add?" (Eklenecek kişi bu mu?) diye sorar (hayır dersen aramaya devam eder). Ad olarak o kişinin Telegram kullanıcı adını önerir. Grupta kişinin bota seslenmesi gerekir: onu anmak ya da `/start` göndermek (bkz. [bot neyi okur](#what-the-bot-reads-in-a-group)). Sihirbaz nereye baktığını söyler:
 
 - **"Watching through the running daemon"** (çalışan aipager üzerinden): `aipager start` çalışırken bot için her mesajı aipager alır, bu yüzden sihirbaz aipager'ın `~/.claude/aipager-pending-users.json` dosyasına yazdığını okur. aipager, henüz hizmet vermediği bir grupta bota seslenen kişiyi (grubun kimliği, adı ve türü, ayrıca kişinin kimliği, kullanıcı adı ve adı) ve hizmet verdiği bir grubun üyesi olmayan herkesi kaydeder. Hizmet vermediği bir grupta asla yanıt vermez. Yapılandırılmamış birinden gelen özel bir mesaj bir yanıt alır ve kaydedilmez, bu yüzden aipager çalışırken bir kişinin özel sohbetini eklemek için kimliğini yapıştır (ya da önce aipager'ı durdur).
 - **"Watching Telegram directly"** (doğrudan Telegram'da): aipager durduğunda sihirbaz botun son mesajlarını Telegram'a kendisi sorar.
+
+`aipager setup detect-group` bir grubun kimliğini aynı şekilde, soru sormadan bulur: henüz yapılandırılmamış bir gruptaki son 10 dakikanın en yeni mesajı.
 
 İlk çalıştırmada kendi özel sohbetin her zaman Telegram'dan okunur. Anonim bir grup yöneticisinin mesajı ya da bir grup veya kanal adına yayımlanan bir mesaj sayılmaz: gönderen kimliği (1087968824, 136817688 ya da 777000) bu şekilde yayımlayan herkes için aynıdır, bu yüzden sihirbaz onu, yazılmış ya da bulunmuş olsun, reddeder. Kişiden kendi hesabıyla yazmasını iste.
 
@@ -74,6 +88,8 @@ Yeniden yüklemenin hemen uyguladıkları:
 - yeni bir grup ya da yeni bir özel sohbet mesaj almaya başlar ve kendi `/` menüsünü alır; kaldırılan biri durur (oturumları sen sonlandırana kadar çalışmaya devam eder);
 - artık bu sohbette yazmasına izin verilmeyen birinden gelen bekletilmiş bir mesaj (bir isteğin yanıtını ya da başkasının görevinin bitmesini bekleyen) atılır: 🤷 alır ve bot “Claude'a gönderilmedi: @bob artık burada yazamaz.” diye yanıt verir;
 - kaldırılan ya da yetkilerini kaybeden bir kişinin süren görevi, görevin sonuna kadar yalnızca eski ve yeni kurallarından en sıkı olanını korur (kaldırılan bir kişi için kısıtlı alt sınır). Terminalde yazılmış bir görev, ona bir Telegram mesajı katılmadıkça değişmez: aipager kimden olduğunu kaydetmez, bu yüzden böyle bir görev, bu sohbetin herhangi bir sahibi (ya da bir özel sohbette, üyesi) yetkilerini kaybettiğinde daralır. aipager yeniden başladığında zaten süren bir görev (hâlâ çalışıyor ya da bir soru veya izin bekliyor), sohbetinin yetkilerini kaybeden her üyesi için daralır. Bir yükseltme süren bir görevi asla genişletmez: yeni yetkiler o kişinin bir sonraki görevinden itibaren geçerlidir.
+
+`aipager setup group` yazdıktan sonra aynı yeniden yüklemeyi gönderir ve ne olduğunu bildirir (`daemon: reloaded live`, `not applied`, `restart needed` ya da `no daemon running`).
 
 Yalnızca yeni bir **bot token'ı** yeniden başlatma gerektirir (`aipager config` bunu Refresh bot token sonrasında söyler). aipager çalışmıyorken yeniden yükleme gönderilmez: bir sonraki `aipager start` yeni yapılandırmayı okur.
 
@@ -118,7 +134,7 @@ Konuları açmak ayrıca sıradan bir grubu süper gruba çevirir; aipager bunu 
 
 ## <a id="roles"></a>Roller
 
-Dört yerleşik rol (bkz. `aipager/safety.py`). Sayılan, bir kişinin **işlem yaptığı sohbetteki** rolüdür. Kimse üyeleri ya da rolleri Telegram'dan veya Mini App'ten değiştiremez: bunu yalnızca bilgisayardaki `aipager config` yapar ve böylece bu, sahibe kalır.
+Dört yerleşik rol (bkz. `aipager/safety.py`). Sayılan, bir kişinin **işlem yaptığı sohbetteki** rolüdür. Kimse üyeleri ya da rolleri Telegram'dan veya Mini App'ten değiştiremez: bunu yalnızca bilgisayardaki `aipager config` ya da `aipager setup group` yapar ve böylece bu, sahibe kalır (aipager'ın güvenlik kuralları sahibin olmayan her Telegram görevi için ikisini de engeller).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ Dört yerleşik rol (bkz. `aipager/safety.py`). Sayılan, bir kişinin **işlem 
 
 - **owner**: güvenliğin yerleşik alt sınırı dahil tam denetim. Tam olarak bir sahip olmalı: bilgisayarı yöneten kişi.
 - **admin**: sahibin Telegram'da ve Mini App'te yapabildiği her şey: oturumları Tam erişim moduna almak (ve onda başlatmak), bir oturuma Tam erişim modunda devam ettirmek, grubun `/settings` ayarlarını değiştirmek, `/update` çalıştırmak, sesli mesaj desteğini kurmak, herhangi bir slash komutu göndermek. Yönetici ayrıca rolün yasak kurallarını aşar (sohbetin ve üyenin `deny_tools` değerleri yöneticilere uygulanmaz). İki şey sahibe kalır:
-  - üyeleri ve rolleri değiştirmek: bunu yalnızca bilgisayardaki `aipager config` yapar ve Telegram'daki ya da Mini App'teki hiçbir şey bunu yapamaz;
+  - üyeleri ve rolleri değiştirmek: bunu yalnızca bilgisayardaki `aipager config` ya da `aipager setup group` yapar ve Telegram'daki ya da Mini App'teki hiçbir şey bunu yapamaz;
   - güvenlik alt sınırını aşmak (aipager'ın yapılandırması ve bot token'ı, Claude Code kimlik bilgileri, aipager'ın kontrol dosyaları). Bir yöneticinin `Grep` ve `Glob` araçları başka her yerde arama yapabilir, ama bunlardan biri olan, bunlardan birinin içinde duran ya da bunlardan birini içeren bir klasörde değil: `~`, `/` ya da `/tmp` üzerinde (ya da ev klasöründeki bir oturumdan klasörsüz) `Grep` reddedilir; kalıbı bunlardan birinde başlayan bir `Glob` da öyle (`/home/you/.config/aipager/*` gibi). Bunun yerine proje klasörünün içinde ara. `Grep` aracı olmayan Claude Code sürümlerinde Claude Bash ile arar; orada da ev klasörünün tamamında ya da `/` üzerinde özyinelemeli arama veya listeleme (`grep -rn x ~`, `rg x $HOME`, `find / -name x`) elden geldiğince reddedilir (ev klasöründen ya da altından çalıştırılan klasörsüz ya da `..` ile yapılan bir arama görünmez), projelerde arama ise reddedilmez, ev klasörü yolunu ARAMA dahil (`grep -rn "$HOME" src`) ([güvenlik](security.md#team-mode-enforcement)).
 
   Yöneticinin Bash'i kalır ve bir shell ile alt sınırın komut kalıpları elden geldiğince çalışır, bir sınır değildir: bir kişiyi ancak bu bilgisayarda bir shell ile güvenilebilirse yönetici yap.
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-Özel sohbet ve grup sohbetleri birlikte yaşar: bot listedeki her sohbete hizmet verir ve her sohbetin oturumları ayrı tutulur. Bu dosyayı `aipager config` yazar; onu düzenlemen hiç gerekmez.
+Özel sohbet ve grup sohbetleri birlikte yaşar: bot listedeki her sohbete hizmet verir ve her sohbetin oturumları ayrı tutulur. Bu dosyayı `aipager config` ve `aipager setup group` yazar. Onu elle yalnızca `aipager setup group` komutundan eski bir aipager'da düzenle: izinlerini 0600 tut, `aipager policy validate` ile denetle ve aipager'a bir yeniden yükleme gönder (bkz. [Yeniden başlatmadan yeniden yükleme](#live-reload)).
 
 ## <a id="how-rules-work"></a>Kurallar nasıl çalışır
 
@@ -359,7 +375,7 @@ safety:
 
 ## <a id="revoking-a-user"></a>Bir kişinin erişimini kaldırmak
 
-1. `aipager config` → Edit a member → sohbet → kişi → Remove member çalıştır. Mesaj gönderme hakkını alıp okuma hakkını bırakmak için Set role kullan ve `read_only` seç. (Sonradan yeniden eklemek için: Edit a scope → grup → Add a member.) Bir kişinin özel sohbeti için oturumlarını sonlandır, sonra Edit a scope → onun özel sohbeti → Remove this scope.
+1. `aipager config` → Edit a member → sohbet → kişi → Remove member çalıştır. Mesaj gönderme hakkını alıp okuma hakkını bırakmak için Set role kullan ve `read_only` seç. (Sonradan yeniden eklemek için: Edit a scope → grup → Add a member.) Bir kişinin özel sohbeti için oturumlarını sonlandır, sonra Edit a scope → onun özel sohbeti → Remove this scope. Soru sormadan: `aipager setup group --chat-id <grup kimliği> --remove-member <kişinin kimliği>` (bir sahip için `--force` gerekir).
 2. Sihirbaz aipager'ı anında yeniden yükler; "Scopes reloaded live" yazar. Hemen bekletilen mesajları atılır (🤷 ve “Claude'a gönderilmedi” yanıtı) ve hâlâ süren görevi sonuna kadar alt sınırla kısıtlanır. Bu görevi şimdi bitirmek için `/stop` gönder.
 3. Onu Telegram grubundan da çıkar. Orada olduğu sürece oraya yayımlanan her şeyi okumaya devam edebilir: kartlar, yanıtlar, araç girdileri ve izin istekleri.
 

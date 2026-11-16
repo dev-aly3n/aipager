@@ -6,6 +6,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import NamedTuple
 
 from aipager import telegram_endpoint
 from aipager.errors import redact_token
@@ -82,6 +83,53 @@ def _verify_token(token: str) -> dict | None:
         return info
     err_console.print(f"  [err]{explained}[/err]")
     return None
+
+
+class BotAnswer(NamedTuple):
+    """A read-only Bot API call's answer. ``result`` is Telegram's
+    ``result`` on success, else ``None``; ``status`` the HTTP status
+    (``None`` when Telegram was never reached); ``description`` why it
+    failed (token redacted, ``""`` on success); ``migrate_to_chat_id``
+    the new id Telegram names for a group it upgraded to a supergroup."""
+
+    result: dict | None
+    status: int | None
+    description: str
+    migrate_to_chat_id: int | None = None
+
+
+def _read_only_call(token: str, method: str, params: dict) -> BotAnswer:
+    """One GET of *method* with *params* in the query string. Never sends
+    anything a person sees."""
+    url = (telegram_endpoint.method_url(token, method) + "?"
+           + urllib.parse.urlencode({k: str(v) for k, v in params.items()}))
+    body, code, err = _http_json(url)
+    if isinstance(body, dict) and body.get("ok"):
+        result = body.get("result")
+        return BotAnswer(result if isinstance(result, dict) else {}, code, "")
+    migrate = None
+    desc = err
+    if isinstance(body, dict):
+        params_ = body.get("parameters")
+        new = (params_.get("migrate_to_chat_id")
+               if isinstance(params_, dict) else None)
+        if isinstance(new, int) and not isinstance(new, bool):
+            migrate = new
+        raw = body.get("description")
+        if isinstance(raw, str) and raw:
+            desc = raw
+    return BotAnswer(None, code, redact_token(desc or ""), migrate)
+
+
+def _get_chat(token: str, chat_id: int) -> BotAnswer:
+    """``getChat`` for *chat_id* (read-only, invisible to the chat)."""
+    return _read_only_call(token, "getChat", {"chat_id": chat_id})
+
+
+def _get_chat_member(token: str, chat_id: int, user_id: int) -> BotAnswer:
+    """``getChatMember``: *user_id*'s status in *chat_id* (read-only)."""
+    return _read_only_call(token, "getChatMember",
+                           {"chat_id": chat_id, "user_id": user_id})
 
 
 #: The wizard's test message (unchanged since before ``aipager setup``).
@@ -179,6 +227,70 @@ def _newest_private_chat(
             }
     others = len(seen - {best["id"]}) if best is not None else 0
     return best, others, code, "", batch_full
+
+
+def _group_message(update) -> tuple[dict, dict] | None:
+    """``(chat, message)`` when *update* is a message (or an edit) in a
+    group or supergroup with a whole-number chat id, else ``None``. The
+    one group filter the wizard's auto-detect and ``aipager setup
+    detect-group`` share."""
+    if not isinstance(update, dict):
+        return None
+    msg = update.get("message") or update.get("edited_message") or {}
+    if not isinstance(msg, dict):
+        return None
+    chat = msg.get("chat") or {}
+    if not isinstance(chat, dict) or chat.get("type") not in ("group", "supergroup"):
+        return None
+    cid = chat.get("id")
+    if not isinstance(cid, int) or isinstance(cid, bool):
+        return None
+    return chat, msg
+
+
+def _newest_group_chat(
+    token: str, *, not_before: int, exclude=frozenset(),
+) -> tuple[dict | None, int, int | None, str, bool, bool]:
+    """ONE read-only ``getUpdates`` (never an ``offset``, like
+    :func:`_newest_private_chat`) for the newest group or supergroup
+    message dated ``not_before`` or later whose chat is not in *exclude*
+    (groups already set up).
+
+    Returns ``(candidate, other_count, http_status, error, batch_full,
+    saw_known)``. ``candidate`` is ``{id, title, type, date}`` or
+    ``None``; ``other_count`` counts the other new groups seen in the
+    window; ``saw_known`` is true when a group in *exclude* was seen in
+    the window (so a caller can say only groups already set up wrote)."""
+    body, code, err = _http_json(
+        telegram_endpoint.method_url(token, "getUpdates")
+    )
+    if not body or not body.get("ok"):
+        return None, 0, code, err, False, False
+    result = body.get("result") or []
+    if not isinstance(result, list):
+        result = []
+    batch_full = len(result) >= GET_UPDATES_BATCH
+    best: dict | None = None
+    seen: set[int] = set()
+    saw_known = False
+    for u in reversed(result):
+        found = _group_message(u)
+        if found is None:
+            continue
+        chat, msg = found
+        date = msg.get("date")
+        if not isinstance(date, int) or isinstance(date, bool) or date < not_before:
+            continue
+        cid = chat["id"]
+        if cid in exclude:
+            saw_known = True
+            continue
+        seen.add(cid)
+        if best is None:
+            best = {"id": cid, "title": chat.get("title") or "",
+                    "type": chat.get("type"), "date": date}
+    others = len(seen - {best["id"]}) if best is not None else 0
+    return best, others, code, "", batch_full, saw_known
 
 
 def _migrated_hint(body) -> str:
@@ -287,7 +399,7 @@ def _detect_id(
 
 
 def _fetch_id_from_pending(
-    *, want: str, exclude=frozenset(),
+    *, want: str, exclude=frozenset(), not_before: float | None = None,
 ) -> tuple[int | None, str | None, str | None]:
     """The newest matching record in the daemon's pending-users file
     (``team.PENDING_USERS_PATH``), skipping ids in *exclude*.
@@ -297,25 +409,26 @@ def _fetch_id_from_pending(
     not serve (roadmap 8.88). ``want="group"`` returns that group's chat
     id and title; ``want="user"`` the sender. ``want="dm"`` finds
     nothing: a DM from someone not set up is never written down.
+
+    *not_before* (a Unix time): skip records last written before it, or
+    with no readable time (``aipager setup detect-group``'s look-back);
+    ``None`` (the wizard) reads every record.
     """
     if want not in _WANTS:
         raise ValueError(f"unknown auto-detect target: {want!r}")
-    from aipager.team import list_pending_users
+    from aipager.team import _pending_seen_at, list_pending_users
     if want == "dm":
         return None, None, DAEMON_DM_ADVISORY
+    if want == "group":
+        record, saw_known = _newest_pending_group(exclude=exclude,
+                                                  not_before=not_before)
+        if record is not None:
+            return record["chat_id"], (record.get("chat_title") or ""), None
+        return None, None, (ONLY_KNOWN_GROUPS_ADVISORY if saw_known
+                            else DAEMON_NO_GROUP_ADVISORY)
     saw_known = False
-    for r in reversed(list_pending_users()):
-        if not isinstance(r, dict):
-            continue
-        if want == "group":
-            cid = r.get("chat_id")
-            if (r.get("chat_type") not in ("group", "supergroup")
-                    or not isinstance(cid, int) or isinstance(cid, bool)):
-                continue
-            if cid in exclude:
-                saw_known = True
-                continue
-            return cid, (r.get("chat_title") or ""), None
+    for r in _pending_records(list_pending_users(), _pending_seen_at,
+                              not_before):
         uid = r.get("user_id")
         # (list_pending_users already hides Telegram's shared sender ids.)
         if not isinstance(uid, int) or isinstance(uid, bool):
@@ -326,11 +439,64 @@ def _fetch_id_from_pending(
         who = _sender_name(r.get("username"), r.get("display_name"))
         return uid, who, None
     if saw_known:
-        return None, None, (ONLY_KNOWN_GROUPS_ADVISORY if want == "group"
-                            else ONLY_KNOWN_SENDERS_ADVISORY)
-    if want == "group":
-        return None, None, DAEMON_NO_GROUP_ADVISORY
+        return None, None, ONLY_KNOWN_SENDERS_ADVISORY
     return None, None, DAEMON_NO_USER_ADVISORY
+
+
+def _pending_records(records, seen_at, not_before: float | None):
+    """The pending-users *records* newest first, dicts only, without those
+    last written before *not_before* or with no readable time (when
+    *not_before* is set)."""
+    for r in reversed(records):
+        if not isinstance(r, dict):
+            continue
+        if not_before is not None:
+            when = seen_at(r)
+            if when is None or when.timestamp() < not_before:
+                continue
+        yield r
+
+
+def _newest_pending_group(*, exclude=frozenset(),
+                          not_before: float | None = None
+                          ) -> tuple[dict | None, bool]:
+    """``(record, saw_known)``: the newest group record in the daemon's
+    pending-users file whose chat id is not in *exclude* (its
+    ``chat_id`` an int, ``chat_type`` ``group`` or ``supergroup``), and
+    whether a group in *exclude* wrote. *not_before* as in
+    :func:`_fetch_id_from_pending`."""
+    from aipager.team import _pending_seen_at, list_pending_users
+    saw_known = False
+    for r in _pending_records(list_pending_users(), _pending_seen_at,
+                              not_before):
+        cid = r.get("chat_id")
+        if (r.get("chat_type") not in ("group", "supergroup")
+                or not isinstance(cid, int) or isinstance(cid, bool)):
+            continue
+        if cid in exclude:
+            saw_known = True
+            continue
+        return r, saw_known
+    return None, saw_known
+
+
+def _known_group_in_pending(*, exclude, not_before: float) -> bool:
+    """A group in *exclude* (already set up) has a record in the daemon's
+    pending-users file written at *not_before* or later: ``aipager setup
+    detect-group`` then says only groups already set up wrote."""
+    from aipager.team import _pending_seen_at, list_pending_users
+    for r in list_pending_users():
+        if not isinstance(r, dict):
+            continue
+        cid = r.get("chat_id")
+        if (r.get("chat_type") not in ("group", "supergroup")
+                or not isinstance(cid, int) or isinstance(cid, bool)
+                or cid not in exclude):
+            continue
+        seen_at = _pending_seen_at(r)
+        if seen_at is not None and seen_at.timestamp() >= not_before:
+            return True
+    return False
 
 
 def _fetch_id_from_updates(
@@ -367,6 +533,14 @@ def _fetch_id_from_updates(
     saw_anonymous = False
     saw_known = False
     for u in reversed(body.get("result") or []):
+        if want == "group":
+            found = _group_message(u)
+            if found is not None:
+                gchat = found[0]
+                if gchat["id"] in exclude:
+                    saw_known = True
+                    continue
+                return gchat["id"], gchat.get("title", ""), None
         msg = u.get("message") or u.get("edited_message") or {}
         chat = msg.get("chat") or {}
         sender = msg.get("from") or {}
@@ -381,13 +555,9 @@ def _fetch_id_from_updates(
                 return int(cid), who, None
             saw_other.append(ctype or "?")
         elif want == "group":
-            if ctype in ("group", "supergroup"):
-                if int(cid) in exclude:
-                    saw_known = True
-                    continue
-                who = chat.get("title", "")
-                return int(cid), who, None
-            saw_other.append(ctype or "?")
+            # (A group message was handled above by _group_message.)
+            if ctype not in ("group", "supergroup"):
+                saw_other.append(ctype or "?")
         elif want == "user":
             uid = sender.get("id")
             if msg.get("sender_chat") or is_shared_sender_id(uid):

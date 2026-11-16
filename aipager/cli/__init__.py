@@ -67,15 +67,21 @@ def _add_setup_parser(sub) -> None:
         description=(
             "Set aipager up with no prompts: the same result as the first "
             "run of `aipager config`. `aipager setup detect-chat` finds the "
-            "person's Telegram id and saves nothing. See docs/commands.md "
+            "person's Telegram id and saves nothing. `aipager setup group` "
+            "sets up a Telegram group, its members and their roles on an "
+            "install that is already set up; `aipager setup detect-group` "
+            "finds a group's id and saves nothing. See docs/commands.md "
             "for the exit codes and the --json document."),
         allow_abbrev=False,
     )
     setup_p.add_argument(
-        "setup_action", nargs="?", choices=("detect-chat",), default=None,
-        metavar="detect-chat",
-        help="find the newest private message to the bot and print its "
-             "sender (saves nothing)",
+        "setup_action", nargs="?",
+        choices=("detect-chat", "detect-group", "group"), default=None,
+        metavar="{detect-chat,detect-group,group}",
+        help="detect-chat: find the newest private message to the bot and "
+             "print its sender; detect-group: find the newest message in a "
+             "group not set up yet (both save nothing); group: set up one "
+             "group",
     )
     setup_p.add_argument("--token-file", dest="token_file", metavar="PATH",
                          help="read the bot token from this file")
@@ -83,7 +89,8 @@ def _add_setup_parser(sub) -> None:
                          action="store_true",
                          help="read the bot token from stdin (a pipe)")
     setup_p.add_argument("--chat-id", dest="chat_id", metavar="N",
-                         help="the person's numeric Telegram user id")
+                         help="the person's numeric Telegram user id; with "
+                              "group, the group's id (a negative number)")
     setup_p.add_argument("--role", dest="role", metavar="owner|admin",
                          default=None,
                          help="the person's role (default: owner)")
@@ -91,14 +98,32 @@ def _add_setup_parser(sub) -> None:
                          help="also install and start the background service")
     setup_p.add_argument("--force", action="store_true",
                          help="allow replacing the token, the owner DM chat "
-                              "or the role of an existing install")
+                              "or the role of an existing install; with "
+                              "group, the changes listed in force_reasons")
     setup_p.add_argument("--dry-run", dest="dry_run", action="store_true",
                          help="check everything, send and write nothing")
     setup_p.add_argument("--json", dest="as_json", action="store_true",
                          help="print one JSON object on stdout")
     setup_p.add_argument("--timeout", dest="timeout", metavar="SECONDS",
                          default=None,
-                         help="detect-chat: how long to wait (default 300)")
+                         help="detect-chat, detect-group: how long to wait "
+                              "(default 300)")
+    setup_p.add_argument("--member", dest="member", action="append",
+                         metavar="ID:LABEL:ROLE", default=None,
+                         help="group: add a member, or change one's label or "
+                              "role (repeatable)")
+    setup_p.add_argument("--remove-member", dest="remove_member",
+                         action="append", metavar="ID", default=None,
+                         help="group: remove this member (repeatable)")
+    setup_p.add_argument("--label", dest="label", metavar="NAME", default=None,
+                         help="group: the group's label (default for a new "
+                              "group: group-<id digits>)")
+    setup_p.add_argument("--root", dest="root", metavar="PATH", default=None,
+                         help="group: the members' root folder")
+    setup_p.add_argument("--block-edits", dest="block_edits",
+                         action="store_true",
+                         help="group: block Write and Edit for the group's "
+                              "user members")
     # Never accepted: refused by cmd_setup without echoing the value.
     setup_p.add_argument("--token", "--bot-token", dest="token_flag",
                          nargs="?", const="", default=None,

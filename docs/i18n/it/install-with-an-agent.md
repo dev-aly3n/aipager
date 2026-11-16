@@ -1,6 +1,6 @@
 # Installare con un agente
 
-<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
+<!-- i18n-source: docs/install-with-an-agent.md @ d63d62ef -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../install-with-an-agent.md))
 
@@ -127,13 +127,83 @@ Racconta alla persona, in poche righe:
 ## <a id="4-what-you-must-not-do"></a>4. Cosa non devi mai fare
 
 - Non stampare il token, non mostrarlo con `echo` o `cat` e non metterlo mai sulla riga di comando (`--token` viene comunque rifiutato). Passalo solo con un file o con stdin.
-- Non modificare a mano `~/.config/aipager/` (tranne il file del token del passo 2) o `~/.claude/settings.json`. Li scrivono `aipager setup` e `aipager config`.
-- Non aggiungere `--force` senza chiedere alla persona: sostituisce il token, la chat o il ruolo che ha già.
+- Non modificare a mano `~/.config/aipager/` (tranne il file del token del passo 2) o `~/.claude/settings.json`. Li scrivono `aipager setup` e `aipager config`. L'unica eccezione è un gruppo su un aipager più vecchio di questo, dove `aipager setup group --help` non funziona: vedi [5.5](#55-older-installs).
+- Non aggiungere `--force` senza chiedere alla persona: sostituisce il token, la chat o il ruolo che ha già. Con `setup group` cambia o toglie ruoli, oppure dà il ruolo `owner`.
+- Attraverso aipager, solo le attività del proprietario possono eseguire `aipager setup` (in qualsiasi forma), `aipager config` o `aipager uninstall`: le regole di sicurezza di aipager li bloccano per ogni altro ruolo. Se la persona ti parla attraverso aipager e non è il proprietario, chiedile di eseguire il comando lei stessa in un terminale.
 - Non riavviare né terminare la sessione di Claude Code in cui ti trovi. Alla prima installazione la tua sessione non è sotto aipager e non serve che lo sia: le nuove sessioni nascono da `/new` in Telegram o da `aipager session <name>`. Se aipager è già configurato e la persona ti sta parlando attraverso di lui (per esempio per eseguire `setup --force` con un nuovo token), non fermare e non riavviare aipager tu: la tua attività e la sua risposta verrebbero tagliate. Quando hai finito, chiedi alla persona di riavviarlo lei.
 
 ## <a id="5-groups"></a>5. Gruppi
 
-`aipager setup` configura la chat privata della persona con il bot. Per aggiungere un gruppo di Telegram con più persone, ognuna con il suo ruolo, la persona esegue `aipager config` (la configurazione dei gruppi non si può ancora fare da script). Vedi [Uso in team e gruppi](groups.md).
+`aipager setup` configura la chat privata della persona con il bot. `aipager setup group` aggiunge un gruppo di Telegram, i suoi membri e i loro ruoli a un'installazione già configurata, senza domande (`aipager config` fa lo stesso con le domande). Legge il token del bot dall'installazione, non riavvia mai aipager e non invia niente al gruppo. Vedi [Uso in team e gruppi](groups.md) e [la guida del comando](commands.md#aipager-setup-group).
+
+### <a id="51-what-only-the-person-can-do"></a>5.1 Quello che può fare solo la persona
+
+Questi passi non puoi farli tu; chiedi alla persona di farli in Telegram:
+
+1. Aggiungere il bot al gruppo.
+2. Rendere il bot amministratore del gruppo con il permesso di fissare i messaggi (aipager ci fissa una barra di stato; senza quel permesso il gruppo funziona, ma senza barra di stato). Può farlo solo un amministratore del gruppo.
+3. Inviare `/start` nel gruppo, così puoi trovarne l'ID (5.2).
+4. Darti, per ogni membro, l'ID numerico dell'utente di Telegram, un nome breve (come aipager lo mostra, cioè `@label`) e un ruolo: `owner`, `admin`, `user`, `read_only` o un ruolo suo definito in `policy.yaml`. Il ruolo `owner` ha il pieno controllo di questo computer: spetta alla persona che lo gestisce e a nessun altro. Se non conosce un ID, `aipager config` può trovarlo mentre quella persona scrive nel gruppo.
+
+### <a id="52-find-the-group"></a>5.2 Trovare il gruppo
+
+```sh
+aipager setup detect-group --json
+```
+
+Aspetta (fino a 300 secondi, `--timeout SECONDS`) un messaggio in un gruppo non ancora configurato, inviato al massimo 10 minuti prima che lo eseguissi, e stampa il gruppo (`candidate.id`, `candidate.title`). Non salva niente. Mostra il titolo alla persona e usa l'ID solo quando conferma che è il gruppo giusto. L'uscita 8 vuol dire che non è arrivato niente: chiedile di inviare di nuovo `/start` nel gruppo.
+
+### <a id="53-set-it-up"></a>5.3 Configurarlo
+
+Eseguilo prima con `--dry-run`, poi lo stesso comando senza:
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+- `--member ID:LABEL:ROLE` una volta per persona. Per aggiungere qualcuno più tardi, eseguilo di nuovo solo con il nuovo `--member`: gli altri restano.
+- `--remove-member ID` toglie una persona.
+- `--label NAME` dà un nome al gruppo, `--root PATH` sceglie la cartella in cui lavorano i suoi membri `user` e `read_only` (predefinita `~/aipager-users/group-<label>`), e `--block-edits` blocca Write ed Edit per i suoi membri `user`.
+- Eseguire di nuovo lo stesso comando non cambia niente (`unchanged`).
+- L'uscita 6 (`needs_force`) vuol dire che la modifica richiede `--force`: `force_reasons` dice perché (un cambio di ruolo, un proprietario aggiunto, declassato o tolto, una cartella radice rischiosa). Mostralo alla persona e aggiungi `--force` solo se è d'accordo.
+
+### <a id="54-read-the-result"></a>5.4 Leggere il risultato
+
+| Uscita | Cosa fare |
+|---|---|
+| 0 | Fatto (`created`, `updated`, `unchanged` o `dry_run`). Di' alla persona il `label` del gruppo, i suoi `members` e cosa dice `daemon.outcome`. |
+| 2 | Un'opzione è sbagliata: `error`, `message` e `fix` la indicano. Correggila ed eseguilo di nuovo. |
+| 6 | `needs_force`: chiedi alla persona di ogni voce di `force_reasons`. |
+| 11 | `not_set_up`: prima configura aipager ([3](#3-your-steps)). |
+| 1 | Tutto il resto (`config_malformed`, `policy_malformed`, `last_member`, `config_changed`...): mostra `message` e `fix`. Dopo `config_changed`, eseguilo di nuovo. |
+
+`daemon.outcome` dice cosa ha fatto l'aipager in esecuzione: `reloaded_live` (il gruppo funziona già), `no_daemon` (funzionerà quando aipager parte), `restart_needed` o `not_applied` (mostra `next_step` alla persona; non riavviare aipager tu). Gli avvisi non cambiano mai il codice di uscita, ma mostrali: `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin` e `group_not_found` vogliono dire che alla persona manca un passo di 5.1, e vale la pena dire chiaramente `owner_granted`.
+
+### <a id="55-older-installs"></a>5.5 Installazioni più vecchie
+
+Se `aipager setup group --help` non funziona, questo aipager è più vecchio del comando. Chiedi alla persona di aggiornare aipager (`aipager update`) oppure, se vuole il gruppo subito, aggiungilo a mano:
+
+1. Aggiungi un gruppo in `~/.config/aipager/aipager.yaml`, seguendo [la struttura](groups.md#aipageryaml-schema-team-parts). Il file contiene il token del bot: non stamparlo mai e non usare `cat`, e lascia i suoi permessi a 0600 (`chmod 600 ~/.config/aipager/aipager.yaml`).
+2. Controllalo con `aipager policy validate`, poi controlla che la riga `scope mode: ...` di `aipager doctor` conti il nuovo gruppo.
+3. Manda ad aipager un ricaricamento senza riavvio, come sotto.
+
+Su Linux, con il servizio in background:
+
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
+
+Su macOS:
+
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+Il controllo `-gt 0` è importante: senza aipager in esecuzione, `kill -USR1 0` manderebbe il segnale ai processi della tua shell. Non riavviare mai aipager da una sessione di aipager: la tua attività verrebbe tagliata.
 
 ## <a id="see-also"></a>Vedi anche
 

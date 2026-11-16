@@ -1,6 +1,6 @@
 # 봇 명령과 화면
 
-<!-- i18n-source: docs/commands.md @ 08e5ce80 -->
+<!-- i18n-source: docs/commands.md @ ace40cd4 -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../commands.md))
 
@@ -474,7 +474,7 @@ Claude는 세션에서 파일을 보내 줄 수 있어요. 평소 말로 부탁�
 | 명령 | 하는 일 |
 |---|---|
 | `aipager config` | 대화형 설정 마법사: 봇 token, 채팅, 멤버와 역할, Claude Code hook. 무엇이든 바꾸려면 다시 실행하세요([그룹](groups.md#setup) 참고). |
-| `aipager setup` | 같은 첫 설정을 질문 없이 해요. 스크립트와 코딩 에이전트용이에요([아래](#command-line-aipager-setup-for-coding-agents) 참고). |
+| `aipager setup` | 같은 첫 설정을 질문 없이 해요. 스크립트와 코딩 에이전트용이에요. `aipager setup group`은 같은 방식으로 Telegram 그룹과 그 멤버, 멤버의 역할을 추가해요([아래](#command-line-aipager-setup-for-coding-agents) 참고). |
 | `aipager start` | aipager를 포그라운드에서 실행해요. 다른 aipager가 실행 중이면 시작을 거부해요. |
 | `aipager service install [--yes]` | aipager를 백그라운드 서비스로 설치하고(Linux에서는 systemd 사용자 서비스, macOS에서는 launchd 에이전트) 시작해요. `--yes`는 설치된 서비스 파일이 다를 때 질문을 건너뛰어요. |
 | `aipager service start\|stop\|status\|logs\|uninstall` | 서비스를 시작하거나, 멈추거나, 보거나, 로그를 따라가거나, 제거해요. |
@@ -496,7 +496,7 @@ Claude는 세션에서 파일을 보내 줄 수 있어요. 평소 말로 부탁�
 
 ## <a id="command-line-aipager-setup-for-coding-agents"></a>명령줄: `aipager setup` (코딩 에이전트용)
 
-위의 부분은 Telegram 봇을 설명해요. 이 부분은 내가 터미널에서 실행하거나, 내 스크립트나 코딩 에이전트가 나 대신 실행하는 명령을 설명해요. `aipager setup`은 질문 없이 aipager를 설정하고, `aipager config`를 처음 실행한 것과 같은 결과를 내요.
+위의 부분은 Telegram 봇을 설명해요. 이 부분은 내가 터미널에서 실행하거나, 내 스크립트나 코딩 에이전트가 나 대신 실행하는 명령을 설명해요. `aipager setup`은 질문 없이 aipager를 설정하고, `aipager config`를 처음 실행한 것과 같은 결과를 내요. 이미 설정된 설치에서는 `aipager setup group`이 Telegram 그룹을 멤버와 멤버의 역할과 함께 추가해요. 이것도 질문이 없어요([`aipager setup group`](#aipager-setup-group) 참고).
 
 ```sh
 # 1. 사용자의 Telegram ID 찾기 (사용자가 봇을 열고 Start를 눌러요)
@@ -505,6 +505,9 @@ aipager setup detect-chat --token-file ~/bot-token.txt --json
 aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 # 3. 설치 확인
 aipager doctor --json
+# 나중에: 그룹 찾기(그룹에서 /start 보내기), 그다음 설정
+aipager setup detect-group --json
+aipager setup group --chat-id -1001234567890 --member 123456789:alice:owner --json
 ```
 
 이 순서로 해요: 봇 token을 읽고, Telegram에서 token을 확인하고(getMe), 아무것도 쓰지 않은 채 이 컴퓨터의 모든 것을 확인하고(기존 설정, 의존성, `~/.claude/settings.json` (또는 `$CLAUDE_CONFIG_DIR/settings.json`), 실행 중인 aipager가 있는지), 사용자에게 테스트 메시지("aipager is set up for you. ...")를 보내고, 그다음에야 써요. 쓰는 파일은 설정 마법사가 쓰는 것과 같아요:
@@ -523,12 +526,17 @@ aipager doctor --json
 |---|---|
 | `--token-file PATH` | 이 파일에서 봇 token을 읽어요(최대 4096바이트. token 주위에 다른 글이 있어도 괜찮아요). 다른 사용자가 읽을 수 있는 파일도 쓸 수 있지만 `token_file_shared` 경고가 나와요. `chmod 600`하거나, setup이 성공한 뒤 지우세요. |
 | `--token-stdin` | stdin에서 봇 token을 읽어요(파이프나 리디렉션한 파일이고, 터미널은 절대 아니에요). 파이프는 닫혀야 해요. setup은 stdin이 끝나기를 최대 30초 기다린 뒤 종료 코드 2와 `token_stdin_timeout`으로 끝나요. `printf '%s\n' "$TOKEN" \| aipager setup --token-stdin ...`과 `< token.txt`는 둘 다 파이프를 닫아요. |
-| `--chat-id N` | 필수. 그 사람의 숫자 Telegram 사용자 ID이고, 그 사람 개인 채팅의 ID이기도 해요. 그룹은 `aipager config`로 추가해요. |
+| `--chat-id N` | 필수. 그 사람의 숫자 Telegram 사용자 ID이고, 그 사람 개인 채팅의 ID이기도 해요. `setup group`에서는 그룹의 ID로, 음수예요. |
 | `--role owner\|admin` | 그 사람의 역할(기본값 `owner`). |
 | `--service` | 백그라운드 서비스도 설치하고 시작해요(aipager가 실행 중이면 무시돼요). |
-| `--force` | 기존 설치의 봇 token, 소유자의 개인 채팅, 역할을 바꿀 수 있게 해요. 그룹과 다른 개인 채팅의 설정은 그대로 둬요. |
+| `--force` | 기존 설치의 봇 token, 소유자의 개인 채팅, 역할을 바꿀 수 있게 해요. 그룹과 다른 개인 채팅의 설정은 그대로 둬요. `setup group`에서는 `force_reasons`에 나온 변경을 허용해요. |
 | `--dry-run` | 모든 확인을 실행하고, 아무것도 보내지 않고, 아무것도 쓰지 않고, 무엇이 바뀔지 알려 줘요. |
 | `--json` | stdout에 JSON 객체를 딱 하나 출력해요. 나머지는 모두 stderr로 가요. |
+| `--member ID:LABEL:ROLE` | `setup group` 전용, 여러 번 쓸 수 있어요. 멤버의 숫자 Telegram 사용자 ID, 이름, 역할이에요. |
+| `--remove-member ID` | `setup group` 전용, 여러 번 쓸 수 있어요. 이 멤버를 빼요. |
+| `--label NAME` | `setup group` 전용. 그룹의 이름이에요. |
+| `--root PATH` | `setup group` 전용. 멤버의 루트 폴더예요. |
+| `--block-edits` | `setup group` 전용. 그룹의 `user` 멤버에게 Write와 Edit를 막아요. |
 
 `--token-file`과 `--token-stdin` 가운데 정확히 하나를 주세요. token은 옵션 값으로 절대 받지 않아요. `--token`과 `--bot-token`은 거부되고(`token_on_command_line`) 값은 보여 주지 않아요. 줄인 옵션(`--token-f`, `--dry`)은 받지 않아요. setup은 절대 질문하지 않고, 터미널이 필요 없으며, 환경 변수에서 token을 읽지 않아요.
 
@@ -546,24 +554,52 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 
 한계: detect-chat은 메시지를 절대 확인 처리하지 않으니, Telegram은 지난 24시간의 읽지 않은 업데이트 가운데 가장 오래된 100개만 보여 줘요. 봇에 그만큼 쌓여 있으면 새 `/start`는 보일 수 없어요. 그때 detect-chat은 `updates_backlog` 경고와 함께 시간 초과(종료 코드 8)로 끝나고, Start를 다시 눌러도 소용없어요. 대신 사용자에게 숫자 Telegram ID를 물어보세요(또는 aipager를 한 번 시작하면 쌓인 것을 읽어서 비워요).
 
+### <a id="aipager-setup-group"></a>`aipager setup group`
+
+```sh
+aipager setup group --chat-id N [--member ID:LABEL:ROLE ...] [--remove-member ID ...]
+                    [--label NAME] [--root PATH] [--block-edits]
+                    [--force] [--dry-run] [--json]
+```
+
+이미 설정된 설치에 Telegram 그룹 하나를 설정해요. 확인, 파일 쓰기, 재시작 없는 다시 불러오기는 `aipager config`와 같아요. 봇 token은 `aipager.yaml`에서 읽고(`--token-file`이나 `--token-stdin` 없음), 터미널이 필요 없으며, aipager를 절대 재시작하지 않고, 그룹에는 아무것도 보내지 않아요.
+
+- `--chat-id N`: 그룹의 ID로, 음수예요([`detect-group`](#aipager-setup-detect-group)이 찾아 줘요).
+- `--member ID:LABEL:ROLE`: 양수 Telegram 사용자 ID, 이름(`:`가 들어가도 돼요), 역할이에요. 역할은 `owner`, `admin`, `user`, `read_only`, 또는 `policy.yaml`에 정의한 역할이에요. Telegram의 공유 발신자 ID(1087968824, 136817688, 777000)는 거부돼요.
+- 새 그룹에는 `--member`가 적어도 하나 필요해요. 이름은 `--label`, 없으면 `group-<ID의 숫자>`이고, 루트 폴더는 `--root`, 없으면 `~/aipager-users/group-<label>`이며 파일에 적혀요.
+- 이미 설정된 그룹은(Telegram이 그룹을 바꾼 뒤의 다른 ID로 찾은 경우도 포함, 경고 `group_moved`) 확장돼요. 지정하지 않은 멤버는 그대로 남고, 새 ID는 추가되고, 이미 있는 ID에 새 이름을 주면 이름이 바뀌고, 멤버가 아닌 사람에게 `--remove-member`를 쓰면 경고 `not_a_member`가 나와요. `--block-edits`는 그룹의 `deny_tools`에 `Write`와 `Edit`를 더하고 아무것도 빼지 않아요. 마지막 멤버는 뺄 수 없어요(`last_member`, `--force`가 있어도). 그룹 전체를 `aipager config`에서 지우세요.
+- 다음 변경에는 `--force`가 필요하고, 없으면 종료 코드 6 `needs_force`예요(`force_reasons`가 목록을 알려 줘요). `owner_granted`(새 멤버가 `bypass_safety`가 있는 역할을 받는데, 아직 어느 채팅에서도 그런 역할이 없는 경우. 내 개인 채팅의 소유자를 추가할 때는 필요 없어요), `role_changed`, `owner_demoted`, `owner_removed`, `root_code_loading`(루트 폴더가 `~/bin`, `~/.local/bin`, `~/.config/systemd`, `~/.config/autostart` 안에 있어요), `root_overlap`(다른 채팅의 루트 폴더와 같거나, 그것을 품거나, 그 안에 있어요).
+- 같은 옵션으로 다시 실행해도 아무것도 바뀌지 않아요(`unchanged`). 쓰기도 다시 불러오기도 없어요.
+- `owner` 역할을 줄 때마다 감사 로그에 `grant-owner` 기록이 남아요.
+- 읽기만 하고 그룹에는 보이지 않게 Telegram에 물어봐요(getMe, getChat, 봇에 대한 getChatMember). 봇이 그룹에 있는지, 관리자인지, 메시지를 고정할 수 있는지요. 찾은 내용은 경고일 뿐 종료 코드가 되지 않아요. 네트워크 오류가 나면 나머지는 건너뛰어요(`telegram_checks_skipped`).
+
+### <a id="aipager-setup-detect-group"></a>`aipager setup detect-group`
+
+```sh
+aipager setup detect-group [--timeout SECONDS] [--json]
+```
+
+아직 설정되지 않은 그룹이나 슈퍼그룹의 가장 최근 메시지(누군가 거기서 `/start`를 보냄)를 기다리고 그룹을 출력해요. ID, 이름, 종류예요. 아무것도 저장하지 않으니, 그룹을 사용자에게 보여 주고 사용자가 확인한 뒤에만 `aipager setup group --chat-id`를 실행하세요. 명령이 시작되기 전 10분 안에 보낸 메시지만 세고, `--timeout`은 detect-chat과 같아요. token은 `aipager.yaml`에서 읽고 다른 옵션은 받지 않아요. 이 봇의 aipager가 실행 중이면 aipager가 적어 둔 기록을 읽고(`source: "daemon"`, 그룹은 보여요), 아니면 어떤 메시지도 확인 처리하지 않고 Telegram을 읽어요(`source: "telegram"`).
+
 ### <a id="exit-codes"></a>종료 코드
 
 | 코드 | `error` | 의미 |
 |---|---|---|
-| 0 | | 성공(`installed`, `updated`, `unchanged`, `dry_run`, 또는 detect-chat의 `found`). |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | 실패. `ambiguous_install`: 소유자의 것일 수 있는 개인 채팅이 둘 이상이에요. `aipager config`에서 고치세요. |
-| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_stdin_timeout`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout` | 입력이 잘못됐거나 빠졌어요. `fix`가 어떤 옵션인지 알려 줘요. 모르는 옵션이나 `setup` 뒤의 잘못된 단어는 인수 분석기가 알려 주고(일반 텍스트, JSON 없음), 이것도 코드 2예요. |
+| 0 | | 성공(`installed`, `created`, `updated`, `unchanged`, `dry_run`, 또는 detect-chat과 detect-group의 `found`). |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `policy_malformed`, `not_a_group_scope`, `last_member`, `config_changed`, `internal_error` | 실패. `ambiguous_install`: 소유자의 것일 수 있는 개인 채팅이 둘 이상이에요. `aipager config`에서 고치세요. `config_changed`: `setup group`이 실행되는 동안 `aipager.yaml`에서 그룹이 바뀌어서 아무것도 쓰지 않았어요. 다시 실행하세요. |
+| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_stdin_timeout`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout`, `bad_member`, `bad_member_id`, `shared_sender_id`, `duplicate_member`, `bad_label`, `duplicate_label`, `unknown_role`, `bad_root` | 입력이 잘못됐거나 빠졌어요. `fix`가 어떤 옵션인지 알려 줘요. 모르는 옵션이나 `setup` 뒤의 잘못된 단어는 인수 분석기가 알려 주고(일반 텍스트, JSON 없음), 이것도 코드 2예요. |
 | 3 | `deps_missing` | dtach, claude, aipager-hook, aipager-statusline이 빠졌어요. `fix`에 실행할 명령이 있어요. 아무것도 쓰지 않아요. |
 | 4 | `token_rejected` | Telegram이 token을 거부했어요. |
 | 5 | `chat_not_started`, `bot_blocked` | 사용자가 봇에서 아직 Start를 누르지 않았거나("Open t.me/&lt;bot&gt; and press Start, then run this again."), 봇을 차단했어요. 아무것도 쓰지 않아요. |
-| 6 | `existing_install` | 다른 token, 채팅, 역할이 이미 설정되어 있어요. `--force`를 붙이세요. |
+| 6 | `existing_install`, `needs_force` | 다른 token, 채팅, 역할이 이미 설정되어 있거나, `setup group`이 `force_reasons`에 나온 변경을 하게 돼요. 사용자에게 물어본 뒤 `--force`를 붙이세요. |
 | 7 | `telegram_unreachable` | 네트워크 오류, 또는 Telegram이 429나 5xx로 답했어요. |
-| 8 | `detect_timeout` | detect-chat이 `--timeout`이 끝나기 전에 개인 메시지를 하나도 보지 못했어요(오래된 읽지 않은 업데이트 100개가 더 새 것을 가렸을 때는 `updates_backlog` 경고와 함께). |
+| 8 | `detect_timeout` | detect-chat이 `--timeout`이 끝나기 전에 개인 메시지를 하나도 보지 못했어요. detect-group이라면 새 그룹의 메시지를 보지 못한 거예요(오래된 읽지 않은 업데이트 100개가 더 새 것을 가렸을 때는 `updates_backlog` 경고와 함께). |
 | 9 | `daemon_running` | detect-chat: 실행 중인 aipager가 봇의 메시지를 받고 있어요. |
-| 10 | `updates_conflict` | detect-chat: 다른 프로그램이 이 봇의 메시지를 읽고 있어요. |
+| 10 | `updates_conflict` | detect-chat이나 detect-group: 다른 프로그램이 이 봇의 메시지를 읽고 있어요. |
+| 11 | `not_set_up` | `setup group`이나 `detect-group`: 봇 token이 있는 `aipager.yaml`이 아직 없어요(오래된 `config.env` 설치도 마찬가지예요. `aipager config`를 한 번 실행해 옮기세요). 먼저 aipager를 설정하세요. |
 | 130 | `interrupted` | Ctrl-C. |
 
-여러 확인이 함께 실패하면 종료 코드는 이 순서를 따라요: `config_malformed`, `ambiguous_install`, `existing_install`, `settings_invalid`, `deps_missing`. `--dry-run`은 실제로 실행했을 때 이 확인들이 낼 코드로 끝나요.
+여러 확인이 함께 실패하면 종료 코드는 이 순서를 따라요: `config_malformed`, `ambiguous_install`, `existing_install`, `settings_invalid`, `deps_missing`. `setup group`은 `config_malformed` 또는 `not_set_up`, `policy_malformed`, `unknown_role`, `usage`, `duplicate_label`, `not_a_group_scope`, `last_member`, `needs_force` 순서예요. `--dry-run`은 실제로 실행했을 때 이 확인들이 낼 코드로 끝나요.
 
 ### <a id="json-aipager-setup---json"></a>JSON: `aipager setup --json`
 
@@ -625,6 +661,74 @@ aipager setup detect-chat (--token-file PATH | --token-stdin) [--timeout SECONDS
 ```
 
 `status`가 `found`가 아니면 `candidate`는 `null`이에요. `warnings`에는 `code`(`token_file_shared`, `updates_backlog`)와 `message`가 있는 객체가 들어 있어요. `other_candidates`는 같은 10분 동안 봇에게 메시지를 보낸 다른 사람 수예요. 0이 아니면 맞는 사람을 골랐는지 꼭 확인하세요. `next_step`은 내가 쓴 token 옵션을 되풀이하고, token 자체는 절대 되풀이하지 않아요.
+
+### <a id="json-aipager-setup-group---json"></a>JSON: `aipager setup group --json`
+
+모든 키가 항상 있어요. 아직 모르는 값은 `null`이에요.
+
+```json
+{
+  "command": "group",
+  "status": "created",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Group team (chat -1001234567890) is set up with 2 members.",
+  "fix": null,
+  "dry_run": false,
+  "force": false,
+  "bot_username": "example_bot",
+  "chat_id": -1001234567890,
+  "scope_chat_id": -1001234567890,
+  "label": "team",
+  "root": "/home/alice/aipager-users/group-team",
+  "block_edits": false,
+  "members": [{"id": 111111111, "label": "alice", "role": "owner"},
+              {"id": 222222222, "label": "bob", "role": "user"}],
+  "changed": ["group"],
+  "member_changes": [{"id": 222222222, "change": "added", "label": "bob", "role": "user", "previous_role": null}],
+  "force_reasons": [],
+  "pinned_roots": [],
+  "telegram": {"checked": true, "chat_type": "supergroup", "chat_title": "Team",
+               "bot_status": "administrator", "bot_can_pin": true, "privacy_mode": true},
+  "daemon": {"running": true, "reload": "reloaded", "restart_needed": false, "outcome": "reloaded_live"},
+  "warnings": [],
+  "next_step": "Check the group with `aipager doctor --json`."
+}
+```
+
+- `status`: `created`, `updated`, `unchanged`, `dry_run`, `error`.
+- `scope_chat_id`: 그룹이 저장된 ID예요(슈퍼그룹으로 바뀐 뒤에는 `--chat-id`와 달라요).
+- `changed`: 바뀐 것(시험 실행에서는 바뀔 것)이고, 순서는 `group`(새 그룹), `label`, `root`, `deny_tools`, `member_added`, `member_relabeled`, `role`, `member_removed`예요.
+- `member_changes[].change`: `added`, `relabeled`, `role`, `removed`.
+- `members`: 변경 후 그룹의 멤버예요(시험 실행에서는 예정된 멤버). 그 전에 멈췄으면 `null`이에요.
+- `pinned_roots`: 루트 폴더가 옮겨지지 않도록 파일에 루트 폴더가 적히는 다른 채팅들이에요.
+- 확인을 건너뛰었으면 `telegram.checked`는 false이고, 그때 `telegram`의 다른 키는 `null`이에요. `privacy_mode`는 알려 주기만 해요. aipager가 무엇에 반응하는지는 바뀌지 않아요.
+- `daemon.reload`는 `setup`과 같아요. `daemon.outcome`: `reloaded_live`, `not_applied`, `restart_needed`, `no_daemon`, `not_needed`(아무것도 쓰지 않음). 일반 출력은 `daemon: reloaded live`, `daemon: not applied: <reason>`, `daemon: restart needed`, `daemon: no daemon running`이라고 써요.
+- `warnings`(`code`와 `message`, 어느 것도 종료 코드를 바꾸지 않아요): `owner_granted`, `no_manager`(그룹을 관리할 수 있는 역할의 멤버가 없어요), `not_a_member`, `group_moved`, `group_not_found`, `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin`, `group_upgraded`, `chat_not_a_group`, `token_rejected`, `telegram_checks_skipped`, `daemon_unknown`, `reload_refused`, `audit_write_failed`.
+- `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin`, `group_not_found`가 있으면 `next_step`은 Telegram에서 사용자만 할 수 있는 일을 알려 줘요. 봇을 그룹에 추가하고, 메시지 고정 권한이 있는 관리자로 만드는 거예요.
+
+### <a id="json-aipager-setup-detect-group---json"></a>JSON: `aipager setup detect-group --json`
+
+```json
+{
+  "command": "detect-group",
+  "status": "found",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Found the group Team, chat id -1001234567890.",
+  "fix": null,
+  "bot_username": "example_bot",
+  "source": "telegram",
+  "candidate": {"id": -1001234567890, "title": "Team", "type": "supergroup", "date": 1700000000},
+  "other_candidates": 0,
+  "warnings": [],
+  "next_step": "Show this group to the user; once they confirm, run: aipager setup group --chat-id -1001234567890 --member ID:LABEL:ROLE"
+}
+```
+
+`status`가 `found`가 아니면 `candidate`는 `null`이에요. aipager에서 읽은 경우 `date`는 `null`이에요. `other_candidates`는 같은 10분 동안 글을 쓴 다른 새 그룹 수예요. `warnings`에는 `updates_backlog`가 들어갈 수 있어요.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

@@ -18,6 +18,7 @@ import re
 import sys
 
 from aipager import instance as _instance
+from aipager import shell_glob as _shell_glob
 
 log = logging.getLogger(__name__)
 
@@ -173,8 +174,9 @@ _WRAP = (r"(?:sudo|doas|xargs|env|nice|nohup|time|command|exec|builtin"
 _WRAP_ARG = rf"(?:-{_UNIT}*|\d{_UNIT}*)"
 #: A variable set for the command alone: ``LC_ALL=C grep …``.
 _ASSIGN = rf"[A-Za-z_]\w*={_UNIT}*{_SP}+"
-#: A shell running a quoted command: ``bash -c "``, ``sh -lc '``.
-_SHELL_C = rf"""(?:ba|da|z|k)?sh(?:{_SP}+-[A-Za-z]+)+{_SP}+["']{_SP}*"""
+#: A shell running a quoted command: ``bash -c "``, ``sh -lc '``, also
+#: with escaped quotes inside another one (``bash -c "bash -c \"...\""``).
+_SHELL_C = rf"""(?:ba|da|z|k)?sh(?:{_SP}+-[A-Za-z]+)+{_SP}+\\*["']{_SP}*"""
 #: Where a command word starts (the start, or after ``;``, ``&``, ``|``,
 #: ``(``, a backquote or a newline that does not continue a line), then
 #: variables set for it, wrappers (``{ `` is one) and a path
@@ -196,8 +198,10 @@ _USER = r"""(?:[^/\s"'`;&|()<>$]+|\$\{?(?:USER|LOGNAME)\}?)"""
 #: The home folder as a path: ``/home``, ``/home/<user>``, ``/Users``,
 #: ``/Users/<user>`` or ``/root`` (quoted or not, the shell reads it so).
 _HOME_PATH = rf"(?:/home(?:/{_USER})?|/Users(?:/{_USER})?|/root)"
-#: The home folder as a variable: expanded bare or in double quotes only.
-_HOME_VAR = r"(?:\$HOME|\$\{HOME\})"
+#: The home folder as a variable: expanded bare or in double quotes only;
+#: also with the ``$`` escaped, as inside ``bash -c "..."`` (``\$HOME``,
+#: the usual way to leave it to the inner shell).
+_HOME_VAR = r"(?:\\?\$HOME|\\?\$\{HOME\})"
 #: The home folder as a tilde (``~``, ``~user``): expanded bare only.
 _HOME_TILDE = r"(?:~(?:[A-Za-z_][\w.-]*)?)"
 #: Folders in the home folder that hold aipager's protected folders.
@@ -215,14 +219,15 @@ def _target_body(*homes: str) -> str:
 #: after it, so ``'/ x'`` is not a folder, and ``'~'`` or ``'$HOME'`` is
 #: plain text), then an optional unquoted ``/.config``-style folder and
 #: ``/``, ``/.`` or ``/*`` (``"$HOME"/.config``), ending where the shell
-#: word ends (or the string around a ``bash -c "…"``).
+#: word ends (or the string around a ``bash -c "…"``, or an escaped quote
+#: that closes one inside another: ``bash -c "bash -c \"grep -r x ~\""``).
 _TARGET = (
     r"(?:"
     rf"{_target_body(_HOME_TILDE, _HOME_VAR, _HOME_PATH)}"
-    rf'|"{_target_body(_HOME_VAR, _HOME_PATH)}"'
+    rf'|\\?"{_target_body(_HOME_VAR, _HOME_PATH)}\\?"'
     rf"|'{_target_body(_HOME_PATH)}'"
     rf"){_HOME_PARENTS}?/?[.*]?"
-    r"""(?=[\s;&|()<>`"']|\\\n|$)""")
+    r"""(?=[\s;&|()<>`"']|\\["'\n]|$)""")
 
 #: The text to find is given by an option (``-e x``, ``-f file``,
 #: ``--regexp``, ``--file``), so every other word may be a folder.
@@ -273,17 +278,768 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
     LIST_FILES,
 )
 
+# ----- the search rules, read in linear time ------------------------------
+#
+# The patterns above start a command after every ``;&|(`` and backtick,
+# inside quotes or not, escaped or not (a re-parse through ``eval``,
+# ``bash -c "..."``, backticks or ``$'...'`` turns ``\;`` into a real
+# ``;``), and from each start they read a quoted string as one unit and
+# an escaped character as part of a word. So one start's reading may run
+# past many later starts: in ``\`a=``, ``\""\;rg x `` or ``\"";rg x ``
+# repeated, each string closes where the next one opens, every start
+# reads to the end of the command, and 100 KB took from half a minute
+# (an escaped quote before a quote pair) to a minute (``\`a=``).
+# :func:`_search_hit` gives the same verdict (never a more permissive
+# one) in linear time, from a copy in which each escaped separator is
+# ``\`` and :data:`_ESCAPED_MARK` (:func:`_escaped_starts_plain`):
+#
+# 1. the pattern from every start, reading only units that hold no start
+#    (a string or an escape that holds a separator is where a reading
+#    would run past the next start);
+# 2. the pattern from every start up to the first unit that holds a
+#    start, after the name or before it (in a setting or a wrapper's
+#    option).
+#
+# Each start reads only up to the next start: linear. Where a reading of
+# 1 or 2 meets a unit that holds a start (2 always does, 1 only in a
+# lookahead for ``-r``, ``-R``, ``--files``, ``-f`` or ``-e``), main's
+# reading goes on right after that unit (after the string's closing
+# quote, or after the ``\;``) up to where that command ends
+# (:func:`_stream`), and the match counts when what main still needs
+# stands at a unit of that stretch: the option the lookahead looked for,
+# and for 2 a home or ``/`` folder word (read past before the name, the
+# name first). Each stretch is walked once (its answer is kept for every
+# place it was read from), so this stays linear too. Where a word of
+# main's starts in that stretch is taken loosely, so a command may be
+# refused that main allows, never the reverse.
+#
+# One difference of the copy is visible to the patterns: a user name in
+# ``/home/<user>`` stops at ``;`` but takes the mark, so a folder word
+# there may also end at the mark.
+
+#: Stands for the separator of an escaped ``\;``, ``\&``, ``\|``, ``\(``
+#: or ``\``` in the copy the search rules read (a private-use character).
+_ESCAPED_MARK = "\uf8fe"
+#: A backslash and the character it escapes, read left to right (so
+#: ``\\\\;`` is an escaped backslash, then a real ``;``).
+_ESCAPED_RE = re.compile(r"\\(.)", re.S)
+#: Each separator a search rule starts a command after, as the mark.
+_ESCAPED_START = {c: _ESCAPED_MARK for c in ";&|(`"}
+
+
+def _escaped_starts_plain(text: str) -> str:
+    """*text* with each escaped separator, ``(`` or backtick written as
+    ``\\`` and :data:`_ESCAPED_MARK` (see the notes above)."""
+    if "\\" not in text:
+        return text
+    return _ESCAPED_RE.sub(
+        lambda m: "\\" + _ESCAPED_START.get(m[1], m[1]), text)
+
+
+#: The characters main's patterns start a command after (a newline that
+#: does not continue a line aside), in the copy.
+_STARTS = ";&|(`" + _ESCAPED_MARK
+#: Where main's patterns start a command, in the copy: the start, after
+#: a separator or an escaped one, or after a newline that does not
+#: continue a line. A lookbehind, so a match never takes in the next
+#: start.
+_ANY_START = (r"(?:^|(?<=[;&|(`])|(?<=\\" + _ESCAPED_MARK
+              + r")|(?<!\\\n)(?<=\n))")
+#: A unit that holds a start: an escaped separator, or a quoted string up
+#: to the first start in it (taken in, so the match ends right after it).
+#: Its three groups tell the kinds apart (:func:`_going_on`); nothing
+#: else in the searches has a group.
+_CROSS = (r"(?:(\\" + _ESCAPED_MARK
+          + r")|('[^'\n" + _STARTS + r"]*[" + _STARTS + r"])"
+          + r'|("[^"\n' + _STARTS + r"]*[" + _STARTS + r"]))")
+#: A folder word that may also end at the mark (see the notes above).
+_MARK_TARGET = _TARGET.replace(r"""(?=[\s;&|()<>`"']""",
+                               r"""(?=[\s;&|()<>`"'""" + _ESCAPED_MARK + "]")
+#: A word unit and a command unit that hold no start (quoted strings and
+#: escapes included).
+_STOP_UNIT = (r"""(?:[^\s;&|()<>`"'\\]|\\[^\n""" + _ESCAPED_MARK
+              + r"""]|'[^'\n""" + _STARTS + r"""]*'|"[^"\n""" + _STARTS
+              + r"""]*")""")
+_STOP_SEG = rf"(?:{_STOP_UNIT}|{_SP}|[<>])"
+_STOP_WRAP_ARG = rf"(?:-{_STOP_UNIT}*|\d{_STOP_UNIT}*)"
+
+#: The options a search rule's lookaheads look for after the name.
+_OPT_RECURSIVE = (rf"{_SP}(?:-[A-Za-z0-9]*[rR]|--recursive"
+                  rf"|--dereference-recursive|-d{_SP}*recurse"
+                  rf"|--directories(?:=|{_SP}+)recurse)")
+_OPT_LS_RECURSIVE = rf"{_SP}(?:-[A-Za-z0-9]*R|--recursive)"
+_OPT_FILES = _SP + r"--files(?![\w-])"
+_OPT_ACK_FILES = _SP + r"-f(?![\w-])"
+_OPT_TEXT = rf"{_SP}(?:-[A-Za-z0-9]*[ef]|--regexp\b|--file\b)"
+#: What main's reading may still need after a unit that holds a start:
+#: a home or ``/`` folder word, or one of those options. Each starts with
+#: a blank, so only a blank that is a unit of its own can start one.
+_FEATURES: tuple[str, ...] = (rf"(?={_SP}{_MARK_TARGET})", _OPT_RECURSIVE,
+                              _OPT_LS_RECURSIVE, _OPT_FILES, _OPT_ACK_FILES,
+                              _OPT_TEXT)
+_FEATURE_RES = tuple(re.compile(f) for f in _FEATURES)
+_TARGET_FEATURE = 0
+_TEXT_FEATURE = _FEATURES.index(_OPT_TEXT)
+
+
+#: How each :data:`_CROSS` begins (its first group).
+_CROSS_HEAD = _CROSS[:_CROSS.index(_ESCAPED_MARK) + 1]
+
+
+class _Search:
+    """One regex of searches 1 and 2: a shared *head*, then ways of
+    reading, tried in order. For each way: its marker group (empty, so a
+    match tells which way it took), *seeks*, ``(first group, feature)``
+    for each lookahead that may stop at a unit holding a start (three
+    groups each, one of which takes part when it does), the first groups
+    of every unit holding a start it may meet, and whether a folder word
+    must follow that unit (search 2).
+
+    A match counts only when :func:`_leads_on` agrees; the ways are put
+    in an order where a way that matched but does not count means no
+    later way would count from that start either (each later way needs
+    at least what the earlier one needed, the unit being the same one: the
+    first that holds a start after the name)."""
+
+    __slots__ = ("rx", "ways", "kinds")
+
+    def __init__(self, head: str, ways: list[tuple[list, bool]]) -> None:
+        text, groups, meta = head + "(?:", 0, []
+        #: each crossing group's kind: 0 escaped, 1 single-, 2 double-quoted
+        self.kinds: dict[int, int] = {}
+        for k, (parts, cross) in enumerate(ways):
+            text += ("|" if k else "") + "()"
+            groups += 1
+            marker, seeks, units = groups, [], []
+            for part in parts:
+                if isinstance(part, tuple):
+                    part, feature = part
+                    seeks.append((groups + 1, feature))
+                count = part.count(_CROSS_HEAD)
+                units.extend(groups + 1 + 3 * i for i in range(count))
+                self.kinds.update((groups + 1 + i, i % 3)
+                                  for i in range(3 * count))
+                groups += 3 * count
+                text += part
+            meta.append((marker, tuple(seeks), tuple(units), cross))
+        self.rx = re.compile(text + ")")
+        assert self.rx.groups == groups, text
+        self.ways: tuple[tuple[int, tuple[tuple[int, int], ...],
+                               tuple[int, ...], bool], ...] = tuple(meta)
+
+
+def _seek(want: str, how: str) -> tuple[str, int] | str:
+    """A lookahead for *want* later in the command. *how*: ``"found"``
+    reads no unit that holds a start before it (no group); ``"or"`` may
+    stop at one instead, ``"stop"`` only there (main's lookahead reads on
+    past it: :class:`_Search` checks the rest)."""
+    if how == "found":
+        return rf"(?={_STOP_SEG}*?{want})"
+    feature = _FEATURES.index(want)
+    if how == "or":
+        return (rf"(?={_STOP_SEG}*?(?:{want}|{_CROSS}))", feature)
+    return (rf"(?={_STOP_SEG}*?{_CROSS})", feature)
+
+
+def _command_items(cross: bool) -> str:
+    """:data:`_CMD` from any start (settings, wrappers, ``bash -c "``);
+    with *cross*, only the ways of reaching a unit that holds a start in
+    a setting or a wrapper's option, before any name."""
+    items = (rf"{_ANY_START}{_SP}*(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*"
+             rf"{_SP}+|{_SHELL_C}|[A-Za-z_]\w*={_STOP_UNIT}*{_SP}+)*")
+    if not cross:
+        return items + r"(?:[\w.~+-]*/)*"
+    return (items + rf"(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*{_SP}+[-\d]"
+            rf"{_STOP_UNIT}*|[A-Za-z_]\w*={_STOP_UNIT}*){_CROSS}")
+
+
+_NAME_END = r"(?![\w./-])"
+_LAST_FOLDER = rf"(?<!-e)(?<!-f)(?<!--regexp)(?<!--file){_SP}{_MARK_TARGET}"
+
+
+def _after_text(cross: bool, by_option: str | None) -> list:
+    """:data:`_FOLDER_AFTER_TEXT` read with units that hold no start.
+    *by_option*: None for its second way (the first word after the
+    options is the text, the folder after it), else how the first way's
+    lookahead for ``-e``/``-f`` is read (:func:`_seek`). With *cross*, up
+    to the first unit holding a start instead of the folder."""
+    end = _CROSS if cross else _LAST_FOLDER
+    if by_option is not None:
+        return [_seek(_OPT_TEXT, by_option), rf"{_STOP_SEG}*?{end}"]
+    if not cross:
+        return [rf"(?:{_SP}+-{_STOP_UNIT}*)*{_SP}+(?!-){_STOP_UNIT}+"
+                rf"{_WORD_END}{_STOP_SEG}*?{end}"]
+    return [rf"(?:{_SP}+-{_STOP_UNIT}*)*{_SP}+(?:-{_STOP_UNIT}*{_CROSS}"
+            rf"|(?!-)(?:{_STOP_UNIT}*{_CROSS}|{_STOP_UNIT}+{_WORD_END}"
+            rf"{_STOP_SEG}*?{_CROSS}))"]
+
+
+def _find_words(cross: bool) -> str:
+    """:data:`SEARCH_FIND`'s words after ``find``; with *cross*, up to
+    the first unit that holds a start instead of the folder."""
+    word = rf"{_SP}+(?![-(!\\]){_STOP_UNIT}+{_WORD_END}"
+    if cross:
+        last = (rf"{_SP}+(?![-(!\\]){_STOP_UNIT}*{_CROSS}")
+    else:
+        last = rf"{_SP}+{_MARK_TARGET}"
+    rest = rf"(?:{_SP}+-O\d*)?(?:{word})*?{last}"
+    if cross:
+        debug = (rf"(?:{_SP}+-D{_SP}+(?:{_STOP_UNIT}*{_CROSS}"
+                 rf"|{_STOP_UNIT}+{rest})|{rest})")
+    else:
+        debug = rf"(?:{_SP}+-D{_SP}+{_STOP_UNIT}+)?{rest}"
+    return rf"(?:{_SP}+-[HLP])*{debug}"
+
+
+def _searches(pat: str) -> tuple[_Search, ...]:
+    """Search rule *pat*'s regexes for searches 1 and 2 (see the notes
+    above): its ways of reading a command, split where a lookahead may
+    stop at a unit holding a start, so a match tells which lookaheads did
+    (:class:`_Search`). The text-first rules need two regexes: a way whose
+    lookahead for ``-e`` only stops at that unit needs that option after
+    it, which reading on to a folder word after the unit does not."""
+    head = _command_items(False)
+
+    def anywhere(cross: bool) -> str:
+        return rf"{_STOP_SEG}*?" + (_CROSS if cross else
+                                     rf"{_SP}{_MARK_TARGET}")
+
+    if pat in (SEARCH_TEXT_FIRST, SEARCH_GREP_RECURSIVE):
+        name: list = ([r"(?:rgrep|rg|ag|ack|ack-grep|fd|fdfind)", _NAME_END]
+                      if pat == SEARCH_TEXT_FIRST else
+                      [r"(?:[ef]?grep)", _NAME_END,
+                       _seek(_OPT_RECURSIVE, "or")])
+        return (
+            _Search(head, [(name + _after_text(False, None), False),
+                           (name + _after_text(False, "found"), False),
+                           (name + _after_text(True, None), True),
+                           (name + _after_text(True, "found"), True)]),
+            _Search(head, [(name + _after_text(False, "stop"), False),
+                           (name + _after_text(True, "stop"), True)]),
+        )
+    if pat == SEARCH_FIND:
+        return (_Search(head, [(["find", _NAME_END, _find_words(c)], c)
+                               for c in (False, True)]),)
+    if pat == LIST_TREE_DU:
+        return (_Search(head, [(["(?:tree|du)", _NAME_END, anywhere(c)], c)
+                               for c in (False, True)]),)
+    if pat == LIST_LS_RECURSIVE:
+        return (_Search(head, [(["ls", _NAME_END,
+                                 _seek(_OPT_LS_RECURSIVE, "or"), anywhere(c)],
+                                c) for c in (False, True)]),)
+    assert pat == LIST_FILES
+    return (_Search(head, [
+        (["rg", _NAME_END, _seek(_OPT_FILES, "or"), anywhere(c)], c)
+        if tool == "rg" else
+        (["(?:ack|ack-grep)", _NAME_END, _seek(_OPT_ACK_FILES, "or"),
+          anywhere(c)], c)
+        for c in (False, True) for tool in ("rg", "ack")]),)
+
+
+#: Each search rule's command names.
+_SEARCH_NAMES = {
+    SEARCH_TEXT_FIRST: r"(?:rgrep|rg|ag|ack|ack-grep|fd|fdfind)",
+    SEARCH_GREP_RECURSIVE: r"(?:[ef]?grep)",
+    SEARCH_FIND: r"(?:find)",
+    LIST_TREE_DU: r"(?:tree|du)",
+    LIST_LS_RECURSIVE: r"(?:ls)",
+    LIST_FILES: r"(?:rg|ack|ack-grep)",
+}
+#: The option each rule needs after its name, among :data:`_FEATURES`
+#: (None for none; ``rg --files`` and ``ack -f`` take either).
+_NEEDS = {
+    SEARCH_TEXT_FIRST: (), SEARCH_GREP_RECURSIVE: (1,), SEARCH_FIND: (),
+    LIST_TREE_DU: (), LIST_LS_RECURSIVE: (2,), LIST_FILES: (3, 4),
+}
+#: Each search rule's searches (:func:`_searches`) and its names alone.
+_SEARCH_VARIANTS: dict[str, tuple[tuple[_Search, ...], re.Pattern]] = {
+    pat: (_searches(pat), re.compile(_SEARCH_NAMES[pat] + _NAME_END))
+    for pat in DENY_BASH_SEARCH_PATTERNS
+}
+#: Search 2 before the name, in a setting or a wrapper's option (the same
+#: for every rule).
+_BEFORE_NAME = _Search("", [([_command_items(True)], True)])
+#: Is there a unit that could hold a start at all (a quote, or an escaped
+#: separator)? Without one, no reading meets one.
+_MAY_CROSS_RE = re.compile(r"""['"]|\\""" + _ESCAPED_MARK)
+#: One step of main's reading of a command: a run of plain characters,
+#: an escaped character (a backslash-newline is a blank), a quoted string,
+#: or a run of blanks and redirections (each blank its own unit: only the
+#: last of a run can start a folder word or an option).
+_STEP_RE = re.compile(r"""[^\s;&|()<>`"'\\]+|\\[\s\S]|'[^'\n]*'|"[^"\n]*"|[\x20\t<>]+""")
+#: The same steps run together (main's reading of one command in one
+#: call), for a quick look at a short stretch (:func:`_absent`).
+_STEPS_RE = re.compile("(?:" + _STEP_RE.pattern + ")*")
+#: How far that quick look reads; a longer stretch is walked
+#: (:func:`_stream`), each place once.
+_QUICK = 512
+
+
+def _first_from(found: list[int], at: int) -> int:
+    """The index of the first of the sorted *found* at or after *at* (the
+    hook's import closure stays as it is: no ``bisect`` here)."""
+    lo, hi = 0, len(found)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if found[mid] < at:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def _absent(plain: str, at: int, features: list[int], memo: dict) -> bool:
+    """True when some of *features* surely does not start in main's
+    reading from *at*: the reading stops within :data:`_QUICK` characters
+    at a character no unit starts with, and that feature starts nowhere
+    in between, unit or not. False means: walk it (:func:`_stream`)."""
+    stop = min(len(plain), at + _QUICK)
+    end = _STEPS_RE.match(plain, at, stop).end()
+    if end == stop and stop < len(plain):
+        return False
+    if end < len(plain) and plain[end] in "\"'\\":
+        # a quote or backslash the cut may have split: walk it
+        return False
+    places = memo.get("sorted")
+    if places is None:
+        places = memo["sorted"] = [
+            [m.start() for m in rx.finditer(plain)] for rx in _FEATURE_RES]
+    for f in features:
+        found = places[f]
+        k = _first_from(found, at)
+        if k == len(found) or found[k] >= end:
+            return True
+    return False
+
+
+class _Walk:
+    """One walk of main's reading (:func:`_stream`): where it stops, the
+    last place each of :data:`_FEATURES` starts at one of its own units,
+    and the same from the walk it ran into (each -1 for none)."""
+
+    __slots__ = ("end", "own", "tail")
+
+    def __init__(self, end: int, own: list[int], tail: tuple[int, ...]):
+        self.end, self.own, self.tail = end, own, tail
+
+    def last(self, at: int) -> tuple[int, ...]:
+        """For each feature, its last place in the reading from *at* (a
+        place this walk passed): the walk it ran into comes later."""
+        return tuple(t if t >= 0 else (o if o >= at else -1)
+                     for o, t in zip(self.own, self.tail))
+
+    def has(self, feature: int, at: int) -> bool:
+        """Whether *feature* starts in the reading from *at*."""
+        return self.tail[feature] >= 0 or self.own[feature] >= at
+
+
+def _stream(plain: str, at: int, memo: dict) -> tuple[int, tuple[int, ...]]:
+    """Main's reading of one command going on from *at* (a unit's end):
+    where it stops (a separator, a newline, a ``)``, a quote that never
+    closes on its line, or the end), and for each of :data:`_FEATURES`
+    the last place it starts at a unit of that reading (-1 for none).
+    *memo* keeps, for every place a walk passed, that walk: a reading that
+    meets an earlier one stops there and takes the rest from it, so each
+    place is walked once."""
+    walks = memo.setdefault("walks", {})
+    known = walks.get(at)
+    if known is not None:
+        return known.end, known.last(at)
+    found = memo.get("features")
+    if found is None:
+        found = memo["features"] = [
+            {m.start() for m in rx.finditer(plain)} for rx in _FEATURE_RES]
+    start, own = at, [-1] * len(_FEATURES)
+    path = []
+    tail: _Walk | None = None
+    n = len(plain)
+    while at < n:
+        tail = walks.get(at)
+        if tail is not None:
+            break
+        path.append(at)
+        step = _STEP_RE.match(plain, at)
+        if step is None:
+            break
+        first, at = plain[step.start()], step.end()
+        if first == "\\":
+            # a backslash-newline is a blank of its own, ``\ `` is not
+            blank = at - 2 if plain[at - 1] == "\n" else -1
+        else:
+            blank = at - 1 if plain[at - 1] in "\x20\t" else -1
+        if blank >= 0:
+            for f, places in enumerate(found):
+                if blank in places:
+                    own[f] = blank
+    if tail is not None:
+        walk = _Walk(tail.end, own, tail.last(at))
+    else:
+        walk = _Walk(at, own, (-1,) * len(_FEATURES))
+    walks.update(dict.fromkeys(path, walk))
+    walks[start] = walk
+    return walk.end, walk.last(start)
+
+
+def _going_on(m: re.Match, units: tuple[int, ...],
+              kinds: dict[int, int]) -> int | None:
+    """Where main's reading goes on after the unit holding a start that
+    match *m* met (every such unit one match meets is the same one, the
+    first after the name; *units*: the first groups of the way's units,
+    *kinds*: each group's kind): right after the ``\\;``, or after the
+    closing quote of the string (None when it never closes on its line,
+    so main's reading stops there too). The last group the match closed
+    is such a unit's when it met one (the unit ends it, or a lookahead
+    stopped there); the units are searched only when it is not."""
+    g = m.lastindex
+    kind = kinds.get(g) if g is not None and m.start(g) >= 0 else None
+    if kind is None:
+        for first in units:
+            for k in range(3):
+                if m.start(first + k) >= 0:
+                    g, kind = first + k, k
+                    break
+            if kind is not None:
+                break
+        else:
+            return None
+    end = m.end(g)
+    if kind == 0:
+        return end
+    plain = m.string
+    close = plain.find("'" if kind == 1 else '"', end)
+    if close < 0 or plain.find("\n", end, close) >= 0:
+        return None
+    return close + 1
+
+
+def _stopped(m: re.Match, g: int) -> bool:
+    """Whether the lookahead whose groups start at *g* stopped at a unit
+    holding a start (one of its three groups took part in match *m*)."""
+    return m.start(g) >= 0 or m.start(g + 1) >= 0 or m.start(g + 2) >= 0
+
+
+def _leads_on(search: _Search, m: re.Match, memo: dict) -> bool:
+    """Whether match *m* of *search* counts: what main's reading still
+    needs after the unit holding a start (if it met one) stands there."""
+    for marker, seeks, units, cross in search.ways:
+        if m.start(marker) >= 0:
+            break
+    waiting = [feature for g, feature in seeks if _stopped(m, g)]
+    if not cross and not waiting:
+        return True
+    on = _going_on(m, units, search.kinds)
+    if on is None:
+        return False
+    walk = memo.get("walks", {}).get(on)
+    if walk is None:
+        need = [_TARGET_FEATURE, *waiting] if cross else waiting
+        if _absent(m.string, on, need, memo):
+            return False
+        _stream(m.string, on, memo)
+        walk = memo["walks"][on]
+    if cross and not walk.has(_TARGET_FEATURE, on):
+        return False
+    return all(walk.has(feature, on) for feature in waiting)
+
+
+#: A newline no backslash stands before: every reading of main's stops
+#: there (a string or a unit never holds one, a blank only after ``\\``).
+_HARD_STOP_RE = re.compile(r"(?<!\\)\n")
+
+
+def _lines(plain: str, memo: dict) -> list[tuple[int, int]]:
+    """The stretches between two :data:`_HARD_STOP_RE` newlines that hold
+    a folder word's text: no match of the searches can be anywhere else
+    (each match, and each reading after its unit, holds a folder word and
+    never passes such a newline). Kept in *memo*."""
+    lines = memo.get("lines")
+    if lines is None:
+        stops = [m.start() for m in _HARD_STOP_RE.finditer(plain)]
+        stops.append(len(plain))
+        lines = []
+        for t in _FEATURE_RES[_TARGET_FEATURE].finditer(plain):
+            k = _first_from(stops, t.start())
+            line = (stops[k - 1] + 1 if k else 0, stops[k])
+            if not lines or lines[-1] != line:
+                lines.append(line)
+        memo["lines"] = lines
+    return lines
+
+
+def _search_hit(pat: str, normalized: str, memo: dict) -> bool:
+    """Whether search rule *pat* matches *normalized* as main's pattern
+    would (or might: see the notes above), in linear time. *memo* keeps
+    the copy, the readings walked and the places found across the
+    rules."""
+    if "plain" not in memo:
+        plain = memo["plain"] = _escaped_starts_plain(normalized)
+        memo["walked"] = {}
+        # every match ends at a folder word or needs one after it
+        memo["any"] = _FEATURE_RES[_TARGET_FEATURE].search(plain) is not None
+        memo["cross"] = memo["any"] and (
+            _MAY_CROSS_RE.search(plain) is not None)
+    if not memo["any"]:
+        return False
+    plain, walked = memo["plain"], memo["walked"]
+    has = memo.setdefault("has", {})
+
+    def anywhere(feature: int) -> bool:
+        # the feature's text anywhere (a match needs it where it counts)
+        if feature not in has:
+            has[feature] = _FEATURE_RES[feature].search(plain) is not None
+        return has[feature]
+
+    needs = _NEEDS[pat]
+    if needs and not any(anywhere(f) for f in needs):
+        return False
+    searches, names = _SEARCH_VARIANTS[pat]
+    for k, search in enumerate(searches):
+        # the second regex's ways all need ``-e``/``-f`` after the unit
+        if k and not (memo["cross"] and anywhere(_TEXT_FEATURE)):
+            break
+        for begin, end in _lines(plain, memo):
+            for m in search.rx.finditer(plain, begin, end):
+                if _leads_on(search, m, walked):
+                    return True
+    if not memo["cross"]:
+        return False
+    # search 2 before the name: the name, then the folder word (and the
+    # option the rule needs) after it
+    if "before" not in memo:
+        memo["before"] = [
+            on for begin, end in _lines(plain, memo)
+            for m in _BEFORE_NAME.rx.finditer(plain, begin, end)
+            if (on := _going_on(m, _BEFORE_NAME.ways[0][2],
+                                _BEFORE_NAME.kinds)) is not None]
+    for on in memo["before"]:
+        stop, last = _stream(plain, on, walked)
+        if last[_TARGET_FEATURE] < 0:
+            continue
+        name = names.search(plain, on, stop)
+        if name is None or last[_TARGET_FEATURE] <= name.start():
+            continue
+        if not needs or any(last[f] > name.start() for f in needs):
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Bash command patterns denied from Telegram (case-sensitive regex).
 # Covers daemon manipulation, escalation, pipe-to-shell, and — critically —
 # nested ``claude`` invocations + privilege flags that would let an
 # in-session user craft a privileged claude instance.
+#
+# Best effort, not a wall: a role with Bash can still reach around any
+# pattern (a name held in a variable, a script written with a file tool
+# and then run, eval, a process signalled by number). The real boundary
+# for restricted roles is having no shell at all (RESTRICTED_DENY_TOOLS).
 # ---------------------------------------------------------------------------
+
+#: A bracket or brace group in a glob word. Its inside holds no
+#: separator, quote, ``=``, ``:`` or ``.``, so a run of brackets is read
+#: once instead of once per bracket (patterns that may start after
+#: ``.``, ``=`` or ``:`` use it).
+_GLOB_GROUP = (r"\[[^\][/\s;&|()<>`'\"=:.]*\]"
+               r"|\{[^{}/\s;&|()<>`'\"=:.]*\}")
+
+
+#: A brace group in one path folder: anything but ``/``, a blank or the
+#: closing brace (``{aipager,a.b}``). Only for a pattern that starts at a
+#: fixed folder name, so a group never holds another start. Brackets are
+#: left to :data:`BASH_GLOB_REACHES_AIPAGER_DIR`, which matches them as
+#: bash does (``[[:lower:]]ip`` has three letters and is not aipager).
+_FOLDER_GLOB_GROUP = r"\{[^}/\s]*\}"
+
+
+def _glob_word(letters: str, group: str = _GLOB_GROUP) -> str:
+    """A word of *letters*, wildcards and bracket or brace groups with at
+    least one wildcard or group. No lookahead: each piece consumes only
+    what it may hold, so a long word is read in linear time."""
+    return (rf"[{letters}]*(?:[*?]|{group})"
+            rf"(?:[{letters}*?]|{group})*")
+
+
+#: A glob or brace word that could match ``aipager`` (any case): only
+#: letters of "aipager", wildcards and bracket or brace groups, with at
+#: least one wildcard, bracket or brace (``aipage?``, ``aip*r``, ``a*``,
+#: ``*``, ``[a]ipager``, ``{aipager,x}``). ``*.conf`` and ``nvim*`` do
+#: not match.
+_AIPAGER_GLOB = rf"(?i:{_glob_word('aipger')})"
+#: The same as one path folder, where a brace group may hold any
+#: character but ``/`` and a blank (:data:`_FOLDER_GLOB_GROUP`).
+_AIPAGER_FOLDER_GLOB = rf"(?i:{_glob_word('aipger', _FOLDER_GLOB_GROUP)})"
+#: The subcommands that change who controls the machine or stop the
+#: daemon: any ``aipager setup`` form (it grants roles), ``config``,
+#: ``uninstall``, ``service``, ``start``.
+_AIPAGER_SUBCOMMAND = r"(?:service|config|start|setup|uninstall)\b"
+#: Options before the subcommand (``-v``, ``--verbose``, ``--x=1``). An
+#: option stops before another ``aipager`` inside it, which starts a
+#: match of its own: so ``aipager -aipager -aipager ...`` is read once.
+_OPTIONS = r"(?:\s+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
+#: The same options on one line (a blank, never a newline, before each),
+#: for a pattern that may start on every line.
+_LINE_OPTIONS = r"(?:[\x20\t]+-(?:(?!(?i:aipager))[^\s;&|()<>`])*)*"
+#: aipager's own commands named above: the program in any case (a macOS
+#: disk runs ``AIPAGER``), options between it and the subcommand; also
+#: through ``python -m aipager[.cli][.__main__]`` (``-m`` glued to the
+#: name or after other flags too: ``-maipager``, ``-Imaipager``) and a
+#: path to the binary.
+BASH_AIPAGER_CLI = (r"(?:\b|(?<=-)[A-Za-z]*m)(?i:aipager)"
+                    rf"(?:\.cli)?(?:\.__main__)?{_OPTIONS}"
+                    rf"\s+{_AIPAGER_SUBCOMMAND}")
+#: One shell word's characters: never a blank or a separator, so a run
+#: of them stays inside one command.
+_TOKEN = r"[^\s;&|()<>`]"
+#: A function's body may be any compound command: ``{``, ``(``,
+#: ``((``, ``[[``, ``if``, ``while``, ``until``, ``for``, ``select`` or
+#: ``case`` next (``f() while aip*r setup; do break; done``).
+_COMPOUND_AHEAD = (r"(?=[\x20\t]*(?:[{(]|\[\[|if|while|until|for|select"
+                   r"|case))")
+#: Where a word is run as a program: the start of a command (the start,
+#: after ``;``, ``&``, ``|``, ``(``, a backtick, ``$(``, a newline, or
+#: the ``()`` of a function's ``name()`` before its body), then any run
+#: of: a function's ``function NAME`` before its body, ``env``,
+#: ``nohup``, ``exec``, ``command``, ``time``, ``nice``, ``timeout``,
+#: ``sudo``, ``doas``, ``builtin``, the keywords ``if``, ``then``,
+#: ``do``, ``else``, ``elif``, ``while``, ``until``, ``!`` and ``{``
+#: (with their options); and an optional path. So ``{ function f {``,
+#: ``if function f {``, ``then function f {`` and ``time function f {``
+#: are program positions after the last ``{`` too.
+#:
+#: The name after ``function`` is one whole word, as bash reads it
+#: (``function f{ ...`` names ``f{``): read whole, it is never split, so
+#: a long name word (``function ifif...``, ``function f{f{...``) is read
+#: once instead of once per place a compound word could start in it.
+#:
+#: Cost: a match starts only at a separator, and every piece after it
+#: (``function NAME``, blanks, wrapper words, options) takes text of its
+#: own and stays on that one command, so the commands are read once
+#: each: linear on any input.
+_PROGRAM_POSITION = (
+    rf"(?:^|[;&|(`\n]|\([\x20\t]*\){_COMPOUND_AHEAD})[\x20\t]*"
+    r"(?:(?:env|nohup|exec|command|time|nice|timeout|sudo|doas|builtin"
+    r"|if|then|do|else|elif|while|until|!|\{)"
+    rf"(?:[\x20\t]+-{_TOKEN}+|[\x20\t]+\w+={_TOKEN}*|[\x20\t]+\d+[smhd]?)*"
+    r"[\x20\t]+"
+    rf"|function[\x20\t]+{_TOKEN}+(?!{_TOKEN})[\x20\t]*{_COMPOUND_AHEAD})*"
+    rf"(?:{_TOKEN}*/)?")
+#: A glob in the program name that could match aipager, run with one of
+#: those subcommands (``aip*r setup``, ``/usr/local/bin/aip* config``).
+BASH_AIPAGER_GLOB_PROGRAM = (rf"{_PROGRAM_POSITION}{_AIPAGER_GLOB}"
+                             rf"{_LINE_OPTIONS}[\x20\t]+{_AIPAGER_SUBCOMMAND}")
+#: ``xargs`` (run as a program) running aipager (or a glob that could
+#: match it) with whatever arguments arrive on its input. ``xargs grep
+#: aipager`` (a search) is not this: there the program is ``grep``. An
+#: ``xargs`` that is an option's value (``xargs -n xargs``) starts no
+#: match of its own.
+BASH_XARGS_AIPAGER = (
+    rf"{_PROGRAM_POSITION}xargs"
+    rf"(?:[\x20\t]+-[IndPLsEa][\x20\t]+[^\s;&|()<>`-]{_TOKEN}*"
+    rf"|[\x20\t]+-{_TOKEN}+)*[\x20\t]+"
+    rf"(?:{_TOKEN}*/)?(?:(?i:aipager)|{_AIPAGER_GLOB})"
+    r"(?=$|[\s;&|)])")
+#: ``(?=(X))\1`` matches X once and never tries it again (an atomic
+#: group, which Python 3.10's ``re`` lacks): a pattern that has to find
+#: a command word and then a name later on the line looks for the word
+#: once per line, so a line of thousands of command words is still read
+#: in linear time.
+BASH_SYSTEMCTL_AIPAGER = r"(?:^|\n)(?=(.*?\bsystemctl\b))\1.*\baipager\b"
+BASH_RM_AIPAGER = (r"(?:^|\n)(?=(.*?\brm\b))\1"
+                   r".*(\.config/aipager|\.claude|\.local/share/aipager)")
+#: Killing the daemon by name.
+BASH_KILL_AIPAGER = (r"(?:^|\n)(?=(.*?\b(?:p?kill|killall)\b))\1"
+                     r".*\baipager\b")
+#: The macOS service by name (``com.aipager.daemon``).
+BASH_LAUNCHCTL_AIPAGER = r"(?:^|\n)(?=(.*?\blaunchctl\b))\1.*\baipager\b"
+#: A Python interpreter (python, python3, python3.12, ipython, pypy; also
+#: under ``uv run`` / ``uvx`` or a path) running code that imports
+#: aipager's own modules (its config writer), from ``-c`` or a here-
+#: document: ``from aipager``, ``import aipager``, ``import os,
+#: aipager.scope as s``, ``__import__``/``import_module``, and
+#: ``runpy.run_module``/``run_path`` of aipager's files. Only after an
+#: interpreter word, so a search for the same text (``grep -rn "from
+#: aipager import" .``) stays allowed.
+BASH_PYTHON_IMPORTS_AIPAGER = (
+    r"\A(?=([\s\S]*?(?:^|[\s;&|(/])(?:i?python|pypy)[\d.]*(?![\w-])))\1"
+    r"[\s\S]*"
+    r"(?:\bfrom\s+aipager\b"
+    r"|\bimport\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*aipager\b"
+    r"|\b(?:import_module|__import__|run_module)\s*\(\s*[\"']?aipager\b"
+    r"|\brun_path\s*\(\s*[\"']?[^()\s\"']*\baipager\b)")
+#: Home-folder spellings in a path.
+_HOME = r"(?:~|\$HOME|\$\{HOME\}|/home/[^/\s\"']+|/Users/[^/\s\"']+|/root)"
+#: The home folder's ``.config``, ``.local``, ``.local/share`` or
+#: ``.local/state`` itself (not a folder inside it).
+_HIDDEN_PARENT = r"\.(?:config|local(?:/share|/state)?)"
+#: A glob or brace in the first folder under ``.config/``,
+#: ``.local/share/`` or ``.local/state/`` that could match ``aipager``
+#: (:data:`_AIPAGER_GLOB`).
+BASH_GLOB_AIPAGER_DIR = (
+    r"\.(?:config|local/share|local/state)/"
+    rf"{_AIPAGER_FOLDER_GLOB}"
+    r"(?=$|[/\s\"';&|)])")
+#: A glob in the hidden folder itself or in ``.local``'s second folder,
+#: then ``aipager`` or a glob that could match it: ``~/.c*/aipager``,
+#: ``~/.co?fig/aipager``, ``~/.*/aipager``, ``~/.local/*/aipager``.
+_DOT_GLOB = _glob_word("configla")
+_MID_GLOB = _glob_word("sharet")
+BASH_GLOB_HIDDEN_PARENT = (
+    r"(?:^|[\s/\"'=:(<>])\."
+    rf"(?:{_DOT_GLOB}/(?:(?:share|state|{_MID_GLOB})/)?|local/{_MID_GLOB}/)"
+    rf"(?:(?i:aipager)|{_AIPAGER_GLOB})(?=$|[/\s\"';&|)])")
+#: Changing into the home folder's ``.config``, ``.local``,
+#: ``.local/share`` or ``.local/state`` itself (then ``aipager/...`` is a
+#: relative path no other pattern sees), options allowed (``cd -P``,
+#: ``cd --``, ``pushd -n``). ``cd`` inside an option word (``-cd``) is
+#: not a start: an option run never holds another start, so a run of
+#: ``cd -cd -cd ...`` is read once.
+BASH_CD_CONFIG_PARENT = (
+    r"(?<![\w-])(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+[\"']?"
+    rf"{_HOME}"
+    rf"[\"']?/{_HIDDEN_PARENT}/?[\"']?(?=$|[\s;&|)])")
+#: The same in two steps: into the home folder (``cd``, ``cd ~``, ``cd
+#: $HOME``), then into ``.config`` or ``.local`` by its relative name.
+BASH_CD_HOME_THEN_PARENT = (
+    rf"(?<![\w-])(?:cd|pushd)(?:[\x20\t]+-[A-Za-z-]*)*(?:[\x20\t]+{_HOME}/?)?[\x20\t]*"
+    rf"(?:&&|;|\n|\|\|)\s*"
+    rf"(?:cd|pushd)(?:\s+-[A-Za-z-]*)*\s+{_HIDDEN_PARENT}/?(?=$|[\s;&|)])")
+#: A command that copies, archives, links or moves the whole home
+#: ``.config`` or ``.local`` folder (or into it): ``cp -r ~/.config x``,
+#: ``rsync -a ~/.config/ x``, ``tar cf - ~/.config``, ``ln -s ~/.config
+#: x``. A folder inside it (``cp -r ~/.config/nvim x``) is not this.
+BASH_COPY_CONFIG_PARENT = (
+    rf"{_PROGRAM_POSITION}(?:cp|rsync|tar|bsdtar|zip|7z|ln|mv|scp|rclone)"
+    r"(?=\s)[^;&|\n(`)]*?"
+    rf"(?:^|[\s=])[\"']?{_HOME}[\"']?/{_HIDDEN_PARENT}(?:/\.?)?[\"']?"
+    r"(?=$|[\s;&|)])")
+BASH_CONFIG_DIR = r"(?i:\.config/aipager)\b"
+BASH_SHARE_DIR = r"(?i:\.local/share/aipager)\b"
+BASH_STATE_DIR = r"(?i:\.local/state/aipager)\b"
+#: Not read as a regex: the place in a pattern list where
+#: :func:`bash_violation` runs :func:`aipager.shell_glob.command_reaches`,
+#: which expands each word's braces and matches its globs the way bash
+#: does, and refuses a word that could reach aipager's folders or that it
+#: cannot read (``~/.config/[[:a]ipager``, ``nvim/{..,x}/aipager``,
+#: ``~/.config/[a,]{ipager/x,y}``, ``~/.config/@(aipager)``). As a regex
+#: it never matches, so a reader that only knows regexes skips it.
+BASH_GLOB_REACHES_AIPAGER_DIR = (
+    r"(?!)(?#aipager-shell-glob)")
+
 DENY_BASH_PATTERNS: tuple[str, ...] = (
     r"^(sudo|su)\b",
-    r"\baipager\s+(service|config|start)\b",
-    r"\bsystemctl\b.*\baipager\b",
-    r"\brm\b.*(\.config/aipager|\.claude|\.local/share/aipager)",
+    BASH_AIPAGER_CLI,
+    BASH_AIPAGER_GLOB_PROGRAM,
+    BASH_XARGS_AIPAGER,
+    BASH_SYSTEMCTL_AIPAGER,
+    BASH_RM_AIPAGER,
+    BASH_KILL_AIPAGER,
+    BASH_LAUNCHCTL_AIPAGER,
+    BASH_PYTHON_IMPORTS_AIPAGER,
+    BASH_GLOB_AIPAGER_DIR,
+    BASH_GLOB_HIDDEN_PARENT,
+    BASH_CD_CONFIG_PARENT,
+    BASH_CD_HOME_THEN_PARENT,
+    BASH_COPY_CONFIG_PARENT,
     # Any command referencing aipager's own dirs — a Telegram session has
     # no legitimate reason to read OR write them. path_violation only
     # guards the Read/Glob/Edit tools, so without these a `cat`/`grep`/`cp`
@@ -293,9 +1049,10 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     # session's own scratchpad root and the project folder name right after
     # it, which bash_violation normalises away first — see
     # normalize_scratchpad.)
-    r"\.config/aipager\b",
-    r"\.local/share/aipager\b",
-    r"\.local/state/aipager\b",
+    BASH_CONFIG_DIR,
+    BASH_SHARE_DIR,
+    BASH_STATE_DIR,
+    BASH_GLOB_REACHES_AIPAGER_DIR,
     # Nested claude invocations + privilege flags (the flag is the
     # smoking gun; catches obfuscated binary names too). Also incidentally
     # blocks reads of ~/.claude/** via Bash.
@@ -312,6 +1069,190 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     # A recursive search or listing of the whole home folder or / (8.98).
     *DENY_BASH_SEARCH_PATTERNS,
 )
+
+#: The built-in patterns that also see the command as the shell would
+#: spell it out (:func:`dequote`), so ``"aipager" setup``, ``aip""ager
+#: setup``, ``a\ipager setup``, ``$'\x61ipager' setup``, ``aip``ager
+#: setup`` and ``$HOME/.config//aip''ager`` are caught too. Only patterns
+#: about aipager's own name and folders: the ``claude``, flag and search
+#: patterns keep matching the raw command.
+DEQUOTED_BASH_PATTERNS: tuple[str, ...] = (
+    BASH_AIPAGER_CLI,
+    BASH_AIPAGER_GLOB_PROGRAM,
+    BASH_XARGS_AIPAGER,
+    BASH_SYSTEMCTL_AIPAGER,
+    BASH_RM_AIPAGER,
+    BASH_KILL_AIPAGER,
+    BASH_LAUNCHCTL_AIPAGER,
+    BASH_PYTHON_IMPORTS_AIPAGER,
+    BASH_GLOB_AIPAGER_DIR,
+    BASH_GLOB_HIDDEN_PARENT,
+    BASH_CD_CONFIG_PARENT,
+    BASH_CD_HOME_THEN_PARENT,
+    BASH_COPY_CONFIG_PARENT,
+    BASH_CONFIG_DIR,
+    BASH_SHARE_DIR,
+    BASH_STATE_DIR,
+)
+
+#: Text every match of a built-in pattern holds, in lower case: each
+#: inner tuple names alternatives, one of which must be in the subject.
+#: :func:`bash_violation` skips a pattern on a subject (an ASCII one: a
+#: case-blind match may meet a non-ASCII letter ``str.lower`` keeps) that
+#: lacks one; a skipped search could not have matched. Only a speed-up:
+#: each entry is read off the pattern above it.
+_PATTERN_NEEDS: dict[str, tuple[tuple[str, ...], ...]] = {
+    BASH_AIPAGER_CLI: (("aipager",),
+                       ("service", "config", "start", "setup", "uninstall")),
+    # a space or tab right before the subcommand (``.config`` is not one)
+    BASH_AIPAGER_GLOB_PROGRAM: (tuple(
+        blank + sub for sub in ("service", "config", "start", "setup",
+                                "uninstall") for blank in "\x20\t"),),
+    BASH_XARGS_AIPAGER: (("xargs",),),
+    BASH_SYSTEMCTL_AIPAGER: (("systemctl",), ("aipager",)),
+    BASH_RM_AIPAGER: (("rm",), (".config/aipager", ".claude",
+                                ".local/share/aipager")),
+    BASH_KILL_AIPAGER: (("kill",), ("aipager",)),
+    BASH_LAUNCHCTL_AIPAGER: (("launchctl",), ("aipager",)),
+    BASH_PYTHON_IMPORTS_AIPAGER: (("python", "pypy"), ("aipager",)),
+    BASH_CD_CONFIG_PARENT: (("cd", "pushd"), ("/.config", "/.local")),
+    BASH_CD_HOME_THEN_PARENT: (("cd", "pushd"), (".config", ".local")),
+    # ``bsdtar`` holds ``tar``, ``scp`` holds ``cp``
+    BASH_COPY_CONFIG_PARENT: (
+        ("cp", "rsync", "tar", "zip", "7z", "ln", "mv", "rclone"),
+        ("/.config", "/.local")),
+    # the search rules' command names (``rgrep`` holds ``rg``,
+    # ``ack-grep`` holds ``ack``, ``fdfind`` holds ``fd``)
+    SEARCH_TEXT_FIRST: (("rg", "ag", "ack", "fd"),),
+    SEARCH_GREP_RECURSIVE: (("grep",),),
+    SEARCH_FIND: (("find",),),
+    LIST_TREE_DU: (("tree", "du"),),
+    LIST_LS_RECURSIVE: (("ls",),),
+    LIST_FILES: (("rg", "ack"),),
+}
+
+
+def _may_match(pat: str, subject: str, lowered: dict[str, str | None],
+               ) -> bool:
+    """False when *subject* lacks text every match of *pat* holds
+    (:data:`_PATTERN_NEEDS`); *lowered* caches each subject's lower case
+    (None for a subject that is not ASCII, which is always searched)."""
+    needs = _PATTERN_NEEDS.get(pat)
+    if needs is None:
+        return True
+    if subject not in lowered:
+        lowered[subject] = subject.lower() if subject.isascii() else None
+    low = lowered[subject]
+    return low is None or all(any(w in low for w in alts) for alts in needs)
+
+
+#: ``$'...'`` (ANSI-C quoting): bash decodes its backslash escapes.
+_ANSI_C_RE = re.compile(r"\$'((?:[^'\\]|\\.)*)'", re.S)
+_ANSI_C_ESCAPE_RE = re.compile(
+    r"\\(?:x([0-9A-Fa-f]{1,2})|u([0-9A-Fa-f]{1,4})|U([0-9A-Fa-f]{1,8})"
+    r"|([0-7]{1,3})|(.))", re.S)
+_ANSI_C_SIMPLE = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f",
+                  "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+#: An empty command substitution: ``````, ``$()``.
+_EMPTY_SUBSTITUTION_RE = re.compile(r"`\s*`|\$\(\s*\)")
+#: One whole shell word (a match takes the whole word at once, so each
+#: word is read once).
+_SHELL_WORD_RE = re.compile(r"[^\x20\t\n;&|()<>`]+")
+
+
+def _keeps_its_place(part: str) -> bool:
+    """A path part that ``..`` after it must not cancel: the root (an
+    empty part), ``.``, ``..`` or a brace that may spell it, the home
+    folder (``~``, ``$HOME``) or a part holding ``=`` or ``:``
+    (``--dir=~``, ``host:``)."""
+    return (part in ("", ".") or part[0] in "~$"
+            or "=" in part or ":" in part or _may_be_parent(part))
+
+
+#: A path part made of a brace group with at most two dots around it
+#: (``{..,x}``, ``..{,}``, ``.{.,}``, ``{x,..`` when an item holds ``/``).
+_BRACE_PART_RE = re.compile(r"(\.{0,2})\{([^{}]*)(?:\}(\.{0,2}))?")
+
+
+def _may_be_parent(part: str) -> bool:
+    """``..``, or a brace part one of whose items spells ``..`` with the
+    dots around the brace (``nvim/{..,x}`` and ``nvim/.{.,}`` may climb
+    out of ``nvim``). A brace still open in this part (an item holding
+    ``/``) counts any of its items, whatever follows the brace."""
+    if part == "..":
+        return True
+    m = _BRACE_PART_RE.fullmatch(part)
+    if not m:
+        return False
+    need = 2 - len(m[1]) - len(m[3] or "")
+    return need >= 0 and "." * need in m[2].split(",")
+
+
+def _drop_parent_steps(m: re.Match) -> str:
+    """The word with each ``name/..`` taken out, in one pass
+    (``~/.config/nvim/../aipager`` is ``~/.config/aipager``); a brace
+    that may spell ``..`` counts as one (:func:`_may_be_parent`)."""
+    out: list[str] = []
+    for part in m[0].split("/"):
+        if _may_be_parent(part) and out and not _keeps_its_place(out[-1]):
+            out.pop()
+        else:
+            out.append(part)
+    return "/".join(out) or "."
+
+
+def _ansi_c_char(m: re.Match) -> str:
+    hex2, hex4, hex8, octal, other = m.groups()
+    digits, base = ((hex2, 16) if hex2 else (hex4, 16) if hex4
+                    else (hex8, 16) if hex8 else (octal, 8) if octal
+                    else (None, 0))
+    if digits is None:
+        return _ANSI_C_SIMPLE.get(other, other)
+    try:
+        return chr(int(digits, base))
+    except (ValueError, OverflowError):
+        return ""
+
+
+def dequote(command: str, everywhere: bool = False) -> str:
+    """*command* as the shell spells out a word quoted or split to dodge a
+    pattern: a backslash-newline (a line continued) dropped, ``$'...'``
+    decoded (``$'\\x61ipager'`` is ``aipager``), the ``$`` of ``$"..."``
+    dropped, every ``'``, ``"`` and ``\\`` removed, empty substitutions
+    (``````, ``$()``) dropped, then the paths made plain
+    (:func:`_plain_paths`). Linear in the command's length.
+
+    Which ``$'`` bash reads as ANSI-C quoting depends on the quotes
+    before it: one inside single quotes (``grep 'TODO$'``), a comment or
+    a here-document body is not one, and reading it as one shifts every
+    later ``$'...'`` here. So no single reading is trusted: with
+    *everywhere*, every backslash escape in the command is decoded as if
+    all of it sat inside ``$'...'``; :func:`aipager.shell_glob.spelled`
+    gives the reading where only bash's own ``$'`` are decoded. The
+    floor checks every copy, so a wrong reading can only add a match."""
+    out = command.replace("\\\n", "")
+    if everywhere:
+        out = _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, out.replace("$'", "'"))
+    else:
+        out = _ANSI_C_RE.sub(
+            lambda m: _ANSI_C_ESCAPE_RE.sub(_ansi_c_char, m[1]), out)
+    out = out.replace('$"', '"')
+    out = out.replace("'", "").replace('"', "").replace("\\", "")
+    out = _EMPTY_SUBSTITUTION_RE.sub("", out)
+    return _plain_paths(out)
+
+
+def _plain_paths(text: str) -> str:
+    """*text* with repeated ``/`` made one, ``/./`` made ``/``
+    (``~/.config//./aipager``) and ``name/..`` taken out
+    (``~/.config/nvim/../aipager``, also a brace that may spell ``..``:
+    ``nvim/{..,x}``). Linear in the text's length."""
+    out = re.sub(r"/{2,}", "/", text)
+    while "/./" in out:
+        out = out.replace("/./", "/")
+    if "/.." in out or "{" in out:
+        out = _SHELL_WORD_RE.sub(_drop_parent_steps, out)
+    return out
 
 # ---------------------------------------------------------------------------
 # Tools that run code as the OS user: Claude Code 2.1.283's own set (every
@@ -1273,17 +2214,71 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
 
     The built-in patterns (:data:`DENY_BASH_PATTERNS`) are matched against
     the command with the session's scratchpad root normalised away
-    (:func:`normalize_scratchpad`); any other pattern — an operator's own
-    ``deny_bash_patterns`` from policy.yaml — sees the command exactly as
-    typed, so a rule written against the scratchpad still applies.
+    (:func:`normalize_scratchpad`), and those in
+    :data:`DEQUOTED_BASH_PATTERNS` also against that command with its
+    quotes and backslashes removed (:func:`dequote`). When the command
+    holds a ``$'``, which ``$'`` bash decodes depends on the quotes before
+    it, so those patterns also see it with every escape decoded
+    (``dequote(..., True)``) and as bash's own words spell it
+    (:func:`aipager.shell_glob.spelled`): each copy can only add a match.
+    Any other pattern — an operator's own ``deny_bash_patterns`` from
+    policy.yaml — sees the command exactly as typed, so a rule written
+    against the scratchpad still applies.
+    :data:`BASH_GLOB_REACHES_AIPAGER_DIR` is not a regex match: at its
+    place in *patterns* the normalised command and its quote-free copies
+    go through :func:`aipager.shell_glob.command_reaches`.
     """
     if not command:
         return None
     normalized = normalize_scratchpad(command)
+    dequoted_patterns = DEQUOTED_BASH_PATTERNS
+    copies: tuple[str, ...] = ()
+    spelled = ""
+    # one read of the command, shared by the bash reading and the matcher
+    read: dict = {}
+    # each subject's lower case, for the patterns' needed text
+    lowered: dict[str, str | None] = {}
+    # the search rules' copy of the command (see _search_hit)
+    search_memo: dict = {}
+    if any(pat in dequoted_patterns or pat == BASH_GLOB_REACHES_AIPAGER_DIR
+           for pat in patterns):
+        copies = (dequote(normalized),)
+        if "$'" in normalized:
+            # which ``$'`` bash decodes depends on the quotes before it:
+            # read it both ways (see :func:`dequote`)
+            copies += (dequote(normalized, True),)
+            spelled = _plain_paths(
+                _shell_glob.spelled(normalized, *copies, cache=read))
+            if _shell_glob.read_overflowed(read):
+                # the spelling stops where ``&`` stood for too much text:
+                # what follows is not seen, so refuse (fail closed)
+                log.info("bash_violation: command blocked: read overflowed")
+                return BASH_REASON
     for pat in patterns:
-        subject = normalized if pat in DENY_BASH_PATTERNS else command
+        if pat == BASH_GLOB_REACHES_AIPAGER_DIR:
+            if _shell_glob.command_reaches(normalized, *copies, cache=read):
+                log.info("bash_violation: command blocked by pattern %r", pat)
+                return BASH_REASON
+            continue
+        if pat in _SEARCH_VARIANTS:
+            if (_may_match(pat, normalized, lowered)
+                    and _search_hit(pat, normalized, search_memo)):
+                log.info("bash_violation: command blocked by pattern %r", pat)
+                return BASH_SEARCH_REASON
+            continue
+        if pat in dequoted_patterns:
+            subjects: tuple[str, ...] = (normalized, *copies)
+            if spelled:
+                subjects += (spelled,)
+            # a command with no quotes is its own quote-free copy
+            subjects = tuple(dict.fromkeys(subjects))
+        elif pat in DENY_BASH_PATTERNS:
+            subjects = (normalized,)
+        else:
+            subjects = (command,)
         try:
-            if re.search(pat, subject):
+            if any(re.search(pat, subject) for subject in subjects
+                   if _may_match(pat, subject, lowered)):
                 log.info("bash_violation: command blocked by pattern %r", pat)
                 if pat in DENY_BASH_SEARCH_PATTERNS:
                     return BASH_SEARCH_REASON

@@ -1,6 +1,6 @@
 # Teambetrieb und Gruppen
 
-<!-- i18n-source: docs/groups.md @ fc3db1c6 -->
+<!-- i18n-source: docs/groups.md @ d63d62ef -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../groups.md))
 
@@ -20,7 +20,7 @@ Behandle die Liste der Mitglieder so, wie du den SSH-Zugang zum Computer behande
 
 ## <a id="setup"></a>Einrichtung
 
-Alles wird mit `aipager config` eingerichtet. Du bearbeitest nie eine Datei von Hand.
+Alles wird mit `aipager config` eingerichtet, oder ohne Rückfragen (für Skripte und Coding-Agenten) mit `aipager setup group` (siehe [unten](#without-prompts-aipager-setup-group)). Du musst nie eine Datei von Hand bearbeiten.
 
 **Beim ersten Mal** (noch keine Konfiguration). Der Assistent fragt in vier Schritten:
 
@@ -51,12 +51,26 @@ Er schreibt deinen privaten Chat als ersten Chat. Nach einem Standardmodus fragt
 
 Um jemanden zu einer Gruppe hinzuzufügen, die schon eingerichtet ist, nimm Edit a scope → die Gruppe → Add a member. Alle, die schon in der Gruppe sind, behalten ihren Platz und ihre Rolle.
 
+### <a id="without-prompts-aipager-setup-group"></a>Ohne Rückfragen: `aipager setup group`
+
+`aipager setup group` macht dasselbe ohne Rückfragen, bei einer Installation, die schon eingerichtet ist: dieselben Prüfungen, dieselbe Datei und dasselbe Neuladen im laufenden Betrieb. Füg den Bot zur Gruppe hinzu, mach ihn zum Admin mit dem Recht, Nachrichten anzuheften, und sende dort `/start`, dann:
+
+```sh
+aipager setup detect-group --json      # findet die ID der Gruppe; speichert nichts
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user --label team
+```
+
+Führ es mit einem weiteren `--member` noch einmal aus, um jemanden hinzuzufügen (die anderen behalten ihren Platz und ihre Rolle), mit `--remove-member ID`, um jemanden zu entfernen, und mit `--block-edits` für die optionale Regel. Eine geänderte Rolle, einen Besitzer herabstufen oder entfernen oder jemanden zum Besitzer machen, der noch nirgends einer ist, braucht `--force`. Derselbe Befehl zweimal ändert nichts. Es prüft, ohne etwas in die Gruppe zu schicken, ob der Bot in der Gruppe ist und Nachrichten anheften darf, und warnt, wenn nicht. Optionen, Exit-Codes und die JSON-Ausgabe: [Befehle](commands.md#aipager-setup-group).
+
 ### <a id="finding-ids-auto-detect"></a>IDs herausfinden (automatische Erkennung)
 
 Die automatische Erkennung eines Mitglieds nimmt die neueste Nachricht einer Person, die noch nicht hinzugefügt ist, und fragt "Is this the person to add?" (Ist das die Person, die hinzugefügt werden soll?), bevor sie sie nimmt (sag nein, und sie sucht weiter zurück). Sie schlägt den Telegram-Benutzernamen der Person als Namen vor. In einer Gruppe muss die Person den Bot ansprechen: ihn erwähnen oder `/start` senden (siehe [was der Bot liest](#what-the-bot-reads-in-a-group)). Der Assistent sagt, wo er hinsieht:
 
 - **"Watching through the running daemon"** (über das laufende aipager): Solange `aipager start` läuft, bekommt aipager jede Nachricht an den Bot, der Assistent liest also, was aipager in `~/.claude/aipager-pending-users.json` notiert hat. aipager notiert, wer den Bot in einer Gruppe anspricht, für die es noch nicht zuständig ist (die ID, den Titel und den Typ der Gruppe sowie die ID, den Benutzernamen und den Namen der Person), und alle, die nicht Mitglied einer Gruppe sind, für die es zuständig ist. In einer Gruppe, für die es nicht zuständig ist, antwortet es nie. Eine private Nachricht einer Person, die nicht eingerichtet ist, bekommt eine Antwort und wird nicht notiert; um den privaten Chat einer Person hinzuzufügen, während aipager läuft, füg also ihre ID ein (oder stoppe aipager vorher).
 - **"Watching Telegram directly"** (direkt in Telegram): Wenn aipager gestoppt ist, fragt der Assistent Telegram selbst nach den neuesten Nachrichten des Bots.
+
+`aipager setup detect-group` findet die ID einer Gruppe auf dieselbe Art, ohne Rückfragen: die neueste Nachricht in einer Gruppe, die noch nicht eingerichtet ist, aus den letzten 10 Minuten.
 
 Dein eigener privater Chat wird beim ersten Mal immer aus Telegram gelesen. Eine Nachricht eines anonymen Admins der Gruppe, oder eine, die als die Gruppe oder als ein Kanal gepostet wurde, zählt nicht: Ihre Absender-ID (1087968824, 136817688 oder 777000) teilen alle, die so posten, der Assistent lehnt sie also ab, getippt oder erkannt. Bitte die Person, mit ihrem eigenen Konto zu posten.
 
@@ -74,6 +88,8 @@ Was ein Neuladen sofort übernimmt:
 - eine neue Gruppe oder ein neuer privater Chat bekommt ab jetzt Nachrichten und sein Menü `/`; ein entfernter hört auf (seine Sitzungen laufen weiter, bis du sie beendest);
 - eine zurückgehaltene Nachricht (eine, die darauf wartet, dass eine Anfrage beantwortet wird oder die Aufgabe einer anderen Person endet) von einer Person, die in diesem Chat nicht mehr schreiben darf, wird verworfen: Sie bekommt ein 🤷, und der Bot antwortet „Nicht an Claude gesendet: @bob darf hier nicht mehr schreiben.“;
 - eine laufende Aufgabe einer Person, die entfernt wurde oder Rechte verloren hat, behält für den Rest der Aufgabe nur das Strengste aus ihren alten und den neuen Regeln (bei einer entfernten Person die eingeschränkte Untergrenze). Eine im Terminal getippte Aufgabe wird nicht verändert, außer eine Telegram-Nachricht ist ihr beigetreten: aipager hält nicht fest, von wem, eine solche Aufgabe wird also eingeengt, wenn irgendein Besitzer dieses Chats (oder, in einem privaten Chat, dessen Mitglied) Rechte verliert. Eine Aufgabe, die schon lief, als aipager neu gestartet wurde (noch arbeitend oder wartend auf eine Frage oder Berechtigung), wird für jedes Mitglied ihres Chats eingeengt, das Rechte verloren hat. Eine Beförderung macht eine laufende Aufgabe nie weiter: Die neuen Rechte gelten ab der nächsten Aufgabe dieser Person.
+
+`aipager setup group` schickt dasselbe Neuladen, nachdem es geschrieben hat, und meldet, was passiert ist (`daemon: reloaded live`, `not applied`, `restart needed` oder `no daemon running`).
 
 Nur ein neuer **Token des Bots** braucht einen Neustart (`aipager config` sagt das nach Refresh bot token). Läuft kein aipager, wird kein Neuladen geschickt: Das nächste `aipager start` liest die neue Konfiguration.
 
@@ -118,7 +134,7 @@ Themen einzuschalten stellt eine einfache Gruppe außerdem auf eine Supergruppe 
 
 ## <a id="roles"></a>Rollen
 
-Vier eingebaute Rollen (siehe `aipager/safety.py`). Es zählt die Rolle der Person **in dem Chat, in dem sie handelt**. Niemand kann Mitglieder oder Rollen aus Telegram oder der Mini App ändern: Das tut nur `aipager config` auf dem Computer, und so bleibt das beim Besitzer.
+Vier eingebaute Rollen (siehe `aipager/safety.py`). Es zählt die Rolle der Person **in dem Chat, in dem sie handelt**. Niemand kann Mitglieder oder Rollen aus Telegram oder der Mini App ändern: Das tun nur `aipager config` oder `aipager setup group` auf dem Computer, und so bleibt das beim Besitzer (die Sicherheitsregeln von aipager blockieren beide für jede Aufgabe aus Telegram, die nicht vom Besitzer kommt).
 
 | | `owner` | `admin` | `user` | `read_only` |
 |---|---|---|---|---|
@@ -138,7 +154,7 @@ Vier eingebaute Rollen (siehe `aipager/safety.py`). Es zählt die Rolle der Pers
 
 - **owner**: volle Kontrolle, einschließlich der eingebauten Sicherheitsuntergrenze. Es sollte genau einen geben: die Person, die den Computer betreut.
 - **admin**: alles, was ein Besitzer in Telegram und in der Mini App tun kann: Sitzungen in den Vollzugriff-Modus wechseln (und darin starten), eine Sitzung im Vollzugriff-Modus fortsetzen, die `/settings` einer Gruppe ändern, `/update` ausführen, die Sprachfunktion installieren, jeden Slash-Befehl senden. Ein Admin umgeht außerdem die Ablehnungsregeln der Rolle (die `deny_tools` des Chats und des Mitglieds gelten für Admins nicht). Zwei Dinge bleiben beim Besitzer:
-  - Mitglieder und Rollen ändern: Das tut nur `aipager config` auf dem Computer, und nichts in Telegram oder der Mini App kann es;
+  - Mitglieder und Rollen ändern: Das tun nur `aipager config` oder `aipager setup group` auf dem Computer, und nichts in Telegram oder der Mini App kann es;
   - die Sicherheitsuntergrenze umgehen (die Konfiguration und der Token des Bots von aipager, die Anmeldedaten von Claude Code, die Steuerdateien von aipager). `Grep` und `Glob` eines Admins dürfen überall sonst suchen, aber nicht in einem Ordner, der einer davon ist, in einem liegt oder einen enthält: Ein `Grep` von `~`, `/` oder `/tmp` (oder ohne Ordner aus einer Sitzung im Home-Ordner) wird abgelehnt, ebenso ein `Glob`, dessen Muster in einem davon beginnt (wie `/home/you/.config/aipager/*`). Such stattdessen in einem Projektordner. Bei Versionen von Claude Code ohne das Tool `Grep` sucht Claude über Bash; auch dort wird eine rekursive Suche oder Auflistung des ganzen Home-Ordners oder von `/` (`grep -rn x ~`, `rg x $HOME`, `find / -name x`) abgelehnt, nach bestem Bemühen (eine Suche ohne Ordner, oder mit `..`, die aus dem Home-Ordner oder darunter läuft, wird nicht gesehen), Suchen in Projekten dagegen nicht, auch keine Suche NACH einem Pfad im Home-Ordner (`grep -rn "$HOME" src`) ([Sicherheit](security.md#team-mode-enforcement)).
 
   Ein Admin behält Bash, und mit einer Shell sind die Befehlsmuster der Untergrenze nur nach bestem Bemühen, keine Grenze: Mach jemanden nur zum Admin, wenn du dieser Person eine Shell auf dem Computer geben würdest.
@@ -323,7 +339,7 @@ scopes:
         role: read_only
 ```
 
-Ein privater Chat und Gruppen-Chats bestehen nebeneinander: Der Bot ist für jeden aufgelisteten Chat zuständig, und die Sitzungen jedes Chats bleiben getrennt. `aipager config` schreibt diese Datei; du musst sie nie bearbeiten.
+Ein privater Chat und Gruppen-Chats bestehen nebeneinander: Der Bot ist für jeden aufgelisteten Chat zuständig, und die Sitzungen jedes Chats bleiben getrennt. `aipager config` und `aipager setup group` schreiben diese Datei. Bearbeite sie nur bei einem aipager von Hand, das älter ist als `aipager setup group`: Lass ihre Rechte bei 0600, prüf sie mit `aipager policy validate` und schick aipager ein Neuladen (siehe [Ohne Neustart neu laden](#live-reload)).
 
 ## <a id="how-rules-work"></a>Wie die Regeln funktionieren
 
@@ -359,7 +375,7 @@ Jede Aufgabe jeder Rolle außer `owner` bekommt sie ganz, ebenso die Aufgaben, d
 
 ## <a id="revoking-a-user"></a>Einer Person den Zugang entziehen
 
-1. Führ `aipager config` → Edit a member → den Chat → die Person → Remove member aus. Um ihr das Recht zum Schicken von Nachrichten zu nehmen, sie aber weiter lesen zu lassen, nimm Set role und wähl `read_only`. (Um sie später wieder hinzuzufügen: Edit a scope → die Gruppe → Add a member.) Für den privaten Chat einer Person beende zuerst die Sitzungen dieses Chats, dann Edit a scope → ihr privater Chat → Remove this scope.
+1. Führ `aipager config` → Edit a member → den Chat → die Person → Remove member aus. Um ihr das Recht zum Schicken von Nachrichten zu nehmen, sie aber weiter lesen zu lassen, nimm Set role und wähl `read_only`. (Um sie später wieder hinzuzufügen: Edit a scope → die Gruppe → Add a member.) Für den privaten Chat einer Person beende zuerst die Sitzungen dieses Chats, dann Edit a scope → ihr privater Chat → Remove this scope. Ohne Rückfragen: `aipager setup group --chat-id <ID der Gruppe> --remove-member <ihre ID>` (bei einem Besitzer braucht es `--force`).
 2. Der Assistent lädt aipager im laufenden Betrieb neu; er sagt "Scopes reloaded live". Sofort werden ihre zurückgehaltenen Nachrichten verworfen (🤷 und eine Antwort „Nicht an Claude gesendet“), und eine noch laufende Aufgabe von ihr wird bis zu ihrem Ende an die eingeschränkte Untergrenze gebunden. Sende `/stop`, um diese Aufgabe sofort zu beenden.
 3. Entfern sie auch aus der Telegram-Gruppe. Solange sie dort bleibt, kann sie weiter alles lesen, was gepostet wird: Karten, Antworten, Eingaben der Tools und Berechtigungsanfragen.
 

@@ -2,7 +2,7 @@
 
 # التثبيت بواسطة وكيل
 
-<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
+<!-- i18n-source: docs/install-with-an-agent.md @ d63d62ef -->
 
 > هذه الصفحة مترجمة عن الإنجليزية؛ إذا اختلفت النسختان، فالنسخة الإنجليزية هي الصحيحة. ([English](../../install-with-an-agent.md))
 
@@ -157,13 +157,99 @@ aipager doctor --json
 ## <a id="4-what-you-must-not-do"></a>٤. ما لا يجوز لك فعله
 
 - لا طباعة للتوكن ولا `echo` ولا `cat` له، ولا وضعه أبدًا في سطر الأوامر (&lrm;`--token` مرفوض على أي حال). يُمرَّر فقط كملف أو على stdin.
-- لا تعديل يدويًا لـ &lrm;`~/.config/aipager/`&lrm; (باستثناء ملف التوكن في الخطوة ٢) أو لـ &lrm;`~/.claude/settings.json`. يكتبهما `aipager setup` و`aipager config`.
-- لا إضافة لـ &lrm;`--force` دون سؤال الشخص: فهو يستبدل التوكن أو الدردشة أو الدور الموجود لديه.
+- لا تعديل يدويًا لـ &lrm;`~/.config/aipager/`&lrm; (باستثناء ملف التوكن في الخطوة ٢) أو لـ &lrm;`~/.claude/settings.json`. يكتبهما `aipager setup` و`aipager config`. الاستثناء الوحيد هو مجموعة على aipager أقدم من هذا، حيث يفشل `aipager setup group --help`: يُنظر [٥.٥](#55-older-installs).
+- لا إضافة لـ &lrm;`--force` دون سؤال الشخص: فهو يستبدل التوكن أو الدردشة أو الدور الموجود لديه. ومع `setup group` يغيّر الأدوار أو يزيلها، أو يمنح دور `owner`.
+- عبر aipager، لا تستطيع تشغيل `aipager setup` (بأي شكل) أو `aipager config` أو `aipager uninstall` إلا مهام المالك: قواعد الأمان في aipager تمنعها لكل دور آخر. إذا كان الشخص يتواصل معك عبر aipager وليس هو المالك، فالمطلوب أن يشغّل الأمر بنفسه في طرفية.
 - لا إعادة تشغيل ولا إنهاء لجلستك في Claude Code. في أول تثبيت، جلستك الحالية ليست تحت aipager، ولا حاجة إلى ذلك: الجلسات الجديدة تأتي من &lrm;`/new` في Telegram أو من `aipager session <name>`&lrm;. إذا كان aipager مُعدًّا من قبل والشخص يتواصل معك عبره (مثلًا لتشغيل `setup --force` بتوكن جديد)، فلا إيقاف ولا إعادة تشغيل لـ aipager من جهتك: فستنقطع مهمتك وإجابتها. عليك طلب إعادة تشغيله من الشخص بعد انتهائك.
 
 ## <a id="5-groups"></a>٥. المجموعات
 
-يُعدّ `aipager setup` الدردشة الخاصة بين الشخص والبوت. لإضافة مجموعة Telegram فيها أشخاص آخرون وأدوارهم، يشغّل الشخص `aipager config` (إعداد المجموعات لا يمكن أتمتته بسكربت بعد). يُنظر [وضع الفريق والمجموعات](groups.md).
+يُعدّ `aipager setup` الدردشة الخاصة بين الشخص والبوت. ويضيف `aipager setup group` مجموعة Telegram وأعضاءها وأدوارهم إلى تثبيت مُعدّ من قبل، دون أي سؤال (ويفعل `aipager config` الشيء نفسه مع الأسئلة). يقرأ توكن البوت من التثبيت، ولا يعيد تشغيل aipager أبدًا، ولا يرسل شيئًا إلى المجموعة. يُنظر [وضع الفريق والمجموعات](groups.md) و[مرجع الأمر](commands.md#aipager-setup-group).
+
+### <a id="51-what-only-the-person-can-do"></a>٥.١ ما لا يستطيعه إلا الشخص نفسه
+
+لا يمكنك تنفيذ هذه الخطوات؛ المطلوب من الشخص أن ينفذها في Telegram:
+
+1. إضافة البوت إلى المجموعة.
+2. جعل البوت مشرفًا في المجموعة مع صلاحية تثبيت الرسائل (يثبّت aipager هناك شريط حالة؛ ومن دون هذه الصلاحية تعمل المجموعة، لكن دون شريط حالة). لا يستطيع ذلك إلا مشرف في المجموعة.
+3. إرسال &lrm;`/start` في المجموعة، ليتسنى لك العثور على معرّفها (٥.٢).
+4. إعطاؤك لكل عضو معرّف مستخدم Telegram الرقمي، واسمًا قصيرًا (به يعرضه aipager، بصيغة &lrm;`@label`)، ودورًا: `owner` أو `admin` أو `user` أو `read_only` أو دورًا خاصًا به في `policy.yaml`. لدور `owner` تحكّم كامل في هذا الكمبيوتر: هو لمن يدير الكمبيوتر ولا أحد غيره. وإذا لم يعرف الشخص معرّفًا ما، يستطيع `aipager config` العثور عليه حين يكتب صاحبه في المجموعة.
+
+### <a id="52-find-the-group"></a>٥.٢ العثور على المجموعة
+
+<div dir="ltr">
+
+```sh
+aipager setup detect-group --json
+```
+
+</div>
+
+ينتظر (حتى ٣٠٠ ثانية، &lrm;`--timeout SECONDS`) رسالة في مجموعة لم تُعدّ بعد، أُرسلت قبل التشغيل بـ ١٠ دقائق على الأكثر، ويطبع المجموعة (`candidate.id`،&rlm; `candidate.title`). لا يحفظ شيئًا. يُعرض العنوان على الشخص، ولا يُستخدم المعرّف إلا بعد أن يؤكد أنها المجموعة الصحيحة. رمز الخروج ٨ يعني أنه لم يصل شيء: المطلوب من الشخص إرسال &lrm;`/start` في المجموعة مرة أخرى.
+
+### <a id="53-set-it-up"></a>٥.٣ إعداد المجموعة
+
+يُشغَّل الأمر أولًا مع &lrm;`--dry-run`، ثم الأمر نفسه من دونه:
+
+<div dir="ltr">
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+</div>
+
+- &rlm;&lrm;`--member ID:LABEL:ROLE` مرة لكل شخص. ولإضافة شخص لاحقًا، يُعاد التشغيل مع &lrm;`--member` الجديد وحده: يبقى الآخرون.
+- &rlm;&lrm;`--remove-member ID` يزيل شخصًا واحدًا.
+- &rlm;&lrm;`--label NAME` يسمّي المجموعة، و&lrm;`--root PATH` يحدد المجلد الذي يعمل فيه أعضاؤها من `user` و`read_only` (الافتراضي &lrm;`~/aipager-users/group-<label>`&lrm;)، و&lrm;`--block-edits` يمنع Write وEdit عن أعضائها من `user`.
+- إعادة تشغيل الأمر نفسه لا تغيّر شيئًا (`unchanged`).
+- رمز الخروج ٦ (`needs_force`) يعني أن التغيير يحتاج إلى &lrm;`--force`: يذكر `force_reasons` السبب (تغيير دور، أو منح مالك أو تخفيضه أو إزالته، أو مجلد جذري فيه خطر). يُعرض ذلك على الشخص، ولا يُضاف &lrm;`--force` إلا بموافقته.
+
+### <a id="54-read-the-result"></a>٥.٤ قراءة النتيجة
+
+| رمز الخروج | ما العمل |
+|---|---|
+| 0 | تم (`created` أو `updated` أو `unchanged` أو `dry_run`). يُبلَّغ الشخص بـ `label` المجموعة و`members` الخاصة بها وما يقوله `daemon.outcome`. |
+| 2 | خيار خاطئ: يذكره `error` و`message` و`fix`. يُصحَّح ويُعاد التشغيل. |
+| 6 | `needs_force`: يُسأل الشخص عن كل بند في `force_reasons`. |
+| 11 | `not_set_up`: يُعدّ aipager أولًا ([٣](#3-your-steps)). |
+| 1 | أي شيء آخر (`config_malformed` أو `policy_malformed` أو `last_member` أو `config_changed`...): يُعرض `message` و`fix`. وبعد `config_changed` يُعاد التشغيل. |
+
+يذكر `daemon.outcome` ما فعله aipager العامل: `reloaded_live` (المجموعة تعمل الآن)، `no_daemon` (ستعمل حين يبدأ aipager)، `restart_needed` أو `not_applied` (يُعرض `next_step` على الشخص؛ ولا إعادة تشغيل لـ aipager من جهتك). التحذيرات لا تغيّر رمز الخروج أبدًا، لكن تُعرض: `bot_not_in_group` و`bot_not_admin` و`bot_cannot_pin` و`group_not_found` تعني أن على الشخص خطوة من ٥.١ بعد، و`owner_granted` يستحق أن يُقال صراحة.
+
+### <a id="55-older-installs"></a>٥.٥ التثبيتات الأقدم
+
+إذا فشل `aipager setup group --help`، فهذا الـ aipager أقدم من الأمر. يمكنك أن تطلب من الشخص تحديث aipager (`aipager update`)، أو، إن أراد المجموعة الآن، إضافتها يدويًا:
+
+1. إضافة نطاق مجموعة إلى &lrm;`~/.config/aipager/aipager.yaml` وفق [البنية](groups.md#aipageryaml-schema-team-parts). يحوي الملف توكن البوت: لا طباعة له ولا `cat` أبدًا، ويُترك بصلاحية 0600 (`chmod 600 ~/.config/aipager/aipager.yaml`).
+2. فحصه بـ `aipager policy validate`، ثم التأكد من أن سطر `scope mode: ...`&lrm; في `aipager doctor` يعدّ المجموعة الجديدة.
+3. إرسال إعادة تحميل دون إعادة تشغيل إلى aipager، كما في الأسفل.
+
+على Linux، مع الخدمة في الخلفية:
+
+<div dir="ltr">
+
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
+
+</div>
+
+على macOS:
+
+<div dir="ltr">
+
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+</div>
+
+فحص &lrm;`-gt 0` مهم: حين لا يعمل aipager، يرسل `kill -USR1 0` الإشارة إلى عمليات الصدفة نفسها. لا إعادة تشغيل لـ aipager أبدًا من داخل جلسة aipager: فستنقطع مهمتك.
 
 ## <a id="see-also"></a>صفحات ذات صلة
 

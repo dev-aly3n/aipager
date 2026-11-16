@@ -1,6 +1,6 @@
 # 用代理安装
 
-<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
+<!-- i18n-source: docs/install-with-an-agent.md @ d63d62ef -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../install-with-an-agent.md)）
 
@@ -127,13 +127,83 @@ aipager doctor --json
 ## <a id="4-what-you-must-not-do"></a>4. 你绝不能做的事
 
 - 不要打印、`echo` 或 `cat` token，也绝不要把它放在命令行上（`--token` 反正会被拒绝）。只能通过文件或 stdin 传递。
-- 不要手动编辑 `~/.config/aipager/`（第 2 步里的 token 文件除外）或 `~/.claude/settings.json`。它们由 `aipager setup` 和 `aipager config` 写入。
-- 不要在没问过用户的情况下加 `--force`：它会替换用户现有的 token、聊天或角色。
+- 不要手动编辑 `~/.config/aipager/`（第 2 步里的 token 文件除外）或 `~/.claude/settings.json`。它们由 `aipager setup` 和 `aipager config` 写入。唯一的例外是在比这个版本更旧的 aipager 上添加群组，这时 `aipager setup group --help` 会失败：见 [5.5](#55-older-installs)。
+- 不要在没问过用户的情况下加 `--force`：它会替换用户现有的 token、聊天或角色。用在 `setup group` 上时，它会修改或去掉角色，或者授予 `owner` 角色。
+- 通过 aipager，只有所有者的任务能运行 `aipager setup`（任何形式）、`aipager config` 或 `aipager uninstall`：aipager 的安全规则会对其他所有角色拦下这些命令。如果用户通过 aipager 和你交流、但不是所有者，请让对方自己在终端里运行这个命令。
 - 不要重启或结束你自己所在的 Claude Code 会话。首次安装时，你所在的会话不在 aipager 之下，也不需要在：新会话来自 Telegram 里的 `/new` 或 `aipager session <name>`。如果 aipager 已经设置好，而用户正通过它与你交流（例如为了用新 token 运行 `setup --force`），不要自己停止或重启 aipager：你的任务和它的回答会被切断。等你完成后，请用户自己重启它。
 
 ## <a id="5-groups"></a>5. 群组
 
-`aipager setup` 设置的是用户与机器人的私聊。要添加一个有更多人、各有角色的 Telegram 群组，由用户运行 `aipager config`（群组设置目前还不能用脚本完成）。见[团队模式与群组](groups.md)。
+`aipager setup` 设置的是用户与机器人的私聊。`aipager setup group` 会把一个 Telegram 群组、它的成员和成员的角色添加到已经设置好的安装里，不提任何问题（`aipager config` 做同样的事，但会提问）。它从安装里读取机器人 token，从不重启 aipager，也不往群组里发任何东西。见[团队模式与群组](groups.md)和[这个命令的说明](commands.md#aipager-setup-group)。
+
+### <a id="51-what-only-the-person-can-do"></a>5.1 只有用户能做的事
+
+这些步骤你做不了；请让用户在 Telegram 里完成：
+
+1. 把机器人加进群组。
+2. 把机器人设为群组管理员，并给它置顶消息的权限（aipager 会在那里置顶一个状态栏；没有这个权限群组也能用，只是没有状态栏）。只有群组管理员能做这件事。
+3. 在群组里发送 `/start`，这样你才能找到群组的 ID（5.2）。
+4. 告诉你每个成员的数字 Telegram 用户 ID、一个简短的名字（aipager 显示这个人时用的名字，形如 `@label`）和一个角色：`owner`、`admin`、`user`、`read_only`，或 `policy.yaml` 里自己定义的角色。`owner` 角色能完全控制这台电脑：它属于运行这台电脑的人，不属于别人。如果用户不知道某个 ID，可以在那个人往群组里发消息时用 `aipager config` 找出来。
+
+### <a id="52-find-the-group"></a>5.2 找到群组
+
+```sh
+aipager setup detect-group --json
+```
+
+它会等待（最多 300 秒，`--timeout SECONDS`）一个还没设置的群组里的消息，这条消息要在你运行命令前不超过 10 分钟发出，然后打印这个群组（`candidate.id`、`candidate.title`）。它不保存任何东西。把群组名称给用户看，等用户确认是对的群组后再用这个 ID。退出码 8 表示什么都没收到：请用户在群组里再发一次 `/start`。
+
+### <a id="53-set-it-up"></a>5.3 设置群组
+
+先加 `--dry-run` 运行，再去掉它运行同一个命令：
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+- 每个人用一次 `--member ID:LABEL:ROLE`。以后要加人，只带新的 `--member` 再运行一次：其他人都会保留。
+- `--remove-member ID` 移除一个人。
+- `--label NAME` 给群组起名，`--root PATH` 设置群组里 `user` 和 `read_only` 成员工作的文件夹（默认是 `~/aipager-users/group-<label>`），`--block-edits` 为群组的 `user` 成员拦下 Write 和 Edit。
+- 再运行同一个命令不会改变任何东西（`unchanged`）。
+- 退出码 6（`needs_force`）表示这个改动需要 `--force`：`force_reasons` 说明原因（角色改动、授予、降级或移除所有者、有风险的根文件夹）。把它给用户看，只有用户同意时才加 `--force`。
+
+### <a id="54-read-the-result"></a>5.4 读取结果
+
+| 退出码 | 怎么做 |
+|---|---|
+| 0 | 完成（`created`、`updated`、`unchanged` 或 `dry_run`）。告诉用户群组的 `label`、它的 `members`，以及 `daemon.outcome` 怎么说。 |
+| 2 | 某个选项有误：`error`、`message` 和 `fix` 会指出是哪个。改正后再运行。 |
+| 6 | `needs_force`：就 `force_reasons` 里的每一项询问用户。 |
+| 11 | `not_set_up`：先设置好 aipager（[3](#3-your-steps)）。 |
+| 1 | 其他情况（`config_malformed`、`policy_malformed`、`last_member`、`config_changed`……）：把 `message` 和 `fix` 给用户看。遇到 `config_changed` 时再运行一次。 |
+
+`daemon.outcome` 说明正在运行的 aipager 做了什么：`reloaded_live`（群组现在就能用），`no_daemon`（aipager 启动后就能用），`restart_needed` 或 `not_applied`（把 `next_step` 给用户看；不要自己重启 aipager）。警告从不改变退出码，但要给用户看：`bot_not_in_group`、`bot_not_admin`、`bot_cannot_pin` 和 `group_not_found` 表示用户还有 5.1 里的某一步没做，`owner_granted` 也值得明确说出来。
+
+### <a id="55-older-installs"></a>5.5 较旧的安装
+
+如果 `aipager setup group --help` 失败，说明这个 aipager 比这个命令旧。请用户更新 aipager（`aipager update`），或者，如果用户现在就要这个群组，就手动添加：
+
+1. 按照[文件结构](groups.md#aipageryaml-schema-team-parts)，在 `~/.config/aipager/aipager.yaml` 里加一个群组 scope。这个文件里有机器人 token：绝不要打印它或对它用 `cat`，并保持权限为 0600（`chmod 600 ~/.config/aipager/aipager.yaml`）。
+2. 用 `aipager policy validate` 检查它，再确认 `aipager doctor` 的 `scope mode: ...` 这一行算上了新群组。
+3. 按下面的方法让 aipager 不重启地重新加载。
+
+在 Linux 上，使用后台服务时：
+
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
+
+在 macOS 上：
+
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+`-gt 0` 这个检查很重要：没有 aipager 在运行时，`kill -USR1 0` 会把信号发给你自己 shell 里的进程。绝不要在 aipager 会话里重启 aipager：你的任务会被打断。
 
 ## <a id="see-also"></a>另见
 

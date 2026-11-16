@@ -57,9 +57,9 @@ def test_bad_chat_id_fix_names_the_flag(env, bad):
     assert "--chat-id" in env.setup(chat=bad).json["fix"]
 
 
-def test_negative_chat_id_points_at_aipager_config(env):
+def test_negative_chat_id_points_at_aipager_setup_group(env):
     d = env.setup(chat="-1001234567890").json
-    assert "aipager config" in f"{d['message']} {d['fix']}"
+    assert "aipager setup group" in f"{d['message']} {d['fix']}"
 
 
 def test_bad_chat_id_makes_no_http_call(env):

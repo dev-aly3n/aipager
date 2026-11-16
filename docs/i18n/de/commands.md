@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ 08e5ce80 -->
+<!-- i18n-source: docs/commands.md @ ace40cd4 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -474,7 +474,7 @@ Führ `aipager <command> --help` aus, um dieselbe Liste auf deinem Computer zu s
 | Befehl | Was er tut |
 |---|---|
 | `aipager config` | Der interaktive Einrichtungsassistent: Token des Bots, Chats, Mitglieder und Rollen, die Hooks von Claude Code. Führ ihn noch einmal aus, um irgendetwas zu ändern (siehe [Teambetrieb](groups.md#setup)). |
-| `aipager setup` | Dieselbe erste Einrichtung ohne Rückfragen, für Skripte und Coding-Agenten (siehe [unten](#command-line-aipager-setup-for-coding-agents)). |
+| `aipager setup` | Dieselbe erste Einrichtung ohne Rückfragen, für Skripte und Coding-Agenten; `aipager setup group` fügt auf dieselbe Art eine Telegram-Gruppe mit ihren Mitgliedern und deren Rollen hinzu (siehe [unten](#command-line-aipager-setup-for-coding-agents)). |
 | `aipager start` | Lässt aipager im Vordergrund laufen. Es verweigert den Start, solange ein anderes aipager läuft. |
 | `aipager service install [--yes]` | Installiert aipager als Hintergrunddienst (systemd-Benutzerdienst auf Linux, launchd-Agent auf macOS) und startet ihn. `--yes` überspringt die Frage, wenn sich der installierte Dienst unterscheidet. |
 | `aipager service start\|stop\|status\|logs\|uninstall` | Startet, stoppt oder zeigt den Dienst, folgt seinem Log oder entfernt ihn. |
@@ -496,7 +496,7 @@ Führ `aipager <command> --help` aus, um dieselbe Liste auf deinem Computer zu s
 
 ## <a id="command-line-aipager-setup-for-coding-agents"></a>Befehlszeile: `aipager setup` (für Coding-Agenten)
 
-Die Abschnitte oben beschreiben den Telegram-Bot. Dieser beschreibt einen Befehl, den du in einem Terminal ausführst oder den ein Skript oder dein Coding-Agent für dich ausführt: `aipager setup` richtet aipager ohne Rückfragen ein und ergibt dasselbe wie der erste Durchlauf von `aipager config`.
+Die Abschnitte oben beschreiben den Telegram-Bot. Dieser beschreibt einen Befehl, den du in einem Terminal ausführst oder den ein Skript oder dein Coding-Agent für dich ausführt: `aipager setup` richtet aipager ohne Rückfragen ein und ergibt dasselbe wie der erste Durchlauf von `aipager config`. Bei einer Installation, die schon eingerichtet ist, fügt `aipager setup group` eine Telegram-Gruppe mit ihren Mitgliedern und deren Rollen hinzu, ebenfalls ohne Rückfragen (siehe [`aipager setup group`](#aipager-setup-group)).
 
 ```sh
 # 1. die Telegram-ID der Person herausfinden (sie öffnet den Bot und tippt auf Start)
@@ -505,6 +505,9 @@ aipager setup detect-chat --token-file ~/bot-token.txt --json
 aipager setup --token-file ~/bot-token.txt --chat-id 123456789 --service --json
 # 3. die Installation prüfen
 aipager doctor --json
+# später: eine Gruppe finden (dort /start senden), dann einrichten
+aipager setup detect-group --json
+aipager setup group --chat-id -1001234567890 --member 123456789:alice:owner --json
 ```
 
 Was er tut, in dieser Reihenfolge: Er liest den Token des Bots, prüft ihn bei Telegram (getMe), prüft alles auf diesem Computer, ohne zu schreiben (die bestehende Konfiguration, die Abhängigkeiten, `~/.claude/settings.json` (oder `$CLAUDE_CONFIG_DIR/settings.json`), ob ein aipager läuft), schickt der Person eine Testnachricht ("aipager is set up for you. ...") und schreibt erst dann. Geschriebene Dateien, genau so, wie der Assistent sie schreibt:
@@ -523,12 +526,17 @@ Schlägt eine Prüfung fehl, wird nichts geschickt und nichts geschrieben. Läuf
 |---|---|
 | `--token-file PATH` | Liest den Token des Bots aus dieser Datei (höchstens 4096 Bytes; Text um einen Token herum ist in Ordnung). Eine Datei, die andere Benutzer lesen können, funktioniert, gibt aber die Warnung `token_file_shared`: Mach `chmod 600` darauf, oder lösch sie, sobald setup geklappt hat. |
 | `--token-stdin` | Liest den Token des Bots von stdin (eine Pipe oder eine umgeleitete Datei, nie ein Terminal). Die Pipe muss sich schließen: setup wartet höchstens 30 Sekunden auf das Ende von stdin und endet dann mit 2 und `token_stdin_timeout`. `printf '%s\n' "$TOKEN" \| aipager setup --token-stdin ...` und `< token.txt` schließen sie beide. |
-| `--chat-id N` | Pflicht. Die numerische Telegram-Benutzer-ID der Person, die auch die ID ihres privaten Chats ist. Gruppen werden mit `aipager config` hinzugefügt. |
+| `--chat-id N` | Pflicht. Die numerische Telegram-Benutzer-ID der Person, die auch die ID ihres privaten Chats ist. Mit `setup group`: die ID der Gruppe, eine negative Zahl. |
 | `--role owner\|admin` | Die Rolle der Person (Standard `owner`). |
 | `--service` | Installiert und startet außerdem den Hintergrunddienst (übersprungen, solange ein aipager läuft). |
-| `--force` | Erlaubt, den Token des Bots, den privaten Chat des Besitzers oder die Rolle einer bestehenden Installation zu ersetzen. Gruppen-Chats und andere private Chats bleiben erhalten. |
+| `--force` | Erlaubt, den Token des Bots, den privaten Chat des Besitzers oder die Rolle einer bestehenden Installation zu ersetzen. Gruppen-Chats und andere private Chats bleiben erhalten. Mit `setup group`: erlaubt die Änderungen, die `force_reasons` aufzählt. |
 | `--dry-run` | Führt jede Prüfung aus, schickt nichts, schreibt nichts und meldet, was sich ändern würde. |
 | `--json` | Gibt genau ein JSON-Objekt auf stdout aus; alles andere geht auf stderr. |
+| `--member ID:LABEL:ROLE` | Nur `setup group`, wiederholbar: die numerische Telegram-Benutzer-ID, der Name und die Rolle eines Mitglieds. |
+| `--remove-member ID` | Nur `setup group`, wiederholbar: entfernt dieses Mitglied. |
+| `--label NAME` | Nur `setup group`: der Name der Gruppe. |
+| `--root PATH` | Nur `setup group`: der Stammordner der Mitglieder. |
+| `--block-edits` | Nur `setup group`: blockiert Write und Edit für die Mitglieder der Gruppe mit `user`. |
 
 Gib genau eine der beiden Optionen `--token-file` und `--token-stdin` an. Der Token wird nie als Wert einer Option angenommen: `--token` und `--bot-token` werden abgelehnt (`token_on_command_line`), und der Wert wird nicht gezeigt. Abgekürzte Optionen (`--token-f`, `--dry`) werden nicht angenommen. setup stellt nie eine Frage, braucht nie ein Terminal und liest den Token nie aus einer Umgebungsvariablen.
 
@@ -546,24 +554,52 @@ Läuft ein aipager für denselben Bot, bekommt aipager die Nachrichten des Bots 
 
 Grenze: Weil detect-chat nie eine Nachricht bestätigt, zeigt Telegram ihm nur die ältesten 100 ungelesenen Updates der letzten 24 Stunden. Hat der Bot so viele wartend, ist ein neues `/start` nicht zu sehen: detect-chat läuft dann in eine Zeitüberschreitung (Exit 8) mit der Warnung `updates_backlog`, und noch einmal auf „Starten“ zu tippen hilft nicht. Frag die Person stattdessen nach ihrer numerischen Telegram-ID (oder starte aipager einmal, das diese Updates liest und leert).
 
+### <a id="aipager-setup-group"></a>`aipager setup group`
+
+```sh
+aipager setup group --chat-id N [--member ID:LABEL:ROLE ...] [--remove-member ID ...]
+                    [--label NAME] [--root PATH] [--block-edits]
+                    [--force] [--dry-run] [--json]
+```
+
+Richtet eine Telegram-Gruppe bei einer Installation ein, die schon eingerichtet ist, mit denselben Prüfungen, demselben Schreiben der Datei und demselben Neuladen im laufenden Betrieb wie `aipager config`. Es liest den Token des Bots aus `aipager.yaml` (kein `--token-file` und kein `--token-stdin`), braucht kein Terminal, startet aipager nie neu und schickt nie etwas in die Gruppe.
+
+- `--chat-id N`: die ID der Gruppe, eine negative Zahl ([`detect-group`](#aipager-setup-detect-group) findet sie).
+- `--member ID:LABEL:ROLE`: eine positive Telegram-Benutzer-ID, ein Name (er darf `:` enthalten) und eine Rolle: `owner`, `admin`, `user`, `read_only` oder eine Rolle aus `policy.yaml`. Die geteilten Absender-IDs von Telegram (1087968824, 136817688, 777000) werden abgelehnt.
+- Eine neue Gruppe braucht mindestens ein `--member`. Ihr Name ist `--label`, sonst `group-<Ziffern der ID>`; ihr Stammordner ist `--root`, sonst `~/aipager-users/group-<label>`, und er wird in die Datei geschrieben.
+- Eine Gruppe, die schon eingerichtet ist (auch unter ihrer anderen ID, nachdem Telegram sie umgewandelt hat, Warnung `group_moved`), wird erweitert: Mitglieder, die du nicht nennst, bleiben, eine neue ID kommt dazu, eine bekannte ID mit neuem Namen wird umbenannt, und `--remove-member` für jemanden, der kein Mitglied ist, gibt die Warnung `not_a_member`. `--block-edits` fügt `Write` und `Edit` zu den `deny_tools` der Gruppe hinzu und entfernt nie etwas. Das letzte Mitglied lässt sich nicht entfernen (`last_member`, auch nicht mit `--force`): Entferne die Gruppe in `aipager config`.
+- Diese Änderungen brauchen `--force`, sonst Exit 6 `needs_force` (`force_reasons` zählt sie auf): `owner_granted` (ein neues Mitglied bekommt eine Rolle mit `bypass_safety` und hat noch in keinem Chat eine solche Rolle; den Besitzer deines eigenen privaten Chats hinzuzufügen braucht es nicht), `role_changed`, `owner_demoted`, `owner_removed`, `root_code_loading` (der Stammordner liegt in `~/bin`, `~/.local/bin`, `~/.config/systemd` oder `~/.config/autostart`) und `root_overlap` (er ist der Stammordner eines anderen Chats, enthält ihn oder liegt darin).
+- Noch einmal mit denselben Optionen ausgeführt, ändert es nichts (`unchanged`): kein Schreiben, kein Neuladen.
+- Jede Vergabe der Rolle `owner` bekommt einen Eintrag `grant-owner` im Audit-Log.
+- Es fragt bei Telegram nach, nur lesend und für die Gruppe unsichtbar (getMe, getChat, getChatMember für den Bot), ob der Bot in der Gruppe ist, Admin ist und Nachrichten anheften darf. Was es findet, ist eine Warnung, nie ein Exit-Code; nach einem Netzwerkfehler wird der Rest übersprungen (`telegram_checks_skipped`).
+
+### <a id="aipager-setup-detect-group"></a>`aipager setup detect-group`
+
+```sh
+aipager setup detect-group [--timeout SECONDS] [--json]
+```
+
+Wartet auf die neueste Nachricht in einer Gruppe oder Supergruppe, die noch nicht eingerichtet ist (jemand sendet dort `/start`), und gibt die Gruppe aus: ID, Titel und Typ. Es speichert nichts, zeig also zuerst die gefundene Gruppe, und führ `aipager setup group --chat-id` erst aus, wenn sie bestätigt ist. Es zählen nur Nachrichten, die höchstens 10 Minuten vor dem Start des Befehls geschickt wurden; `--timeout` funktioniert wie bei detect-chat. Es liest den Token aus `aipager.yaml` und nimmt keine andere Option. Läuft ein aipager für den Bot, liest es, was aipager notiert hat (`source: "daemon"`, das Gruppen sieht); sonst liest es Telegram, ohne eine Nachricht zu bestätigen (`source: "telegram"`).
+
 ### <a id="exit-codes"></a>Exit-Codes
 
 | Code | `error` | Bedeutung |
 |---|---|---|
-| 0 | | Erfolg (`installed`, `updated`, `unchanged`, `dry_run` oder detect-chat `found`). |
-| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `internal_error` | Fehlschlag. `ambiguous_install`: Mehr als ein privater Chat könnte der des Besitzers sein; beheb das in `aipager config`. |
-| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_stdin_timeout`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout` | Falsche oder fehlende Eingabe; `fix` nennt die Option. Eine unbekannte Option oder ein falsches Wort nach `setup` meldet der Argument-Parser (einfacher Text, kein JSON), ebenfalls mit 2. |
+| 0 | | Erfolg (`installed`, `created`, `updated`, `unchanged`, `dry_run`, oder `found` bei detect-chat und detect-group). |
+| 1 | `config_malformed`, `ambiguous_install`, `settings_invalid`, `test_send_failed`, `write_failed`, `service_failed`, `policy_malformed`, `not_a_group_scope`, `last_member`, `config_changed`, `internal_error` | Fehlschlag. `ambiguous_install`: Mehr als ein privater Chat könnte der des Besitzers sein; beheb das in `aipager config`. `config_changed`: Die Gruppe hat sich in `aipager.yaml` geändert, während `setup group` lief, deshalb wurde nichts geschrieben; führ es noch einmal aus. |
+| 2 | `usage`, `missing_token_source`, `token_source_conflict`, `token_file_unreadable`, `token_stdin_is_tty`, `token_stdin_timeout`, `token_malformed`, `token_on_command_line`, `bad_chat_id`, `bad_role`, `bad_timeout`, `bad_member`, `bad_member_id`, `shared_sender_id`, `duplicate_member`, `bad_label`, `duplicate_label`, `unknown_role`, `bad_root` | Falsche oder fehlende Eingabe; `fix` nennt die Option. Eine unbekannte Option oder ein falsches Wort nach `setup` meldet der Argument-Parser (einfacher Text, kein JSON), ebenfalls mit 2. |
 | 3 | `deps_missing` | dtach, claude, aipager-hook oder aipager-statusline fehlt; `fix` enthält die Befehle. Es wurde nichts geschrieben. |
 | 4 | `token_rejected` | Telegram hat den Token abgelehnt. |
 | 5 | `chat_not_started`, `bot_blocked` | Die Person hat im Bot nicht auf „Starten“ getippt ("Open t.me/&lt;bot&gt; and press Start, then run this again.") oder hat ihn blockiert. Es wurde nichts geschrieben. |
-| 6 | `existing_install` | Ein anderer Token, Chat oder eine andere Rolle ist schon eingerichtet; füg `--force` hinzu. |
+| 6 | `existing_install`, `needs_force` | Ein anderer Token, Chat oder eine andere Rolle ist schon eingerichtet, oder `setup group` würde eine Änderung aus `force_reasons` machen; füg `--force` hinzu (nachdem du die Person gefragt hast). |
 | 7 | `telegram_unreachable` | Netzwerkfehler, oder Telegram hat mit 429 oder 5xx geantwortet. |
-| 8 | `detect_timeout` | detect-chat hat vor `--timeout` keine private Nachricht gesehen (mit der Warnung `updates_backlog`, wenn 100 alte ungelesene Updates neuere verdecken). |
+| 8 | `detect_timeout` | detect-chat hat vor `--timeout` keine private Nachricht gesehen (detect-group: keine Nachricht in einer neuen Gruppe) (mit der Warnung `updates_backlog`, wenn 100 alte ungelesene Updates neuere verdecken). |
 | 9 | `daemon_running` | detect-chat: Ein laufendes aipager bekommt die Nachrichten des Bots. |
-| 10 | `updates_conflict` | detect-chat: Ein anderes Programm liest die Nachrichten dieses Bots. |
+| 10 | `updates_conflict` | detect-chat oder detect-group: Ein anderes Programm liest die Nachrichten dieses Bots. |
+| 11 | `not_set_up` | `setup group` oder `detect-group`: Es gibt noch keine `aipager.yaml` mit einem Token des Bots (auch bei einer alten Installation mit `config.env`: Führ einmal `aipager config` aus, um sie umzuziehen). Richte zuerst aipager ein. |
 | 130 | `interrupted` | Ctrl-C. |
 
-Schlagen mehrere Prüfungen gleichzeitig fehl, folgt der Code dieser Reihenfolge: `config_malformed`, `ambiguous_install`, `existing_install`, `settings_invalid`, `deps_missing`. `--dry-run` endet mit dem Code, den der echte Lauf aufgrund dieser Prüfungen hätte.
+Schlagen mehrere Prüfungen gleichzeitig fehl, folgt der Code dieser Reihenfolge: `config_malformed`, `ambiguous_install`, `existing_install`, `settings_invalid`, `deps_missing`. Bei `setup group`: `config_malformed` oder `not_set_up`, `policy_malformed`, `unknown_role`, `usage`, `duplicate_label`, `not_a_group_scope`, `last_member`, `needs_force`. `--dry-run` endet mit dem Code, den der echte Lauf aufgrund dieser Prüfungen hätte.
 
 ### <a id="json-aipager-setup---json"></a>JSON: `aipager setup --json`
 
@@ -625,6 +661,74 @@ Jeder Schlüssel ist immer vorhanden; ein noch unbekannter Wert ist `null`.
 ```
 
 `candidate` ist `null`, außer `status` ist `found`. `warnings` enthält Objekte mit `code` (`token_file_shared`, `updates_backlog`) und `message`. `other_candidates` zählt andere Personen, die dem Bot in denselben 10 Minuten geschrieben haben: Ist es nicht 0, stell sicher, dass du die richtige Person hast. `next_step` wiederholt die Token-Option, die du benutzt hast, nie den Token.
+
+### <a id="json-aipager-setup-group---json"></a>JSON: `aipager setup group --json`
+
+Jeder Schlüssel ist immer da; ein Wert, der noch nicht bekannt ist, ist `null`.
+
+```json
+{
+  "command": "group",
+  "status": "created",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Group team (chat -1001234567890) is set up with 2 members.",
+  "fix": null,
+  "dry_run": false,
+  "force": false,
+  "bot_username": "example_bot",
+  "chat_id": -1001234567890,
+  "scope_chat_id": -1001234567890,
+  "label": "team",
+  "root": "/home/alice/aipager-users/group-team",
+  "block_edits": false,
+  "members": [{"id": 111111111, "label": "alice", "role": "owner"},
+              {"id": 222222222, "label": "bob", "role": "user"}],
+  "changed": ["group"],
+  "member_changes": [{"id": 222222222, "change": "added", "label": "bob", "role": "user", "previous_role": null}],
+  "force_reasons": [],
+  "pinned_roots": [],
+  "telegram": {"checked": true, "chat_type": "supergroup", "chat_title": "Team",
+               "bot_status": "administrator", "bot_can_pin": true, "privacy_mode": true},
+  "daemon": {"running": true, "reload": "reloaded", "restart_needed": false, "outcome": "reloaded_live"},
+  "warnings": [],
+  "next_step": "Check the group with `aipager doctor --json`."
+}
+```
+
+- `status`: `created`, `updated`, `unchanged`, `dry_run` oder `error`.
+- `scope_chat_id`: die ID, unter der die Gruppe gespeichert ist (nach einer Umwandlung in eine Supergruppe eine andere als `--chat-id`).
+- `changed`: was sich geändert hat (oder bei einem Probelauf ändern würde), in dieser Reihenfolge: `group` (eine neue Gruppe), `label`, `root`, `deny_tools`, `member_added`, `member_relabeled`, `role`, `member_removed`.
+- `member_changes[].change`: `added`, `relabeled`, `role` oder `removed`.
+- `members`: die Mitglieder der Gruppe nach der Änderung (bei einem Probelauf die geplanten); `null`, wenn der Lauf vorher aufgehört hat.
+- `pinned_roots`: andere Chats, deren Stammordner in die Datei geschrieben wird, damit er sich nicht verschiebt.
+- `telegram.checked` ist false, wenn die Prüfungen übersprungen wurden; die anderen Schlüssel von `telegram` sind dann `null`. `privacy_mode` wird nur gemeldet: Es ändert nichts daran, worauf aipager reagiert.
+- `daemon.reload` wie bei `setup`; `daemon.outcome`: `reloaded_live`, `not_applied`, `restart_needed`, `no_daemon` oder `not_needed` (es wurde nichts geschrieben). Die einfache Ausgabe sagt `daemon: reloaded live`, `daemon: not applied: <reason>`, `daemon: restart needed` oder `daemon: no daemon running`.
+- `warnings` (`code` und `message`; keine ändert den Exit-Code): `owner_granted`, `no_manager` (die Rolle keines Mitglieds kann die Gruppe verwalten), `not_a_member`, `group_moved`, `group_not_found`, `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin`, `group_upgraded`, `chat_not_a_group`, `token_rejected`, `telegram_checks_skipped`, `daemon_unknown`, `reload_refused`, `audit_write_failed`.
+- Bei `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin` oder `group_not_found` nennt `next_step`, was nur die Person in Telegram tun kann: den Bot zur Gruppe hinzufügen und ihn zum Admin mit dem Recht machen, Nachrichten anzuheften.
+
+### <a id="json-aipager-setup-detect-group---json"></a>JSON: `aipager setup detect-group --json`
+
+```json
+{
+  "command": "detect-group",
+  "status": "found",
+  "ok": true,
+  "exit_code": 0,
+  "error": null,
+  "message": "Found the group Team, chat id -1001234567890.",
+  "fix": null,
+  "bot_username": "example_bot",
+  "source": "telegram",
+  "candidate": {"id": -1001234567890, "title": "Team", "type": "supergroup", "date": 1700000000},
+  "other_candidates": 0,
+  "warnings": [],
+  "next_step": "Show this group to the user; once they confirm, run: aipager setup group --chat-id -1001234567890 --member ID:LABEL:ROLE"
+}
+```
+
+`candidate` ist `null`, außer `status` ist `found`; aus der Quelle aipager ist sein `date` `null`. `other_candidates` zählt die anderen neuen Gruppen, die in denselben 10 Minuten geschrieben haben. `warnings` kann `updates_backlog` enthalten.
 
 ### <a id="aipager-doctor---json"></a>`aipager doctor --json`
 

@@ -93,7 +93,13 @@ def configured_scope_for(chat_id: int, scopes: list[Scope] | None = None
     old id names the same group."""
     if scopes is None:
         scopes, _ = read_config()
-    moved = _scope.load_chat_migrations(_scope.CONFIG_PATH)
+    return scope_for_ids(chat_id, scopes,
+                         _scope.load_chat_migrations(_scope.CONFIG_PATH))
+
+
+def scope_for_ids(chat_id: int, scopes, moved: dict) -> Scope | None:
+    """:func:`configured_scope_for` with the recorded supergroup moves
+    (``{old id: new id}``) passed in: no file is read."""
     ids = {chat_id, moved.get(chat_id, chat_id)}
     ids |= {old for old, new in moved.items() if new == chat_id}
     return next((s for s in scopes if s.chat_id in ids), None)
@@ -142,5 +148,38 @@ def append_member(chat_id: int, member: Member, token: str) -> str | None:
                 f"{current.label}.")
     out = [replace(s, members=(*s.members, member))
            if s.chat_id == chat_id else s for s in scopes]
-    _write(scopes, out, token or existing_token)
+    _write(scopes, out, existing_token or token)
+    return None
+
+
+#: Why :func:`put_group_scope` refused: the group on disk changed.
+GROUP_CHANGED_MEANWHILE = ("This group changed in aipager.yaml while the "
+                           "command ran, so nothing was written.")
+
+
+def put_group_scope(new: Scope, token: str, *,
+                    expected: Scope | None) -> str | None:
+    """Write *new* (a group scope) into ``aipager.yaml`` as it is on disk
+    NOW, in one atomic write. Returns ``None`` when written, else why not.
+
+    *expected* is the group's scope as the caller planned from: ``None``
+    means the group must still be absent (under either id of a moved
+    supergroup, :func:`configured_scope_for`), else the scope on disk
+    must still equal it. Anything else (the wizard or another run edited
+    the same group meanwhile) is refused rather than overwritten. Other
+    scopes are kept as they are on disk; some may gain an explicit
+    ``root`` so their folder does not move (:func:`_write`). So is the
+    bot token: one changed meanwhile (``aipager setup --token-file`` or
+    the wizard) is kept, and *token* only fills a file that has none."""
+    scopes, existing_token = read_config()
+    current = configured_scope_for(new.chat_id, scopes)
+    if expected is None:
+        if current is not None:
+            return GROUP_CHANGED_MEANWHILE
+        out = [*scopes, new]
+    else:
+        if current is None or current != expected:
+            return GROUP_CHANGED_MEANWHILE
+        out = [new if s is current else s for s in scopes]
+    _write(scopes, out, existing_token or token)
     return None

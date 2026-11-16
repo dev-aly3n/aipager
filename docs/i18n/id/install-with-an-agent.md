@@ -1,6 +1,6 @@
 # Pemasangan dengan agen
 
-<!-- i18n-source: docs/install-with-an-agent.md @ fc5d6810 -->
+<!-- i18n-source: docs/install-with-an-agent.md @ d63d62ef -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../install-with-an-agent.md))
 
@@ -127,13 +127,83 @@ Sampaikan dalam beberapa baris:
 ## <a id="4-what-you-must-not-do"></a>4. Yang tidak boleh kamu lakukan
 
 - Jangan mencetak token, mengalirkannya lewat `echo` atau `cat`, atau menaruhnya di baris perintah (`--token` toh akan ditolak). Berikan hanya lewat file atau stdin.
-- Jangan mengedit `~/.config/aipager/` (selain file token dari langkah 2) atau `~/.claude/settings.json` dengan tangan. Yang menulisnya adalah `aipager setup` dan `aipager config`.
-- Jangan menambahkan `--force` tanpa bertanya ke orangnya: flag ini mengganti token, chat, atau peran yang sudah ada.
+- Jangan mengedit `~/.config/aipager/` (selain file token dari langkah 2) atau `~/.claude/settings.json` dengan tangan. Yang menulisnya adalah `aipager setup` dan `aipager config`. Satu-satunya pengecualian adalah grup di aipager yang lebih lama dari yang ini, tempat `aipager setup group --help` gagal: lihat [5.5](#55-older-installs).
+- Jangan menambahkan `--force` tanpa bertanya ke orangnya: flag ini mengganti token, chat, atau peran yang sudah ada. Dengan `setup group`, flag ini mengubah atau mencabut peran, atau memberi peran `owner`.
+- Lewat aipager, hanya tugas milik pemilik yang bisa menjalankan `aipager setup` (dalam bentuk apa pun), `aipager config`, atau `aipager uninstall`: aturan keamanan aipager memblokirnya untuk peran lain mana pun. Kalau orang itu bicara denganmu lewat aipager dan ia bukan pemilik, minta ia menjalankan perintahnya sendiri di terminal.
 - Jangan memulai ulang atau mengakhiri sesi Claude Code-mu sendiri. Pada pemasangan pertama, sesi tempatmu bekerja tidak berada di bawah aipager, dan memang tidak perlu: sesi baru datang lewat `/new` di Telegram atau `aipager session <name>`. Kalau aipager sudah diatur dan orang itu bicara denganmu lewat aipager (misalnya untuk menjalankan `setup --force` dengan token baru), jangan menghentikan atau memulai ulang aipager sendiri: tugasmu dan jawabannya akan terputus. Minta orang itu memulai ulang aipager setelah kamu selesai.
 
 ## <a id="5-groups"></a>5. Grup
 
-`aipager setup` mengatur chat pribadi orang itu dengan bot. Untuk menambahkan grup Telegram dengan orang lain dan peran mereka, orang itu menjalankan `aipager config` (pengaturan grup belum bisa diskripkan). Lihat [Mode tim dan grup](groups.md).
+`aipager setup` mengatur chat pribadi orang itu dengan bot. `aipager setup group` menambahkan grup Telegram, anggotanya, dan peran mereka ke pemasangan yang sudah diatur, tanpa bertanya (`aipager config` melakukan hal yang sama dengan pertanyaan). Perintah ini membaca token bot dari pemasangan, tidak pernah memulai ulang aipager, dan tidak mengirim apa pun ke grup. Lihat [Mode tim dan grup](groups.md) dan [referensi perintahnya](commands.md#aipager-setup-group).
+
+### <a id="51-what-only-the-person-can-do"></a>5.1 Yang hanya bisa dilakukan orang itu
+
+Kamu tidak bisa melakukan langkah-langkah ini; minta orang itu melakukannya di Telegram:
+
+1. Menambahkan bot ke grup.
+2. Menjadikan bot admin grup dengan hak menyematkan pesan (aipager menyematkan bilah status di sana; tanpa hak itu grup tetap jalan, hanya tanpa bilah status). Hanya admin grup yang bisa melakukannya.
+3. Mengirim `/start` di grup, supaya kamu bisa menemukan ID-nya (5.2).
+4. Memberimu, untuk setiap anggota, ID pengguna Telegram numeriknya, nama pendek (cara aipager menampilkannya, sebagai `@label`), dan peran: `owner`, `admin`, `user`, `read_only`, atau peran buatannya sendiri dari `policy.yaml`. Peran `owner` punya kendali penuh atas komputer ini: peran itu milik orang yang menjalankannya, bukan orang lain. Kalau ia tidak tahu suatu ID, `aipager config` bisa menemukannya selagi orang tersebut menulis di grup.
+
+### <a id="52-find-the-group"></a>5.2 Menemukan grup
+
+```sh
+aipager setup detect-group --json
+```
+
+Perintah ini menunggu (sampai 300 detik, `--timeout SECONDS`) pesan di grup yang belum diatur, yang dikirim tidak lebih dari 10 menit sebelum kamu menjalankannya, lalu mencetak grupnya (`candidate.id`, `candidate.title`). Tidak ada yang disimpan. Tunjukkan judulnya ke orang itu dan pakai ID-nya hanya setelah ia memastikan itu grup yang benar. Keluar dengan kode 8 berarti tidak ada yang masuk: minta ia mengirim `/start` di grup lagi.
+
+### <a id="53-set-it-up"></a>5.3 Mengaturnya
+
+Jalankan dulu dengan `--dry-run`, lalu perintah yang sama tanpa itu:
+
+```sh
+aipager setup group --chat-id -1001234567890 \
+  --member 111111111:alice:owner --member 222222222:bob:user \
+  --label team --dry-run --json
+```
+
+- `--member ID:LABEL:ROLE` satu kali per orang. Untuk menambahkan seseorang nanti, jalankan lagi hanya dengan `--member` yang baru: yang lain tetap ada.
+- `--remove-member ID` mengeluarkan satu orang.
+- `--label NAME` memberi nama grup, `--root PATH` menentukan folder tempat anggota `user` dan `read_only`-nya bekerja (bawaan `~/aipager-users/group-<label>`), dan `--block-edits` memblokir Write dan Edit untuk anggota `user`-nya.
+- Menjalankan perintah yang sama lagi tidak mengubah apa pun (`unchanged`).
+- Kode keluar 6 (`needs_force`) berarti perubahannya butuh `--force`: `force_reasons` menjelaskan alasannya (peran yang berubah, pemilik yang diberikan, diturunkan, atau dikeluarkan, folder utama yang berisiko). Tunjukkan ke orang itu dan tambahkan `--force` hanya kalau ia setuju.
+
+### <a id="54-read-the-result"></a>5.4 Membaca hasilnya
+
+| Kode keluar | Yang harus dilakukan |
+|---|---|
+| 0 | Selesai (`created`, `updated`, `unchanged`, atau `dry_run`). Sampaikan ke orang itu `label` grup, `members`-nya, dan apa kata `daemon.outcome`. |
+| 2 | Ada opsi yang salah: `error`, `message`, dan `fix` menyebutkannya. Perbaiki dan jalankan lagi. |
+| 6 | `needs_force`: tanyakan ke orang itu tentang setiap isi `force_reasons`. |
+| 11 | `not_set_up`: atur aipager dulu ([3](#3-your-steps)). |
+| 1 | Hal lain (`config_malformed`, `policy_malformed`, `last_member`, `config_changed`...): tunjukkan `message` dan `fix`. Setelah `config_changed`, jalankan lagi. |
+
+`daemon.outcome` memberi tahu apa yang dilakukan aipager yang sedang berjalan: `reloaded_live` (grup sudah jalan sekarang), `no_daemon` (grup akan jalan begitu aipager dimulai), `restart_needed` atau `not_applied` (tunjukkan `next_step` ke orang itu; jangan memulai ulang aipager sendiri). Peringatan tidak pernah mengubah kode keluar, tapi tetap tunjukkan: `bot_not_in_group`, `bot_not_admin`, `bot_cannot_pin`, dan `group_not_found` berarti orang itu masih punya satu langkah dari 5.1, dan `owner_granted` perlu disampaikan dengan jelas.
+
+### <a id="55-older-installs"></a>5.5 Pemasangan yang lebih lama
+
+Kalau `aipager setup group --help` gagal, aipager ini lebih lama dari perintah itu. Minta orang itu memperbarui aipager (`aipager update`), atau, kalau ia ingin grupnya sekarang juga, tambahkan dengan tangan:
+
+1. Tambahkan chat grup ke `~/.config/aipager/aipager.yaml`, mengikuti [strukturnya](groups.md#aipageryaml-schema-team-parts). File ini berisi token bot: jangan pernah mencetaknya atau memakai `cat`, dan biarkan izinnya 0600 (`chmod 600 ~/.config/aipager/aipager.yaml`).
+2. Periksa dengan `aipager policy validate`, lalu pastikan baris `scope mode: ...` dari `aipager doctor` ikut menghitung grup baru itu.
+3. Kirim aipager perintah muat ulang tanpa mulai ulang, seperti di bawah.
+
+Di Linux, dengan layanan latar belakang:
+
+```sh
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
+```
+
+Di macOS:
+
+```sh
+pid=$(launchctl list | awk '$3 == "com.aipager.daemon" {print $1}')
+[ "${pid:-0}" -gt 0 ] 2>/dev/null && kill -USR1 "$pid"
+```
+
+Pemeriksaan `-gt 0` itu penting: kalau aipager tidak berjalan, `kill -USR1 0` akan mengirim sinyal ke proses shell-mu sendiri. Jangan pernah memulai ulang aipager dari dalam sesi aipager: tugasmu akan terputus.
 
 ## <a id="see-also"></a>Lihat juga
 

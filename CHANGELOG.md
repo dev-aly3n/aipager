@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`aipager setup group` sets up a Telegram group, its members and their roles with no prompts, and `aipager setup detect-group` finds a group's id.** For scripts and coding agents, on an install that is already set up: the same checks, file and live reload as `aipager config`; role changes and owner grants need `--force`, running it twice changes nothing, and nothing is ever sent to the group.
+
+### Security
+- **aipager's safety rules now block `aipager setup`, `aipager config`, `aipager uninstall` and other ways to change aipager's config from a Telegram turn that is not the owner's.** This covers options before the subcommand, any letter case, quoted, `$'...'` and split names, a glob in the name, globs and braces in a path to aipager's folders (matched the way bash expands them, with commands read the way bash reads them as far as the check can; text it sets aside, like a comment, is checked anyway, and a word it can't read, or a command left open at its end, is refused), `xargs`, a `cd` into `~/.config` (also in two steps), copying the whole `~/.config` folder, killing the daemon, and Python that imports or runs aipager; best effort, like every command rule, for roles given Bash. A search or commit message containing `aipager setup`, `aipager config`, `aipager uninstall` or `.config/aipager` is refused for those turns too ([what still gets through](docs/security.md#team-mode-enforcement)).
+- **The Bash search rule also sees `\$HOME` and a nested `bash -c \"...\"` inside `bash -c "..."`, and no longer slows down on quoted strings that run across separators.** For every role except owner, `bash -c "grep -rn x \$HOME"` (the usual way to leave `$HOME` to the inner shell) and a search whose folder ends on the escaped quote of a nested `bash -c \"...\"` are now denied like `grep -rn x ~`. A command built so that its quoted strings run across its separators no longer holds the check for seconds ([docs/security.md](docs/security.md#team-mode-enforcement)).
+
 ### Fixed
 - **Crons, /loop and messages between sessions now work in Claude Code sessions aipager did not start.** aipager's safety check ran in every Claude Code session on the machine, so in a plain `claude` a scheduled prompt had its first command refused and every later run stopped as "session halted", with nothing shown anywhere. aipager now leaves sessions it did not start alone (a turn carrying aipager's Telegram mark is still checked), and no longer makes their permission prompts wait for a Telegram tap that cannot come.
 
