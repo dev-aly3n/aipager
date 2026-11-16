@@ -1375,9 +1375,10 @@ def test_an_ampersand_that_is_no_matched_text_is_plain(cmd):
     assert not g.command_reaches(cmd)
 
 
-def test_a_plain_pattern_stands_as_one_bracket_per_character():
-    assert "~/.config/[a]ipager/x" in g.words("cat ~/.config/${x/a/&ipager}/x")
-    assert "[a][b]" in g.words("echo ${x/ab/&}")
+def test_the_pattern_stands_for_the_matched_text():
+    assert "~/.config/aipager/x" in g.words("cat ~/.config/${x/a/&ipager}/x")
+    assert "~/.config/[a]ipager/x" in g.words("cat ~/.config/${x/[a]/&ipager}/x")
+    assert "ab" in g.words("echo ${x/ab/&}")
 
 
 @pytest.mark.parametrize("cmd", [
