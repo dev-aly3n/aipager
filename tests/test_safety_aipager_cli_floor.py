@@ -1099,6 +1099,10 @@ def test_each_search_finds_what_main_finds(which, cmd, monkeypatch):
     "ack" + B + "& /home/bob",
     " rg " + B + "|" + B + " /",
     'rg "a;b" src "x ~"',
+    # a string that never closes ends main's reading there
+    "rg 'a;b ~",
+    # read past before the name: the name, then the folder word after it
+    'X="a;b" cat ~ ls -R x',
 ])
 def test_reading_past_an_escaped_separator_needs_what_could_follow(cmd):
     import re

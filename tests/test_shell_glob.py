@@ -1453,6 +1453,27 @@ def test_the_budget_is_shared_by_one_read():
     assert not g.read_overflowed(small)
 
 
+_STAND72 = "${x/aaaaaaaa/&&&&&&&&}"   # 8 copies of 8 letters: 72 paid
+
+
+@pytest.mark.parametrize("cmd", [
+    # backtick bodies, each read by a reader of its own (a slice of the
+    # command, and with an escape taken out a text of its own)
+    "cat ~/.config/" + ("`echo " + _STAND72 + "`") * 200,
+    "cat ~/.config/" + ("`echo \\$y " + _STAND72 + "`") * 200,
+    # a span set aside and read again (once in the read, once again; a
+    # glob makes it worth reading again)
+    "cat " + ("${y:-~/.config/n*" + _STAND72 + "}") * 100,
+    # a backtick inside such a span: read again by a reader of the
+    # second reading
+    "cat " + ("${y:-~/.config/n*`echo " + _STAND72 + "`}") * 100,
+], ids=["slice", "text", "read-again", "read-again-body"])
+def test_every_reader_of_one_read_pays_from_one_budget(cmd):
+    cache: dict = {}
+    assert g.command_reaches(cmd, cache=cache)
+    assert g.read_overflowed(cache)
+
+
 def test_an_overflowed_spelling_is_refused():
     # no protected folder named anywhere: only the spelling (read for the
     # ``$'``) stops at the budget, and the floor refuses what it missed
