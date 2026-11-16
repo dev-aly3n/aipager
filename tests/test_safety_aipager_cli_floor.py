@@ -662,6 +662,9 @@ _SLOW_NEW = [
     "function f " * 10_000 + "while",
     "() if " * 20_000 + "x",
     "; time function f " * 6_000 + "x",
+    # each bare ``&`` a copy of a long pattern (rev-iter9-001)
+    "cat ~/.config/${x/" + "a" * 50_000 + "/" + "&" * 49_000 + "}",
+    "echo $'x' ${x/" + "a" * 50_000 + "/" + "&" * 49_000 + "}",
 ]
 
 

@@ -217,6 +217,29 @@ class _TooDeep(Exception):
     pass
 
 
+#: At most this many characters of matched text are put in place of a
+#: bare ``&`` in one read (:meth:`_Lexer._param`): each ``&`` adds a
+#: whole copy of its pattern, so ``${x/<50,000 a>/<50,000 &>}`` would
+#: spell 2.5 billion characters. Past it the read stops and the command
+#: is refused (:class:`_TooBig`, :func:`read_overflowed`).
+_MAX_STAND = 8192
+
+
+class _TooBig(_TooDeep):
+    """More matched text stood for ``&`` than :data:`_MAX_STAND`."""
+
+
+class _Stand:
+    """What a bare ``&`` in one replacement stands for (read off its
+    pattern once, where the pattern ends) and whether one was met."""
+
+    __slots__ = ("text", "met")
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.met = False
+
+
 class _Spans:
     """Text one read set aside (a comment, a here-document's delimiter
     and body, a subscript, a ``=~`` group, an arithmetic-only ``$[...]``
@@ -329,7 +352,8 @@ class _Lexer:
                  spell: list[str] | None = None,
                  spans: _Spans | None = None, base: int = 0,
                  groups: list[_Spans] | None = None,
-                 bodies: dict[str, bool] | None = None) -> None:
+                 bodies: dict[str, bool] | None = None,
+                 room: list[int] | None = None) -> None:
         self.text = text
         self.n = len(text)
         self.out = out
@@ -355,6 +379,9 @@ class _Lexer:
         self.boff = 0
         # backtick bodies read so far in this read (:meth:`_backtick`)
         self.bodies: dict[str, bool] = {} if bodies is None else bodies
+        # the matched text ``&`` may still stand for in this read, shared
+        # by every reader of it (:data:`_MAX_STAND`)
+        self.room: list[int] = [_MAX_STAND] if room is None else room
 
     # -- helpers --------------------------------------------------------
 
@@ -389,16 +416,17 @@ class _Lexer:
             raise _TooDeep
         if self.flat:
             sub = _Lexer(text, self.out, self.level + 1, self.dotglob, True,
-                         bodies=self.bodies)
+                         bodies=self.bodies, room=self.room)
         elif base is None:
             spans = _Spans(text)
             self.groups.append(spans)
             sub = _Lexer(text, self.out, self.level + 1, self.dotglob, False,
-                         self.spell, spans, 0, self.groups, self.bodies)
+                         self.spell, spans, 0, self.groups, self.bodies,
+                         self.room)
         else:
             sub = _Lexer(text, self.out, self.level + 1, self.dotglob, False,
                          self.spell, self.spans, self.base + base,
-                         self.groups, self.bodies)
+                         self.groups, self.bodies, self.room)
         if base is not None:
             # a slice: its brackets pair as they do in this text
             if self.brackets is None:
@@ -669,10 +697,11 @@ class _Lexer:
         self.params += 1
         head = _PARAM_HEAD_RE.match(text, i)
         value = head.group("value") if head is not None else None
-        inline = not quoted and value is not None
+        replacement = bool(value) and value[0] == "/"
+        stand: _Stand | None = None
         # a replacement's value is the text after the pattern's end, the
         # first unquoted ``/`` (None until it is met)
-        rep_at: int | None = None if value and value[0] == "/" else 0
+        rep_at: int | None = None if replacement else 0
         word = _Word()
         if head is not None:
             i = head.end()
@@ -682,7 +711,8 @@ class _Lexer:
             if kind == "close":
                 self.level -= 1
                 self.params -= 1
-                inline = inline and rep_at is not None
+                inline = value is not None and rep_at is not None and (
+                    not quoted)
                 own = word.alt_text()
                 if not inline and _WORTH_RE.search(own):
                     # not in the value: a word of its own (a value's text
@@ -699,21 +729,18 @@ class _Lexer:
                     k = tok.index("/") + 1
                     word.add(tok[:k])
                     rep_at = len(word.pieces)
+                    # the pattern, read once: what a bare ``&`` stands for
+                    stand = _Stand()
+                    pattern = "".join(word.pieces)[:-1]
+                    stand.text = _NESTED if OPAQUE in pattern else pattern
                     tok = tok[k:]
                     if not tok:
                         continue
-                if rep_at and "&" in tok:
-                    # bash 5.2 puts the matched text where a replacement
-                    # has a bare ``&``: the pattern stands for it (a glob
-                    # one as a glob, so the word matches as bash's could),
-                    # one holding a value as a value not known here
-                    pattern = "".join(word.pieces[:rep_at])[:-1]
-                    stand = _NESTED if OPAQUE in pattern else pattern
-                    for k, part in enumerate(tok.split("&")):
-                        if k:
-                            word.add(stand)
-                        if part:
-                            word.add(part)
+                if stand is not None and "&" in tok:
+                    # the pattern stands for the matched text (a glob one
+                    # as a glob, so the word matches as bash's could), one
+                    # holding a value as a value not known here
+                    self._stand_in(word, tok, stand)
                     continue
                 word.add(tok)
             elif kind == "esc":
@@ -766,6 +793,20 @@ class _Lexer:
             self.params_off = True
             return begin + 2
         return n
+
+    def _stand_in(self, word: _Word, tok: str, stand: _Stand) -> None:
+        """Add *tok* to *word* with each ``&`` as *stand*'s text. The
+        pattern was read off once (:meth:`_param`); every copy is paid
+        from :attr:`room`, the ``&`` itself included."""
+        for k, part in enumerate(tok.split("&")):
+            if k:
+                self.room[0] -= len(stand.text) + 1
+                if self.room[0] < 0:
+                    raise _TooBig
+                word.add(stand.text)
+                stand.met = True
+            if part:
+                word.add(part)
 
     def _comsub(self, i: int) -> int:
         """Read ``$(...)`` (or ``$((...))``) from *i* (after ``$(``): its
@@ -1016,7 +1057,7 @@ def _may_give_worth(text: str) -> bool:
 
 
 def _read_again(groups: list[_Spans], out: list[str], dotglob: bool,
-                ) -> bool:
+                room: list[int] | None = None) -> bool:
     """Read the set-aside spans of one read again as plain words (a flat
     :class:`_Lexer`, from a fresh state, so a quote inside one cannot
     swallow text outside it), adding their words to *out*. Only spans
@@ -1035,7 +1076,7 @@ def _read_again(groups: list[_Spans], out: list[str], dotglob: bool,
             if not _may_give_worth(part) or not _mentions(part, dotglob):
                 continue
             try:
-                _Lexer(part, out, 0, dotglob, True).commands()
+                _Lexer(part, out, 0, dotglob, True, room=room).commands()
             except _TooDeep:
                 deep = True
     return not deep
@@ -1061,14 +1102,29 @@ def _read(command: str, dotglob: bool, cache: dict | None = None,
         lexer.commands()
     except _TooDeep:
         deep = True
-    if not _read_again(lexer.groups, out, dotglob):
+    if not _read_again(lexer.groups, out, dotglob, lexer.room):
         deep = True
     found = (out, lexer.sure and not deep,
              None if spell is None
              else " ".join(spell).translate(_UNLIT_TABLE), deep)
     if cache is not None:
         cache[key] = found
+        if lexer.room[0] < 0:
+            cache[_OVERFLOW] = True
     return found
+
+
+#: The key :func:`_read` sets in a check's cache when a read stopped at
+#: :data:`_MAX_STAND` (see :func:`read_overflowed`).
+_OVERFLOW = ("overflow",)
+
+
+def read_overflowed(cache: dict) -> bool:
+    """Whether a read shared through *cache* (:func:`spelled`,
+    :func:`command_reaches`) stopped because ``&`` would have stood for
+    more matched text than :data:`_MAX_STAND`: its words and spelling
+    miss the rest of the command, so the floor refuses it."""
+    return bool(cache.get(_OVERFLOW))
 
 
 def lex(command: str, dotglob: bool = False) -> tuple[list[str], bool]:

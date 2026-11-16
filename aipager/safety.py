@@ -1902,6 +1902,11 @@ def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
             copies += (dequote(normalized, True),)
             spelled = _plain_paths(
                 _shell_glob.spelled(normalized, *copies, cache=read))
+            if _shell_glob.read_overflowed(read):
+                # the spelling stops where ``&`` stood for too much text:
+                # what follows is not seen, so refuse (fail closed)
+                log.info("bash_violation: command blocked: read overflowed")
+                return BASH_REASON
     for pat in patterns:
         if pat == BASH_GLOB_REACHES_AIPAGER_DIR:
             if _shell_glob.command_reaches(normalized, *copies, cache=read):

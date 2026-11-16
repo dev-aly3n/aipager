@@ -1381,6 +1381,55 @@ def test_the_pattern_stands_for_the_matched_text():
     assert "ab" in g.words("echo ${x/ab/&}")
 
 
+#: rev-iter9-001: each bare ``&`` adds a whole copy of its pattern, so
+#: these spelled gigabytes (50,000 x 50,000 was killed at a 3 GB cap).
+_STAND_FLOODS = [
+    "cat ~/.config/${x/" + "a" * 50_000 + "/" + "&" * 50_000 + "}",
+    "cat ~/.config/${x/" + "a" * 5_000 + "/" + "&" * 5_000 + "}",
+    "cat ~/.config/${x/" + "a" * 50_000 + "/" + "&\\x" * 16_000 + "}",
+    "cat ~/.config/\"${x/" + "a" * 50_000 + "/" + "&" * 50_000 + "}\"",
+    "cat ~/.config/" + ("${x/" + "a" * 30 + "/" + "&" * 30 + "}") * 1_600,
+    "cat ~/.config/" + ("${y:-${x/" + "a" * 30 + "/" + "&" * 30 + "}}") * 1_400,
+]
+
+
+@pytest.mark.parametrize("cmd", _STAND_FLOODS, ids=range(len(_STAND_FLOODS)))
+def test_matched_text_past_the_budget_is_refused_in_bounded_time_and_memory(cmd):
+    import tracemalloc
+    tracemalloc.start()
+    try:
+        start = time.perf_counter()
+        verdict = bash_violation(cmd, DENY_BASH_PATTERNS)
+        seconds = time.perf_counter() - start
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert verdict is not None
+    assert seconds < 1.0
+    assert peak < 32 * 2**20, peak
+
+
+def test_the_budget_is_shared_by_one_read():
+    # each replacement alone stays far under the budget; together they
+    # pass it, and the read says so (the floor then refuses)
+    cmd = "cat ~/.config/" + "${x/aaaaaaaa/&&&&&&&&}" * 200
+    cache: dict = {}
+    assert g.command_reaches(cmd, cache=cache)
+    assert g.read_overflowed(cache)
+    small: dict = {}
+    g.command_reaches("cat ~/.config/" + "${x/aaaaaaaa/&&&&&&&&}" * 20,
+                      cache=small)
+    assert not g.read_overflowed(small)
+
+
+def test_an_overflowed_spelling_is_refused():
+    # no protected folder named anywhere: only the spelling (read for the
+    # ``$'``) stops at the budget, and the floor refuses what it missed
+    cmd = "echo $'x' ${x/" + "a" * 9_000 + "/&}"
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) is not None
+    assert bash_violation("echo $'x' ${x/aaaa/&}", DENY_BASH_PATTERNS) is None
+
+
 @pytest.mark.parametrize("cmd", [
     # tester-iter8-007: a value glued to a glob may be empty
     "cat ~/.config/[a]ipager${unset_v}/x",
