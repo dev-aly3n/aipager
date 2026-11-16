@@ -1033,6 +1033,8 @@ ONE_SEARCH = [
     ("first", 'grep x ~ "a;b" -r'),
     ("first", "ls ~ 'a|b' -R"),
     ("first", 'rg ~ "a;b" -e y'),
+    # a backslash-newline joins the lines: they are searched as one
+    ("first", "grep -rn x " + B + "\n~"),
     # 2: reading past a unit that holds a start after the name ...
     ("second", "echo x" + B + "; grep -rn a" + B + ";b ~"),
     ("second", "echo x" + B + "; find a" + B + ";b ~"),
@@ -1051,6 +1053,20 @@ ONE_SEARCH = [
     ("before", 'X="a;b" grep -rn x ~'),
     ("before", "LC_ALL='a|b' ls -R ~"),
 ]
+
+
+@pytest.mark.parametrize("cmd", [
+    # main's reading after the unit is longer than the quick look reads
+    'grep -r "a;b" ' + "x " * 400 + "~",
+    # ... or holds a string the quick look's cut would split
+    'grep -r "a;b" "' + "x" * 600 + '" ~',
+    # ... or goes on past a backslash-newline
+    'rg "a|b" ' + B + "\n~",
+])
+def test_a_long_reading_after_the_unit_is_read_whole(cmd):
+    import re
+    assert any(re.search(p, cmd) for p in safety.DENY_BASH_SEARCH_PATTERNS)
+    assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_SEARCH_REASON
 
 
 def _without(which: str, monkeypatch) -> None:

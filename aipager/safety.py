@@ -11,6 +11,7 @@ rationale behind every entry.
 
 from __future__ import annotations
 
+import bisect
 import fnmatch
 import logging
 import os
@@ -401,10 +402,12 @@ class _Search:
     at least what the earlier one needed, the unit being the same one: the
     first that holds a start after the name)."""
 
-    __slots__ = ("rx", "ways")
+    __slots__ = ("rx", "ways", "kinds")
 
     def __init__(self, head: str, ways: list[tuple[list, bool]]) -> None:
         text, groups, meta = head + "(?:", 0, []
+        #: each crossing group's kind: 0 escaped, 1 single-, 2 double-quoted
+        self.kinds: dict[int, int] = {}
         for k, (parts, cross) in enumerate(ways):
             text += ("|" if k else "") + "()"
             groups += 1
@@ -415,6 +418,8 @@ class _Search:
                     seeks.append((groups + 1, feature))
                 count = part.count(_CROSS_HEAD)
                 units.extend(groups + 1 + 3 * i for i in range(count))
+                self.kinds.update((groups + 1 + i, i % 3)
+                                  for i in range(3 * count))
                 groups += 3 * count
                 text += part
             meta.append((marker, tuple(seeks), tuple(units), cross))
@@ -563,6 +568,36 @@ _MAY_CROSS_RE = re.compile(r"""['"]|\\""" + _ESCAPED_MARK)
 #: or a run of blanks and redirections (each blank its own unit: only the
 #: last of a run can start a folder word or an option).
 _STEP_RE = re.compile(r"""[^\s;&|()<>`"'\\]+|\\[\s\S]|'[^'\n]*'|"[^"\n]*"|[\x20\t<>]+""")
+#: The same steps run together (main's reading of one command in one
+#: call), for a quick look at a short stretch (:func:`_absent`).
+_STEPS_RE = re.compile("(?:" + _STEP_RE.pattern + ")*")
+#: How far that quick look reads; a longer stretch is walked
+#: (:func:`_stream`), each place once.
+_QUICK = 512
+
+
+def _absent(plain: str, at: int, features: list[int], memo: dict) -> bool:
+    """True when some of *features* surely does not start in main's
+    reading from *at*: the reading stops within :data:`_QUICK` characters
+    at a character no unit starts with, and that feature starts nowhere
+    in between, unit or not. False means: walk it (:func:`_stream`)."""
+    stop = min(len(plain), at + _QUICK)
+    end = _STEPS_RE.match(plain, at, stop).end()
+    if end == stop and stop < len(plain):
+        return False
+    if end < len(plain) and plain[end] in "\"'\\":
+        # a quote or backslash the cut may have split: walk it
+        return False
+    places = memo.get("sorted")
+    if places is None:
+        places = memo["sorted"] = [
+            [m.start() for m in rx.finditer(plain)] for rx in _FEATURE_RES]
+    for f in features:
+        found = places[f]
+        k = bisect.bisect_left(found, at)
+        if k == len(found) or found[k] >= end:
+            return True
+    return False
 
 
 class _Walk:
@@ -580,6 +615,10 @@ class _Walk:
         place this walk passed): the walk it ran into comes later."""
         return tuple(t if t >= 0 else (o if o >= at else -1)
                      for o, t in zip(self.own, self.tail))
+
+    def has(self, feature: int, at: int) -> bool:
+        """Whether *feature* starts in the reading from *at*."""
+        return self.tail[feature] >= 0 or self.own[feature] >= at
 
 
 def _stream(plain: str, at: int, memo: dict) -> tuple[int, tuple[int, ...]]:
@@ -625,29 +664,40 @@ def _stream(plain: str, at: int, memo: dict) -> tuple[int, tuple[int, ...]]:
     else:
         walk = _Walk(at, own, (-1,) * len(_FEATURES))
     walks.update(dict.fromkeys(path, walk))
+    walks[start] = walk
     return walk.end, walk.last(start)
 
 
-def _going_on(m: re.Match, units: tuple[int, ...]) -> int | None:
+def _going_on(m: re.Match, units: tuple[int, ...],
+              kinds: dict[int, int]) -> int | None:
     """Where main's reading goes on after the unit holding a start that
     match *m* met (every such unit one match meets is the same one, the
-    first after the name; *units*: the first groups of the way's units):
-    right after the ``\\;``, or after the closing quote of the string
-    (None when it never closes on its line, so main's reading stops
-    there too)."""
+    first after the name; *units*: the first groups of the way's units,
+    *kinds*: each group's kind): right after the ``\\;``, or after the
+    closing quote of the string (None when it never closes on its line,
+    so main's reading stops there too). The last group the match closed
+    is such a unit's when it met one (the unit ends it, or a lookahead
+    stopped there); the units are searched only when it is not."""
+    g = m.lastindex
+    kind = kinds.get(g) if g is not None and m.start(g) >= 0 else None
+    if kind is None:
+        for first in units:
+            for k in range(3):
+                if m.start(first + k) >= 0:
+                    g, kind = first + k, k
+                    break
+            if kind is not None:
+                break
+        else:
+            return None
+    end = m.end(g)
+    if kind == 0:
+        return end
     plain = m.string
-    for first in units:
-        for kind in range(3):
-            if m.start(first + kind) < 0:
-                continue
-            end = m.end(first + kind)
-            if kind == 0:
-                return end
-            close = plain.find("'" if kind == 1 else '"', end)
-            if close < 0 or plain.find("\n", end, close) >= 0:
-                return None
-            return close + 1
-    return None
+    close = plain.find("'" if kind == 1 else '"', end)
+    if close < 0 or plain.find("\n", end, close) >= 0:
+        return None
+    return close + 1
 
 
 def _stopped(m: re.Match, g: int) -> bool:
@@ -665,16 +715,43 @@ def _leads_on(search: _Search, m: re.Match, memo: dict) -> bool:
     waiting = [feature for g, feature in seeks if _stopped(m, g)]
     if not cross and not waiting:
         return True
-    on = _going_on(m, units)
+    on = _going_on(m, units, search.kinds)
     if on is None:
         return False
-    seen = memo.setdefault("on", {})
-    last = seen.get(on)
-    if last is None:
-        last = seen[on] = _stream(m.string, on, memo)[1]
-    if cross and last[_TARGET_FEATURE] < 0:
+    walk = memo.get("walks", {}).get(on)
+    if walk is None:
+        need = [_TARGET_FEATURE, *waiting] if cross else waiting
+        if _absent(m.string, on, need, memo):
+            return False
+        _stream(m.string, on, memo)
+        walk = memo["walks"][on]
+    if cross and not walk.has(_TARGET_FEATURE, on):
         return False
-    return all(last[feature] >= 0 for feature in waiting)
+    return all(walk.has(feature, on) for feature in waiting)
+
+
+#: A newline no backslash stands before: every reading of main's stops
+#: there (a string or a unit never holds one, a blank only after ``\\``).
+_HARD_STOP_RE = re.compile(r"(?<!\\)\n")
+
+
+def _lines(plain: str, memo: dict) -> list[tuple[int, int]]:
+    """The stretches between two :data:`_HARD_STOP_RE` newlines that hold
+    a folder word's text: no match of the searches can be anywhere else
+    (each match, and each reading after its unit, holds a folder word and
+    never passes such a newline). Kept in *memo*."""
+    lines = memo.get("lines")
+    if lines is None:
+        stops = [m.start() for m in _HARD_STOP_RE.finditer(plain)]
+        stops.append(len(plain))
+        lines = []
+        for t in _FEATURE_RES[_TARGET_FEATURE].finditer(plain):
+            k = bisect.bisect_left(stops, t.start())
+            line = (stops[k - 1] + 1 if k else 0, stops[k])
+            if not lines or lines[-1] != line:
+                lines.append(line)
+        memo["lines"] = lines
+    return lines
 
 
 def _search_hit(pat: str, normalized: str, memo: dict) -> bool:
@@ -708,17 +785,20 @@ def _search_hit(pat: str, normalized: str, memo: dict) -> bool:
         # the second regex's ways all need ``-e``/``-f`` after the unit
         if k and not (memo["cross"] and anywhere(_TEXT_FEATURE)):
             break
-        for m in search.rx.finditer(plain):
-            if _leads_on(search, m, walked):
-                return True
+        for begin, end in _lines(plain, memo):
+            for m in search.rx.finditer(plain, begin, end):
+                if _leads_on(search, m, walked):
+                    return True
     if not memo["cross"]:
         return False
     # search 2 before the name: the name, then the folder word (and the
     # option the rule needs) after it
     if "before" not in memo:
         memo["before"] = [
-            on for m in _BEFORE_NAME.rx.finditer(plain)
-            if (on := _going_on(m, _BEFORE_NAME.ways[0][2])) is not None]
+            on for begin, end in _lines(plain, memo)
+            for m in _BEFORE_NAME.rx.finditer(plain, begin, end)
+            if (on := _going_on(m, _BEFORE_NAME.ways[0][2],
+                                _BEFORE_NAME.kinds)) is not None]
     for on in memo["before"]:
         stop, last = _stream(plain, on, walked)
         if last[_TARGET_FEATURE] < 0:
