@@ -234,6 +234,16 @@ def _restart_hint() -> None:
     console.print(
         "[warn]⚠[/warn]  [warn]Restart the daemon to apply this change:[/warn]"
     )
+    foreground = (
+        "    [muted](for a foreground daemon: stop `aipager start` and run "
+        "it again)[/muted]"
+    )
+    if instance_dir() is not None:
+        # An isolated instance runs `aipager start` in the foreground.
+        # `aipager service` and the systemd unit are the main install's:
+        # naming them here would restart the wrong daemon.
+        console.print(foreground)
+        return
     # There is no `aipager service restart`: stop, then start (the same
     # commands `aipager setup` names in its next step).
     console.print(
@@ -244,10 +254,7 @@ def _restart_hint() -> None:
         console.print(
             "    [muted](or [path]systemctl --user restart aipager[/path])[/muted]"
         )
-    console.print(
-        "    [muted](for a foreground daemon: stop `aipager start` and run "
-        "it again)[/muted]"
-    )
+    console.print(foreground)
 
 
 def _signal_reload() -> bool:

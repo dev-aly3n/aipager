@@ -1534,3 +1534,48 @@ def test_reload_raising_with_no_daemon_detected_is_not_needed(env):
     assert code == 0
     assert doc["daemon"] == {"running": False, "reload": "not_needed",
                              "restart_needed": False}
+
+
+# ---- next steps from an isolated instance ------------------------------
+
+def _step_doc(*, unknown=False, running=True, restart=True, service="skipped"):
+    warnings = [{"code": "daemon_unknown"}] if unknown else []
+    return {"daemon": {"running": running, "restart_needed": restart},
+            "warnings": warnings, "changed": ["role"],
+            "service": {"result": service}}
+
+
+@pytest.mark.parametrize("doc", [
+    _step_doc(), _step_doc(unknown=True),
+    _step_doc(restart=False, running=True, unknown=True),
+    _step_doc(restart=False, running=False)],
+    ids=["restart", "restart-unknown", "running-unknown", "not-running"])
+def test_next_step_of_an_instance_never_names_the_service(monkeypatch, tmp_path, doc):
+    """`aipager service` is the main install's: from an isolated instance a
+    next step that named it would stop or start the main daemon."""
+    from aipager import setup_cmd
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path / "inst"))
+    step = setup_cmd._next_step(doc)
+    assert "aipager service" not in step, step
+    assert "`aipager start`" in step, step
+
+
+def test_next_step_restart_of_an_instance(monkeypatch, tmp_path):
+    from aipager import setup_cmd
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path / "inst"))
+    assert setup_cmd._next_step(_step_doc()) == (
+        "Restart the daemon to apply the change: stop this instance's "
+        "`aipager start` and run it again.")
+
+
+@pytest.mark.parametrize("value", [None, "   "], ids=["unset", "blank"])
+def test_next_step_of_a_normal_install_names_the_service(monkeypatch, value):
+    from aipager import setup_cmd
+    if value is None:
+        monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)
+    else:
+        monkeypatch.setenv("AIPAGER_INSTANCE_DIR", value)
+    assert "run `aipager service stop` and then `aipager service start`" in \
+        setup_cmd._next_step(_step_doc())
+    assert "`aipager service install` (background service)" in \
+        setup_cmd._next_step(_step_doc(restart=False, running=False))

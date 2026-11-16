@@ -790,8 +790,12 @@ def test_setup_refuses_before_sending_or_writing(fake_home, tmp_path,
 
 # ----- the wizard's restart hint -----
 
-def _hint(monkeypatch, capsys, platform):
+def _hint(monkeypatch, capsys, platform, instance=None):
     from aipager.wizard import daemon_io
+    if instance is None:
+        monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)
+    else:
+        monkeypatch.setenv("AIPAGER_INSTANCE_DIR", instance)
     monkeypatch.setattr(daemon_io, "_detect_daemon_running", lambda: 4321)
     monkeypatch.setattr(daemon_io, "_is_linux", lambda: platform == "linux")
     daemon_io._restart_hint()
@@ -810,6 +814,25 @@ def test_restart_hint_on_macos_has_no_systemctl(monkeypatch, capsys):
     out = _hint(monkeypatch, capsys, "darwin")
     assert "aipager service stop, then aipager service start" in out
     assert "systemctl" not in out
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_restart_hint_of_an_instance_names_only_its_own_daemon(
+        monkeypatch, capsys, tmp_path, platform):
+    """`aipager service` and the systemd unit belong to the main install:
+    from an isolated instance they would stop or restart the operator's
+    daemon, not this one."""
+    out = _hint(monkeypatch, capsys, platform, instance=str(tmp_path / "inst"))
+    assert "Restart the daemon to apply this change" in out
+    assert "for a foreground daemon: stop `aipager start` and run it again" in out
+    assert "aipager service" not in out
+    assert "systemctl" not in out
+
+
+def test_restart_hint_ignores_a_blank_instance_dir(monkeypatch, capsys):
+    out = _hint(monkeypatch, capsys, "linux", instance="   ")
+    assert "aipager service stop, then aipager service start" in out
+    assert "systemctl --user restart aipager" in out
 
 
 def test_is_linux_reads_the_platform():
