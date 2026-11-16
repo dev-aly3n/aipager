@@ -1103,6 +1103,11 @@ def test_each_search_finds_what_main_finds(which, cmd, monkeypatch):
     "rg 'a;b ~",
     # read past before the name: the name, then the folder word after it
     'X="a;b" cat ~ ls -R x',
+    # the option a lookahead stopped at the unit looks for must stand in
+    # main's reading after it, not elsewhere in the command
+    'ls "a;b" ~; ls -R src',
+    'grep x ~ ";"; grep -r y src',
+    'X="a;b" ls ~; ls -R src',
 ])
 def test_reading_past_an_escaped_separator_needs_what_could_follow(cmd):
     import re
@@ -1161,7 +1166,10 @@ def test_the_copy_marks_each_escaped_separator():
     B + '"";rg x ', "'" + B + "'';rg x ", B + "''|grep -r ", B + '""`rg x ',
     B + '""&ls -R ', B + ";rg x '", B + ";rg x ~/a" + B + ";"])
 @pytest.mark.parametrize("tail", ["; cat ~/.config/aipager/x",
-                                  "; ls ~/.config/nvim x", " ~"])
+                                  "; ls ~/.config/nvim x", " ~",
+                                  # a home folder word no search reads: every
+                                  # start is read, none matches
+                                  "; echo ~"])
 def test_escaped_separators_in_one_word_stay_fast(unit, tail):
     """Main's search patterns start a command at every escaped separator
     and read the rest of the word from each: ``\\`a=`` repeated to 100 KB
