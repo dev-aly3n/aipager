@@ -168,3 +168,18 @@ def test_stored_text_with_an_escaped_surrogate_loads_cleaned():
     assert (reading["key"], reading["session"]) == ("saved||/h?", "s?")
     assert got["days"][DAY][-1] == {"a?": [1, 0, 0, 0]}   # the first of the two
     assert got["cursors"]["/h/t.jsonl"]["session"] == "c?"
+
+
+# ---- the key's length -----------------------------------------------------------------------
+
+def test_a_plan_key_past_1024_chars_is_cut_with_a_hash_and_survives_a_restart():
+    windows = {"seven_day": Window(5.0, int(NOW) + 86400)}
+    long_a = "/home/alice/" + "a" * 2000 + "/one"
+    long_b = "/home/alice/" + "a" * 2000 + "/two"
+    usage_store.note_plan("s1", windows, SessionLogin("saved", "", long_a), now=NOW)
+    usage_store.note_plan("s2", windows, SessionLogin("saved", "", long_b), now=NOW + 1)
+    keys = set(usage_store._plan)
+    assert len(keys) == 2                       # two sign-ins, two keys
+    assert all(len(k) <= 1024 for k in keys)
+    _save_and_reload()
+    assert set(usage_store._plan) == keys

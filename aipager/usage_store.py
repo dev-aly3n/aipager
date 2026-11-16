@@ -202,8 +202,14 @@ def clean_text(value: str) -> str:
 
 
 def _plan_key(login: SessionLogin) -> str:
-    """:func:`login_key`, encodable."""
-    return clean_text(login_key(login))
+    """:func:`login_key`, encodable and at most 1024 characters (what
+    loads again); a longer one keeps a hash of the whole so two sign-ins
+    never share a key."""
+    key = clean_text(login_key(login))
+    if len(key) > 1024:
+        digest = hashlib.blake2b(key.encode("utf-8"), digest_size=16).hexdigest()
+        key = key[:1024 - 33] + "#" + digest
+    return key
 
 
 # ---- time ------------------------------------------------------------------------
