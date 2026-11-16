@@ -44,7 +44,7 @@ SUPPORTED_METHODS = (
     "sendMediaGroup", "sendChatAction", "answerCallbackQuery", "setMyCommands",
     "deleteMyCommands", "getMyCommands", "setChatMenuButton", "getFile",
     "getMyDescription", "setMyDescription", "getMyShortDescription",
-    "setMyShortDescription",
+    "setMyShortDescription", "getChatMember",
 )
 
 _INT_KEYS = {"chat_id", "message_id", "reply_to_message_id", "message_thread_id",
@@ -255,6 +255,9 @@ class FakeBotApi:
         # (kind, language_code) -> text; kind "description" | "short".
         self._descriptions: dict[tuple[str, str], str] = {}
         self._injected: list[_Injected] = []
+        # chat_id -> (status, can_pin_messages) of the bot there; a known
+        # chat without an entry: an admin that may pin.
+        self._bot_members: dict[int, tuple[str, bool]] = {}
         self.unknown_methods: list[str] = []
         self.bad_token_calls: list[str] = []
         self.polling_started = threading.Event()
@@ -270,6 +273,11 @@ class FakeBotApi:
             c = U.chat(chat_id, chat_type, title, who)
             self._chats[chat_id] = c
             return dict(c)
+
+    def set_bot_member(self, chat_id: int, status: str, *, can_pin: bool = True) -> None:
+        """What ``getChatMember`` says about the bot in *chat_id*."""
+        with self._lock:
+            self._bot_members[chat_id] = (status, can_pin)
 
     @staticmethod
     def user(user_id: int, username: str, first_name: str | None = None) -> dict:
@@ -375,6 +383,20 @@ class FakeBotApi:
                         "unlimited_gifts": False, "limited_gifts": False,
                         "unique_gifts": False, "premium_subscription": False,
                         "gifts_from_channels": False}})
+        return out
+
+    def _m_getChatMember(self, p, f):
+        cid = p.get("chat_id")
+        self._chat_obj(cid)
+        uid = p.get("user_id")
+        if uid != self.bot_user["id"]:
+            return {"status": "member", "user": U.user(uid, f"user{uid}")}
+        status, can_pin = self._bot_members.get(cid, ("administrator", True))
+        out = {"status": status, "user": dict(self.bot_user)}
+        if status == "administrator":
+            out.update({"can_be_edited": False, "is_anonymous": False,
+                        "can_manage_chat": True, "can_delete_messages": True,
+                        "can_pin_messages": can_pin})
         return out
 
     def _m_sendMessage(self, p, f):

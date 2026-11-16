@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -313,3 +314,107 @@ def test_user_bash_search_denied_by_the_tool_deny(call, session, tmp_path, fake_
     t = _transcript(tmp_path, _prompt(_MARKED))
     _denied(call(t, "Bash", {"command": "grep -rn TOKEN ~/proj"}, home=fake_home),
             "Bash is in this role's deny_tools")
+
+
+# ---- 1.5: changing who controls the machine stays with the owner ------------
+
+_CONFIG_CHANGES = [
+    "aipager setup group --chat-id -1001234567890 --member 111:alice:owner --force",
+    "aipager setup group --chat-id -1001234567890 --member 222:bob:admin --json",
+    "aipager setup detect-group --json",
+    "aipager config",
+    "python3 -m aipager.cli setup group --chat-id -1001234567890",
+    "sed -i s/user/owner/ ~/.config/aipager/aipager.yaml",
+]
+
+
+@pytest.fixture
+def dev_policy(tmp_path):
+    """A custom role with a shell and no ``bypass_safety``, through the
+    real loader."""
+    pol = harness.policy_from_yaml(tmp_path / "cfg", "roles:\n  dev:\n    can_prompt: true\n")
+    role = pol.get_role("dev")
+    assert role is not None and not role.bypass_safety and "Bash" not in role.deny_tools
+    return pol
+
+
+@pytest.mark.parametrize("role", ["admin", "dev"])
+@pytest.mark.parametrize("command", _CONFIG_CHANGES)
+def test_config_change_denied_below_the_owner(call, session, tmp_path, fake_home,
+                                              dev_policy, role, command):
+    harness.write_snapshot(session, role_name=role, policy=dev_policy)
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    _denied(call(t, "Bash", {"command": command}, home=fake_home),
+            "Bash command blocked by safety policy")
+
+
+@pytest.mark.parametrize("role", ["admin", "dev"])
+@pytest.mark.parametrize("tool,tool_input", [
+    ("Write", {"content": "scopes: []\n"}),
+    ("Edit", {"old_string": "role: user", "new_string": "role: owner"}),
+])
+def test_config_file_edit_denied_below_the_owner(call, session, tmp_path, fake_home,
+                                                 dev_policy, role, tool, tool_input):
+    harness.write_snapshot(session, role_name=role, policy=dev_policy)
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    target = str(fake_home / ".config/aipager/aipager.yaml")
+    _denied(call(t, tool, {"file_path": target, **tool_input}, home=fake_home),
+            "protected path ~/.config/aipager/**")
+
+
+@pytest.mark.parametrize("role", ["admin", "dev"])
+def test_ordinary_shell_stays_allowed_below_the_owner(call, session, tmp_path, fake_home,
+                                                      dev_policy, role):
+    harness.write_snapshot(session, role_name=role, policy=dev_policy)
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    assert call(t, "Bash", {"command": "git status && ls -la"}, home=fake_home) is None
+
+
+@pytest.mark.parametrize("command", _CONFIG_CHANGES)
+def test_owner_may_change_the_config(call, session, tmp_path, fake_home, command):
+    harness.write_snapshot(session, role_name="owner")
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    assert call(t, "Bash", {"command": command}, home=fake_home) is None
+
+
+# ---- 1.5: the Bash check gets 3 seconds -------------------------------------
+
+def _timed(call, *args, **kwargs):
+    start = time.monotonic()
+    reason = call(*args, **kwargs)
+    return reason, time.monotonic() - start
+
+
+def test_a_command_built_to_slow_the_check_is_denied_in_time(call, session, tmp_path,
+                                                             fake_home):
+    """About 100 KB of ``rg~/``: the search rules alone take minutes on
+    it. The check stops at 3 seconds and the call is denied, never
+    left to Claude Code's own hook timeout (which runs it unchecked)."""
+    harness.write_snapshot(session, role_name="admin")
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    command = "rg~/" * 25_000 + " ~"
+    reason, took = _timed(call, t, "Bash", {"command": command}, home=fake_home)
+    assert reason is not None, "the hook allowed the call"
+    assert "this tool call could not be checked, so it was denied" in reason, reason
+    assert took < 10, f"the hook took {took:.1f} s"
+
+
+def test_a_long_ordinary_command_is_still_checked_and_allowed(call, session, tmp_path,
+                                                              fake_home):
+    harness.write_snapshot(session, role_name="admin")
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    command = "cat > notes.txt <<'EOF'\n" + "a plain line of notes\n" * 5_000 + "EOF"
+    assert len(command) > 100_000
+    reason, took = _timed(call, t, "Bash", {"command": command}, home=fake_home)
+    assert reason is None
+    assert took < 10, f"the hook took {took:.1f} s"
+
+
+def test_a_long_command_is_still_held_to_the_floor(call, session, tmp_path, fake_home):
+    """Past 1 KB the check runs in its own process: a rule still denies
+    with its own reason there."""
+    harness.write_snapshot(session, role_name="admin")
+    t = _transcript(tmp_path, _prompt(_MARKED))
+    command = "echo " + "x" * 4_000 + " && aipager setup group --chat-id -1001234567890"
+    _denied(call(t, "Bash", {"command": command}, home=fake_home),
+            "Bash command blocked by safety policy")

@@ -7,6 +7,7 @@ import sys
 
 
 from aipager._test_guard import check_write
+from aipager.instance import INSTANCE_ENV, instance_dir
 from aipager.ui import console
 from aipager.wizard._constants import (
     CONFIG_DIR, CONFIG_ENV,
@@ -62,9 +63,10 @@ def _detect_daemon_running() -> int | None:
     find one, ``None`` otherwise, ``-1`` when it is up but its PID cannot
     be told for sure. The PID is SIGNALLED by the post-edit live reload
     (:func:`_signal_reload`, roadmap 8.80), so only a PID that is really
-    the daemon is returned: the service's ``MainPID`` first, else a
-    single ``pgrep`` match whose argv is ``aipager start`` in this PID
-    namespace (:func:`_pick_daemon_pid`).
+    the daemon is returned: the service's ``MainPID`` first (never for an
+    isolated instance, :func:`_systemd_main_pid`), else a single ``pgrep``
+    match whose argv is ``aipager start`` in this PID namespace and whose
+    instance is this one (:func:`_pick_daemon_pid`).
 
     Uses ``aipager.config.SOCKET_PATH`` rather than a hardcoded
     ``/tmp/aipager.sock`` — under the systemd unit that socket lives at
@@ -108,6 +110,10 @@ def _systemd_main_pid() -> int | None:
     launched, so only its MAIN process may be signalled."""
     import shutil as _shutil
     import subprocess as _subprocess
+    if instance_dir() is not None:
+        # An isolated instance never runs as the service: its MainPID is
+        # the main install's daemon, which this instance must never signal.
+        return None
     if not _shutil.which("systemctl"):
         return None
     try:
@@ -136,6 +142,23 @@ def _same_pid_namespace(pid: int) -> bool:
             "/proc/self/ns/pid")
     except OSError:
         return True
+
+
+def _read_instance_dir(pid: int) -> str | None:
+    """*pid*'s normalised ``AIPAGER_INSTANCE_DIR`` from ``/proc`` (``""``
+    when it has none: a normal install), or ``None`` where its environment
+    cannot be read."""
+    try:
+        with open(f"/proc/{pid}/environ", "rb") as f:
+            raw = f.read()
+    except OSError:
+        return None
+    for item in raw.split(b"\0"):
+        key, sep, value = item.partition(b"=")
+        if sep and key == INSTANCE_ENV.encode():
+            text = value.decode("utf-8", "replace").strip()
+            return os.path.normpath(text) if text else ""
+    return ""
 
 
 def _read_cmdline(pid: int) -> list[str] | None:
@@ -169,8 +192,12 @@ def _pick_daemon_pid(pgrep_out: str) -> int | None:
     with the words in a file name). So a match counts only when its argv
     is the daemon's (``/proc``) in this PID namespace (a container's
     aipager is not this one), and anything ambiguous is unknown, which
-    falls back to the restart hint."""
+    falls back to the restart hint. Only a daemon of THIS instance counts
+    (the same ``AIPAGER_INSTANCE_DIR``, or none for a normal install): a
+    test instance's daemon is never the main one's, nor the other way
+    round."""
     me = os.getpid()
+    mine = instance_dir() or ""
     pids = [int(t) for t in pgrep_out.split() if t.isdigit()]
     pids = [p for p in pids if p != me]
     confirmed: list[int] = []
@@ -180,10 +207,14 @@ def _pick_daemon_pid(pgrep_out: str) -> int | None:
         if argv is None:
             unknown.append(pid)
         elif _is_daemon_argv(argv) and _same_pid_namespace(pid):
-            confirmed.append(pid)
+            theirs = _read_instance_dir(pid)
+            if theirs is None:
+                unknown.append(pid)
+            elif theirs == mine:
+                confirmed.append(pid)
     if len(confirmed) == 1:
         return confirmed[0]
-    if not confirmed and len(unknown) == 1 and len(pids) == 1:
+    if not confirmed and not mine and len(unknown) == 1 and len(pids) == 1:
         return unknown[0]  # no /proc (macOS): only an unambiguous match
     return None
 
