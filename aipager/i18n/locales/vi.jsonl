@@ -1593,9 +1593,14 @@
 {"k": "usage.fresh.hours", "src": "38dea47a", "v": {"other": "Tính đến {time} ({n} giờ trước), từ phiên {session}."}}
 {"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"other": "Tính đến {time} ({n} phút trước), từ phiên {session}."}}
 {"k": "usage.fresh.now", "src": "eb614feb", "v": "Tính đến {time} (vừa xong), từ phiên {session}."}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"other": "Tính đến {time} ({n} ngày trước), từ một phiên trong chat khác."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"other": "Tính đến {time} ({n} giờ trước), từ một phiên trong chat khác."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"other": "Tính đến {time} ({n} phút trước), từ một phiên trong chat khác."}}
+{"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "Tính đến {time} (vừa xong), từ một phiên trong chat khác."}
 {"k": "usage.group_note", "src": "827f3d0c", "v": "Giới hạn gói không hiện trong nhóm. Hãy gửi /usage trong chat riêng với bot, hoặc mở Mini App."}
 {"k": "usage.login.cloud", "src": "db9bd808", "v": "Nhà cung cấp đám mây"}
 {"k": "usage.login.gateway", "src": "c45b6181", "v": "Gateway {host}"}
+{"k": "usage.login.gateway_other", "src": "688e68d9", "v": "Gateway dùng trong chat khác"}
 {"k": "usage.login.saved", "src": "8ebcb721", "v": "Đăng nhập Claude đã lưu trên máy tính này"}
 {"k": "usage.login.token", "src": "64d01959", "v": "Token đăng nhập Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Đăng nhập không rõ"}

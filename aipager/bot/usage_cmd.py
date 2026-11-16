@@ -101,6 +101,34 @@ FRESH_DAYS = Plural("usage.fresh.days",
                     other="As of {time} ({n} days ago), from session {session}.",
                     eg={"time": "20:15", "session": "frontend"},
                     note="/usage: when Claude Code last reported these limits")
+# The same, for a reading from a session in a chat the caller may not see:
+# that session's name stays out (the /update rule, update_flow).
+FRESH_OTHER_NOW = Msg("usage.fresh_other.now",
+                      "As of {time} (just now), from a session in another chat.",
+                      eg={"time": "20:15"},
+                      note="/usage: when Claude Code last reported these limits; the session "
+                           "is in a chat the reader does not manage, so it is not named")
+FRESH_OTHER_MINUTES = Plural("usage.fresh_other.minutes",
+                             one="As of {time} ({n} minute ago), from a session in another "
+                                 "chat.",
+                             other="As of {time} ({n} minutes ago), from a session in another "
+                                   "chat.",
+                             eg={"time": "20:15"},
+                             note="/usage: like usage.fresh.minutes, for a session in a chat "
+                                  "the reader does not manage")
+FRESH_OTHER_HOURS = Plural("usage.fresh_other.hours",
+                           one="As of {time} ({n} hour ago), from a session in another chat.",
+                           other="As of {time} ({n} hours ago), from a session in another "
+                                 "chat.",
+                           eg={"time": "20:15"},
+                           note="/usage: like usage.fresh.hours, for a session in a chat the "
+                                "reader does not manage")
+FRESH_OTHER_DAYS = Plural("usage.fresh_other.days",
+                          one="As of {time} ({n} day ago), from a session in another chat.",
+                          other="As of {time} ({n} days ago), from a session in another chat.",
+                          eg={"time": "20:15"},
+                          note="/usage: like usage.fresh.days, for a session in a chat the "
+                               "reader does not manage")
 PLAN_NONE = Msg("usage.plan.none",
                 "Plan limits show here after Claude answers in a session signed in with a "
                 "Claude subscription. API keys, and gateways without a spend limit, do not "
@@ -122,6 +150,10 @@ _LOGIN = {
 LOGIN_GATEWAY = Msg("usage.login.gateway", "Gateway {host}", eg={"host": "gateway.example"},
                     note="/usage: which sign-in these limits belong to: a gateway; {host} is "
                          "its address")
+LOGIN_GATEWAY_OTHER = Msg("usage.login.gateway_other", "Gateway used in another chat",
+                          note="/usage: which sign-in these limits belong to: a gateway a "
+                               "session in a chat the reader does not manage uses (its "
+                               "address is not shown)")
 TOKENS_TITLE = Msg("usage.tokens.title", "Tokens",
                    note="/usage: heading of the token counts of every chat's sessions")
 TOKENS_TITLE_MANAGED = Msg("usage.tokens.title_managed", "Tokens in the chats you manage",
@@ -267,20 +299,28 @@ def _reset_line(window, now: float, tr, kind: str) -> str:
     return _render(tr, kind, RESETS_MINUTES, minutes=max(1, math.ceil(left / 60)), time=at)
 
 
-def _fresh_line(reading, now: float, tr, kind: str) -> str:
+def _fresh_line(reading, now: float, tr, kind: str, *, named: bool = True) -> str:
+    """When the reading was seen and, when *named*, in which session."""
     age = max(0.0, now - reading.seen_at)
-    params = {"time": _clock(reading.seen_at, tr), "session": reading.session}
+    params = {"time": _clock(reading.seen_at, tr)}
+    if named:
+        params["session"] = reading.session
+        forms = (FRESH_NOW, FRESH_MINUTES, FRESH_HOURS, FRESH_DAYS)
+    else:
+        forms = (FRESH_OTHER_NOW, FRESH_OTHER_MINUTES, FRESH_OTHER_HOURS, FRESH_OTHER_DAYS)
     if age < 60:
-        return _render(tr, kind, FRESH_NOW, **params)
+        return _render(tr, kind, forms[0], **params)
     if age < 3600:
-        return _render_n(tr, kind, FRESH_MINUTES, int(age // 60), **params)
+        return _render_n(tr, kind, forms[1], int(age // 60), **params)
     if age < 86400:
-        return _render_n(tr, kind, FRESH_HOURS, int(age // 3600), **params)
-    return _render_n(tr, kind, FRESH_DAYS, int(age // 86400), **params)
+        return _render_n(tr, kind, forms[2], int(age // 3600), **params)
+    return _render_n(tr, kind, forms[3], int(age // 86400), **params)
 
 
-def _login_name(reading, tr, kind: str) -> str:
+def _login_name(reading, tr, kind: str, *, named: bool = True) -> str:
     if reading.kind == "gateway":
+        if not named:
+            return _render(tr, kind, LOGIN_GATEWAY_OTHER)
         return _render(tr, kind, LOGIN_GATEWAY, host=reading.host or "?")
     return _render(tr, kind, _LOGIN.get(reading.kind, _LOGIN["unknown"]))
 
@@ -307,16 +347,25 @@ def _day_label(back: int, tr, kind: str) -> str:
     return _render_n(tr, kind, ROW_DAYS_AGO, back)
 
 
+def may_name(reading, access: UsageAccess) -> bool:
+    """Whether the caller may see the session a reading came from (its
+    name, a gateway's host): only when they may see its chat. The plan
+    limits themselves are the whole account's and still shown."""
+    return access.scopes is None or reading.scope in access.scopes
+
+
 def _view(snapshot, access: UsageAccess, tr, now: float, kind: str) -> dict:
     logins = []
     if access.plan:
-        named = len(snapshot.plan) > 1
+        several = len(snapshot.plan) > 1
         for reading in snapshot.plan:
+            named = may_name(reading, access)
             windows = [_window_entry(n, reading.windows[n], now, tr, kind)
                        for n in WINDOW_ORDER if n in reading.windows]
-            logins.append({"name": _login_name(reading, tr, kind) if named else None,
+            logins.append({"name": _login_name(reading, tr, kind, named=named)
+                           if several else None,
                            "windows": windows,
-                           "fresh": _fresh_line(reading, now, tr, kind)})
+                           "fresh": _fresh_line(reading, now, tr, kind, named=named)})
     title = {"all": TOKENS_TITLE, "managed": TOKENS_TITLE_MANAGED,
              "chat": TOKENS_TITLE_CHAT}.get(access.title, TOKENS_TITLE)
     empty = not any(snapshot.week)

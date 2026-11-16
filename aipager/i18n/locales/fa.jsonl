@@ -1593,9 +1593,14 @@
 {"k": "usage.fresh.hours", "src": "38dea47a", "v": {"one": "آخرین گزارش: ساعت {time} ({n} ساعت پیش)، از سشن {session}.", "other": "آخرین گزارش: ساعت {time} ({n} ساعت پیش)، از سشن {session}."}}
 {"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"one": "آخرین گزارش: ساعت {time} ({n} دقیقه پیش)، از سشن {session}.", "other": "آخرین گزارش: ساعت {time} ({n} دقیقه پیش)، از سشن {session}."}}
 {"k": "usage.fresh.now", "src": "eb614feb", "v": "آخرین گزارش: ساعت {time} (همین الان)، از سشن {session}."}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"one": "آخرین گزارش: ساعت {time} ({n} روز پیش)، از سشنی در یک چت دیگر.", "other": "آخرین گزارش: ساعت {time} ({n} روز پیش)، از سشنی در یک چت دیگر."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"one": "آخرین گزارش: ساعت {time} ({n} ساعت پیش)، از سشنی در یک چت دیگر.", "other": "آخرین گزارش: ساعت {time} ({n} ساعت پیش)، از سشنی در یک چت دیگر."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"one": "آخرین گزارش: ساعت {time} ({n} دقیقه پیش)، از سشنی در یک چت دیگر.", "other": "آخرین گزارش: ساعت {time} ({n} دقیقه پیش)، از سشنی در یک چت دیگر."}}
+{"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "آخرین گزارش: ساعت {time} (همین الان)، از سشنی در یک چت دیگر."}
 {"k": "usage.group_note", "src": "827f3d0c", "v": "محدودیت‌های اشتراک در گروه نشان داده نمی‌شوند. /usage را در چت خصوصی با ربات بفرستید یا Mini App را باز کنید."}
 {"k": "usage.login.cloud", "src": "db9bd808", "v": "سرویس ابری"}
 {"k": "usage.login.gateway", "src": "c45b6181", "v": "گیت‌وی {host}"}
+{"k": "usage.login.gateway_other", "src": "688e68d9", "v": "گیت‌وی یک چت دیگر"}
 {"k": "usage.login.saved", "src": "8ebcb721", "v": "ورود Claude ذخیره‌شده روی این کامپیوتر"}
 {"k": "usage.login.token", "src": "64d01959", "v": "توکن ورود Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "ورود نامشخص"}

@@ -59,6 +59,16 @@ def test_a_payload_with_rate_limits_stores_a_reading(receiver, run_async):
     assert reading.session == "frontend" and reading.kind == "saved"
 
 
+def test_the_reading_keeps_the_sessions_chat(receiver, run_async):
+    """Its name is shown only to who may see that chat (rev-iter1-001)."""
+    registry, recv = receiver
+    registry.get_or_create(SESSION).scope_chat_id = -100123
+    _datagram(recv, run_async, _payload({"seven_day": {"used_percentage": 83,
+                                                      "resets_at": LATER}}))
+    (reading,) = _plan()
+    assert reading.scope == -100123
+
+
 def test_a_payload_without_rate_limits_leaves_the_reading_alone(receiver, run_async):
     _registry, recv = receiver
     _datagram(recv, run_async, _payload({"seven_day": {"used_percentage": 83,

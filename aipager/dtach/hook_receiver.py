@@ -1626,7 +1626,10 @@ class HookReceiver:
         try:
             windows = statusline_file.parse_rate_limits(statusline_file.read_raw(sess.name))
             if windows:
-                usage_store.note_plan(sess.label, windows, usage_store.login_for(sess))
+                # The session's chat goes with it: its name is shown only
+                # to who may see that chat (usage_cmd).
+                usage_store.note_plan(sess.label, windows, usage_store.login_for(sess),
+                                      scope=getattr(sess, "scope_chat_id", 0))
         except Exception:
             log.debug("[%s] plan usage not read", getattr(sess, "label", "?"), exc_info=True)
 

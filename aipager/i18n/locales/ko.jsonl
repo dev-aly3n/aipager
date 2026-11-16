@@ -1593,9 +1593,14 @@
 {"k": "usage.fresh.hours", "src": "38dea47a", "v": {"other": "{time} 기준 ({n}시간 전), {session} 세션에서 받았어요."}}
 {"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"other": "{time} 기준 ({n}분 전), {session} 세션에서 받았어요."}}
 {"k": "usage.fresh.now", "src": "eb614feb", "v": "{time} 기준 (방금), {session} 세션에서 받았어요."}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"other": "{time} 기준 ({n}일 전), 다른 채팅의 세션에서 받았어요."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"other": "{time} 기준 ({n}시간 전), 다른 채팅의 세션에서 받았어요."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"other": "{time} 기준 ({n}분 전), 다른 채팅의 세션에서 받았어요."}}
+{"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "{time} 기준 (방금), 다른 채팅의 세션에서 받았어요."}
 {"k": "usage.group_note", "src": "827f3d0c", "v": "그룹에서는 요금제 한도를 보여 주지 않아요. 봇과의 개인 채팅에서 /usage를 보내거나 Mini App을 여세요."}
 {"k": "usage.login.cloud", "src": "db9bd808", "v": "클라우드 제공업체"}
 {"k": "usage.login.gateway", "src": "c45b6181", "v": "게이트웨이 {host}"}
+{"k": "usage.login.gateway_other", "src": "688e68d9", "v": "다른 채팅에서 쓰는 게이트웨이"}
 {"k": "usage.login.saved", "src": "8ebcb721", "v": "이 컴퓨터에 저장된 Claude 로그인"}
 {"k": "usage.login.token", "src": "64d01959", "v": "Claude 로그인 토큰"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "알 수 없는 로그인"}

@@ -153,6 +153,9 @@ class Reading:
     session: str
     seen_at: float
     windows: dict[str, Window]
+    #: The chat scope of the session it came from: the session's name (and
+    #: a gateway's host) is shown only to who may see that chat.
+    scope: int = 0
 
 
 Counts = tuple[int, int, int, int]   # input, output, cache read, cache write
@@ -244,13 +247,18 @@ def _windows_doc(windows: dict[str, Window]) -> dict[str, dict]:
             for name, w in windows.items() if name in RATE_WINDOWS}
 
 
+def _scope_value(scope: Any) -> int:
+    return scope if type(scope) is int and abs(scope) < 10**20 else 0
+
+
 def note_plan(session_label: str, windows: dict[str, Window], login: SessionLogin, *,
-              now: float | None = None) -> bool:
+              scope: Any = 0, now: float | None = None) -> bool:
     """Keep *windows* as the newest reading of *login*'s sign-in, seen now
-    in session *session_label*. It wholly replaces that sign-in's previous
-    reading (a window Claude Code stopped reporting is no longer shown);
-    other sign-ins' readings are untouched. Returns whether the stored
-    document changed. Never raises."""
+    in session *session_label* of chat scope *scope* (0: none known, which
+    only the owner and a personal-mode operator see by name). It wholly
+    replaces that sign-in's previous reading (a window Claude Code stopped
+    reporting is no longer shown); other sign-ins' readings are untouched.
+    Returns whether the stored document changed. Never raises."""
     global _dirty
     try:
         if not windows:
@@ -266,10 +274,12 @@ def note_plan(session_label: str, windows: dict[str, Window], login: SessionLogi
             _ensure_loaded()
             old = _plan.pop(key, None)
             entry = {"key": key, "kind": kind, "host": str(host)[:255],
-                     "session": str(session_label)[:128], "seen_at": ts, "windows": doc}
+                     "session": str(session_label)[:128], "scope": _scope_value(scope),
+                     "seen_at": ts, "windows": doc}
             _plan[key] = entry   # most recently seen last
             changed = (old is None or old["windows"] != doc
                        or old["session"] != entry["session"]
+                       or old.get("scope") != entry["scope"]
                        or ts - _plan_marked.get(key, 0.0) >= PLAN_RESAVE_SECONDS)
             while len(_plan) > MAX_READINGS:
                 del _plan[min(_plan, key=lambda k: _plan[k]["seen_at"])]
@@ -547,7 +557,7 @@ def snapshot(scopes: frozenset[int] | None, *, now: float | None = None) -> Snap
             today = _date_of(ts)
             plan = tuple(
                 Reading(key=r["key"], kind=r["kind"], host=r["host"], session=r["session"],
-                        seen_at=r["seen_at"],
+                        seen_at=r["seen_at"], scope=r.get("scope", 0),
                         windows={n: Window(pct=w["pct"], resets_at=w["resets_at"])
                                  for n, w in r["windows"].items()})
                 for r in sorted(_plan.values(), key=lambda r: -r["seen_at"])
@@ -606,6 +616,9 @@ def _clean_reading(raw: Any) -> dict | None:
     if (key == "unknown") != (kind == "unknown") or (kind != "unknown"
                                                      and not key.startswith(kind + "|")):
         return None
+    scope = raw.get("scope", 0)
+    if type(scope) is not int or abs(scope) >= 10**20:
+        return None
     windows = raw.get("windows")
     if not isinstance(windows, dict):
         return None
@@ -621,7 +634,8 @@ def _clean_reading(raw: Any) -> dict | None:
     if not clean:
         return None
     return {"key": key, "kind": kind, "host": host if kind == "gateway" else "",
-            "session": session, "seen_at": float(raw["seen_at"]), "windows": clean}
+            "session": session, "scope": scope, "seen_at": float(raw["seen_at"]),
+            "windows": clean}
 
 
 def _clean_counts(raw: Any) -> list[int] | None:

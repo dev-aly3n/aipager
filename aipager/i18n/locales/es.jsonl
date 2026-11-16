@@ -1593,9 +1593,14 @@
 {"k": "usage.fresh.hours", "src": "38dea47a", "v": {"many": "Dato de las {time} (hace {n} horas), de la sesión {session}.", "one": "Dato de las {time} (hace {n} hora), de la sesión {session}.", "other": "Dato de las {time} (hace {n} horas), de la sesión {session}."}}
 {"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"many": "Dato de las {time} (hace {n} minutos), de la sesión {session}.", "one": "Dato de las {time} (hace {n} minuto), de la sesión {session}.", "other": "Dato de las {time} (hace {n} minutos), de la sesión {session}."}}
 {"k": "usage.fresh.now", "src": "eb614feb", "v": "Dato de las {time} (ahora mismo), de la sesión {session}."}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"many": "Dato de las {time} (hace {n} días), de una sesión de otro chat.", "one": "Dato de las {time} (hace {n} día), de una sesión de otro chat.", "other": "Dato de las {time} (hace {n} días), de una sesión de otro chat."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"many": "Dato de las {time} (hace {n} horas), de una sesión de otro chat.", "one": "Dato de las {time} (hace {n} hora), de una sesión de otro chat.", "other": "Dato de las {time} (hace {n} horas), de una sesión de otro chat."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"many": "Dato de las {time} (hace {n} minutos), de una sesión de otro chat.", "one": "Dato de las {time} (hace {n} minuto), de una sesión de otro chat.", "other": "Dato de las {time} (hace {n} minutos), de una sesión de otro chat."}}
+{"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "Dato de las {time} (ahora mismo), de una sesión de otro chat."}
 {"k": "usage.group_note", "src": "827f3d0c", "v": "Los límites del plan no se muestran en un grupo. Envía /usage en tu chat privado con el bot o abre la Mini App."}
 {"k": "usage.login.cloud", "src": "db9bd808", "v": "Proveedor en la nube"}
 {"k": "usage.login.gateway", "src": "c45b6181", "v": "Gateway {host}"}
+{"k": "usage.login.gateway_other", "src": "688e68d9", "v": "Gateway usado en otro chat"}
 {"k": "usage.login.saved", "src": "8ebcb721", "v": "Cuenta de Claude guardada en este equipo"}
 {"k": "usage.login.token", "src": "64d01959", "v": "Token de acceso de Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Cuenta desconocida"}
