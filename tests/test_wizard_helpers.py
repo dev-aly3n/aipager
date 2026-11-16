@@ -372,6 +372,7 @@ def test_detect_daemon_running_with_pgrep_finds_pid(monkeypatch):
         54321: ["/home/u/.local/bin/aipager", "start"],
         67890: ["bash", "-c", "aipager start"],
     }.get(pid))
+    monkeypatch.setattr(daemon_io, "_read_instance_dir", lambda pid: "")
     assert daemon_io._detect_daemon_running() == 54321
 
 

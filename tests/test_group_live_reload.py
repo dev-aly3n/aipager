@@ -1201,6 +1201,7 @@ def test_pick_daemon_pid_skips_another_pid_namespace(monkeypatch):
                         lambda pid: ["/x/aipager", "start"])
     monkeypatch.setattr(daemon_io, "_same_pid_namespace",
                         lambda pid: pid == 11)
+    monkeypatch.setattr(daemon_io, "_read_instance_dir", lambda pid: "")
     assert daemon_io._pick_daemon_pid("10\n11\n12\n") == 11
 
 
@@ -1235,8 +1236,10 @@ def test_the_live_hint_falls_back_to_restart_without_a_daemon_pid(
 ])
 def test_pick_daemon_pid(monkeypatch, cmdlines, out, expected):
     from aipager.wizard import daemon_io
+    monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)
     monkeypatch.setattr(daemon_io, "_read_cmdline",
                         lambda pid: cmdlines.get(pid))
+    monkeypatch.setattr(daemon_io, "_read_instance_dir", lambda pid: "")
     assert daemon_io._pick_daemon_pid(out) == expected
 
 
@@ -1247,5 +1250,100 @@ def test_pick_daemon_pid_never_picks_itself(monkeypatch):
     me = os.getpid()
     monkeypatch.setattr(daemon_io, "_read_cmdline",
                         lambda pid: ["/x/aipager", "start"])
+    monkeypatch.setattr(daemon_io, "_read_instance_dir", lambda pid: "")
     assert daemon_io._pick_daemon_pid(f"{me}\n") is None
+
+
+# ---- a reload signals only a daemon of THIS instance ----------------------
+
+def test_an_instance_never_signals_the_services_main_pid(monkeypatch):
+    """The service is the main install's daemon: from an isolated
+    instance its MainPID is someone else's, whatever systemd says."""
+    from aipager.wizard import daemon_io
+    _systemctl(monkeypatch, "3201\n")
+    monkeypatch.setattr(daemon_io, "_read_cmdline",
+                        lambda pid: ["/x/aipager", "start"])
+    assert daemon_io._systemd_main_pid() == 3201
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", "/tmp/apg-x/i")
+    assert daemon_io._systemd_main_pid() is None
+
+
+@pytest.mark.parametrize("mine,theirs,out,expected", [
+    # a normal install skips a test instance's daemon
+    ("", {10: "", 11: "/tmp/apg-x/i"}, "10\n11\n", 10),
+    ("", {11: "/tmp/apg-x/i"}, "11\n", None),
+    # an instance picks its own daemon, never the main one
+    ("/tmp/apg-x/i", {10: "", 11: "/tmp/apg-x/i"}, "10\n11\n", 11),
+    ("/tmp/apg-x/i", {10: ""}, "10\n", None),
+    ("/tmp/apg-x/i", {10: "/tmp/apg-y/i"}, "10\n", None),
+    # the same folder spelled with a trailing slash is the same instance
+    ("/tmp/apg-x/i/", {11: "/tmp/apg-x/i"}, "11\n", 11),
+    # an environment that cannot be read is unknown, never a match
+    ("", {10: None}, "10\n", 10),   # a normal install: the lone-match rule
+    ("/tmp/apg-x/i", {10: None}, "10\n", None),
+])
+def test_pick_daemon_pid_keeps_to_this_instance(monkeypatch, mine, theirs, out,
+                                                expected):
+    from aipager.wizard import daemon_io
+    if mine:
+        monkeypatch.setenv("AIPAGER_INSTANCE_DIR", mine)
+    else:
+        monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)
+    monkeypatch.setattr(daemon_io, "_read_cmdline",
+                        lambda pid: ["/x/aipager", "start"])
+    monkeypatch.setattr(daemon_io, "_same_pid_namespace", lambda pid: True)
+    monkeypatch.setattr(daemon_io, "_read_instance_dir",
+                        lambda pid: theirs.get(pid))
+    assert daemon_io._pick_daemon_pid(out) == expected
+
+
+def test_an_instance_never_takes_a_lone_unknown_match(monkeypatch):
+    """No ``/proc`` (macOS): a normal install still takes its one
+    unambiguous match; an instance cannot tell whose it is and takes none."""
+    from aipager.wizard import daemon_io
+    monkeypatch.setattr(daemon_io, "_read_cmdline", lambda pid: None)
+    monkeypatch.setattr(daemon_io, "_read_instance_dir", lambda pid: None)
+    monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)
+    assert daemon_io._pick_daemon_pid("10\n") == 10
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", "/tmp/apg-x/i")
+    assert daemon_io._pick_daemon_pid("10\n") is None
+
+
+@pytest.mark.parametrize("value,expected", [
+    (None, ""),
+    ("", ""),
+    ("/tmp/apg-x/i/", "/tmp/apg-x/i"),
+    ("/tmp/apg-x/./i", "/tmp/apg-x/i"),
+    ("   ", ""),
+    (" /tmp/apg-x/i ", "/tmp/apg-x/i"),
+])
+def test_read_instance_dir_from_a_real_process(value, expected):
+    """Read from a real child's ``/proc/<pid>/environ``; the child exits
+    when its stdin closes (no signal)."""
+    import os
+    import subprocess
+    import sys
+
+    from aipager.wizard import daemon_io
+    env = {k: v for k, v in os.environ.items() if k != "AIPAGER_INSTANCE_DIR"}
+    if value is not None:
+        env["AIPAGER_INSTANCE_DIR"] = value
+    child = subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys; print('up', flush=True); sys.stdin.read()"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env)
+    try:
+        # Read only once the child runs: right after the spawn its
+        # environment can still read as empty.
+        assert child.stdout.readline() == b"up\n"
+        assert daemon_io._read_instance_dir(child.pid) == expected
+    finally:
+        child.stdin.close()
+        child.wait(timeout=30)
+        child.stdout.close()
+
+
+def test_read_instance_dir_of_a_missing_process_is_unknown():
+    from aipager.wizard import daemon_io
+    assert daemon_io._read_instance_dir(2 ** 22 + 7) is None
 
