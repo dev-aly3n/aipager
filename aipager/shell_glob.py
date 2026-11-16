@@ -1424,6 +1424,10 @@ def _bracket(seg: str, i: int, run_on: bool = False,
                     span = seg[close + 3:end]
                     if _POSIX_OPEN_RE.search(span):
                         raise Unsure("an_item_in_a_run_on_bracket")
+                    if "-" in span:
+                        # bash reads ``]h-j`` there as ``]`` and a range,
+                        # ``]-z`` as one range: not modelled here
+                        raise Unsure("a_range_in_a_run_on_bracket")
                     for ch in "]" + span:
                         _member(ch, maybe, sure)
                     return done(end + 1)
@@ -1432,6 +1436,10 @@ def _bracket(seg: str, i: int, run_on: bool = False,
             else:
                 raise Unsure("a_collating_element_of_several_characters")
             j = close + 2
+            if j + 1 < n and seg[j] == "-" and seg[j + 1] != "]":
+                # a range from the item (``[[.a.]-z]`` holds a to z in
+                # bash): its ends are not modelled here
+                raise Unsure("a_range_from_a_posix_item")
             continue
         if c == "[":
             # bash reads ``[[]`` as just ``[``; the floor has refused a

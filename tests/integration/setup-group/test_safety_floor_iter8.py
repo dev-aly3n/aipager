@@ -497,7 +497,7 @@ BRACKET_RANGES = [
 ]
 
 
-@_xfail_params(BRACKET_RANGES, BRACKET)
+@_params(BRACKET_RANGES)
 def test_bracket_range_that_can_match_is_blocked(cmd):
     assert _blocked(cmd) is True
 

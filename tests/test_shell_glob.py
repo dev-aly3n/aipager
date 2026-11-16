@@ -1326,3 +1326,25 @@ def test_a_cached_body_keeps_its_effect_on_sureness():
         lexer = g._Lexer("echo `ls` ; ls *.py", [], bodies={"ls": recorded})
         lexer.commands()
         assert lexer.sure is recorded
+
+
+# ----- iteration 9 -----
+
+@pytest.mark.parametrize("seg", [
+    # tester-iter8-004: a range from a collating symbol or another item
+    "a[[.a.]-z]pager", "a[[.a.]-x]pager", "a[[.-.]-z]pager", "a[[=a=]-z]pager",
+    # a range in the run-on reading after an equivalence class
+    "a[[=x=]]h-j]pager", "a[[=a=]]-z]pager", "a[[=a=]]!-~]pager",
+    "a[[=a=]][h-j]pager", "a[a[=a=]]-z]pager", "a[][=a=]]-z]pager",
+])
+def test_a_range_bash_reads_from_an_item_is_unsure(seg):
+    assert g._classify(seg, False) == g._ALL
+
+
+@pytest.mark.parametrize("seg", [
+    "a[[.a.]-]pager", "a[[=x=]-]pager", "a[[=x=]]i]pager", "[[=n=]]v[a,]",
+])
+def test_an_item_without_such_a_range_is_still_read(seg):
+    assert g._classify(seg, False) != g._ALL
+
+
