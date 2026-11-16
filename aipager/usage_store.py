@@ -490,17 +490,17 @@ def _read_cursor(path: str, cur: dict, st: os.stat_result, budget: int,
 def scan(registry: Any, *, now: float | None = None, force: bool = False) -> None:
     """Read what the transcripts of *registry*'s sessions gained since the
     last scan and count it. Does real work at most every ``SCAN_INTERVAL``
-    seconds unless *force*; reads at most ``SCAN_BUDGET_BYTES`` (plus one
-    long line), least recently read files first. Never raises."""
+    seconds of *now* (the wall clock when not given; a clock set back
+    scans at once) unless *force*; reads at most ``SCAN_BUDGET_BYTES``
+    (plus one long line), least recently read files first. Never raises."""
     global _last_scan, _behind, _dirty
     try:
         with _lock:
-            mono = time.monotonic()
-            if not force and _last_scan and mono - _last_scan < SCAN_INTERVAL:
-                return
-            _last_scan = mono
-            _ensure_loaded()
             ts = _now(now)
+            if not force and _last_scan and 0 <= ts - _last_scan < SCAN_INTERVAL:
+                return
+            _last_scan = ts
+            _ensure_loaded()
             today = _date_of(ts)
             _discover(registry, ts)
             budget = SCAN_BUDGET_BYTES

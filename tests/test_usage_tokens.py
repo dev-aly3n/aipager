@@ -339,6 +339,30 @@ def test_without_force_a_scan_waits_its_interval(world):
     assert _today() == (10, 5, 100, 20)
 
 
+def test_an_unforced_scan_reads_once_the_interval_of_now_has_passed(world):
+    """The interval runs on the ``now`` given (the wall clock in the
+    daemon), so a test can drive it (tester-iter1-001)."""
+    registry, session = world
+    _sess, path = session("frontend")
+    usage_store.scan(registry, now=NOW, force=True)
+    _append(path, _line("msg_1"))
+    usage_store.scan(registry, now=NOW + usage_store.SCAN_INTERVAL - 0.5)
+    assert _today() == (0, 0, 0, 0)
+    usage_store.scan(registry, now=NOW + usage_store.SCAN_INTERVAL + 1)
+    assert _today() == (10, 5, 100, 20)
+
+
+def test_a_clock_set_back_scans_at_once(world):
+    """Without it a clock set back an hour would stop the tally for that
+    hour."""
+    registry, session = world
+    _sess, path = session("frontend")
+    usage_store.scan(registry, now=NOW, force=True)
+    _append(path, _line("msg_1"))
+    usage_store.scan(registry, now=NOW - 3600)
+    assert _today() == (10, 5, 100, 20)
+
+
 def test_models_past_the_cap_go_to_other(world, monkeypatch):
     registry, session = world
     monkeypatch.setattr(usage_store, "MAX_MODELS", 3)
