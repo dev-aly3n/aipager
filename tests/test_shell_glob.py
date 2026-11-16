@@ -1475,6 +1475,24 @@ def test_a_value_glued_to_a_glob_may_be_empty(cmd):
     assert g.command_reaches(cmd)
 
 
+@pytest.mark.parametrize("cmd", [
+    # only the reading with the value empty spells aipager here: a value
+    # that is not empty makes the segment longer than the name
+    "cat ~/.config/aipage[r]$x/x",
+    "cat ~/.config/[a]ip${v}ager/x",
+    "cat ~/.local/sta[t]e$v/aipager/x",
+    "cat ~/.config/a?pager$v/x",
+])
+def test_the_empty_value_reading_alone_finds_these(cmd):
+    """The guard in :func:`shell_glob._classify` that reads a segment
+    holding a value and a glob with each value empty (review-9 nit: this
+    test kills its mutant on its own)."""
+    assert g.command_reaches(cmd)
+    seg = cmd.split("/")[-2].replace("$x", g.OPAQUE).replace(
+        "${v}", g.OPAQUE).replace("$v", g.OPAQUE)
+    assert g._classify(seg, False) & (g._A | g._S)
+
+
 def test_an_empty_value_changes_only_a_glob_segment():
     assert g._classify("[a]ipager" + g.OPAQUE, False) & g._A
     assert not g._classify("[n]vim" + g.OPAQUE, False) & g._A
