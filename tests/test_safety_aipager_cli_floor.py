@@ -1124,6 +1124,13 @@ def test_each_search_finds_what_main_finds(which, cmd, monkeypatch):
     'ls "a;b" ~; ls -R src',
     'grep x ~ ";"; grep -r y src',
     'X="a;b" ls ~; ls -R src',
+    # ... and at a unit of that reading, not inside a string of it (the
+    # quick look counts any place; the walk counts units)
+    'ls "a;b" "x -R" ~',
+    'grep x ~ ";" "y -r"',
+    # ... also when that reading is longer than the quick look reads
+    'ls "a;b" ' + "x " * 300 + "~; ls -R src",
+    'rg "a;b" ' + "x " * 300 + '"y ~"',
 ])
 def test_reading_past_an_escaped_separator_needs_what_could_follow(cmd):
     import re
