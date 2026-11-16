@@ -94,15 +94,22 @@ def test_two_sign_ins_keep_two_readings_never_merged():
     assert plan[0].windows == {"five_hour": Window(9.0, LATER)}
 
 
-@pytest.mark.parametrize("other", [
-    SessionLogin("saved", "", "/home/alice/.claude-work"),
-    SessionLogin("token", "user", "/home/alice/.claude"),
-    SessionLogin("token", "project:/home/alice/frontend", "/home/alice/.claude"),
-    SessionLogin("gateway", "gw.example", "/home/alice/.claude"),
-], ids=["config-home", "source-layer", "folder-layer", "gateway"])
-def test_logins_that_differ_in_any_part_are_kept_apart(other):
-    usage_store.note_plan("a", _windows(1.0), TOKEN, now=NOW)
-    usage_store.note_plan("b", _windows(2.0), other, now=NOW + 1)
+@pytest.mark.parametrize("a,b", [
+    (SessionLogin("saved", "", "/home/alice/.claude"),
+     SessionLogin("saved", "", "/home/alice/.claude-work")),
+    (SessionLogin("token", "env", "/home/alice/.claude"),
+     SessionLogin("token", "user", "/home/alice/.claude")),
+    (SessionLogin("token", "project:/home/alice/frontend", "/home/alice/.claude"),
+     SessionLogin("token", "project:/home/alice/backend", "/home/alice/.claude")),
+    (SessionLogin("gateway", "gw.example", "/home/alice/.claude"),
+     SessionLogin("gateway", "gw2.example", "/home/alice/.claude")),
+    (SessionLogin("token", "env", "/home/alice/.claude"),
+     SessionLogin("saved", "", "/home/alice/.claude")),
+], ids=["config-home", "source-layer", "folder-layer", "gateway-host", "kind"])
+def test_logins_that_differ_in_any_part_are_kept_apart(a, b):
+    """Each pair differs in exactly one part of the sign-in."""
+    usage_store.note_plan("a", _windows(1.0), a, now=NOW)
+    usage_store.note_plan("b", _windows(2.0), b, now=NOW + 1)
     assert len(usage_store.snapshot(None, now=NOW + 1).plan) == 2
 
 

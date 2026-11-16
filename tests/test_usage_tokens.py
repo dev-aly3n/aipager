@@ -218,12 +218,19 @@ def test_truncation_rereads_without_counting_twice(world):
 
 
 def test_a_replaced_file_is_read_from_the_start(world, tmp_path):
+    """A new inode is read from 0 even when it is larger than the old
+    offset: here the old offset falls past msg_2 and msg_3 of the new
+    file, which carrying on from it would never count."""
     registry, session = world
     _sess, path = session("frontend")
-    _append(path, _line("msg_1"))
+    padded = json.loads(_line("msg_1"))
+    padded["message"]["content"] = [{"type": "text", "text": "p" * 600}]
+    _append(path, json.dumps(padded) + "\n")
     _scan(registry)
     other = tmp_path / "replacement.jsonl"
-    other.write_text(_line("msg_1") + _line("msg_2") + _line("msg_3"))
+    filler = json.dumps({"type": "system", "text": "f" * 2000}) + "\n"
+    other.write_text(_line("msg_2") + _line("msg_3") + filler)
+    assert other.stat().st_size > path.stat().st_size > len(_line("msg_2") + _line("msg_3"))
     os.replace(other, path)               # a new inode, larger than before
     _scan(registry)
     assert _today() == (30, 15, 300, 60)
@@ -274,6 +281,26 @@ def test_one_scan_reads_at_most_its_budget_and_says_it_is_behind(world, monkeypa
     snap = usage_store.snapshot(None, now=NOW)
     assert snap.behind is False
     assert snap.today == (180, 90, 1800, 360)
+
+
+def test_a_spent_budget_reads_no_further_file(world, monkeypatch):
+    """A long line can take a scan past its budget; once spent, no other
+    file is read in that scan (it waits for the next one)."""
+    registry, session = world
+    monkeypatch.setattr(usage_store, "SCAN_BUDGET_BYTES", 500)
+    monkeypatch.setattr(usage_store, "CHUNK_BYTES", 300)
+    _a, long_path = session("long")
+    big = json.loads(_line("msg_big"))
+    big["message"]["content"] = [{"type": "text", "text": "x" * 1500}]
+    _append(long_path, json.dumps(big) + "\n")
+    _b, next_path = session("next")
+    _append(next_path, _line("msg_next"))
+    _scan(registry)
+    assert usage_store._cursors[str(long_path)]["offset"] == long_path.stat().st_size
+    assert usage_store._cursors[str(next_path)]["offset"] == 0
+    assert usage_store.snapshot(None, now=NOW).behind is True
+    _scan(registry)
+    assert _today() == (20, 10, 200, 40)
 
 
 def test_a_line_longer_than_the_limit_is_skipped_and_reading_resumes(world, monkeypatch):
@@ -350,6 +377,8 @@ def test_entries_older_than_seven_days_or_far_in_the_future_are_ignored(world):
     snap = usage_store.snapshot(None, now=NOW)
     assert snap.week == (1, 0, 0, 0)
     assert len(snap.days) == 7 and snap.days[6][1] == (1, 0, 0, 0)
+    # A far-future entry is not kept for the day it names either.
+    assert usage_store.snapshot(None, now=NOW + 3 * 86400).today == (0, 0, 0, 0)
 
 
 def test_old_days_are_pruned_with_their_ids(world):
