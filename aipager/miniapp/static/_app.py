@@ -795,6 +795,9 @@ APP_JS = r"""
     sessions.forEach(function (s) { lastSessionsByLabel[s.label] = s; });
     pulseForStatusChanges(sessions);
 
+    // The Usage button (8.131): a hint only, /api/usage enforces the rule.
+    document.getElementById("usage-open").hidden = data.can_usage !== true;
+
     var sig = gridSignature(data);
     if (sig === gridSig) { return; }     // nothing on screen would change
     gridSig = sig;
@@ -1998,7 +2001,7 @@ APP_JS = r"""
     "now": true, "perms": true, "rename": true, "reset": true, "restart": true,
     "resume": true,
     "settings": true, "start": true, "status": true, "stop": true,
-    "update": true, "whoami": true
+    "update": true, "usage": true, "whoami": true
   };
 
   function renameValidationError(value) {
@@ -2345,7 +2348,8 @@ APP_JS = r"""
     settings: { section: "view-settings", topLevel: true,  polls: null },
     detail:   { section: "view-detail",   topLevel: false, polls: "detail" },
     "new":    { section: "view-new",      topLevel: false, polls: null },
-    report:   { section: "view-report",   topLevel: false, polls: null }
+    report:   { section: "view-report",   topLevel: false, polls: null },
+    usage:    { section: "view-usage",    topLevel: false, polls: null }
   };
 
   // ---- Telegram chrome: MainButton and vertical swipes ------------------
@@ -3003,6 +3007,114 @@ APP_JS = r"""
     showView("report");
     rpLoad();
     rpOnInput();
+  }
+
+  // ---- usage (roadmap 8.131) -------------------------------------------
+  // Plan limits and tokens. Every sentence and number arrives rendered
+  // from GET /api/usage (the daemon's clock, the viewer's language), so
+  // the page only lays it out, with textContent.
+  var usageSeq = 0;
+
+  function usageText(host, cls, text, tag) {
+    if (!text) { return null; }
+    var el = make(tag || "p", cls);
+    el.textContent = plain(text);
+    host.appendChild(el);
+    return el;
+  }
+
+  function usageTable(host, title, columns, rows, ltrLabels) {
+    if (!rows || !rows.length) { return; }
+    if (title) { usageText(host, "sect-title", title, "h3"); }
+    var table = make("div", "utable");
+    var head = make("div", "utable-row utable-head");
+    (columns || []).forEach(function (c, i) {
+      var cell = make("span", i ? "utable-num" : "utable-label");
+      cell.textContent = plain(c);
+      head.appendChild(cell);
+    });
+    table.appendChild(head);
+    rows.forEach(function (r) {
+      var row = make("div", "utable-row");
+      var label = make("span", "utable-label");
+      label.textContent = plain(r.label);
+      if (ltrLabels) { setAttr(label, "dir", "ltr"); }   // a model id
+      row.appendChild(label);
+      (r.cells || []).forEach(function (c) {
+        var cell = make("span", "utable-num");
+        cell.textContent = String(c);
+        row.appendChild(cell);
+      });
+      table.appendChild(row);
+    });
+    host.appendChild(table);
+  }
+
+  function renderUsage(d) {
+    var host = document.getElementById("usage-body");
+    host.innerHTML = "";
+    var plan = d.plan || {};
+    if (plan.shown) {
+      usageText(host, "sect-title", plan.title, "h3");
+      (plan.logins || []).forEach(function (login) {
+        var card = make("div", "usage-card");
+        usageText(card, "usage-name", login.name);
+        (login.windows || []).forEach(function (w) {
+          usageText(card, "usage-line", w.line);
+          if (w.state !== "reset") {
+            var bar = make("div", "ubar");
+            var fill = make("div", "ubar-fill");
+            setAttr(fill, "style", "--pct:" + Math.max(0, Math.min(100, Number(w.pct) || 0)));
+            bar.appendChild(fill);
+            card.appendChild(bar);
+          }
+          usageText(card, "usage-sub", w.reset);
+        });
+        usageText(card, "usage-sub", login.fresh);
+        host.appendChild(card);
+      });
+      usageText(host, "sect-note", plan.empty);
+    }
+    var tok = d.tokens || {};
+    usageText(host, "sect-title", tok.title, "h3");
+    if (tok.empty) {
+      usageText(host, "sect-note", tok.empty);
+    } else {
+      usageTable(host, "", tok.columns, tok.rows, false);
+      usageTable(host, tok.days_title, tok.columns, tok.days, false);
+      usageTable(host, tok.models_title, tok.columns, tok.models, true);
+    }
+    usageText(host, "sect-note", tok.note);
+  }
+
+  function openUsage() {
+    var host = document.getElementById("usage-body");
+    host.innerHTML = "";
+    usageText(host, "sect-note", t("ui.shell.loading"));
+    showView("usage");
+    var seq = ++usageSeq;
+    var stale = function () { return seq !== usageSeq || currentView.type !== "usage"; };
+    fetch("/api/usage", { cache: "no-store", headers: authHeaders() })
+      .then(function (res) {
+        if (res.status === 401) {
+          var authErr = new Error("auth");
+          authErr.authFailed = true;
+          throw authErr;
+        }
+        if (!res.ok) { throw new Error("HTTP " + res.status); }
+        return res.json();
+      })
+      .then(function (d) {
+        if (stale()) { return; }
+        if ((d && d.ui) || L.code !== "en") { setUi(d && d.ui); }
+        renderUsage(d || {});
+      }, function (err) {
+        if (stale()) { return; }
+        if (err && err.authFailed) { handleFetchError(err); return; }
+        // Not an admin here any more (403), or the server is away.
+        showNotice(t("ui.action.failed"), "err");
+        showGrid();
+      });
   }
 
   function rpOutcome(d) {
@@ -4279,6 +4391,7 @@ APP_JS = r"""
     if (currentView.label) { answerPrompt(currentView.label); }
   });
   document.getElementById("empty-new").addEventListener("click", openNewSession);
+  document.getElementById("usage-open").addEventListener("click", openUsage);
 
   // ---- top-level tabs -------------------------------------------------
 

@@ -49,7 +49,7 @@ _GROUP_TYPES = frozenset({ChatType.GROUP, ChatType.SUPERGROUP})
 OWN_COMMANDS = frozenset({
     "start", "help", "status", "stop", "now", "kill", "new", "resume",
     "clearqueue", "whoami", "mode", "perms", "settings", "language", "app", "update",
-    "restart", "rename", "delete", "diff",
+    "restart", "rename", "delete", "diff", "usage",
 })
 
 #: How long a later item of an album is let through after an item of the

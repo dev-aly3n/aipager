@@ -92,6 +92,11 @@ def _credentials_file_is_fresh(path: Path | None = None) -> bool:
         return False
 
 
+#: Public name for :func:`claude_bootstrap.session_login`, which mirrors
+#: launch_session's strip-the-token rule (roadmap 8.131).
+credentials_file_is_fresh = _credentials_file_is_fresh
+
+
 def _credentials_file_has_token(path: Path | None = None) -> bool:
     """Return True iff Claude Code's credentials file holds a real,
     non-empty ``claudeAiOauth.accessToken``.
@@ -1368,6 +1373,7 @@ _RESERVED = {
     "status", "stop", "kill", "new", "help", "start", "settings", "language",
     "restart", "rename", "delete", "diff",
     "app", "clearqueue", "perms", "mode", "resume", "whoami", "update", "now",
+    "usage",
     # `aipager session` subcommand verbs (see cli/session.py) — these are
     # matched before the name is treated as a session at all.
     "ls", "list",

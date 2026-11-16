@@ -293,6 +293,7 @@
 {"k": "cmd.status", "src": "b3ddc08d", "v": "Tus sesiones"}
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "Detener lo que hace Claude"}
 {"k": "cmd.talk", "src": "a0173425", "v": "Hablar con {session}"}
+{"k": "cmd.usage", "src": "0311ee6e", "v": "Límites del plan y tokens"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"many": "<i>…y {n} líneas más</i>", "one": "<i>…y {n} línea más</i>", "other": "<i>…y {n} líneas más</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Terminado (el agente en segundo plano desapareció)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Terminado ({clock}, el agente en segundo plano desapareció)"}
@@ -317,7 +318,7 @@
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Escribe con tu propia cuenta para usar el bot."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"many": "⏳ llegó tarde: retenido {n} min por un límite de Telegram", "one": "⏳ llegó tarde: retenido {n} min por un límite de Telegram", "other": "⏳ llegó tarde: retenido {n} min por un límite de Telegram"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "Ese mensaje ya es antiguo y no se envió; vuelve a enviarlo."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>Admin:</b> /update (actualiza aipager y Claude Code)"}
+{"k": "help.admin", "src": "67882dc1", "v": "<b>Admin:</b> /update (actualiza aipager y Claude Code) · /usage (límites del plan y tokens)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>Control:</b> /stop · /now (enviar los mensajes en cola) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>Gestionar:</b> /status y luego ⋮ (reiniciar, cambiar nombre, diff, terminar, eliminar)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>Ajustes:</b> /settings · /mode (Modo Preguntar, Automático o Acceso total)"}
@@ -1156,6 +1157,7 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Cambiar a Modo Automático"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Cambiar a Modo Acceso total"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Reintentar"}
+{"k": "ui.btn.usage", "src": "0bb18642", "v": "Uso"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Esperar 10 min más"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "¿Borrar la conversación de {session}?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude empieza una conversación nueva y olvida esta; la anterior queda guardada en la computadora, pero no se puede continuar desde aquí."}
@@ -1476,6 +1478,7 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Actualizado a {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"many": "Actualizado a {version}; {n} sesiones se volvieron a conectar.", "one": "Actualizado a {version}; {n} sesión se volvió a conectar.", "other": "Actualizado a {version}; {n} sesiones se volvieron a conectar."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} está instalado y espera un reinicio."}
+{"k": "ui.usage.title", "src": "0bb18642", "v": "Uso"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude te está preguntando"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude necesita tu permiso"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Hay una solicitud de permiso abierta en el chat."}
@@ -1580,6 +1583,51 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Reinicia aipager para terminar la actualización."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ La actualización se detuvo por un error inesperado (mira el log de aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ El reinicio programado no ocurrió: la nueva versión está instalada, pero la antigua sigue funcionando. Reinícialo tú mismo: {command}"}
+{"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Caché leída"}
+{"k": "usage.col.cache_write", "src": "d725b361", "v": "Caché escrita"}
+{"k": "usage.col.input", "src": "aef36502", "v": "Entrada"}
+{"k": "usage.col.output", "src": "220e06ba", "v": "Salida"}
+{"k": "usage.days.title", "src": "d27d4f9b", "v": "Por día"}
+{"k": "usage.denied", "src": "573cfa99", "v": "🚫 Solo un admin puede ver el uso."}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"many": "Dato de las {time} (hace {n} días), de la sesión {session}.", "one": "Dato de las {time} (hace {n} día), de la sesión {session}.", "other": "Dato de las {time} (hace {n} días), de la sesión {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"many": "Dato de las {time} (hace {n} horas), de la sesión {session}.", "one": "Dato de las {time} (hace {n} hora), de la sesión {session}.", "other": "Dato de las {time} (hace {n} horas), de la sesión {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"many": "Dato de las {time} (hace {n} minutos), de la sesión {session}.", "one": "Dato de las {time} (hace {n} minuto), de la sesión {session}.", "other": "Dato de las {time} (hace {n} minutos), de la sesión {session}."}}
+{"k": "usage.fresh.now", "src": "eb614feb", "v": "Dato de las {time} (ahora mismo), de la sesión {session}."}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"many": "Dato de las {time} (hace {n} días), de una sesión de otro chat.", "one": "Dato de las {time} (hace {n} día), de una sesión de otro chat.", "other": "Dato de las {time} (hace {n} días), de una sesión de otro chat."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"many": "Dato de las {time} (hace {n} horas), de una sesión de otro chat.", "one": "Dato de las {time} (hace {n} hora), de una sesión de otro chat.", "other": "Dato de las {time} (hace {n} horas), de una sesión de otro chat."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"many": "Dato de las {time} (hace {n} minutos), de una sesión de otro chat.", "one": "Dato de las {time} (hace {n} minuto), de una sesión de otro chat.", "other": "Dato de las {time} (hace {n} minutos), de una sesión de otro chat."}}
+{"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "Dato de las {time} (ahora mismo), de una sesión de otro chat."}
+{"k": "usage.group_note", "src": "827f3d0c", "v": "Los límites del plan no se muestran en un grupo. Envía /usage en tu chat privado con el bot o abre la Mini App."}
+{"k": "usage.login.cloud", "src": "db9bd808", "v": "Proveedor en la nube"}
+{"k": "usage.login.gateway", "src": "c45b6181", "v": "Gateway {host}"}
+{"k": "usage.login.gateway_other", "src": "688e68d9", "v": "Gateway usado en otro chat"}
+{"k": "usage.login.saved", "src": "8ebcb721", "v": "Cuenta de Claude guardada en este equipo"}
+{"k": "usage.login.token", "src": "64d01959", "v": "Token de acceso de Claude"}
+{"k": "usage.login.unknown", "src": "1bf1c689", "v": "Cuenta desconocida"}
+{"k": "usage.models.title", "src": "cd5eb0b5", "v": "Por modelo, últimos 7 días"}
+{"k": "usage.plan.none", "src": "dbfa3286", "v": "Los límites del plan aparecen aquí cuando Claude responde en una sesión iniciada con una suscripción de Claude. Las claves de API y los gateways sin límite de gasto no los informan."}
+{"k": "usage.plan.title", "src": "f65ebee7", "v": "Límites del plan"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "Se reinicia en {days} d {hours} h"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "Se reinicia en {hours} h {minutes} min, a las {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "Se reinicia en {minutes} min, a las {time}"}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"many": "hace {n} días", "one": "hace {n} día", "other": "hace {n} días"}}
+{"k": "usage.row.today", "src": "24345a14", "v": "Hoy"}
+{"k": "usage.row.week", "src": "df833fe8", "v": "Últimos 7 días"}
+{"k": "usage.row.yesterday", "src": "da24830f", "v": "Ayer"}
+{"k": "usage.title", "src": "0bb18642", "v": "Uso"}
+{"k": "usage.tokens.behind", "src": "f5039b88", "v": "aipager aún está leyendo conversaciones anteriores, así que estos totales pueden subir."}
+{"k": "usage.tokens.none", "src": "43bf5b4d", "v": "Aún no hay tokens registrados."}
+{"k": "usage.tokens.title", "src": "c38c6c1f", "v": "Tokens"}
+{"k": "usage.tokens.title_chat", "src": "fe5e7335", "v": "Tokens en este chat"}
+{"k": "usage.tokens.title_managed", "src": "3285044d", "v": "Tokens en los chats que administras"}
+{"k": "usage.tokens.today", "src": "9463a013", "v": "Hoy: {input} de entrada, {output} de salida, {cache_read} leídos de caché, {cache_write} escritos en caché"}
+{"k": "usage.tokens.week", "src": "c70b981a", "v": "Últimos 7 días: {input} de entrada, {output} de salida, {cache_read} leídos de caché, {cache_write} escritos en caché"}
+{"k": "usage.window.five_hour", "src": "a0eb1726", "v": "Ventana de 5 horas: {pct} usado"}
+{"k": "usage.window.five_hour_reset", "src": "a673c8fd", "v": "Ventana de 5 horas: se reinició desde la última lectura"}
+{"k": "usage.window.seven_day", "src": "9d526d84", "v": "Esta semana (todos los modelos): {pct} usado"}
+{"k": "usage.window.seven_day_reset", "src": "f42ff03c", "v": "Esta semana (todos los modelos): se reinició desde la última lectura"}
+{"k": "usage.window.spend_limit", "src": "5de9218d", "v": "Límite de gasto: {pct} usado"}
+{"k": "usage.window.spend_limit_reset", "src": "6994710b", "v": "Límite de gasto: se reinició desde la última lectura"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(todas)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}

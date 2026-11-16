@@ -309,6 +309,10 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # aipager.i18n.persist, so one entry covers every reader.
         "aipager.config.LANGUAGE_STATE_FILE":
             home / ".local" / "state" / "aipager" / "languages.json",
+        # Plan usage and the token tally (8.131): read LATE by
+        # aipager.usage_store, so one entry covers every reader.
+        "aipager.config.USAGE_STATE_FILE":
+            home / ".local" / "state" / "aipager" / "usage.json",
         # The outbox of files Claude sends (aipager.bot.outbox): read LATE.
         "aipager.config.OUTBOX_DIR":
             home / ".local" / "state" / "aipager" / "outbox",
@@ -400,6 +404,16 @@ def _isolate_problem_report_sends(tmp_path, monkeypatch):
     monkeypatch.setattr(errors, "_report_socket_path", lambda: target)
     monkeypatch.setattr(notify_hook, "SOCKET_PATH", target)
     return target
+
+
+@pytest.fixture(autouse=True)
+def _reset_usage_store(_isolate_home_paths):
+    """The usage store (8.131) is module state too: every test starts with
+    it empty and unread (it reads the redirected file)."""
+    from aipager import usage_store
+    usage_store.reset_for_tests()
+    yield
+    usage_store.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)

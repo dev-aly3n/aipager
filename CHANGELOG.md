@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `/usage` and a Usage page in the Mini App show your plan limits as Claude Code reports them and the tokens aipager's sessions used today and over the last 7 days (owner and admins).
 - **`aipager setup group` sets up a Telegram group, its members and their roles with no prompts, and `aipager setup detect-group` finds a group's id.** For scripts and coding agents, on an install that is already set up: the same checks, file and live reload as `aipager config`; role changes and owner grants need `--force`, running it twice changes nothing, and nothing is ever sent to the group.
 
 ### Security

@@ -347,6 +347,17 @@ REPORT_RUNNING_FILE = Path.home() / ".local" / "share" / "aipager" / "running.js
 # snapshotted for the whole test run.
 LANGUAGE_STATE_FILE = Path.home() / ".local" / "state" / "aipager" / "languages.json"
 
+# Plan usage and the token tally (roadmap 8.131, ``aipager.usage_store``):
+# the newest ``rate_limits`` reading per sign-in, the per-day token counts
+# and the transcript read offsets they were counted up to. In the XDG state
+# dir for the same reason as REPORTS_FILE: the live daemon rewrites it on
+# its own (every 30 s at most while something changed), and
+# ~/.local/share/aipager and ~/.config/aipager are snapshotted for the
+# whole test run. Read LATE by that module, so ONE entry in
+# tests/conftest.py::_isolate_home_paths redirects it, and that redirect
+# is NOT optional.
+USAGE_STATE_FILE = Path.home() / ".local" / "state" / "aipager" / "usage.json"
+
 # Copies of the files Claude sends to a chat (SendUserFile), one private
 # folder per chat, until they are sent (aipager.bot.outbox). Under the
 # state folder, which every restricted turn's floor already covers. Read

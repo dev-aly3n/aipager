@@ -335,7 +335,7 @@ def close_open_card(bot: TelegramBot, chat_id: int | None,
 #: Commands that only look (or reopen or use the card): the card keeps
 #: waiting through them. Every other command acts on a session.
 _LOOKING_COMMANDS = frozenset({"new", "status", "start", "help", "whoami",
-                               "settings", "app"})
+                               "settings", "app", "usage"})
 
 #: Buttons that only look: the card's own, /settings (its New sessions
 #: page is this card's own defaults; per-session preferences), and paging

@@ -227,6 +227,26 @@ _TASKS_ADDED = {
 }
 
 
+#: The Usage page (roadmap 8.131): the home's Usage button, the window
+#: cards and bars, and the token tables; after ``.updates-again``.
+_USAGE_ADDED = {
+    ("", ".updates-again"): [
+        ["", ".usage-link", [["background", "var(--fill)"], ["border-radius", "var(--r-pill)"], ["color", "var(--ink)"], ["font-size", "var(--fs-sm)"], ["font-weight", "600"], ["margin-bottom", "var(--s4)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"], ["min-height", "36px"], ["padding-bottom", "0"], ["padding-left", "var(--s4)"], ["padding-right", "var(--s4)"], ["padding-top", "0"]]],
+        ["", ".usage-card", [["background", "var(--surface)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["margin-bottom", "var(--s3)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"], ["padding-bottom", "var(--s3)"], ["padding-left", "var(--s4)"], ["padding-right", "var(--s4)"], ["padding-top", "var(--s3)"]]],
+        ["", ".usage-name", [["font-weight", "600"], ["margin-bottom", "var(--s2)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"]]],
+        ["", ".usage-line", [["font-size", "var(--fs-sm)"], ["line-height", "var(--lh-sm)"], ["margin-bottom", "var(--s1)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "var(--s2)"]]],
+        ["", ".usage-sub", [["color", "var(--ink-3)"], ["font-size", "13px"], ["line-height", "18px"], ["margin-bottom", "0"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "var(--s1)"]]],
+        ["", ".ubar", [["background", "var(--track)"], ["block-size", "8px"], ["border-radius", "var(--r-pill)"], ["overflow", "hidden"]]],
+        ["", ".ubar-fill", [["background", "var(--accent)"], ["block-size", "100%"], ["border-radius", "var(--r-pill)"], ["inline-size", "calc(var(--pct, 0) * 1%)"]]],
+        ["", ".utable", [["background", "var(--line)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["display", "grid"], ["gap", "1px"], ["overflow", "hidden"]]],
+        ["", ".utable-row", [["background", "var(--surface)"], ["display", "grid"], ["font-size", "13px"], ["gap", "var(--s2)"], ["grid-template-columns", "minmax(0, 1.4fr) repeat(4, minmax(0, 1fr))"], ["line-height", "18px"], ["padding-bottom", "var(--s2)"], ["padding-left", "var(--s3)"], ["padding-right", "var(--s3)"], ["padding-top", "var(--s2)"]]],
+        ["", ".utable-head", [["color", "var(--ink-3)"], ["font-weight", "600"]]],
+        ["", ".utable-label", [["min-width", "0"], ["overflow-wrap", "anywhere"]]],
+        ["", ".utable-num", [["font-variant-numeric", "tabular-nums"], ["text-align", "right"]]],
+    ],
+}
+
+
 def _expected_now(golden: list) -> list:
     out = []
     for ctx, sel, props in golden:
@@ -239,6 +259,7 @@ def _expected_now(golden: list) -> list:
         out.extend(_UPDATES_CARD_ADDED.get((ctx, sel), []))
         out.extend(_APPEARANCE_SECTION_ADDED.get((ctx, sel), []))
         out.extend(_TASKS_ADDED.get((ctx, sel), []))
+        out.extend(_USAGE_ADDED.get((ctx, sel), []))
     return out
 
 

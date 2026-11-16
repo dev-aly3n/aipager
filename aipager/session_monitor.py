@@ -14,7 +14,7 @@ import logging
 import os
 import time
 
-from aipager import claude_jobs, rm_countdown, statusline_file, term_dialog
+from aipager import claude_jobs, rm_countdown, statusline_file, term_dialog, usage_store
 from aipager.dtach import bg_jobs
 from aipager.report import store as report_store
 from aipager.dtach import inject as dtach_inject
@@ -1405,6 +1405,11 @@ class SessionMonitor:
         # Problem reports (8.112): the same dirty-flag-plus-tick debounce as
         # the registry; a no-op unless something was recorded. Never raises.
         report_store.save_if_dirty()
+        # The token tally (8.131): new transcript lines, at most every
+        # usage_store.SCAN_INTERVAL seconds and SCAN_BUDGET_BYTES a scan,
+        # then the same debounced save. Both never raise.
+        usage_store.scan(self.registry)
+        usage_store.save_if_dirty()
         if self.on_mute_catchup is not None:
             try:
                 await self.on_mute_catchup()

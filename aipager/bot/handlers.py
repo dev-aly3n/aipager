@@ -160,8 +160,11 @@ HELP_MANAGE = Msg("help.manage",
 HELP_SETTINGS = Msg("help.settings", "<b>Settings:</b> /settings · /mode (Ask, Auto or Full access)",
                     note="/help: settings and the permission mode; Auto and Ask are the "
                          "mode names")
-HELP_ADMIN = Msg("help.admin", "<b>Admin:</b> /update (aipager and Claude Code)",
-                 note="/help: what /update updates")
+HELP_ADMIN = Msg("help.admin",
+                 "<b>Admin:</b> /update (aipager and Claude Code) · /usage (plan limits and "
+                 "tokens)",
+                 note="/help: what /update updates, and /usage: the plan's usage limits and "
+                      "the tokens sessions used")
 HELP_TIP = Msg("help.tip",
                "<i>Tip: tapping a command sends it at once. Long-press it (phone) or "
                "press Tab (desktop) to add text first.</i>",

@@ -94,6 +94,55 @@ def parse(data: dict[str, Any], mtime: float = 0.0) -> StatusLine:
     )
 
 
+#: The plan-usage windows Claude Code hands its status line (2.1.325's
+#: schema), in the order /usage shows them. Any subset may be present:
+#: a setup token reports only ``seven_day``, an API key or a gateway
+#: without a spend limit reports none (roadmap 8.131).
+RATE_WINDOWS = ("five_hour", "seven_day", "spend_limit")
+#: ``resets_at`` is unix seconds; anything outside 2001..2096 is not one.
+_RESET_MIN, _RESET_MAX = 1_000_000_000, 4_000_000_000
+
+
+@dataclass(frozen=True)
+class Window:
+    """One plan-usage window: how much is used (percent) and when it
+    resets (unix seconds)."""
+
+    pct: float
+    resets_at: int
+
+
+def parse_rate_limits(data: Any) -> dict[str, Window] | None:
+    """The valid windows of the payload's ``rate_limits`` object, or
+    ``None`` when it is missing, not an object, or holds no valid window.
+
+    The file is written by whatever Claude Code sends, so every window is
+    checked: ``used_percentage`` a real number in 0..1000 (a spend limit
+    can run over 100), ``resets_at`` a number of unix seconds; an unknown
+    window name, a bool, a string, NaN or infinity is dropped. Never
+    raises. Stays free of ``aipager.i18n``: this module is in the hook's
+    import closure.
+    """
+    if not isinstance(data, dict):
+        return None
+    limits = data.get("rate_limits")
+    if not isinstance(limits, dict):
+        return None
+    windows: dict[str, Window] = {}
+    for name in RATE_WINDOWS:
+        raw = limits.get(name)
+        if not isinstance(raw, dict):
+            continue
+        pct = _num(raw.get("used_percentage"))
+        resets = _num(raw.get("resets_at"))
+        if pct is None or not 0 <= pct <= 1000:
+            continue
+        if resets is None or not _RESET_MIN <= resets <= _RESET_MAX:
+            continue
+        windows[name] = Window(pct=pct, resets_at=int(resets))
+    return windows or None
+
+
 def read_status_line(session_name: str) -> StatusLine | None:
     """Parse the session's status-line file, or ``None`` when there is
     no usable file (missing, unreadable, malformed)."""

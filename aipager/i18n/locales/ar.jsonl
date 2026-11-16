@@ -293,6 +293,7 @@
 {"k": "cmd.status", "src": "b3ddc08d", "v": "جلساتك"}
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "إيقاف ما يفعله Claude"}
 {"k": "cmd.talk", "src": "a0173425", "v": "التحدث مع {session}"}
+{"k": "cmd.usage", "src": "0311ee6e", "v": "حدود الاشتراك والـ tokens"}
 {"k": "diff.more_lines", "src": "816da678", "v": {"few": "<i>…و{n} أسطر أخرى</i>", "many": "<i>…و{n} سطرًا آخر</i>", "one": "<i>…وسطر آخر</i>", "other": "<i>…و{n} سطر آخر</i>", "two": "<i>…وسطران آخران</i>", "zero": "<i>…ولا أسطر أخرى</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · انتهت (اختفى الوكيل في الخلفية)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · انتهت ({clock}، اختفى الوكيل في الخلفية)"}
@@ -317,7 +318,7 @@
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "لاستخدام البوت يلزم النشر باسمك الشخصي."}
 {"k": "held.late_marker", "src": "e38c307b", "v": {"few": "⏳ وصلت متأخرة: احتُجزت {n} دقائق بسبب حدود Telegram", "many": "⏳ وصلت متأخرة: احتُجزت {n} دقيقة بسبب حدود Telegram", "one": "⏳ وصلت متأخرة: احتُجزت دقيقة واحدة بسبب حدود Telegram", "other": "⏳ وصلت متأخرة: احتُجزت {n} دقيقة بسبب حدود Telegram", "two": "⏳ وصلت متأخرة: احتُجزت دقيقتين بسبب حدود Telegram", "zero": "⏳ وصلت متأخرة: احتُجزت {n} دقيقة بسبب حدود Telegram"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "هذه الرسالة قديمة جدًا ولم تُرسل؛ يمكنك إرسالها مرة أخرى."}
-{"k": "help.admin", "src": "29ac6154", "v": "<b>المشرف:</b> /update (تحديث aipager وClaude Code)"}
+{"k": "help.admin", "src": "67882dc1", "v": "<b>المشرف:</b> /update (تحديث aipager وClaude Code) · /usage (حدود الاشتراك والـ tokens)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>التحكم:</b> /stop · /now (إرسال رسائل قائمة الانتظار) · /clearqueue"}
 {"k": "help.manage", "src": "75144040", "v": "<b>الإدارة:</b> /status، ثم ⋮ (إعادة التشغيل، إعادة التسمية، التغييرات، الإنهاء، الحذف)"}
 {"k": "help.settings", "src": "ab2b823b", "v": "<b>الإعدادات:</b> /settings · /mode (وضع «اسأل» أو التلقائي أو الوصول الكامل)"}
@@ -1156,6 +1157,7 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "التبديل إلى الوضع التلقائي"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "التبديل إلى وضع الوصول الكامل"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "إعادة المحاولة"}
+{"k": "ui.btn.usage", "src": "0bb18642", "v": "الاستخدام"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "الانتظار ١٠ د أخرى"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "مسح المحادثة في {session}؟"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "سيبدأ Claude محادثة جديدة وينسى هذه المحادثة، وتبقى المحادثة القديمة محفوظة على الكمبيوتر لكن لا يمكن استئنافها من هنا."}
@@ -1476,6 +1478,7 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "تم التحديث إلى {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"few": "تم التحديث إلى {version}، وأُعيد ربط {n} جلسات.", "many": "تم التحديث إلى {version}، وأُعيد ربط {n} جلسة.", "one": "تم التحديث إلى {version}، وأُعيد ربط جلسة واحدة.", "other": "تم التحديث إلى {version}، وأُعيد ربط {n} جلسة.", "two": "تم التحديث إلى {version}، وأُعيد ربط جلستين.", "zero": "تم التحديث إلى {version}، ولم تُربط أي جلسة من جديد."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} مثبت وينتظر إعادة التشغيل."}
+{"k": "ui.usage.title", "src": "0bb18642", "v": "الاستخدام"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude يسألك"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude بحاجة إلى إذنك"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "يوجد طلب إذن مفتوح في الدردشة."}
@@ -1580,6 +1583,51 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "لإكمال التحديث: إعادة تشغيل aipager."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ توقف التحديث بسبب خطأ غير متوقع (التفاصيل في سجل aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ لم تحدث إعادة التشغيل المجدولة - الإصدار الجديد مثبت لكن القديم لا يزال يعمل. يُرجى إعادة تشغيله يدويًا: {command}"}
+{"k": "usage.col.cache_read", "src": "62df4f2a", "v": "قراءة الكاش"}
+{"k": "usage.col.cache_write", "src": "d725b361", "v": "كتابة الكاش"}
+{"k": "usage.col.input", "src": "aef36502", "v": "إدخال"}
+{"k": "usage.col.output", "src": "220e06ba", "v": "إخراج"}
+{"k": "usage.days.title", "src": "d27d4f9b", "v": "حسب اليوم"}
+{"k": "usage.denied", "src": "573cfa99", "v": "🚫 المشرف فقط يمكنه رؤية الاستخدام."}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"few": "حتى الساعة {time} (قبل {n} أيام)، من الجلسة {session}.", "many": "حتى الساعة {time} (قبل {n} يومًا)، من الجلسة {session}.", "one": "حتى الساعة {time} (قبل يوم)، من الجلسة {session}.", "other": "حتى الساعة {time} (قبل {n} يوم)، من الجلسة {session}.", "two": "حتى الساعة {time} (قبل يومين)، من الجلسة {session}.", "zero": "حتى الساعة {time} (اليوم)، من الجلسة {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"few": "حتى الساعة {time} (قبل {n} ساعات)، من الجلسة {session}.", "many": "حتى الساعة {time} (قبل {n} ساعة)، من الجلسة {session}.", "one": "حتى الساعة {time} (قبل ساعة)، من الجلسة {session}.", "other": "حتى الساعة {time} (قبل {n} ساعة)، من الجلسة {session}.", "two": "حتى الساعة {time} (قبل ساعتين)، من الجلسة {session}.", "zero": "حتى الساعة {time} (الآن)، من الجلسة {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"few": "حتى الساعة {time} (قبل {n} دقائق)، من الجلسة {session}.", "many": "حتى الساعة {time} (قبل {n} دقيقة)، من الجلسة {session}.", "one": "حتى الساعة {time} (قبل دقيقة)، من الجلسة {session}.", "other": "حتى الساعة {time} (قبل {n} دقيقة)، من الجلسة {session}.", "two": "حتى الساعة {time} (قبل دقيقتين)، من الجلسة {session}.", "zero": "حتى الساعة {time} (الآن)، من الجلسة {session}."}}
+{"k": "usage.fresh.now", "src": "eb614feb", "v": "حتى الساعة {time} (الآن)، من الجلسة {session}."}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"few": "حتى الساعة {time} (قبل {n} أيام)، من جلسة في دردشة أخرى.", "many": "حتى الساعة {time} (قبل {n} يومًا)، من جلسة في دردشة أخرى.", "one": "حتى الساعة {time} (قبل يوم)، من جلسة في دردشة أخرى.", "other": "حتى الساعة {time} (قبل {n} يوم)، من جلسة في دردشة أخرى.", "two": "حتى الساعة {time} (قبل يومين)، من جلسة في دردشة أخرى.", "zero": "حتى الساعة {time} (اليوم)، من جلسة في دردشة أخرى."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"few": "حتى الساعة {time} (قبل {n} ساعات)، من جلسة في دردشة أخرى.", "many": "حتى الساعة {time} (قبل {n} ساعة)، من جلسة في دردشة أخرى.", "one": "حتى الساعة {time} (قبل ساعة)، من جلسة في دردشة أخرى.", "other": "حتى الساعة {time} (قبل {n} ساعة)، من جلسة في دردشة أخرى.", "two": "حتى الساعة {time} (قبل ساعتين)، من جلسة في دردشة أخرى.", "zero": "حتى الساعة {time} (الآن)، من جلسة في دردشة أخرى."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"few": "حتى الساعة {time} (قبل {n} دقائق)، من جلسة في دردشة أخرى.", "many": "حتى الساعة {time} (قبل {n} دقيقة)، من جلسة في دردشة أخرى.", "one": "حتى الساعة {time} (قبل دقيقة)، من جلسة في دردشة أخرى.", "other": "حتى الساعة {time} (قبل {n} دقيقة)، من جلسة في دردشة أخرى.", "two": "حتى الساعة {time} (قبل دقيقتين)، من جلسة في دردشة أخرى.", "zero": "حتى الساعة {time} (الآن)، من جلسة في دردشة أخرى."}}
+{"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "حتى الساعة {time} (الآن)، من جلسة في دردشة أخرى."}
+{"k": "usage.group_note", "src": "827f3d0c", "v": "حدود الاشتراك لا تظهر في المجموعة. أرسل /usage في دردشتك الخاصة مع البوت، أو افتح Mini App."}
+{"k": "usage.login.cloud", "src": "db9bd808", "v": "مزوّد سحابي"}
+{"k": "usage.login.gateway", "src": "c45b6181", "v": "البوابة {host}"}
+{"k": "usage.login.gateway_other", "src": "688e68d9", "v": "بوابة مستخدمة في دردشة أخرى"}
+{"k": "usage.login.saved", "src": "8ebcb721", "v": "تسجيل دخول Claude المحفوظ على هذا الكمبيوتر"}
+{"k": "usage.login.token", "src": "64d01959", "v": "token تسجيل الدخول إلى Claude"}
+{"k": "usage.login.unknown", "src": "1bf1c689", "v": "تسجيل دخول غير معروف"}
+{"k": "usage.models.title", "src": "cd5eb0b5", "v": "حسب النموذج، آخر ٧ أيام"}
+{"k": "usage.plan.none", "src": "dbfa3286", "v": "تظهر حدود الاشتراك هنا بعد أن يجيب Claude في جلسة مسجّلة باشتراك Claude. مفاتيح API والبوابات التي ليس لها حد إنفاق لا تُبلغ عنها."}
+{"k": "usage.plan.title", "src": "f65ebee7", "v": "حدود الاشتراك"}
+{"k": "usage.resets.days", "src": "8ec71dd7", "v": "يُعاد الضبط بعد {days} ي {hours} س"}
+{"k": "usage.resets.hours", "src": "80940941", "v": "يُعاد الضبط بعد {hours} س {minutes} د، الساعة {time}"}
+{"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "يُعاد الضبط بعد {minutes} د، الساعة {time}"}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"few": "قبل {n} أيام", "many": "قبل {n} يومًا", "one": "قبل يوم", "other": "قبل {n} يوم", "two": "قبل يومين", "zero": "اليوم"}}
+{"k": "usage.row.today", "src": "24345a14", "v": "اليوم"}
+{"k": "usage.row.week", "src": "df833fe8", "v": "آخر ٧ أيام"}
+{"k": "usage.row.yesterday", "src": "da24830f", "v": "أمس"}
+{"k": "usage.title", "src": "0bb18642", "v": "الاستخدام"}
+{"k": "usage.tokens.behind", "src": "f5039b88", "v": "ما زال aipager يقرأ المحادثات السابقة، لذا قد تزيد هذه الأرقام."}
+{"k": "usage.tokens.none", "src": "43bf5b4d", "v": "لم تُسجَّل أي tokens بعد."}
+{"k": "usage.tokens.title", "src": "c38c6c1f", "v": "الـ tokens"}
+{"k": "usage.tokens.title_chat", "src": "fe5e7335", "v": "الـ tokens في هذه الدردشة"}
+{"k": "usage.tokens.title_managed", "src": "3285044d", "v": "الـ tokens في الدردشات التي تديرها"}
+{"k": "usage.tokens.today", "src": "9463a013", "v": "اليوم: {input} إدخال، {output} إخراج، {cache_read} قراءة من الكاش، {cache_write} كتابة في الكاش"}
+{"k": "usage.tokens.week", "src": "c70b981a", "v": "آخر ٧ أيام: {input} إدخال، {output} إخراج، {cache_read} قراءة من الكاش، {cache_write} كتابة في الكاش"}
+{"k": "usage.window.five_hour", "src": "a0eb1726", "v": "نافذة الـ ٥ ساعات: استُخدم {pct}"}
+{"k": "usage.window.five_hour_reset", "src": "a673c8fd", "v": "نافذة الـ ٥ ساعات: أُعيد ضبطها منذ آخر قراءة"}
+{"k": "usage.window.seven_day", "src": "9d526d84", "v": "هذا الأسبوع (كل النماذج): استُخدم {pct}"}
+{"k": "usage.window.seven_day_reset", "src": "f42ff03c", "v": "هذا الأسبوع (كل النماذج): أُعيد ضبطه منذ آخر قراءة"}
+{"k": "usage.window.spend_limit", "src": "5de9218d", "v": "حد الإنفاق: استُخدم {pct}"}
+{"k": "usage.window.spend_limit_reset", "src": "6994710b", "v": "حد الإنفاق: أُعيد ضبطه منذ آخر قراءة"}
 {"k": "whoami.any", "src": "195d97a4", "v": "(الكل)"}
 {"k": "whoami.bypass_role_denies", "src": "9ed1452d", "v": "  bypass_role_denies: {value}"}
 {"k": "whoami.bypass_safety", "src": "a09645db", "v": "  bypass_safety: {value}"}

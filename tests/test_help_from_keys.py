@@ -30,7 +30,7 @@ def test_help_text_is_todays_english():
         "<b>Control:</b> /stop · /now (send queued) · /clearqueue\n"
         "<b>Manage:</b> /status, then ⋮ (restart, rename, diff, end, delete)\n"
         "<b>Settings:</b> /settings · /mode (Ask, Auto or Full access)\n"
-        "<b>Admin:</b> /update (aipager and Claude Code)\n\n"
+        "<b>Admin:</b> /update (aipager and Claude Code) · /usage (plan limits and tokens)\n\n"
         "<i>Tip: tapping a command sends it at once. Long-press it (phone) or "
         "press Tab (desktop) to add text first.</i>")
 
