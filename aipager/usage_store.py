@@ -569,13 +569,14 @@ def scan(registry: Any, *, now: float | None = None, force: bool = False) -> Non
 def _prune(ts: float) -> None:
     """Drop what can no longer change anything shown."""
     global _dirty
-    oldest_day = _day_key(_date_of(ts) - _dt.timedelta(days=KEEP_DAYS - 1))
-    # Past days go, and so do the oldest of more than MAX_DAYS (a clock
-    # set back leaves later days behind it).
-    for day in [d for d in _days if d < oldest_day] + sorted(_days)[:-MAX_DAYS]:
+    today = _date_of(ts)
+    oldest_day = _day_key(today - _dt.timedelta(days=KEEP_DAYS - 1))
+    # Past days go, and so do the furthest from today of more than
+    # MAX_DAYS (a clock set back leaves later days behind it).
+    for day in [d for d in _days if d < oldest_day] + _furthest_days(_days, today):
         if _days.pop(day, None) is not None:
             _dirty = True
-    for day in [d for d in _seen if d < oldest_day] + sorted(_seen)[:-MAX_DAYS]:
+    for day in [d for d in _seen if d < oldest_day] + _furthest_days(_seen, today):
         ids = _seen.pop(day, None)
         if ids is None:
             continue
@@ -595,6 +596,20 @@ def _prune(ts: float) -> None:
                 :len(_cursors) - MAX_CURSORS]:
             del _cursors[path]
         _dirty = True
+
+
+def _furthest_days(days: dict[str, Any], today: _dt.date) -> list[str]:
+    """The day keys of *days* past the ``MAX_DAYS`` nearest *today*: the
+    ones a scan can still count into (the kept days up to tomorrow) are
+    nearest, then the later ones, nearest first. So a clock set back
+    keeps the current week and drops the stale days ahead of it."""
+    def distance(day: str) -> tuple[bool, int]:
+        try:
+            delta = (_dt.date.fromisoformat(day) - today).days
+        except (TypeError, ValueError):
+            return (True, 10**9)
+        return (delta > 1, abs(delta))
+    return sorted(days, key=lambda d: (distance(d), d))[MAX_DAYS:]
 
 
 # ---- reading it back -------------------------------------------------------------

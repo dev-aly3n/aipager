@@ -142,7 +142,7 @@ def test_a_stored_cursor_past_the_path_cap_is_dropped():
 
 def test_a_clock_set_back_still_keeps_at_most_max_days():
     """Days ahead of a clock set back are not past days, so only the
-    count cap removes them; the newest are kept."""
+    count cap removes them; the nearest to today are kept."""
     usage_store.load()
     later = [(dt.date(2027, 3, 1) + dt.timedelta(days=i)).isoformat() for i in range(12)]
     for day in later:
@@ -151,10 +151,60 @@ def test_a_clock_set_back_still_keeps_at_most_max_days():
     for day, ids in usage_store._seen.items():
         usage_store._seen_day.update(dict.fromkeys(ids, day))
     usage_store.scan(SessionRegistry(), now=NOW, force=True)
-    keep = sorted(later)[-usage_store.MAX_DAYS:]
+    keep = sorted(later)[:usage_store.MAX_DAYS]
     assert sorted(usage_store._days) == keep
     assert sorted(usage_store._seen) == keep
     assert set(usage_store._seen_day.values()) == set(keep)
+
+
+def _today() -> dt.date:
+    return dt.datetime.fromtimestamp(NOW, dt.timezone.utc).date()
+
+
+def _count_day(day: dt.date, n: int) -> None:
+    key = day.isoformat()
+    usage_store._days[key] = {-1: {"m": [n, 0, 0, 0]}}
+    mid = f"{len(usage_store._seen_day):016x}"
+    usage_store._seen[key] = {mid: 0}
+    usage_store._seen_day[mid] = key
+
+
+def test_a_clock_set_back_keeps_today_and_yesterday_over_stale_later_days():
+    """8 days counted, the clock set back 30 days, yesterday and today
+    counted on the new clock: the week still holds both."""
+    usage_store.load()
+    today = _today()
+    for i in range(8):
+        _count_day(today + dt.timedelta(days=30 - i), 100)
+    _count_day(today - dt.timedelta(days=1), 100)
+    _count_day(today, 100)
+    usage_store.scan(SessionRegistry(), now=NOW, force=True)
+    assert len(usage_store._days) == usage_store.MAX_DAYS
+    assert today.isoformat() in usage_store._days
+    assert (today - dt.timedelta(days=1)).isoformat() in usage_store._days
+    assert usage_store.snapshot(None, now=NOW).week == (200, 0, 0, 0)
+    # The stale day furthest ahead went first, from the ids too.
+    gone = (today + dt.timedelta(days=30)).isoformat()
+    assert gone not in usage_store._days and gone not in usage_store._seen
+    assert set(usage_store._seen) == set(usage_store._days)
+    assert set(usage_store._seen_day.values()) == set(usage_store._seen)
+
+
+def test_the_days_a_scan_counts_into_go_before_any_later_day():
+    """The days a scan still counts into (today back to KEEP_DAYS - 1
+    days ago, and tomorrow) are kept over a later day, even one nearer by
+    distance alone (two days ahead against seven days back)."""
+    usage_store.load()
+    today = _today()
+    window = [today - dt.timedelta(days=i) for i in range(usage_store.KEEP_DAYS)]
+    ahead = [today + dt.timedelta(days=i) for i in range(2, 10)]
+    for day in window + ahead:
+        _count_day(day, 1)
+    usage_store.scan(SessionRegistry(), now=NOW, force=True)
+    kept = {dt.date.fromisoformat(d) for d in usage_store._days}
+    # MAX_DAYS = KEEP_DAYS + 1: the whole window and the nearest later day.
+    assert kept == set(window) | {today + dt.timedelta(days=2)}
+    assert usage_store.snapshot(None, now=NOW).week == (7, 0, 0, 0)
 
 
 # ---- model rows ---------------------------------------------------------------------------
