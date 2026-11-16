@@ -25,6 +25,18 @@ THREE_MODES = json.loads(Path(__file__).with_name("three_modes_scenarios.json")
 #: conversation" row (2026-11-13), above Rename, and nothing else.
 CLEAR_ROW_SCENARIOS = {"session_commands"}
 CLEAR_ROW = "[btn] 🧹 Clear conversation"
+#: /help's admin line names /usage too since 2026-11-16 (roadmap 8.131),
+#: and nothing else in /help changed.
+ADMIN_OLD = "<b>Admin:</b> /update (aipager and Claude Code)\n"
+ADMIN_NEW = ("<b>Admin:</b> /update (aipager and Claude Code) · /usage (plan limits and "
+             "tokens)\n")
+HELP_SCENARIOS = {"help_dm", "help_group", "help_group_unnamed"}
+
+
+def _without_usage_line(text: str) -> str:
+    """*text* with /help's new admin line put back to the base's."""
+    assert text.count(ADMIN_NEW) == 1, text
+    return text.replace(ADMIN_NEW, ADMIN_OLD)
 
 
 def test_the_golden_has_every_scenario(golden):
@@ -48,6 +60,12 @@ def test_an_english_chat_reads_what_it_read_before(golden, scenario_out, name):
         got = got[:at] + got[at + 1:]
     else:
         assert CLEAR_ROW not in got
+    if name in HELP_SCENARIOS:
+        assert sum(ADMIN_NEW in line for line in got) == 1
+        got = [_without_usage_line(line) if ADMIN_NEW in line else line for line in got]
+        assert sum(ADMIN_OLD in line for line in got) == 1
+    else:
+        assert not any(ADMIN_NEW in str(line) for line in got)
     if name in MODE_LABEL_SCENARIOS:
         assert got != want
         assert sorted(THREE_MODES) == sorted(MODE_LABEL_SCENARIOS)
@@ -62,5 +80,7 @@ def test_the_exported_constants_are_the_same_set(golden):
 @pytest.mark.parametrize("name", sorted(S.constants()))
 def test_an_exported_constant_equals_todays_english(golden, name):
     value = S.constants()[name]
+    if name == "handlers.HELP_TEXT":
+        value = _without_usage_line(value)
     assert value == golden["constants"][name]
     assert str(value) == golden["constants"][name]

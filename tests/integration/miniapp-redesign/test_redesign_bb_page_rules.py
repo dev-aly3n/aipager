@@ -193,12 +193,12 @@ def test_notice_has_role_status(self_page):
     assert 'role="status"' in _tag(self_page, "notice")
 
 
-def test_exactly_five_views(self_page):
+def test_exactly_six_views(self_page):
     """The four of the redesign plus the problem report page (8.112
-    follow-up)."""
+    follow-up) and the Usage page (8.131)."""
     ids = re.findall(r'<section[^>]*\bid="(view-[a-z]+)"', self_page)
     assert sorted(ids) == ["view-detail", "view-grid", "view-new",
-                           "view-report", "view-settings"]
+                           "view-report", "view-settings", "view-usage"]
 
 
 def test_no_inline_event_handlers(self_page):

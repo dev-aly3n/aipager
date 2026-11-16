@@ -196,10 +196,12 @@ def test_the_mini_app_mirror_says_vocabulary_level(tg_bot, mini_server, run_asyn
 # ---- the / menu and reserved names ----------------------------------------------------
 
 def test_language_is_in_the_menu_after_settings_before_help(monkeypatch):
+    """Right after settings; /usage (8.131) sits between it and help."""
     from aipager.bot.lifecycle import LifecycleMixin
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", False)
     names = [c.command for c in LifecycleMixin._command_list(set())]
-    assert names.index("settings") + 1 == names.index("language") == names.index("help") - 1
+    assert names.index("settings") + 1 == names.index("language") == names.index("help") - 2
+    assert names.index("usage") == names.index("help") - 1
 
 
 def test_the_menu_describes_language(monkeypatch):
