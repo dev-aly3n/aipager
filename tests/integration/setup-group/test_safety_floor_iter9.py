@@ -28,10 +28,10 @@ backticks and here-documents; the docs' list of open search routes.
 
 Known gaps found this round (strict xfail, the project's convention):
 
-- SLOW_SHAPES_ITER9: an escaped quote and an empty quote pair (``""``,
-  ``''``, ``$'``, ``$"``) before an escaped separator and a search name
-  (``\\""\\;rg x ``, ``\\''\\|rg x ``)
-  repeated in one word takes time quadratic in its length since 9efe41dd
+- SLOW_SHAPES_ITER9 (closed in iteration 10): an escaped quote and an
+  empty quote pair (``""``, ``''``, ``$'``, ``$"``) before an escaped
+  separator and a search name (``\\""\\;rg x ``, ``\\''\\|rg x ``)
+  repeated in one word took time quadratic in its length since 9efe41dd
   (100 KB: 4.5 s to about 40 s; b5153bd7: 0.06 s). Measured here at 25 KB,
   where a linear reading takes about 0.02 s.
 
@@ -693,9 +693,9 @@ def test_iteration_9_shape_before_a_harmless_tail_is_under_budget(prefix, unit, 
 # ---- timing: an escaped quote and an empty quote pair before an escaped
 # separator (quadratic since 9efe41dd) ----
 
-SLOW = ("undocumented gap (tester iteration 9): quadratic time for an escaped "
-        "quote and an empty quote pair before an escaped separator "
-        "and a search name; b5153bd7 read these in linear time")
+# Closed in iteration 10 (were strict xfails): quadratic time for an
+# escaped quote and an empty quote pair before an escaped separator and a
+# search name; b5153bd7 read these in linear time.
 SLOW_BUDGET_S = 0.25
 SLOW_SIZE = 25_000
 Q = '"'
@@ -721,10 +721,6 @@ def test_slow_shape_before_a_home_search_is_denied(cmd):
     assert _blocked(_slow_cmd(cmd, SEARCH_TAIL)) is True
 
 
-@pytest.mark.parametrize(
-    "cmd",
-    [pytest.param(r[1], marks=pytest.mark.xfail(strict=True, reason=SLOW))
-     for r in SLOW_SHAPES_ITER9],
-    ids=[r[0] for r in SLOW_SHAPES_ITER9])
+@_params(SLOW_SHAPES_ITER9)
 def test_slow_shape_before_a_harmless_tail_is_under_budget(cmd):
     assert _best_of_three(_slow_cmd(cmd, HARMLESS_TAIL)) < SLOW_BUDGET_S

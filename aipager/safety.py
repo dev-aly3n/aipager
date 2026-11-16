@@ -277,23 +277,37 @@ DENY_BASH_SEARCH_PATTERNS: tuple[str, ...] = (
 # ----- the search rules, read in linear time ------------------------------
 #
 # The patterns above start a command after every ``;&|(`` and backtick,
-# escaped or not (a re-parse through ``eval``, ``bash -c "..."``,
-# backticks or ``$'...'`` turns ``\;`` into a real ``;``), and their words
-# read an escaped character as part of the word. So in one long word each
-# escaped separator started a scan of the rest of it: ``\`a=`` repeated
-# to 8 KB took about 1 s, to 100 KB about a minute. :func:`_search_hit`
-# gives the same verdict (never a more permissive one) from three linear
-# searches of a copy in which each escaped separator is ``\`` and
-# :data:`_ESCAPED_MARK` (:func:`_escaped_starts_plain`):
+# inside quotes or not, escaped or not (a re-parse through ``eval``,
+# ``bash -c "..."``, backticks or ``$'...'`` turns ``\;`` into a real
+# ``;``), and from each start they read a quoted string as one unit and
+# an escaped character as part of a word. So one start's reading may run
+# past many later starts: in ``\`a=``, ``\""\;rg x `` or ``\"";rg x ``
+# repeated, each string closes where the next one opens, every start
+# reads to the end of the command, and 100 KB took from half a minute
+# (an escaped quote before a quote pair) to a minute (``\`a=``).
+# :func:`_search_hit` gives the same verdict (never a more permissive
+# one) in linear time, from a copy in which each escaped separator is
+# ``\`` and :data:`_ESCAPED_MARK` (:func:`_escaped_starts_plain`):
 #
-# 1. the pattern from every other start (the mark is a plain character
-#    there, and an escaped character of a word either way);
-# 2. the pattern from every escaped separator, its words stopping at the
-#    next one, so every escaped start reads only up to the next;
-# 3. the pattern from every escaped separator up to the point where it
-#    would read past the next one, taken as a match when a home or ``/``
-#    folder word comes later (a refusal main's patterns might not give,
-#    never an allow they would not give).
+# 1. the pattern from every start, reading only units that hold no start
+#    (a string or an escape that holds a separator is where a reading
+#    would run past the next start);
+# 2. the pattern from every start up to the first unit that holds a
+#    start, after the name or before it (in a setting or a wrapper's
+#    option).
+#
+# Each start reads only up to the next start: linear. Where a reading of
+# 1 or 2 meets a unit that holds a start (2 always does, 1 only in a
+# lookahead for ``-r``, ``-R``, ``--files``, ``-f`` or ``-e``), main's
+# reading goes on right after that unit (after the string's closing
+# quote, or after the ``\;``) up to where that command ends
+# (:func:`_stream`), and the match counts when what main still needs
+# stands at a unit of that stretch: the option the lookahead looked for,
+# and for 2 a home or ``/`` folder word (read past before the name, the
+# name first). Each stretch is walked once (its answer is kept for every
+# place it was read from), so this stays linear too. Where a word of
+# main's starts in that stretch is taken loosely, so a command may be
+# refused that main allows, never the reverse.
 #
 # One difference of the copy is visible to the patterns: a user name in
 # ``/home/<user>`` stops at ``;`` but takes the mark, so a folder word
@@ -318,82 +332,200 @@ def _escaped_starts_plain(text: str) -> str:
         lambda m: "\\" + _ESCAPED_START.get(m[1], m[1]), text)
 
 
-#: An escaped separator in that copy.
-_CROSS = r"\\" + _ESCAPED_MARK
-#: A command start right after one (taken in, so ``re`` finds the
-#: starts by their first character).
-_ESCAPED_CMD_START = _CROSS
+#: The characters main's patterns start a command after (a newline that
+#: does not continue a line aside), in the copy.
+_STARTS = ";&|(`" + _ESCAPED_MARK
+#: Where main's patterns start a command, in the copy: the start, after
+#: a separator or an escaped one, or after a newline that does not
+#: continue a line. A lookbehind, so a match never takes in the next
+#: start.
+_ANY_START = (r"(?:^|(?<=[;&|(`])|(?<=\\" + _ESCAPED_MARK
+              + r")|(?<!\\\n)(?<=\n))")
+#: A unit that holds a start: an escaped separator, or a quoted string up
+#: to the first start in it (taken in, so the match ends right after it).
+#: Its three groups tell the kinds apart (:func:`_going_on`); nothing
+#: else in the searches has a group.
+_CROSS = (r"(?:(\\" + _ESCAPED_MARK
+          + r")|('[^'\n" + _STARTS + r"]*[" + _STARTS + r"])"
+          + r'|("[^"\n' + _STARTS + r"]*[" + _STARTS + r"]))")
 #: A folder word that may also end at the mark (see the notes above).
 _MARK_TARGET = _TARGET.replace(r"""(?=[\s;&|()<>`"']""",
                                r"""(?=[\s;&|()<>`"'""" + _ESCAPED_MARK + "]")
-#: A word unit and a command unit that stop at an escaped separator.
+#: A word unit and a command unit that hold no start (quoted strings and
+#: escapes included).
 _STOP_UNIT = (r"""(?:[^\s;&|()<>`"'\\]|\\[^\n""" + _ESCAPED_MARK
-              + r"""]|'[^'\n]*'|"[^"\n]*")""")
+              + r"""]|'[^'\n""" + _STARTS + r"""]*'|"[^"\n""" + _STARTS
+              + r"""]*")""")
 _STOP_SEG = rf"(?:{_STOP_UNIT}|{_SP}|[<>])"
 _STOP_WRAP_ARG = rf"(?:-{_STOP_UNIT}*|\d{_STOP_UNIT}*)"
 
+#: The options a search rule's lookaheads look for after the name.
+_OPT_RECURSIVE = (rf"{_SP}(?:-[A-Za-z0-9]*[rR]|--recursive"
+                  rf"|--dereference-recursive|-d{_SP}*recurse"
+                  rf"|--directories(?:=|{_SP}+)recurse)")
+_OPT_LS_RECURSIVE = rf"{_SP}(?:-[A-Za-z0-9]*R|--recursive)"
+_OPT_FILES = _SP + r"--files(?![\w-])"
+_OPT_ACK_FILES = _SP + r"-f(?![\w-])"
+_OPT_TEXT = rf"{_SP}(?:-[A-Za-z0-9]*[ef]|--regexp\b|--file\b)"
+#: What main's reading may still need after a unit that holds a start:
+#: a home or ``/`` folder word, or one of those options. Each starts with
+#: a blank, so only a blank that is a unit of its own can start one.
+_FEATURES: tuple[str, ...] = (rf"(?={_SP}{_MARK_TARGET})", _OPT_RECURSIVE,
+                              _OPT_LS_RECURSIVE, _OPT_FILES, _OPT_ACK_FILES,
+                              _OPT_TEXT)
+_FEATURE_RES = tuple(re.compile(f) for f in _FEATURES)
+_TARGET_FEATURE = 0
+_TEXT_FEATURE = _FEATURES.index(_OPT_TEXT)
 
-def _loop(unit: str, k: str, cross: bool, *, lazy: bool = False) -> str:
-    """*unit* repeated, then *k*; with *cross*, reaching an escaped
-    separator instead is a match too."""
+
+#: How each :data:`_CROSS` begins (its first group).
+_CROSS_HEAD = _CROSS[:_CROSS.index(_ESCAPED_MARK) + 1]
+
+
+class _Search:
+    """One regex of searches 1 and 2: a shared *head*, then ways of
+    reading, tried in order. For each way: its marker group (empty, so a
+    match tells which way it took), *seeks*, ``(first group, feature)``
+    for each lookahead that may stop at a unit holding a start (three
+    groups each, one of which takes part when it does), the first groups
+    of every unit holding a start it may meet, and whether a folder word
+    must follow that unit (search 2).
+
+    A match counts only when :func:`_leads_on` agrees; the ways are put
+    in an order where a way that matched but does not count means no
+    later way would count from that start either (each later way needs
+    at least what the earlier one needed, the unit being the same one: the
+    first that holds a start after the name)."""
+
+    __slots__ = ("rx", "ways")
+
+    def __init__(self, head: str, ways: list[tuple[list, bool]]) -> None:
+        text, groups, meta = head + "(?:", 0, []
+        for k, (parts, cross) in enumerate(ways):
+            text += ("|" if k else "") + "()"
+            groups += 1
+            marker, seeks, units = groups, [], []
+            for part in parts:
+                if isinstance(part, tuple):
+                    part, feature = part
+                    seeks.append((groups + 1, feature))
+                count = part.count(_CROSS_HEAD)
+                units.extend(groups + 1 + 3 * i for i in range(count))
+                groups += 3 * count
+                text += part
+            meta.append((marker, tuple(seeks), tuple(units), cross))
+        self.rx = re.compile(text + ")")
+        assert self.rx.groups == groups, text
+        self.ways: tuple[tuple[int, tuple[tuple[int, int], ...],
+                               tuple[int, ...], bool], ...] = tuple(meta)
+
+
+def _seek(want: str, how: str) -> tuple[str, int] | str:
+    """A lookahead for *want* later in the command. *how*: ``"found"``
+    reads no unit that holds a start before it (no group); ``"or"`` may
+    stop at one instead, ``"stop"`` only there (main's lookahead reads on
+    past it: :class:`_Search` checks the rest)."""
+    if how == "found":
+        return rf"(?={_STOP_SEG}*?{want})"
+    feature = _FEATURES.index(want)
+    if how == "or":
+        return (rf"(?={_STOP_SEG}*?(?:{want}|{_CROSS}))", feature)
+    return (rf"(?={_STOP_SEG}*?{_CROSS})", feature)
+
+
+def _command_items(cross: bool) -> str:
+    """:data:`_CMD` from any start (settings, wrappers, ``bash -c "``);
+    with *cross*, only the ways of reaching a unit that holds a start in
+    a setting or a wrapper's option, before any name."""
+    items = (rf"{_ANY_START}{_SP}*(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*"
+             rf"{_SP}+|{_SHELL_C}|[A-Za-z_]\w*={_STOP_UNIT}*{_SP}+)*")
     if not cross:
-        return unit + ("*?" if lazy else "*") + k
-    return unit + ("*?" if lazy else "*") + rf"(?:{_CROSS}|{k})"
+        return items + r"(?:[\w.~+-]*/)*"
+    return (items + rf"(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*{_SP}+[-\d]"
+            rf"{_STOP_UNIT}*|[A-Za-z_]\w*={_STOP_UNIT}*){_CROSS}")
 
 
-def _seek(want: str) -> str:
-    """A lookahead for *want* later in the command, taken as found at an
-    escaped separator (the scan stops there)."""
-    return rf"(?={_STOP_SEG}*?(?:{want}|{_CROSS}))"
+_NAME_END = r"(?![\w./-])"
+_LAST_FOLDER = rf"(?<!-e)(?<!-f)(?<!--regexp)(?<!--file){_SP}{_MARK_TARGET}"
 
 
-def _escaped_command(rest: str, cross: bool) -> str:
-    """:data:`_CMD` from an escaped separator, then *rest* (the name and
-    what follows it); with *cross*, only the ways of reading past the
-    next escaped separator in a setting or a wrapper's option."""
-    items = (rf"(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*{_SP}+|{_SHELL_C}"
-             rf"|[A-Za-z_]\w*={_STOP_UNIT}*{_SP}+)*")
+def _after_text(cross: bool, by_option: str | None) -> list:
+    """:data:`_FOLDER_AFTER_TEXT` read with units that hold no start.
+    *by_option*: None for its second way (the first word after the
+    options is the text, the folder after it), else how the first way's
+    lookahead for ``-e``/``-f`` is read (:func:`_seek`). With *cross*, up
+    to the first unit holding a start instead of the folder."""
+    end = _CROSS if cross else _LAST_FOLDER
+    if by_option is not None:
+        return [_seek(_OPT_TEXT, by_option), rf"{_STOP_SEG}*?{end}"]
     if not cross:
-        return rf"{_ESCAPED_CMD_START}{_SP}*{items}(?:[\w.~+-]*/)*{rest}"
-    return (rf"{_ESCAPED_CMD_START}{_SP}*{items}"
-            rf"(?:{_WRAP}(?:{_SP}+{_STOP_WRAP_ARG})*{_SP}+[-\d]{_STOP_UNIT}*"
-            rf"|[A-Za-z_]\w*={_STOP_UNIT}*){_CROSS}")
+        return [rf"(?:{_SP}+-{_STOP_UNIT}*)*{_SP}+(?!-){_STOP_UNIT}+"
+                rf"{_WORD_END}{_STOP_SEG}*?{end}"]
+    return [rf"(?:{_SP}+-{_STOP_UNIT}*)*{_SP}+(?:-{_STOP_UNIT}*{_CROSS}"
+            rf"|(?!-)(?:{_STOP_UNIT}*{_CROSS}|{_STOP_UNIT}+{_WORD_END}"
+            rf"{_STOP_SEG}*?{_CROSS}))"]
 
 
-def _escaped_folder_after_text(k: str, cross: bool) -> str:
-    """:data:`_FOLDER_AFTER_TEXT` with :func:`_loop` words, then *k*.
-    With *cross*, only its first way: a scan that reads past an escaped
-    separator in the options or the text word reaches it by that way too
-    (the lookahead for ``-e`` is taken as found there)."""
-    rest = (rf"(?<!-e)(?<!-f)(?<!--regexp)(?<!--file){_SP}{_MARK_TARGET}"
-            + k)
-    by_option = _seek(rf"{_SP}(?:-[A-Za-z0-9]*[ef]|--regexp\b|--file\b)")
-    after = _loop(_STOP_SEG, rest, cross, lazy=True)
-    if cross:
-        return by_option + after
-    word = rf"(?!-){_STOP_UNIT}+{_WORD_END}{after}"
-    return rf"(?:{by_option}{after}|(?:{_SP}+-{_STOP_UNIT}*)*{_SP}+{word})"
-
-
-def _escaped_folder_anywhere(k: str, cross: bool) -> str:
-    return _loop(_STOP_SEG, rf"{_SP}{_MARK_TARGET}{k}", cross, lazy=True)
-
-
-def _escaped_find(k: str, cross: bool) -> str:
-    """:data:`SEARCH_FIND`'s words after ``find``, then *k*."""
+def _find_words(cross: bool) -> str:
+    """:data:`SEARCH_FIND`'s words after ``find``; with *cross*, up to
+    the first unit that holds a start instead of the folder."""
     word = rf"{_SP}+(?![-(!\\]){_STOP_UNIT}+{_WORD_END}"
     if cross:
-        last = (rf"(?:{_SP}+(?![-(!\\]){_STOP_UNIT}+{_CROSS}"
-                rf"|{_SP}+{_MARK_TARGET}{k})")
+        last = (rf"{_SP}+(?![-(!\\]){_STOP_UNIT}*{_CROSS}")
     else:
-        last = rf"{_SP}+{_MARK_TARGET}{k}"
+        last = rf"{_SP}+{_MARK_TARGET}"
     rest = rf"(?:{_SP}+-O\d*)?(?:{word})*?{last}"
     if cross:
-        debug = (rf"(?:{_SP}+-D{_SP}+(?:{_CROSS}|{_STOP_UNIT}+"
-                 rf"(?:{_CROSS}|{rest}))|{rest})")
+        debug = (rf"(?:{_SP}+-D{_SP}+(?:{_STOP_UNIT}*{_CROSS}"
+                 rf"|{_STOP_UNIT}+{rest})|{rest})")
     else:
         debug = rf"(?:{_SP}+-D{_SP}+{_STOP_UNIT}+)?{rest}"
     return rf"(?:{_SP}+-[HLP])*{debug}"
+
+
+def _searches(pat: str) -> tuple[_Search, ...]:
+    """Search rule *pat*'s regexes for searches 1 and 2 (see the notes
+    above): its ways of reading a command, split where a lookahead may
+    stop at a unit holding a start, so a match tells which lookaheads did
+    (:class:`_Search`). The text-first rules need two regexes: a way whose
+    lookahead for ``-e`` only stops at that unit needs that option after
+    it, which reading on to a folder word after the unit does not."""
+    head = _command_items(False)
+
+    def anywhere(cross: bool) -> str:
+        return rf"{_STOP_SEG}*?" + (_CROSS if cross else
+                                     rf"{_SP}{_MARK_TARGET}")
+
+    if pat in (SEARCH_TEXT_FIRST, SEARCH_GREP_RECURSIVE):
+        name: list = ([r"(?:rgrep|rg|ag|ack|ack-grep|fd|fdfind)", _NAME_END]
+                      if pat == SEARCH_TEXT_FIRST else
+                      [r"(?:[ef]?grep)", _NAME_END,
+                       _seek(_OPT_RECURSIVE, "or")])
+        return (
+            _Search(head, [(name + _after_text(False, None), False),
+                           (name + _after_text(False, "found"), False),
+                           (name + _after_text(True, None), True),
+                           (name + _after_text(True, "found"), True)]),
+            _Search(head, [(name + _after_text(False, "stop"), False),
+                           (name + _after_text(True, "stop"), True)]),
+        )
+    if pat == SEARCH_FIND:
+        return (_Search(head, [(["find", _NAME_END, _find_words(c)], c)
+                               for c in (False, True)]),)
+    if pat == LIST_TREE_DU:
+        return (_Search(head, [(["(?:tree|du)", _NAME_END, anywhere(c)], c)
+                               for c in (False, True)]),)
+    if pat == LIST_LS_RECURSIVE:
+        return (_Search(head, [(["ls", _NAME_END,
+                                 _seek(_OPT_LS_RECURSIVE, "or"), anywhere(c)],
+                                c) for c in (False, True)]),)
+    assert pat == LIST_FILES
+    return (_Search(head, [
+        (["rg", _NAME_END, _seek(_OPT_FILES, "or"), anywhere(c)], c)
+        if tool == "rg" else
+        (["(?:ack|ack-grep)", _NAME_END, _seek(_OPT_ACK_FILES, "or"),
+          anywhere(c)], c)
+        for c in (False, True) for tool in ("rg", "ack")]),)
 
 
 #: Each search rule's command names.
@@ -405,80 +537,194 @@ _SEARCH_NAMES = {
     LIST_LS_RECURSIVE: r"(?:ls)",
     LIST_FILES: r"(?:rg|ack|ack-grep)",
 }
-
-
-def _escaped_variant(pat: str, cross: bool) -> str:
-    """*pat* (one of :data:`DENY_BASH_SEARCH_PATTERNS`) from an escaped
-    separator, its words stopping at the next one: search 2 of the notes
-    above, or with *cross* search 3's reading past it after the name."""
-    k = "(?!)" if cross else ""
-    name = r"(?![\w./-])"
-    recursive = _seek(
-        rf"{_SP}(?:-[A-Za-z0-9]*[rR]|--recursive|--dereference-recursive"
-        rf"|-d{_SP}*recurse|--directories(?:=|{_SP}+)recurse)")
-    rest = {
-        SEARCH_TEXT_FIRST: (_SEARCH_NAMES[pat] + name
-                            + _escaped_folder_after_text(k, cross)),
-        SEARCH_GREP_RECURSIVE: (_SEARCH_NAMES[pat] + name + recursive
-                                + _escaped_folder_after_text(k, cross)),
-        SEARCH_FIND: _SEARCH_NAMES[pat] + name + _escaped_find(k, cross),
-        LIST_TREE_DU: (_SEARCH_NAMES[pat] + name
-                       + _escaped_folder_anywhere(k, cross)),
-        LIST_LS_RECURSIVE: (
-            _SEARCH_NAMES[pat] + name
-            + _seek(rf"{_SP}(?:-[A-Za-z0-9]*R|--recursive)")
-            + _escaped_folder_anywhere(k, cross)),
-        LIST_FILES: (
-            "(?:(?:rg)" + name + _seek(_SP + r"--files(?![\w-])")
-            + "|(?:ack|ack-grep)" + name + _seek(_SP + r"-f(?![\w-])") + ")"
-            + _escaped_folder_anywhere(k, cross)),
-    }[pat]
-    return _escaped_command(rest, False)
-
-
-#: Each search rule's searches (see the notes above): the whole pattern
-#: on the copy, from an escaped separator, from one reading past the
-#: next after the name, from one reading past it before the name, and
-#: the name alone.
-_SEARCH_VARIANTS: dict[str, tuple[re.Pattern, ...]] = {
-    pat: (re.compile(pat.replace(_TARGET, _MARK_TARGET)),
-          re.compile(_escaped_variant(pat, False)),
-          re.compile(_escaped_variant(pat, True)),
-          re.compile(_escaped_command("", True)),
-          re.compile(_SEARCH_NAMES[pat] + r"(?![\w./-])"))
+#: The option each rule needs after its name, among :data:`_FEATURES`
+#: (None for none; ``rg --files`` and ``ack -f`` take either).
+_NEEDS = {
+    SEARCH_TEXT_FIRST: (), SEARCH_GREP_RECURSIVE: (1,), SEARCH_FIND: (),
+    LIST_TREE_DU: (), LIST_LS_RECURSIVE: (2,), LIST_FILES: (3, 4),
+}
+#: Each search rule's searches (:func:`_searches`) and its names alone.
+_SEARCH_VARIANTS: dict[str, tuple[tuple[_Search, ...], re.Pattern]] = {
+    pat: (_searches(pat), re.compile(_SEARCH_NAMES[pat] + _NAME_END))
     for pat in DENY_BASH_SEARCH_PATTERNS
 }
-#: Where a home or ``/`` folder word may start (for search 3).
-_TARGET_AHEAD_RE = re.compile(rf"(?={_SP}{_MARK_TARGET})")
+#: Search 2 before the name, in a setting or a wrapper's option (the same
+#: for every rule).
+_BEFORE_NAME = _Search("", [([_command_items(True)], True)])
+#: Is there a unit that could hold a start at all (a quote, or an escaped
+#: separator)? Without one, no reading meets one.
+_MAY_CROSS_RE = re.compile(r"""['"]|\\""" + _ESCAPED_MARK)
+#: One step of main's reading of a command: a run of plain characters,
+#: an escaped character (a backslash-newline is a blank), a quoted string,
+#: or a run of blanks and redirections (each blank its own unit: only the
+#: last of a run can start a folder word or an option).
+_STEP_RE = re.compile(r"""[^\s;&|()<>`"'\\]+|\\[\s\S]|'[^'\n]*'|"[^"\n]*"|[\x20\t<>]+""")
+
+
+class _Walk:
+    """One walk of main's reading (:func:`_stream`): where it stops, the
+    last place each of :data:`_FEATURES` starts at one of its own units,
+    and the same from the walk it ran into (each -1 for none)."""
+
+    __slots__ = ("end", "own", "tail")
+
+    def __init__(self, end: int, own: list[int], tail: tuple[int, ...]):
+        self.end, self.own, self.tail = end, own, tail
+
+    def last(self, at: int) -> tuple[int, ...]:
+        """For each feature, its last place in the reading from *at* (a
+        place this walk passed): the walk it ran into comes later."""
+        return tuple(t if t >= 0 else (o if o >= at else -1)
+                     for o, t in zip(self.own, self.tail))
+
+
+def _stream(plain: str, at: int, memo: dict) -> tuple[int, tuple[int, ...]]:
+    """Main's reading of one command going on from *at* (a unit's end):
+    where it stops (a separator, a newline, a ``)``, a quote that never
+    closes on its line, or the end), and for each of :data:`_FEATURES`
+    the last place it starts at a unit of that reading (-1 for none).
+    *memo* keeps, for every place a walk passed, that walk: a reading that
+    meets an earlier one stops there and takes the rest from it, so each
+    place is walked once."""
+    walks = memo.setdefault("walks", {})
+    known = walks.get(at)
+    if known is not None:
+        return known.end, known.last(at)
+    found = memo.get("features")
+    if found is None:
+        found = memo["features"] = [
+            {m.start() for m in rx.finditer(plain)} for rx in _FEATURE_RES]
+    start, own = at, [-1] * len(_FEATURES)
+    path = []
+    tail: _Walk | None = None
+    n = len(plain)
+    while at < n:
+        tail = walks.get(at)
+        if tail is not None:
+            break
+        path.append(at)
+        step = _STEP_RE.match(plain, at)
+        if step is None:
+            break
+        first, at = plain[step.start()], step.end()
+        if first == "\\":
+            # a backslash-newline is a blank of its own, ``\ `` is not
+            blank = at - 2 if plain[at - 1] == "\n" else -1
+        else:
+            blank = at - 1 if plain[at - 1] in "\x20\t" else -1
+        if blank >= 0:
+            for f, places in enumerate(found):
+                if blank in places:
+                    own[f] = blank
+    if tail is not None:
+        walk = _Walk(tail.end, own, tail.last(at))
+    else:
+        walk = _Walk(at, own, (-1,) * len(_FEATURES))
+    walks.update(dict.fromkeys(path, walk))
+    return walk.end, walk.last(start)
+
+
+def _going_on(m: re.Match, units: tuple[int, ...]) -> int | None:
+    """Where main's reading goes on after the unit holding a start that
+    match *m* met (every such unit one match meets is the same one, the
+    first after the name; *units*: the first groups of the way's units):
+    right after the ``\\;``, or after the closing quote of the string
+    (None when it never closes on its line, so main's reading stops
+    there too)."""
+    plain = m.string
+    for first in units:
+        for kind in range(3):
+            if m.start(first + kind) < 0:
+                continue
+            end = m.end(first + kind)
+            if kind == 0:
+                return end
+            close = plain.find("'" if kind == 1 else '"', end)
+            if close < 0 or plain.find("\n", end, close) >= 0:
+                return None
+            return close + 1
+    return None
+
+
+def _stopped(m: re.Match, g: int) -> bool:
+    """Whether the lookahead whose groups start at *g* stopped at a unit
+    holding a start (one of its three groups took part in match *m*)."""
+    return m.start(g) >= 0 or m.start(g + 1) >= 0 or m.start(g + 2) >= 0
+
+
+def _leads_on(search: _Search, m: re.Match, memo: dict) -> bool:
+    """Whether match *m* of *search* counts: what main's reading still
+    needs after the unit holding a start (if it met one) stands there."""
+    for marker, seeks, units, cross in search.ways:
+        if m.start(marker) >= 0:
+            break
+    waiting = [feature for g, feature in seeks if _stopped(m, g)]
+    if not cross and not waiting:
+        return True
+    on = _going_on(m, units)
+    if on is None:
+        return False
+    seen = memo.setdefault("on", {})
+    last = seen.get(on)
+    if last is None:
+        last = seen[on] = _stream(m.string, on, memo)[1]
+    if cross and last[_TARGET_FEATURE] < 0:
+        return False
+    return all(last[feature] >= 0 for feature in waiting)
 
 
 def _search_hit(pat: str, normalized: str, memo: dict) -> bool:
     """Whether search rule *pat* matches *normalized* as main's pattern
     would (or might: see the notes above), in linear time. *memo* keeps
-    the copy and the last folder word's place across the rules."""
+    the copy, the readings walked and the places found across the
+    rules."""
     if "plain" not in memo:
-        memo["plain"] = _escaped_starts_plain(normalized)
-    plain = memo["plain"]
-    whole, escaped, after_name, before_name, names = _SEARCH_VARIANTS[pat]
-    if whole.search(plain):
-        return True
-    if "\\" + _ESCAPED_MARK not in plain:
+        plain = memo["plain"] = _escaped_starts_plain(normalized)
+        memo["walked"] = {}
+        # every match ends at a folder word or needs one after it
+        memo["any"] = _FEATURE_RES[_TARGET_FEATURE].search(plain) is not None
+        memo["cross"] = memo["any"] and (
+            _MAY_CROSS_RE.search(plain) is not None)
+    if not memo["any"]:
         return False
-    if escaped.search(plain):
-        return True
-    # search 3: the escaped separator read past comes before a folder
-    # word, and before the name too when it is read past before the name
-    if "folder" not in memo:
-        memo["folder"] = max(
-            (m.start() for m in _TARGET_AHEAD_RE.finditer(plain)), default=0)
-    folder = memo["folder"]
-    if not folder:
+    plain, walked = memo["plain"], memo["walked"]
+    has = memo.setdefault("has", {})
+
+    def anywhere(feature: int) -> bool:
+        # the feature's text anywhere (a match needs it where it counts)
+        if feature not in has:
+            has[feature] = _FEATURE_RES[feature].search(plain) is not None
+        return has[feature]
+
+    needs = _NEEDS[pat]
+    if needs and not any(anywhere(f) for f in needs):
         return False
-    if after_name.search(plain, 0, folder):
-        return True
-    name = max((m.start() for m in names.finditer(plain, 0, folder)),
-               default=0)
-    return bool(name) and before_name.search(plain, 0, name) is not None
+    searches, names = _SEARCH_VARIANTS[pat]
+    for k, search in enumerate(searches):
+        # the second regex's ways all need ``-e``/``-f`` after the unit
+        if k and not (memo["cross"] and anywhere(_TEXT_FEATURE)):
+            break
+        for m in search.rx.finditer(plain):
+            if _leads_on(search, m, walked):
+                return True
+    if not memo["cross"]:
+        return False
+    # search 2 before the name: the name, then the folder word (and the
+    # option the rule needs) after it
+    if "before" not in memo:
+        memo["before"] = [
+            on for m in _BEFORE_NAME.rx.finditer(plain)
+            if (on := _going_on(m, _BEFORE_NAME.ways[0][2])) is not None]
+    for on in memo["before"]:
+        stop, last = _stream(plain, on, walked)
+        if last[_TARGET_FEATURE] < 0:
+            continue
+        name = names.search(plain, on, stop)
+        if name is None or last[_TARGET_FEATURE] <= name.start():
+            continue
+        if not needs or any(last[f] > name.start() for f in needs):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------

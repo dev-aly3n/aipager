@@ -981,29 +981,61 @@ def test_an_escaped_separator_a_later_parser_reads_starts_a_search(cmd):
 
 
 #: One row per search of :func:`safety._search_hit` that alone finds main's
-#: match (each fails when that search is taken out).
+#: match (each fails when that search is taken out): search 1 (``first``,
+#: no unit that holds a start), search 2 after the name (``second``) and
+#: before it (``before``).
 ONE_SEARCH = [
     # 1: a user name ends at the separator of ``\;`` (the mark in the copy)
-    ("whole", "grep -rn x /home/a" + B + ";b/src"),
-    # 2: from an escaped separator
-    ("escaped", "echo x" + B + "; grep -rn aipager ~"),
-    ("escaped", "echo x" + B + "|ls -R /"),
-    ("escaped", "echo x" + B + "(du -sh ~"),
-    ("escaped", "echo x" + B + "`find ~ -name a"),
-    ("escaped", "echo x" + B + "&rg --files ~"),
-    # a lookahead reading past the next one finds what it looks for there
-    ("escaped", "echo x" + B + "; grep x ~ a" + B + ";b -r"),
-    # 3: reading past the next escaped separator after the name ...
-    ("after_name", "echo x" + B + "; grep -rn a" + B + ";b ~"),
-    ("after_name", "echo x" + B + "; find a" + B + ";b ~"),
-    ("after_name", "echo x" + B + "; find -D a" + B + ";b ~"),
-    ("after_name", "echo x" + B + "; ls a" + B + "; -R ~"),
-    ("after_name", "echo x" + B + "; rg -e a" + B + ";b ~"),
-    ("after_name", "echo x" + B + "; grep -rn -a" + B + ";b x ~"),
+    ("first", "grep -rn x /home/a" + B + ";b/src"),
+    # 1, from an escaped separator
+    ("first", "echo x" + B + "; grep -rn aipager ~"),
+    ("first", "echo x" + B + "|ls -R /"),
+    ("first", "echo x" + B + "(du -sh ~"),
+    ("first", "echo x" + B + "`find ~ -name a"),
+    ("first", "echo x" + B + "&rg --files ~"),
+    # 1, its lookahead stopping at a unit that holds a start and finding
+    # what it looks for in main's reading after it
+    ("first", "echo x" + B + "; grep x ~ a" + B + ";b -r"),
+    ("first", 'grep x ~ "a;b" -r'),
+    ("first", "ls ~ 'a|b' -R"),
+    ("first", 'rg ~ "a;b" -e y'),
+    # 2: reading past a unit that holds a start after the name ...
+    ("second", "echo x" + B + "; grep -rn a" + B + ";b ~"),
+    ("second", "echo x" + B + "; find a" + B + ";b ~"),
+    ("second", "echo x" + B + "; find -D a" + B + ";b ~"),
+    ("second", "echo x" + B + "; ls a" + B + "; -R ~"),
+    ("second", "echo x" + B + "; rg -e a" + B + ";b ~"),
+    ("second", "echo x" + B + "; grep -rn -a" + B + ";b x ~"),
+    ("second", 'grep -r "a;b" ~'),
+    ("second", "rg 'foo(' ~"),
+    ("second", 'find "a|b" ~'),
+    ("second", 'rg ~ "a;b" ~'),
+    ("second", 'du "$(pwd)" ~'),
     # ... and before it, in a setting or a wrapper's option
-    ("before_name", "echo x" + B + "; X=a" + B + ";b grep -rn x ~"),
-    ("before_name", "echo x" + B + "; timeout -k1" + B + ";b du ~"),
+    ("before", "echo x" + B + "; X=a" + B + ";b grep -rn x ~"),
+    ("before", "echo x" + B + "; timeout -k1" + B + ";b du ~"),
+    ("before", 'X="a;b" grep -rn x ~'),
+    ("before", "LC_ALL='a|b' ls -R ~"),
 ]
+
+
+def _without(which: str, monkeypatch) -> None:
+    """Take search *which* out of :func:`safety._search_hit`."""
+    if which == "before":
+        monkeypatch.setattr(safety, "_BEFORE_NAME",
+                            safety._Search("(?!)", [([""], True)]))
+        return
+    real = safety._leads_on
+
+    def leads_on(search, m, memo):
+        for marker, _, _, cross in search.ways:
+            if m.start(marker) >= 0:
+                break
+        if cross == (which == "second"):
+            return False
+        return real(search, m, memo)
+
+    monkeypatch.setattr(safety, "_leads_on", leads_on)
 
 
 @pytest.mark.parametrize("which,cmd", ONE_SEARCH)
@@ -1011,12 +1043,7 @@ def test_each_search_finds_what_main_finds(which, cmd, monkeypatch):
     import re
     assert any(re.search(p, cmd) for p in safety.DENY_BASH_SEARCH_PATTERNS)
     assert bash_violation(cmd, DENY_BASH_PATTERNS) == safety.BASH_SEARCH_REASON
-    index = ["whole", "escaped", "after_name", "before_name"].index(which)
-    never = re.compile("(?!)")
-    variants = {pat: tuple(never if i == index else v
-                           for i, v in enumerate(vs))
-                for pat, vs in safety._SEARCH_VARIANTS.items()}
-    monkeypatch.setattr(safety, "_SEARCH_VARIANTS", variants)
+    _without(which, monkeypatch)
     assert bash_violation(cmd, DENY_BASH_PATTERNS) is None
 
 
@@ -1028,6 +1055,16 @@ def test_each_search_finds_what_main_finds(which, cmd, monkeypatch):
     "ls -R x; echo " + B + ";a=" + B + ";b /",
     # the 57 s shape of iteration 8, short
     (B + "`a=") * 50 + " ; ls ~/.config/nvim x",
+    # main's reading of a quoted string that holds a separator goes on
+    # after it to the end of that command only, and needs what main needs
+    'rg "a|b" src; cd ~',
+    "grep -rn 'foo(' src && cp out ~",
+    'X="a;b" ls ~',
+    'ls "a;b" ~',
+    'grep x ~ ";"',
+    "ack" + B + "& /home/bob",
+    " rg " + B + "|" + B + " /",
+    'rg "a;b" src "x ~"',
 ])
 def test_reading_past_an_escaped_separator_needs_what_could_follow(cmd):
     import re
@@ -1038,6 +1075,7 @@ def test_reading_past_an_escaped_separator_needs_what_could_follow(cmd):
 def _search_corpus(seed: int, count: int) -> list[str]:
     import random
     vocab = [" ", " ", "\t", "\n", ";", "&", "|", "(", ")", "`", "<", B,
+             '"a;b"', "'a|b'", '"$(x)"', B + '"', B + "'",
              B + ";", B + "&", B + "|", B + "(", B + "`", B * 2, B + "\n",
              "'", '"', "x", "a=", "-r", "-R", "-e", "-D", "--files", "-f",
              "grep", "rg", "find", "ls", "du", "tree", "ack", "env", "timeout",
@@ -1076,7 +1114,14 @@ def test_the_copy_marks_each_escaped_separator():
 @pytest.mark.parametrize("unit", [
     B + "`a=", B + ";a=", B + "|ls" + B + ";", B + "(a=", B + "&a=",
     B + ";grep -r ", B + ";rg x ", B + "`env -", B + ";ls -R ", B + ";tree ",
-    B + "`du -a ", "x" + B + ";find ", B + ";a=" + B + " ", '"' + B + "`a="])
+    B + "`du -a ", "x" + B + ";find ", B + ";a=" + B + " ", '"' + B + "`a=",
+    # an escaped quote and a quote pair before a separator: each string
+    # closed where the next opened (tester-iter9-001, 16-41 s), escaped
+    # separators or real ones (main's own patterns took as long)
+    B + '""' + B + ";rg x ", B + "'$'" + B + ";rg x ", B + "''" + B + "|grep -r ",
+    B + '"$"' + B + "(rg x ", B + "''" + B + "`ls -R ", B + '""eval ' + B + ";du -a ",
+    B + '"";rg x ', "'" + B + "'';rg x ", B + "''|grep -r ", B + '""`rg x ',
+    B + '""&ls -R ', B + ";rg x '", B + ";rg x ~/a" + B + ";"])
 @pytest.mark.parametrize("tail", ["; cat ~/.config/aipager/x",
                                   "; ls ~/.config/nvim x", " ~"])
 def test_escaped_separators_in_one_word_stay_fast(unit, tail):
