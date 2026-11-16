@@ -845,6 +845,31 @@ class TestInstance:
                 continue
         return out
 
+    def send_user_file_inputs(self, name: str) -> list[dict]:
+        """The ``input`` of every SendUserFile call in session *name*'s
+        transcript, in order (what Claude asked for, e.g. ``display``)."""
+        path = self._registry_transcript(name)
+        if not path:
+            return []
+        try:
+            lines = Path(path).read_text(errors="replace").splitlines()
+        except OSError:
+            return []
+        out: list[dict] = []
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            msg = e.get("message") if isinstance(e, dict) else None
+            content = msg.get("content") if isinstance(msg, dict) else None
+            for block in content if isinstance(content, list) else ():
+                if (isinstance(block, dict) and block.get("type") == "tool_use"
+                        and block.get("name") == "SendUserFile"
+                        and isinstance(block.get("input"), dict)):
+                    out.append(block["input"])
+        return out
+
     def _registry_transcript(self, name: str) -> str:
         try:
             data = json.loads((self.home / ".claude" / "aipager-sessions.json").read_text())

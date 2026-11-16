@@ -595,3 +595,40 @@ def test_install_linux_reports_a_failed_restart_and_names_the_old_daemon(
         "a failed restart must say the old process is still serving — "
         f"got: {err!r}"
     )
+
+
+# ---- an isolated instance never drives the main install's service --------
+
+@pytest.mark.parametrize("sub", ["install", "start", "stop", "status", "logs",
+                                 "uninstall"])
+def test_cmd_service_refuses_in_an_instance(monkeypatch, capsys, tmp_path, sub):
+    """`aipager service` is the main install's: from an isolated instance
+    it would start, stop or replace the main daemon, never this one."""
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path / "inst"))
+    monkeypatch.setattr(service, "_platform", lambda: "linux")
+    ran = []
+    monkeypatch.setitem(service._DISPATCH["linux"], sub,
+                        lambda *a, **k: ran.append(sub) or 0)
+    monkeypatch.setattr(service, "install_service",
+                        lambda **k: ran.append("install_service") or 0)
+    rc = service.cmd_service(argparse.Namespace(service_cmd=sub))
+    assert rc == 1 and ran == []
+    assert "not this isolated instance" in " ".join(capsys.readouterr().err.split())
+
+
+def test_install_service_refuses_in_an_instance(monkeypatch, capsys, tmp_path):
+    """`aipager setup --service` calls install_service directly."""
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path / "inst"))
+    monkeypatch.setattr(service, "_platform", lambda: "linux")
+    ran = []
+    monkeypatch.setitem(service._DISPATCH["linux"], "install",
+                        lambda *a, **k: ran.append(1) or 0)
+    assert service.install_service(yes=True) == 1 and ran == []
+    assert "not this isolated instance" in " ".join(capsys.readouterr().err.split())
+
+
+def test_cmd_service_runs_with_a_blank_instance_dir(monkeypatch):
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", "  ")
+    monkeypatch.setattr(service, "_platform", lambda: "linux")
+    monkeypatch.setitem(service._DISPATCH["linux"], "start", lambda: 0)
+    assert service.cmd_service(argparse.Namespace(service_cmd="start")) == 0

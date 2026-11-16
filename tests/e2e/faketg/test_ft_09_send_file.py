@@ -86,10 +86,11 @@ def _wait_photo(fake, since: int, timeout: float = 90):
                          timeout=timeout, since=since, what="the file in the DM")
 
 
-def _assert_delivered(inst, name: str, label: str, path, since: int, log_since: int):
+def _assert_delivered(inst, name: str, label: str, path, since: int, log_since: int,
+                      method: str = "sendPhoto"):
     fake = inst.fake
     photo = _wait_photo(fake, since)
-    assert photo.method == "sendPhoto", photo.summary()
+    assert photo.method == method, photo.summary()
     assert list(photo.files.values())[0][1] == path.read_bytes()
     assert photo.params.get("disable_notification") is True
     # The session's name first; Claude's own caption, if it gave one, on
@@ -216,6 +217,8 @@ def _observe(inst, name: str, log_since: int, case: str) -> None:
     payloads = [m.group(1) for line in inst.log_lines(log_since)
                 if (m := _PAYLOAD_RE.search(line))]
     print(f"[{case}] session env CLAUDE_CODE_ATTACHMENTS_BY_PATH={env!r}")
+    print(f"[{case}] SendUserFile display: "
+          f"{[i.get('display') for i in inst.send_user_file_inputs(name)]!r}")
     print(f"[{case}] transcript tail:\n{inst.transcript_tail(name, 10)}")
     for p in payloads:
         print(f"[{case}] {p}")
@@ -231,7 +234,14 @@ def test_real_claude_sends_the_image_it_is_asked_for(fresh, lang, run):
     template = EN_PROMPT if lang == "en" else FA_PROMPT
     name, path, since, log_since = _ask(inst, label, template)
     try:
-        _assert_delivered(inst, name, label, path, since, log_since)
+        # Claude may ask for a plain attachment (display "attach"): then
+        # the image goes as a document, otherwise as a photo. Read once the
+        # file is out: the transcript has the call by then.
+        _wait_photo(inst.fake, since)
+        asked = [i.get("display") for i in inst.send_user_file_inputs(name)]
+        assert asked, "no SendUserFile call in the transcript"
+        method = "sendDocument" if asked[0] == "attach" else "sendPhoto"
+        _assert_delivered(inst, name, label, path, since, log_since, method)
     finally:
         _observe(inst, name, log_since, f"{lang}-{run}")
     assert inst.session_env_values(name, "CLAUDE_CODE_ATTACHMENTS_BY_PATH")[:1] == ["1"]

@@ -906,6 +906,18 @@ _START_HOW = ("`aipager service install` (background service) or "
               "`aipager start` (foreground)")
 
 
+def _is_instance() -> bool:
+    """Run from an isolated instance (``AIPAGER_INSTANCE_DIR``): its daemon
+    is a foreground ``aipager start``, and ``aipager service`` is the main
+    install's, so a next step never names it."""
+    from aipager.instance import instance_dir
+    return instance_dir() is not None
+
+
+def _start_how() -> str:
+    return "`aipager start`" if _is_instance() else _START_HOW
+
+
 def _restart_or_refused_step(doc: dict) -> str | None:
     """The next step when a restart is needed or the reload was refused
     (shared by the DM setup and ``aipager setup group``), else ``None``."""
@@ -914,11 +926,13 @@ def _restart_or_refused_step(doc: dict) -> str | None:
     if daemon.get("restart_needed"):
         why = ("to use the new bot token" if "bot_token" in doc.get("changed", [])
                else "to apply the change")
-        how = ("run `aipager service stop` and then `aipager service start` "
+        how = ("stop this instance's `aipager start` and run it again."
+               if _is_instance() else
+               "run `aipager service stop` and then `aipager service start` "
                "(or stop a foreground `aipager start` and run it again).")
         if unknown:
             return (f"If an aipager daemon is running, restart it {why}: "
-                    f"{how} Otherwise start it with {_START_HOW}.")
+                    f"{how} Otherwise start it with {_start_how()}.")
         return f"Restart the daemon {why}: {how}"
     if any(w.get("code") == "reload_refused" for w in doc["warnings"]):
         return ("Fix the problem in the warning (run `aipager config`), then "
@@ -940,10 +954,10 @@ def _next_step(doc: dict) -> str:
             return ("Setup could not tell whether aipager is running (see "
                     "the daemon_unknown warning). Check with `aipager doctor "
                     "--json`, and if it is not running, start it with "
-                    f"{_START_HOW}.")
+                    f"{_start_how()}.")
         return ("aipager is running. Check the install with "
                 "`aipager doctor --json`.")
-    return (f"Start aipager with {_START_HOW}, then check it with "
+    return (f"Start aipager with {_start_how()}, then check it with "
             "`aipager doctor --json`.")
 
 

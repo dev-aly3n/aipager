@@ -211,7 +211,8 @@ socket path.
 
 `/update` and `/restart` are not isolated: they act on the installed
 aipager package and the `aipager.service` unit, so never send them to a
-test instance.
+test instance. For the same reason `aipager service` refuses to run with
+`AIPAGER_INSTANCE_DIR` set: run the instance with `aipager start`.
 
 `AIPAGER_TELEGRAM_API_BASE` (for example `http://127.0.0.1:41234`)
 sends every Bot API request and file download to that address instead

@@ -752,13 +752,30 @@ _DISPATCH = {
 }
 
 
+def _refused_in_instance() -> bool:
+    """``True``, after saying why, when run from an isolated instance
+    (``AIPAGER_INSTANCE_DIR``): the service is the main install's, so
+    installing, starting or stopping it here would act on the main daemon."""
+    from aipager.instance import instance_dir
+    if instance_dir() is None:
+        return False
+    friendly_error(
+        "`aipager service` manages the main install's background service, "
+        "not this isolated instance (AIPAGER_INSTANCE_DIR is set).",
+        "  Run this instance in the foreground with `aipager start`.",
+    )
+    return True
+
+
 def install_service(*, yes: bool) -> int:
     """Install and start the service for this platform, with no config
     preflight: the caller has made sure ``aipager.yaml`` loads (``aipager
     setup`` checks the file on disk, because ``preflight.require_config``
     reads the import-time ``aipager.config`` snapshot, stale in a process
     that has just written the config). Returns the installer's exit code,
-    1 on an unsupported platform."""
+    1 on an unsupported platform or from an isolated instance."""
+    if _refused_in_instance():
+        return 1
     plat = _platform()
     if plat not in _DISPATCH:
         friendly_error(
@@ -781,6 +798,8 @@ def unit_path() -> Path | None:
 
 
 def cmd_service(args: argparse.Namespace) -> int:
+    if _refused_in_instance():
+        return 1
     plat = _platform()
     if plat not in _DISPATCH:
         friendly_error(
