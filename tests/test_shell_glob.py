@@ -1380,3 +1380,23 @@ def test_a_plain_pattern_stands_as_one_bracket_per_character():
     assert "[a][b]" in g.words("echo ${x/ab/&}")
 
 
+@pytest.mark.parametrize("cmd", [
+    # tester-iter8-007: a value glued to a glob may be empty
+    "cat ~/.config/[a]ipager${unset_v}/x",
+    "cat ~/.config/[a]ipager$unset_v/x",
+    "cat ~/.config/[a]ipager${unset_v@Q}/x",
+    "cat ~/.config/[a]ipager${x:0:0}/x",
+    "cat ~/.config/[a]ipager${!zzq*}/x",
+    "cat ~/.config/[a]ipager$(:)/x",
+    "cat ~/.config/$x*/x",
+])
+def test_a_value_glued_to_a_glob_may_be_empty(cmd):
+    assert g.command_reaches(cmd)
+
+
+def test_an_empty_value_changes_only_a_glob_segment():
+    assert g._classify("[a]ipager" + g.OPAQUE, False) & g._A
+    assert not g._classify("[n]vim" + g.OPAQUE, False) & g._A
+    # a plain name split by a value stays the documented open route
+    assert not g._classify("aip" + g.OPAQUE + "ager", False) & g._A
+    assert not g.command_reaches("cat ~/.config/[n]vim$x/init.lua")

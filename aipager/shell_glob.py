@@ -1539,6 +1539,12 @@ def _classify(seg: str, dotglob: bool) -> int:
     can be ``.`` or ``..`` (a glob only), whether it holds a value the
     floor cannot see. Unsure: every flag."""
     flags = _O if OPAQUE in seg else 0
+    if flags:
+        empty = seg.replace(OPAQUE, "")
+        if _GLOB_RE.search(empty):
+            # each value may be empty (``[a]ipager${unset}``): the glob
+            # around it as bash would then read it
+            flags |= _classify(empty, dotglob)
     if not _GLOB_RE.search(seg):
         low = seg.lower()
         return flags | (_C if low == ".config" else _L if low == ".local"

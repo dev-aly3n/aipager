@@ -24,7 +24,8 @@ function bodies and ``case`` patterns); the ``function NAME`` forms
 other compound bodies); escaped separators (``\\;``, ``\\&``, ``\\|``,
 backslash-newline, quoted separators) before a recursive home search.
 
-Gaps (strict xfail, project convention for known gaps):
+Gaps found in iteration 8 (strict xfail then, project convention for known
+gaps; all five closed in iteration 9, their marks removed):
 
 - FUNCTION_KEYWORD_POSITIONS: ``function NAME {`` is a program position
   only where ``function`` starts a command after ``;``/``&&``/``(``/
@@ -562,9 +563,17 @@ DOCUMENTED_OPEN_ITER8 = [
 ]
 
 
+# Closed in iteration 9: a value glued to a glob may be empty, so the glob
+# around it is read as bash would then read it (tester-iter8-007).
+CLOSED_ITER9 = {"glob-path-then-empty-var", "glob-path-then-empty-at-q",
+                "glob-path-then-empty-offset", "glob-path-then-empty-names",
+                "glob-path-then-empty-cmdsub"}
+
+
 @pytest.mark.parametrize(
     "cmd",
-    [pytest.param(r[1], marks=pytest.mark.xfail(strict=True, reason=DOC_GAP))
+    [pytest.param(r[1], marks=() if r[0] in CLOSED_ITER9 else
+                  pytest.mark.xfail(strict=True, reason=DOC_GAP))
      for r in DOCUMENTED_OPEN_ITER8],
     ids=[r[0] for r in DOCUMENTED_OPEN_ITER8])
 def test_documented_open_route_met_in_iteration_8(cmd):
@@ -572,7 +581,8 @@ def test_documented_open_route_met_in_iteration_8(cmd):
 
 
 @pytest.mark.parametrize(
-    "example", sorted({r[2] for r in DOCUMENTED_OPEN_ITER8}))
+    "example", sorted({r[2] for r in DOCUMENTED_OPEN_ITER8
+                       if r[0] not in CLOSED_ITER9}))
 def test_open_route_met_in_iteration_8_is_named_as_open(example):
     open_list = _docs_section("What still gets through", "The real boundary")
     assert example in open_list
