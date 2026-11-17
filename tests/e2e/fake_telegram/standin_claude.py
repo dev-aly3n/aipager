@@ -20,6 +20,10 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   then, unless launched with ``--dangerously-skip-permissions`` or the
   hook already decided, ``PermissionRequest``, whose hook output decides.
   The file is written only when allowed.
+- A prompt containing "Bash command exactly: `CMD`" runs ``CMD`` (``sh -c``
+  in the session folder) as a Bash call: ``PreToolUse`` (a deny there is
+  logged with its reason and the command never runs), then the permission
+  as for Write, then ``PostToolUse``.
 - A prompt containing "Reply with exactly: X" answers ``X``; any other
   answers ``stand-in: <decision or ok>``. Then ``Stop``.
 - Escape interrupts a running turn (no ``Stop``, like Claude). The
@@ -142,6 +146,7 @@ REJECTED_TOOL_RESULT = ("The user doesn't want to proceed with this tool use. Th
                         "the user to tell you how to proceed.")
 INTERRUPT_MARKER = "[Request interrupted by user for tool use]"
 _NAME_RE = re.compile(r"create\s+([A-Za-z0-9_-]+)\.txt", re.I)
+_BASH_RE = re.compile(r"Bash command exactly:\s*`([^`]+)`", re.I)
 _AGENTS_RE = re.compile(r"agents:\s*(launch|hold|finish)\b", re.I)
 _TWO_RE = re.compile(r"two prompts:\s*(agent-first|claude-first)\b", re.I)
 #: "hold this turn": the turn waits on the hold file before it answers (a
@@ -409,6 +414,14 @@ class StandIn:
         elif _SEND_EN_RE.search(prompt) or _SEND_FA_RE.search(prompt):
             m = _SEND_EN_RE.search(prompt) or _SEND_FA_RE.search(prompt)
             decision = self._send_file_turn(m.group(1).rstrip(".,;:!?"))
+        elif _BASH_RE.search(prompt):
+            decision = self._bash_turn(_BASH_RE.search(prompt).group(1))
+            if decision == "rejected":
+                return  # ended like an interrupt by the dialog's last row
+            if self.interrupted:
+                self.log(event="interrupted")
+                self.user_text("[Request interrupted by user]")
+                return
         elif "write tool" in prompt.lower():
             m = _NAME_RE.search(prompt)
             name = m.group(1) if m else "standin"
@@ -458,6 +471,46 @@ class StandIn:
             self.after_stop_agent = None
             self.after_stop.set()
         self.statusline()
+
+    # -- a Bash command -------------------------------------------------------
+
+    def _bash_turn(self, command: str) -> str:
+        tool_input = {"command": command, "description": "Run the command"}
+        tool_use_id = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.assistant([{"type": "tool_use", "id": tool_use_id, "name": "Bash",
+                         "input": tool_input}])
+        pre = self.fire("PreToolUse", {"tool_name": "Bash", "tool_input": tool_input,
+                                       "tool_use_id": tool_use_id}, tool="Bash")
+        for o in pre:
+            hso = o.get("hookSpecificOutput") or {}
+            if hso.get("permissionDecision") == "deny" or o.get("decision") == "block":
+                reason = hso.get("permissionDecisionReason") or o.get("reason") or "denied"
+                self.tool_result(tool_use_id, reason, True)
+                self.log(event="decision", tool="Bash", decision="denied", reason=reason,
+                         command=command)
+                return "denied"
+        decision = self._ask_tool("Bash", tool_input, tool_use_id, pre=pre)
+        self.log(event="decision", tool="Bash", decision=decision, command=command)
+        if decision == "rejected":
+            self.tool_result(tool_use_id, REJECTED_TOOL_RESULT, True)
+            self.user_text(INTERRUPT_MARKER)
+            self.log(event="interrupted", by="dialog")
+            return decision
+        if decision != "allowed":
+            self.tool_result(tool_use_id, f"Permission {decision}", True)
+            return decision
+        try:
+            done = subprocess.run(["sh", "-c", command], cwd=self.cwd, capture_output=True,
+                                  text=True, timeout=60)
+            out, code = (done.stdout + done.stderr)[-2000:], done.returncode
+        except (OSError, subprocess.TimeoutExpired) as e:
+            out, code = f"{type(e).__name__}", 1
+        self.fire("PostToolUse", {"tool_name": "Bash", "tool_input": tool_input,
+                                  "tool_response": {"stdout": out, "stderr": "",
+                                                    "interrupted": False},
+                                  "tool_use_id": tool_use_id}, tool="Bash")
+        self.tool_result(tool_use_id, out, code != 0)
+        return "ran"
 
     # -- a file sent to the person (SendUserFile) ------------------------------
 
@@ -873,9 +926,11 @@ class StandIn:
                 self.raw_mode = _MODE_CYCLE[(i + 1) % len(_MODE_CYCLE)]
         self.log(event="mode", mode=self.raw_mode)
 
-    def _ask_tool(self, tool: str, tool_input: dict, tool_use_id: str) -> str:
-        pre = self.fire("PreToolUse", {"tool_name": tool, "tool_input": tool_input,
-                                       "tool_use_id": tool_use_id}, tool=tool)
+    def _ask_tool(self, tool: str, tool_input: dict, tool_use_id: str,
+                  pre: list[dict] | None = None) -> str:
+        if pre is None:
+            pre = self.fire("PreToolUse", {"tool_name": tool, "tool_input": tool_input,
+                                           "tool_use_id": tool_use_id}, tool=tool)
         for o in pre:
             hso = o.get("hookSpecificOutput") or {}
             d = hso.get("permissionDecision") or o.get("decision")
