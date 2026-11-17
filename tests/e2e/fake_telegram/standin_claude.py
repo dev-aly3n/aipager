@@ -800,6 +800,10 @@ class StandIn:
         return "agent launched"
 
     def _agent_asks_after_stop(self, agent_id: str, prompt_id: str) -> None:
+        """The background agent's Bash ask, once the turn's Stop is done.
+        Its dialog counts as on screen as soon as the hook gives up: the
+        2 s Claude Code 2.1.326 takes to put it in the terminal is not
+        modelled, so a tap in that gap cannot be shown here."""
         if not self.after_stop.wait(600):
             return
         time.sleep(AFTER_STOP_DELAY)
