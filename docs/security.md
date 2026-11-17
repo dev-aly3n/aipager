@@ -947,7 +947,9 @@ the Mini App serves is verified against Telegram's `initData` signature
 protects it regardless of how the URL was obtained. Knowing the
 hostname alone gets an attacker nothing they could not already get by
 guessing a `trycloudflare.com` subdomain at random - the signature
-check is the actual gate. Treat it the way you'd treat any other
+check is the actual gate. The only files served without that check
+are public ones: the page itself, Telegram's SDK script and the fonts
+bundled with aipager (`/fonts/`, a fixed list of names). Treat it the way you'd treat any other
 unlisted-but-not-secret URL: fine to leave running, not something to
 paste into a public channel for no reason.
 

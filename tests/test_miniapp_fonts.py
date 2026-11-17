@@ -96,15 +96,16 @@ def server(mk_bot):
     return MiniAppServer(bot, registry, port=8765)
 
 
-async def _get_all(server, paths):
+async def _get_all(server, paths, method="GET", full=False):
     client = TestClient(TestServer(server._build_app()))
     await client.start_server()
     out = []
     try:
         for p in paths:
-            resp = await client.get(URL(p, encoded=True))
-            out.append((resp.status, resp.headers.get("Content-Type"),
-                        resp.headers.get("Cache-Control"), await resp.read()))
+            resp = await client.request(method, URL(p, encoded=True))
+            body = await resp.read()
+            out.append(resp if full else (resp.status, resp.headers.get("Content-Type"),
+                                          resp.headers.get("Cache-Control"), body))
     finally:
         await client.close()
     return out
@@ -143,6 +144,23 @@ def test_the_route_refuses_anything_not_on_the_list(server, run_async, path):
     [(status, _ctype, _cache, body)] = run_async(_get_all(server, [path]))
     assert status == 404
     assert b"wOF2" not in body and b"Copyright" not in body and b"import" not in body
+
+
+def test_a_font_is_never_sniffed_as_another_type(server, run_async):
+    [resp] = run_async(_get_all(server, ["/fonts/vazirmatn-33.003-arabic.woff2"], full=True))
+    assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+
+
+def test_a_refusal_is_never_cached(server, run_async):
+    """A 404 a phone kept would hide a font added later under that name."""
+    [(status, _t, cache, _b)] = run_async(_get_all(server, ["/fonts/nope.woff2"]))
+    assert (status, cache) == (404, "no-store")
+
+
+def test_head_answers_like_get_without_the_body(server, run_async):
+    name = "be-vietnam-pro-1.002-400-latin.woff2"
+    [(status, ctype, cache, body)] = run_async(_get_all(server, ["/fonts/" + name], "HEAD"))
+    assert (status, ctype, cache, body) == (200, "font/woff2", "public,max-age=31536000,immutable", b"")
 
 
 def test_an_unlisted_name_never_reaches_the_cache():
