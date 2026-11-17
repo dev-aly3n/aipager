@@ -147,8 +147,16 @@ def test_close_never_logs_a_move_to_busy(rig, how, caplog):
 
 
 def test_close_logs_interactive_to_idle(rig, caplog):
+    _after_stop(rig)
+    # Minutes passed since the Stop (hours in the field): the IDLE is not
+    # the debounced re-IDLE, so its transition is logged.
+    rig.sess.last_idle_at = 0.0
     with caplog.at_level(logging.INFO):
-        _close(rig, "terminal-tool-ran")
+        _agent_pre(rig, BG, CMD, "toolu_bg1")
+        _ask(rig)
+        rig.timeout(REQ)
+        _agent_post(rig, BG, CMD, "toolu_bg1")
+    assert rig.sess.status == Status.IDLE
     assert "INTERACTIVE → IDLE" in caplog.text
 
 
