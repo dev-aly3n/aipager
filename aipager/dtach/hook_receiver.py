@@ -1118,6 +1118,15 @@ class HookReceiver:
                 "mode": permission_mode if isinstance(permission_mode, str) else "",
             }
             tool_info["order"] = order
+        # Claude's own prompt (its hook payload names no agent; the
+        # Notification's never does, so it proves nothing): its turn runs,
+        # as its own tool call proves (the parent PreToolUse). Its question
+        # comes at PreToolUse, before that code, so a wait it opens while
+        # aipager shows IDLE (a Stop hook carrying the turn on, a false
+        # idle) is not a wait after the turn: its close goes BUSY.
+        claudes_own = (source in ("permission_request", "question")
+                       and isinstance(tool_info, dict)
+                       and not tool_info.get("agent_id"))
         if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
             # During the carry (Claude's Stop with an agent's prompt still
             # open) the session is already waiting: a prompt then is one
@@ -1128,8 +1137,16 @@ class HookReceiver:
                 if source == "permission_request":
                     log.info("[%s] PermissionRequest: %s", moved.label,
                              (tool_info or {}).get("summary", ""))
+                # Opened while idle: a card kept from then is out of view
+                # above the answer, whoever asks (notify draws the prompt
+                # as its own message).
+                context["from_idle"] = moved.wait_from_idle
+                if claudes_own:
+                    moved.wait_from_idle = False
                 await self.notify_fn(moved, "permission_prompt", context)
             return
+        if claudes_own:
+            sess.wait_from_idle = False
         summary = (tool_info or {}).get("summary", "") if isinstance(tool_info, dict) else ""
         if source == "notification" or order is None:
             log.info("[%s] prompt already open, not shown again: %s",

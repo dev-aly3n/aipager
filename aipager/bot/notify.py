@@ -734,6 +734,9 @@ class NotifyMixin:
             return
         if sess.resumed_after_stop:
             # Carried over Claude's Stop (8.120): no turn of Claude's runs.
+            # Not ``wait_after_turn()``: the risky-rm ask is Claude's own
+            # (``countdown_candidate`` excludes agents), and Claude's own
+            # prompt never keeps ``wait_from_idle``.
             self.registry.transition(sess.name, Status.IDLE)
             return
         self.registry.transition(sess.name, Status.BUSY,
@@ -5210,15 +5213,21 @@ class NotifyMixin:
 
             # Can we inline into the existing busy message?
             can_inline = sess.busy_msg_id and sess.busy_msg_id > 0
-            if can_inline and sess.wait_from_idle:
-                # An agent asked after Claude's own turn ended: the card
-                # is the job's kept waiting card, above the interim
-                # answer (or a stale one). Drawn there, the prompt was a
-                # silent edit out of view, and nowhere when the edit
-                # failed; it comes as its own message, as a prompt
-                # carried over the Stop does (``_on_prompts_carried``).
-                log.info("[%s] agent's prompt after the turn ended - sent "
-                         "as its own message", sess.label)
+            if can_inline and (sess.wait_from_idle or context.get("from_idle")):
+                # A prompt that opened while the session was IDLE: the card
+                # is the job's kept waiting card, above the interim answer,
+                # or a finished turn's card that was never cleared. Drawn
+                # there, the prompt was a silent edit out of view, and
+                # nowhere when the edit failed; it comes as its own
+                # message, as a prompt carried over the Stop does
+                # (``_on_prompts_carried``). Claude's own prompt from IDLE
+                # (``from_idle`` with ``wait_from_idle`` cleared) too.
+                if sess.wait_from_idle:
+                    log.info("[%s] agent's prompt after the turn ended - sent "
+                             "as its own message", sess.label)
+                else:
+                    log.info("[%s] Claude's prompt while idle - sent as its "
+                             "own message", sess.label)
                 can_inline = False
 
             if can_inline:
