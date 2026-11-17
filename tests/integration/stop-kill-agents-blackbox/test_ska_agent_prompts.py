@@ -1,9 +1,10 @@
 """design-6 success criterion: an agent's open prompt after Stop.
 
 Claude's own turn has ended; a background agent then asks (the "needs
-you" case where every open prompt is an agent's). The first prompt sits
-on the busy card, the second is its own message (the shape the chat shows
-for two open prompts). Stop (from the card, the /stop command,
+you" case where every open prompt is an agent's). Each prompt is its own
+message, the card keeps only its Stop (an agent asking after Claude's turn
+ended never lands on the job's waiting card). Stop (from the card, the
+/stop command,
 ``/<label> stop`` and the Mini App) presses the chord; afterwards the
 prompt's own message has no buttons and says its agent was stopped, and a
 late tap on any of the prompt's buttons types nothing and answers no hook.
@@ -49,17 +50,14 @@ def _scenario(h, entry, *, two=True):
     return seen
 
 
-def _late_taps(h, seen, where):
-    """Tap every Allow / Deny the person still saw before the Stop."""
+def _late_taps(h, seen, which):
+    """Tap every Allow / Deny the person still saw before the Stop, on the
+    first prompt's message or the second's."""
+    mid, _text, buttons = seen["msgs"][0 if which == "first" else 1]
+
     async def go():
-        if where == "message":
-            for mid, _text, buttons in seen["msgs"]:
-                for _label, data in buttons:
-                    await h.tap_data(data, mid)
-        else:
-            for label, data in seen["card_buttons"]:
-                if "Stop" not in label:
-                    await h.tap_data(data, kit.CARD)
+        for _label, data in buttons:
+            await h.tap_data(data, mid)
     h.run(go())
 
 
@@ -69,8 +67,17 @@ def test_precondition_the_session_needs_you(dm, entry):
 
 
 @pytest.mark.parametrize("entry", ENTRIES)
-def test_precondition_the_second_prompt_is_its_own_message(dm, entry):
-    assert len(_scenario(dm, entry)["msgs"]) == 1
+def test_precondition_each_prompt_is_its_own_message(dm, entry):
+    seen = _scenario(dm, entry)
+    assert len(seen["msgs"]) == 2
+    assert all(len(b) == 2 for _m, _t, b in seen["msgs"])
+
+
+@pytest.mark.parametrize("entry", ENTRIES)
+def test_precondition_the_card_offers_no_answer(dm, entry):
+    seen = _scenario(dm, entry)
+    assert not any("Allow" in label or "Deny" in label
+                   for label, _d in seen["card_buttons"])
 
 
 @pytest.mark.parametrize("entry", ENTRIES)
@@ -109,24 +116,24 @@ def test_the_prompt_message_keeps_what_it_asked(dm, entry):
 
 
 @pytest.mark.parametrize("entry", ENTRIES)
-def test_the_card_holding_the_first_prompt_loses_its_buttons(dm, entry):
+def test_the_card_loses_its_buttons(dm, entry):
     _scenario(dm, entry)
     assert [m for i, _t, m in dm.edits if i == kit.CARD][-1] is None
 
 
 @pytest.mark.parametrize("entry", ENTRIES)
-@pytest.mark.parametrize("where", ["message", "card"])
-def test_a_late_tap_types_nothing(dm, entry, where):
+@pytest.mark.parametrize("which", ["first", "second"])
+def test_a_late_tap_types_nothing(dm, entry, which):
     seen = _scenario(dm, entry)
-    _late_taps(dm, seen, where)
+    _late_taps(dm, seen, which)
     assert len(dm.term.writes()) == seen["writes_after_stop"]
 
 
 @pytest.mark.parametrize("entry", ENTRIES)
-@pytest.mark.parametrize("where", ["message", "card"])
-def test_a_late_tap_answers_no_hook(dm, entry, where):
+@pytest.mark.parametrize("which", ["first", "second"])
+def test_a_late_tap_answers_no_hook(dm, entry, which):
     seen = _scenario(dm, entry)
-    _late_taps(dm, seen, where)
+    _late_taps(dm, seen, which)
     assert len(dm.decisions) == seen["decisions_after_stop"]
 
 
@@ -137,7 +144,7 @@ def test_after_stop_the_session_is_idle(dm, entry):
 
 
 @pytest.mark.parametrize("entry", ENTRIES)
-def test_one_agent_prompt_on_the_card_also_presses_the_chord(dm, entry):
+def test_one_agent_prompt_also_presses_the_chord(dm, entry):
     _scenario(dm, entry, two=False)
     assert dm.term.writes() == [kit.CHORD, kit.CHORD]
 
@@ -148,8 +155,8 @@ def test_the_card_reads_stopped_two_background_agents(dm, entry):
     assert dm.card_texts()[-1] == "⚠️ <b>x1</b> · Stopped 2 background agents"
 
 
-@pytest.mark.parametrize("where", ["message", "card"])
-def test_control_the_same_tap_before_stop_answers_the_hook(dm, where):
+@pytest.mark.parametrize("which", ["first", "second"])
+def test_control_the_same_tap_before_stop_answers_the_hook(dm, which):
     """The late-tap tests are not vacuous: before the Stop, the very same
     Allow answers the agent's waiting hook."""
     seen = {}
@@ -158,13 +165,9 @@ def test_control_the_same_tap_before_stop_answers_the_hook(dm, where):
         await dm.waiting()
         await dm.agent_permission(kit.A1)
         await dm.agent_permission(kit.A2, "rm -rf cache/")
-        if where == "message":
-            msg = _prompt_messages(dm)[0]
-            data = dict(_buttons(msg["reply_markup"]))["✅ Allow"]
-            await dm.tap_data(data, msg["msg_id"])
-        else:
-            card = [m for mid, _t, m in dm.edits if mid == kit.CARD][-1]
-            await dm.tap_data(dict(_buttons(card))["✅ Allow"], kit.CARD)
+        msg = _prompt_messages(dm)[0 if which == "first" else 1]
+        data = dict(_buttons(msg["reply_markup"]))["✅ Allow"]
+        await dm.tap_data(data, msg["msg_id"])
         seen["decisions"] = len(dm.decisions)
     dm.run(go())
     assert seen["decisions"] == 1

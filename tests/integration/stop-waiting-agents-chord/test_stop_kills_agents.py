@@ -296,7 +296,9 @@ def test_a_person_typing_at_the_terminal_during_that_wait_turns_stop_back_to_esc
     rig.agent_bash(BG, "rm -rf build")
     rig.hook("UserPromptSubmit", prompt="also check the README")
     assert sess.wait_from_idle is False
-    _card(rig)
+    # A new turn of Claude's, with its own card; Stop on it.
+    assert sess.busy_msg_id not in (None, CARD)
+    answers(rig.tap(sess.busy_msg_id, "stop", uid=ALICE))
     assert rig.writes.bytes() == [ESC, ESC]
 
 

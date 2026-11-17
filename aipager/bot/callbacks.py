@@ -2495,9 +2495,10 @@ class CallbackDispatchMixin:
                     # and the card shows what the session still waits on.
                     await self._after_prompts_changed(
                         sess, {"inline_closed": False})
-                elif sess.resumed_after_stop:
-                    # The last prompt carried over Claude's Stop (8.120):
-                    # its turn is over, Claude sits at its input.
+                elif sess.wait_after_turn():
+                    # The last prompt carried over Claude's Stop (8.120),
+                    # or opened while Claude's turn was over: its turn is
+                    # over, Claude sits at its input.
                     self.registry.transition(session_name, Status.IDLE)
                 else:
                     # Mark session as busy after user interaction

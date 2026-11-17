@@ -1315,7 +1315,8 @@ class HookReceiver:
                               reason: str, *,
                               preserve_job_state: bool = False) -> bool:
         """After a hook closed *closed* of the open prompts: BUSY when none
-        is left (True), else the bot repaints what changed (False)."""
+        is left (True; IDLE when the wait had no turn of Claude's behind
+        it), else the bot repaints what changed (False)."""
         left = len(sess.open_prompts())
         if closed:
             log.info("[%s] prompt closed (%s), %d still open", sess.label,
@@ -1323,9 +1324,12 @@ class HookReceiver:
         if sess.status != Status.INTERACTIVE:
             return False
         if not left:
-            if sess.resumed_after_stop:
-                # Carried over Claude's Stop (8.120): no turn of Claude's
-                # runs, and an agent's work never makes the session BUSY.
+            if sess.wait_after_turn():
+                # Carried over Claude's Stop (8.120), or opened while idle
+                # (an agent asking after the turn ended): no turn of
+                # Claude's runs, and an agent's work never makes the
+                # session BUSY. BUSY here took the next Telegram message
+                # for a queued one: no card, no queued line.
                 self.registry.transition(sess.name, Status.IDLE)
                 return True
             self.registry.transition(sess.name, Status.BUSY,
@@ -2252,11 +2256,11 @@ class HookReceiver:
             transitioned = None
             new_turn_while_waiting = False
             if (waiting is not None and waiting.status == Status.INTERACTIVE
-                    and waiting.resumed_after_stop):
+                    and waiting.wait_after_turn()):
                 # Claude's turn ended at a Stop that carried an agent's
-                # prompt over (8.120): this is a new turn, not a message
-                # into a running one. It gets its card; the agents'
-                # prompts stay open beside it.
+                # prompt over (8.120), or before an agent asked: this is a
+                # new turn, not a message into a running one. It gets its
+                # card; the agents' prompts stay open beside it.
                 waiting.close_prompts(_owned_by(""))
                 if waiting.open_prompts():
                     waiting.prompt_wait_carry = True

@@ -1968,6 +1968,14 @@ class TrackedSession:
                 return False
         return True
 
+    def wait_after_turn(self) -> bool:
+        """Whether this INTERACTIVE wait has no turn of Claude's behind it:
+        carried over a Stop (``resumed_after_stop``) or opened while idle
+        (``wait_from_idle``), the pair :meth:`own_turn_over` reads too. Its
+        last prompt closing leaves the session IDLE, never BUSY: an agent's
+        work never makes it BUSY, and a message sent next is a new turn."""
+        return self.resumed_after_stop or self.wait_from_idle
+
     def unnamed_prompt_after_turn(self) -> bool:
         """An INTERACTIVE wait entered after Claude's own turn ended
         (carried over a Stop, or opened while idle) with a prompt whose
@@ -4515,12 +4523,13 @@ class SessionRegistry:
             if new_status == Status.INTERACTIVE:
                 sess.dialog_hold.pop("closed", None)
             elif sess.status == Status.INTERACTIVE:
-                # The last prompt carried over a Stop answered (8.120):
-                # Claude sits at its input, so what was held goes now.
+                # The last prompt carried over a Stop, or opened while
+                # idle, answered (8.120): Claude sits at its input, so
+                # what was held goes now.
                 sess.dialog_hold["closed"] = (
                     "answered" if (new_status == Status.BUSY
                                    or (new_status == Status.IDLE
-                                       and sess.resumed_after_stop))
+                                       and sess.wait_after_turn()))
                     else "ended")
         sess.resumed_after_stop = False
         # Roadmap 8.121 F5: an agent's prompt that opened while Claude's
@@ -4691,15 +4700,16 @@ class SessionRegistry:
 
     def begin_turn_while_waiting(self, name: str) -> TrackedSession | None:
         """A prompt typed at the terminal while the session waits on
-        prompts carried over a Stop (roadmap 8.120): Claude's turn was over,
+        prompts carried over a Stop, or opened while idle (roadmap 8.120,
+        :meth:`TrackedSession.wait_after_turn`): Claude's turn was over,
         so this is a new turn, entered from IDLE (its turn-start stamps, a
         card of its own), while the agents' prompts stay recorded. The
         caller holds ``prompt_wait_carry`` until it has sent the turn's card
         and then calls :meth:`resume_wait` with ``after_stop=False``. None
-        when the session is not waiting after a Stop."""
+        when the session is not waiting after Claude's turn."""
         sess = self._sessions.get(name)
         if (sess is None or sess.status is not Status.INTERACTIVE
-                or not sess.resumed_after_stop):
+                or not sess.wait_after_turn()):
             return None
         # Silently, as the IDLE debounce does: the Stop already ended the
         # turn, and the wait is not over (no hold release, no extras

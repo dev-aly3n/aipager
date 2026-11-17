@@ -5210,6 +5210,16 @@ class NotifyMixin:
 
             # Can we inline into the existing busy message?
             can_inline = sess.busy_msg_id and sess.busy_msg_id > 0
+            if can_inline and sess.wait_from_idle:
+                # An agent asked after Claude's own turn ended: the card
+                # is the job's kept waiting card, above the interim
+                # answer (or a stale one). Drawn there, the prompt was a
+                # silent edit out of view, and nowhere when the edit
+                # failed; it comes as its own message, as a prompt
+                # carried over the Stop does (``_on_prompts_carried``).
+                log.info("[%s] agent's prompt after the turn ended - sent "
+                         "as its own message", sess.label)
+                can_inline = False
 
             if can_inline:
                 # Set pending_permission SYNCHRONOUSLY before any await
