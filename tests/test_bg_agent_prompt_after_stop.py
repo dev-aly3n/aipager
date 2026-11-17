@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 import pytest
 
@@ -474,4 +475,71 @@ def test_notification_naming_no_agent_still_counts_as_a_wait_after_the_turn(rig,
     [perm] = sess.open_prompts()
     assert isinstance(perm["tool_info"], dict)
     assert not perm["tool_info"].get("agent_id")
+    assert sess.wait_from_idle
+
+
+# -- A prompt naming no agent while none runs (tester-iter2-001) -------------
+# The Notification never names the agent, so an unnamed prompt after the
+# Stop may be an agent's only while one runs. With none running, only
+# Claude's own turn can have opened it: its close goes BUSY, as on main.
+
+def _plain_stop(rig):
+    rig.hook("Stop", stop_hook_active=False, last_assistant_message=INTERIM)
+    sess = rig.sess
+    assert sess.status == Status.IDLE
+    assert not (sess.active_subagents or sess.bg_agents)
+
+
+def test_unnamed_notification_with_no_agent_running_is_claudes_own(rig, caplog):
+    caplog.set_level(logging.INFO)
+    _plain_stop(rig)
+    n = len(rig.sent)
+    rig.hook("Notification", notification_type="permission_prompt",
+             message="Claude needs your permission to use Bash")
+    sess = rig.sess
+    assert sess.status == Status.INTERACTIVE
+    [perm] = sess.open_prompts()
+    assert isinstance(perm["tool_info"], dict)
+    assert not perm["tool_info"].get("agent_id")
+    assert not sess.wait_from_idle
+    assert not sess.wait_after_turn()
+    # Still shown, with its buttons, as its own message.
+    msg = _new_prompt_msg(rig, n)
+    assert "Allow" in " ".join(rig.buttons(msg))
+    assert _card_buttons(rig) == []
+    rig.tap(msg["msg_id"], "allow")
+    assert sess.open_prompts() == []
+    assert sess.status == Status.BUSY
+
+
+def test_prompt_with_no_tool_known_and_no_agent_running_is_claudes_own(rig):
+    _plain_stop(rig)
+    rig.hook("Notification", notification_type="permission_prompt",
+             message="Claude needs your permission")
+    sess = rig.sess
+    assert sess.status == Status.INTERACTIVE
+    assert not sess.wait_from_idle
+    assert not sess.unnamed_prompt_after_turn()
+
+
+def test_prompt_with_no_tool_known_while_an_agent_runs_stays_after_the_turn(rig):
+    _after_stop(rig)
+    rig.hook("Notification", notification_type="permission_prompt",
+             message="Claude needs your permission")
+    sess = rig.sess
+    assert sess.status == Status.INTERACTIVE
+    assert sess.wait_from_idle
+    assert sess.unnamed_prompt_after_turn()
+
+
+def test_unnamed_prompt_while_an_agent_outside_the_job_runs_stays_after_the_turn(rig):
+    """An agent of an earlier turn still runs (the session's running set,
+    not the job's table): the unnamed prompt may be its."""
+    _plain_stop(rig)
+    sess = rig.sess
+    assert sess.bg_agent_started("old-agent", "Explore", time.monotonic())
+    assert not sess.active_subagents
+    rig.hook("Notification", notification_type="permission_prompt",
+             message="Claude needs your permission to use Bash")
+    assert sess.status == Status.INTERACTIVE
     assert sess.wait_from_idle
