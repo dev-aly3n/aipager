@@ -543,3 +543,18 @@ def test_unnamed_prompt_while_an_agent_outside_the_job_runs_stays_after_the_turn
              message="Claude needs your permission to use Bash")
     assert sess.status == Status.INTERACTIVE
     assert sess.wait_from_idle
+
+
+def test_unnamed_prompt_while_an_agent_only_in_the_job_table_runs_stays_after_the_turn(rig):
+    """An agent the job's table knows but the session's running set does
+    not (a start that named no type): the unnamed prompt may be its."""
+    _plain_stop(rig)
+    sess = rig.sess
+    sess.add_subagent("job-only", {"type": "general-purpose",
+                                   "started_at": time.monotonic()})
+    assert sess.active_subagents
+    assert not sess.bg_agents
+    rig.hook("Notification", notification_type="permission_prompt",
+             message="Claude needs your permission to use Bash")
+    assert sess.status == Status.INTERACTIVE
+    assert sess.wait_from_idle
