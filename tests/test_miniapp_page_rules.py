@@ -14,17 +14,20 @@ import re
 
 import pytest
 
+from aipager.miniapp.fonts import FONT_FILES
 from aipager.miniapp.static import SDK_SRC_TELEGRAM, SOURCE_INDEX_HTML, index_html
 
 # Roadmap 8.117: the page goes over the wire gzipped (every Telegram in-app
 # browser takes gzip), so that is the budget that counts. Both budgets are
 # for the page as served, without its comments and indentation, and keep
-# about a tenth over the largest language (Russian, 2026-10-13: 237,623
-# bytes built, 56,810 sent), so a growing page is noticed in time.
-SENT_BUDGET_BYTES = 63_000
+# about a tenth over the largest language, so a growing page is noticed in
+# time. Re-based 2026-11-17 when the per-script fonts' @font-face rules
+# (about 4 KB) pushed Russian to 265,671 bytes built, 62,722 sent (it was
+# 237,623 / 56,810 on 2026-10-13).
+SENT_BUDGET_BYTES = 69_000
 # A ceiling on the page as built: what a client that takes no gzip gets,
 # and a stop for an accidental embed (an image, a data file).
-PAGE_BUDGET_BYTES = 262_000
+PAGE_BUDGET_BYTES = 292_000
 
 SELF = index_html(sdk_from_self=True)
 FALLBACK = index_html(sdk_from_self=False)
@@ -60,11 +63,15 @@ def test_the_fallback_names_exactly_the_telegram_sdk():
 
 
 @pytest.mark.parametrize("page", [SELF, FALLBACK], ids=["self-served", "fallback"])
-def test_no_imports_fonts_or_remote_urls(page):
+def test_no_imports_or_remote_urls(page):
+    """A url() is a fragment or a font from the daemon's own /fonts/."""
     assert "@import" not in page
-    assert "@font-face" not in page
     for m in re.finditer(r"url\(", page):
-        assert page[m.end()] == "#", f"url() that is not a fragment: {page[m.start():m.start() + 40]!r}"
+        if page[m.end()] == "#":
+            continue
+        own = re.match(r'"/fonts/([^"/]+)"\)', page[m.end():])
+        assert own and own.group(1) in FONT_FILES, \
+            f"url() that is not a fragment or an own font: {page[m.start():m.start() + 40]!r}"
 
 
 def test_the_page_fetches_only_its_own_api():

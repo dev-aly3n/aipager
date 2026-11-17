@@ -84,8 +84,14 @@ def test_sdk_src_constants_are_unchanged():
                                                  TELEGRAM_SDK)
 
 
-def test_no_web_fonts(self_page):
-    assert "@font-face" not in self_page
+def test_no_web_fonts_from_elsewhere(self_page):
+    """The only fonts are the daemon's own (Persian, Arabic, Vietnamese):
+    every @font-face loads a /fonts/ path on this origin."""
+    faces = re.findall(r"@font-face\s*\{([^}]*)\}", self_page)
+    assert faces
+    for face in faces:
+        assert re.fullmatch(r'url\("/fonts/[a-z0-9.-]+\.woff2"\) format\("woff2"\)',
+                            re.search(r"src:\s*([^;]*)", face).group(1).strip()), face
 
 
 def test_page_script_ends_with_the_iife_close(self_page):

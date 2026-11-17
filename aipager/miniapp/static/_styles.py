@@ -20,6 +20,62 @@ Icons are inline SVG in the page, never CSS `content:` glyphs.
 from __future__ import annotations
 
 CSS = """
+  /* ---- fonts -----------------------------------------------------------
+     Bundled with aipager and served by the daemon (aipager/miniapp/fonts.py,
+     static/fonts/README.md), never from another host. The ranges are the
+     ones Google Fonts splits these families by (the project site uses the
+     same families): a phone downloads a file only when a font stack below
+     names its family and the page holds a character in its range. */
+  @font-face {
+    font-family: "Vazirmatn"; font-style: normal; font-weight: 400 700; font-display: swap;
+    src: url("/fonts/vazirmatn-33.003-arabic.woff2") format("woff2");
+    unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+  }
+  @font-face {
+    font-family: "Noto Sans Arabic"; font-style: normal; font-weight: 400 700; font-display: swap;
+    src: url("/fonts/noto-sans-arabic-2.012-arabic.woff2") format("woff2");
+    unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-400-vietnamese.woff2") format("woff2");
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 400; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-400-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 500; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-500-vietnamese.woff2") format("woff2");
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 500; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-500-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-600-vietnamese.woff2") format("woff2");
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 600; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-600-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-700-vietnamese.woff2") format("woff2");
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+  }
+  @font-face {
+    font-family: "Be Vietnam Pro"; font-style: normal; font-weight: 700; font-display: swap;
+    src: url("/fonts/be-vietnam-pro-1.002-700-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
   /* ---- tokens --------------------------------------------------------
      Type 12/14/16/20/28, a 4-pt spacing scale, four radii, three
      durations and one easing. Colours derive from Telegram's theme. */
@@ -74,6 +130,30 @@ CSS = """
     color-scheme: dark;
   }
   html[data-scheme="light"] { color-scheme: light; }
+  /* Each script in the font people expect for it, as on the project
+     site: the bundled Vazirmatn (Persian), Noto Sans Arabic (Arabic) and
+     Be Vietnam Pro (Vietnamese, all text), and the platform's own CJK UI
+     font for Korean and Chinese. The system stack stays behind each one,
+     and code stays monospace with the script font behind it, so Persian
+     or Arabic inside code still has its letters. Every other language
+     keeps the system font. <html lang> follows the page's language. */
+  :root:lang(fa) {
+    --font: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, "Vazirmatn", monospace;
+  }
+  :root:lang(ar) {
+    --font: "Noto Sans Arabic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, "Noto Sans Arabic", monospace;
+  }
+  :root:lang(vi) {
+    --font: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  :root:lang(ko) {
+    --font: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  :root:lang(zh) {
+    --font: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
   /* A WebView without color-mix loses the hierarchy, never legibility. */
   @supports not (color: color-mix(in srgb, red 50%, blue)) {
     :root {

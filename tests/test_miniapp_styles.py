@@ -17,6 +17,7 @@ import re
 
 import pytest
 
+from aipager.miniapp.fonts import FONT_FILES
 from aipager.miniapp.static import INDEX_HTML
 from aipager.miniapp.static._styles import CSS
 
@@ -264,11 +265,18 @@ def test_no_backdrop_filter_anywhere():
     assert "backdrop-filter" not in _CODE
 
 
-def test_no_web_fonts_imports_or_remote_urls():
-    assert "@font-face" not in _CODE
+def test_no_imports_or_remote_urls():
+    """A url() is a fragment or one of the daemon's own fonts
+    (/fonts/<a listed name>); never another host, never @import."""
     assert "@import" not in _CODE
+    found = 0
     for m in re.finditer(r"url\(", _CODE):
-        assert _CODE[m.end()] == "#", "a url() that is not a local fragment"
+        if _CODE[m.end()] == "#":
+            continue
+        own = re.match(r'"/fonts/([^"/]+)"\)', _CODE[m.end():])
+        assert own and own.group(1) in FONT_FILES, _CODE[m.start():m.start() + 60]
+        found += 1
+    assert found == len(FONT_FILES)
 
 
 def test_the_stylesheet_has_no_backslash():

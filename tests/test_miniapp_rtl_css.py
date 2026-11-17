@@ -285,9 +285,30 @@ _USAGE_TAB_ADDED = {
     ],
 }
 
+# The per-script fonts: the @font-face rules first (one per bundled file,
+# checked in tests/test_miniapp_fonts.py), and each script's font stack
+# after the light scheme rule. Fonts only; no layout changes.
+_SYS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+_FONTS_ADDED = {
+    ("", 'html[data-scheme="light"]'): [
+        ["", ":root:lang(fa)", [["--font", '"Vazirmatn", ' + _SYS],
+                                ["--mono", 'ui-monospace, SFMono-Regular, Menlo, "Vazirmatn", monospace']]],
+        ["", ":root:lang(ar)", [["--font", '"Noto Sans Arabic", ' + _SYS],
+                                ["--mono", 'ui-monospace, SFMono-Regular, Menlo, "Noto Sans Arabic", '
+                                           'monospace']]],
+        ["", ":root:lang(vi)", [["--font", '"Be Vietnam Pro", ' + _SYS]]],
+        ["", ":root:lang(ko)", [["--font", '"Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", '
+                                           + _SYS]]],
+        ["", ":root:lang(zh)", [["--font", '"PingFang SC", "Noto Sans SC", "Microsoft YaHei", '
+                                           + _SYS]]],
+    ],
+}
+
 
 def _expected_now(golden: list) -> list:
-    out = []
+    # (the faces' own content: tests/test_miniapp_fonts.py)
+    out = [r for r in _as_json(ltr_layout()) if r[1] == "@font-face"]
+    assert len(out) == 10 and all(r[1] == "@font-face" for r in out)
     for ctx, sel, props in golden:
         if sel == ":root" and ctx in _ROOT_ADDED:
             props = sorted(props + _ROOT_ADDED[ctx])
@@ -302,6 +323,7 @@ def _expected_now(golden: list) -> list:
         out.extend(_TASKS_ADDED.get((ctx, sel), []))
         out.extend(_USAGE_ADDED.get((ctx, sel), []))
         out.extend(_USAGE_TAB_ADDED.get((ctx, sel), []))
+        out.extend(_FONTS_ADDED.get((ctx, sel), []))
     return out
 
 

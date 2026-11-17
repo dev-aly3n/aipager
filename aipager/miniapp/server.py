@@ -505,6 +505,10 @@ class MiniAppServer:
         # initData, because this script is what produces initData. Public
         # bytes, not a secret; same trust level as the page itself.
         app.router.add_get("/telegram-web-app.js", self._handle_webapp_sdk)
+        # The bundled fonts (aipager/miniapp/fonts.py). Unauthenticated
+        # like the two above: the stylesheet fetches them without
+        # initData. Only a fixed list of names; the bytes are public.
+        app.router.add_get("/fonts/{name}", self._handle_font)
         app.router.add_get("/api/status", self._handle_status)
         # The chats the caller may switch between (roadmap 8.73, D-A).
         app.router.add_get("/api/chats", self._handle_chats)
@@ -720,6 +724,22 @@ class MiniAppServer:
             body=body, content_type="application/javascript", charset="utf-8",
             headers={"Cache-Control": "public, max-age=86400"},
         )
+
+    async def _handle_font(self, request):
+        """``GET /fonts/<name>`` - one of the bundled fonts, by a name on
+        the fixed list only (``fonts.FONT_FILES``); 404 for anything else.
+        No auth gate (see the route comment). A name carries its font's
+        version, so the answer is cached for a year."""
+        from aiohttp import web
+
+        from aipager.miniapp import fonts
+
+        body = fonts.font_bytes(request.match_info["name"])
+        if body is None:
+            return web.Response(status=404, headers={"Cache-Control": "no-store"})
+        return web.Response(body=body, content_type=fonts.FONT_CONTENT_TYPE,
+                            headers={"Cache-Control": fonts.FONT_CACHE_CONTROL,
+                                     "X-Content-Type-Options": "nosniff"})
 
     async def _authenticate(self, request, route_name: str):
         """Shared auth gate for every JSON route: header read → initData
