@@ -227,11 +227,10 @@ _TASKS_ADDED = {
 }
 
 
-#: The Usage page (roadmap 8.131): the home's Usage button, the window
+#: The Usage page (roadmap 8.131): the window
 #: cards and bars, and the token tables; after ``.updates-again``.
 _USAGE_ADDED = {
     ("", ".updates-again"): [
-        ["", ".usage-link", [["background", "var(--fill)"], ["border-radius", "var(--r-pill)"], ["color", "var(--ink)"], ["font-size", "var(--fs-sm)"], ["font-weight", "600"], ["margin-bottom", "var(--s4)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"], ["min-height", "36px"], ["padding-bottom", "0"], ["padding-left", "var(--s4)"], ["padding-right", "var(--s4)"], ["padding-top", "0"]]],
         ["", ".usage-card", [["background", "var(--surface)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["margin-bottom", "var(--s3)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"], ["padding-bottom", "var(--s3)"], ["padding-left", "var(--s4)"], ["padding-right", "var(--s4)"], ["padding-top", "var(--s3)"]]],
         ["", ".usage-name", [["font-weight", "600"], ["margin-bottom", "var(--s2)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"]]],
         ["", ".usage-line", [["font-size", "var(--fs-sm)"], ["line-height", "var(--lh-sm)"], ["margin-bottom", "var(--s1)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "var(--s2)"]]],
@@ -243,6 +242,19 @@ _USAGE_ADDED = {
         ["", ".utable-head", [["color", "var(--ink-3)"], ["font-weight", "600"]]],
         ["", ".utable-label", [["min-width", "0"], ["overflow-wrap", "anywhere"]]],
         ["", ".utable-num", [["font-variant-numeric", "tabular-nums"], ["text-align", "right"]]],
+    ],
+}
+
+
+#: The Usage tab (roadmap 8.131): three tabs fit 320px in every language
+#: (a size smaller, a long label may break); after the tab's own rule.
+_USAGE_TAB_ADDED = {
+    ("", ".tabbar-btn"): [
+        ["", ".tabbar-btn", [["min-width", "0"], ["padding-bottom", "0"], ["padding-left", "2px"],
+                             ["padding-right", "2px"], ["padding-top", "0"]]],
+        ["", ".tabbar-label", [["hyphens", "auto"], ["line-height", "18px"], ["min-width", "0"],
+                               ["overflow-wrap", "anywhere"], ["text-align", "center"]]],
+        ["", ".tabbar:has(> #maintab-usage:not([hidden])) .tabbar-btn", [["font-size", "14px"]]],
     ],
 }
 
@@ -260,6 +272,7 @@ def _expected_now(golden: list) -> list:
         out.extend(_APPEARANCE_SECTION_ADDED.get((ctx, sel), []))
         out.extend(_TASKS_ADDED.get((ctx, sel), []))
         out.extend(_USAGE_ADDED.get((ctx, sel), []))
+        out.extend(_USAGE_TAB_ADDED.get((ctx, sel), []))
     return out
 
 

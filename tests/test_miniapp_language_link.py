@@ -327,7 +327,7 @@ def test_an_attribute_is_matched_by_its_whole_name():
 def test_the_persian_markup_is_persian_before_any_script():
     page = index_html(lang="fa")
     fa = ui_text.catalog("fa")["strings"]
-    assert f'<span data-i18n="ui.tab.sessions">{fa["ui.tab.sessions"]}</span>' in page
+    assert f'<span class="tabbar-label" data-i18n="ui.tab.sessions">{fa["ui.tab.sessions"]}</span>' in page
     assert f'aria-label="{fa["ui.shell.sections_aria"]}"' in page
     assert 'data-i18n-num="0 / 500">\u06f0 / \u06f5\u06f0\u06f0<' in page
 

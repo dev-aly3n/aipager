@@ -795,8 +795,8 @@ APP_JS = r"""
     sessions.forEach(function (s) { lastSessionsByLabel[s.label] = s; });
     pulseForStatusChanges(sessions);
 
-    // The Usage button (8.131): a hint only, /api/usage enforces the rule.
-    document.getElementById("usage-open").hidden = data.can_usage !== true;
+    // The Usage tab (8.131): a hint only, /api/usage enforces the rule.
+    syncUsageTab(data.can_usage === true);
 
     var sig = gridSignature(data);
     if (sig === gridSig) { return; }     // nothing on screen would change
@@ -2186,6 +2186,7 @@ APP_JS = r"""
     // Leaving the detail page - the same rule as openDetail.
     closeOverlay();
     // Back from a sub-page returns to whichever top-level tab was active.
+    if (mainTab === "usage") { openUsage(); return; }
     showView(mainTab === "settings" ? "settings" : "grid");
     pollTick();
   }
@@ -2339,7 +2340,7 @@ APP_JS = r"""
   // not render at all.
   //
   //   section  - the DOM section this view shows
-  //   topLevel - true if the Sessions|Settings tab bar belongs on screen
+  //   topLevel - true if the Sessions|Usage|Settings tab bar belongs on screen
   //              (it is top-level navigation; on a sub-page it competes
   //              with Telegram's BackButton and makes the page feel lost)
   //   polls    - "grid" | "detail" | null (no polling at all)
@@ -2349,7 +2350,7 @@ APP_JS = r"""
     detail:   { section: "view-detail",   topLevel: false, polls: "detail" },
     "new":    { section: "view-new",      topLevel: false, polls: null },
     report:   { section: "view-report",   topLevel: false, polls: null },
-    usage:    { section: "view-usage",    topLevel: false, polls: null }
+    usage:    { section: "view-usage",    topLevel: true,  polls: null }
   };
 
   // ---- Telegram chrome: MainButton and vertical swipes ------------------
@@ -3087,7 +3088,9 @@ APP_JS = r"""
     usageText(host, "sect-note", tok.note);
   }
 
-  function openUsage() {
+  // quiet: a chat switch landed here, so a 403 is the expected way out
+  // (the new chat's viewer may not read usage), not a failure to report.
+  function openUsage(quiet) {
     var host = document.getElementById("usage-body");
     host.innerHTML = "";
     usageText(host, "sect-note", t("ui.shell.loading"));
@@ -3101,7 +3104,11 @@ APP_JS = r"""
           authErr.authFailed = true;
           throw authErr;
         }
-        if (!res.ok) { throw new Error("HTTP " + res.status); }
+        if (!res.ok) {
+          var httpErr = new Error("HTTP " + res.status);
+          httpErr.httpStatus = res.status;
+          throw httpErr;
+        }
         return res.json();
       })
       .then(function (d) {
@@ -3111,9 +3118,17 @@ APP_JS = r"""
       }, function (err) {
         if (stale()) { return; }
         if (err && err.authFailed) { handleFetchError(err); return; }
-        // Not an admin here any more (403), or the server is away.
-        showNotice(t("ui.action.failed"), "err");
-        showGrid();
+        // Not an admin here any more (403): the tab goes too. Or the
+        // server is away. Either way back to Sessions (never showGrid,
+        // which reopens the Usage tab).
+        var denied = !!(err && err.httpStatus === 403);
+        if (!(quiet && denied)) { showNotice(t("ui.action.failed"), "err"); }
+        if (denied) {
+          usageDenied = true;
+          syncUsageTab(false);           // hides the tab, back to Sessions
+        } else {
+          setMainTab("sessions");
+        }
       });
   }
 
@@ -4391,7 +4406,6 @@ APP_JS = r"""
     if (currentView.label) { answerPrompt(currentView.label); }
   });
   document.getElementById("empty-new").addEventListener("click", openNewSession);
-  document.getElementById("usage-open").addEventListener("click", openUsage);
 
   // ---- top-level tabs -------------------------------------------------
 
@@ -4399,17 +4413,37 @@ APP_JS = r"""
 
   function setMainTab(name) {
     mainTab = name;
-    // Switching tabs from inside a sub-page returns to the top level -
-    // the back button is for going back, the tab bar is for switching.
-    showView(name === "settings" ? "settings" : "grid");
     document.getElementById("maintab-sessions")
       .classList.toggle("is-active", name === "sessions");
+    document.getElementById("maintab-usage")
+      .classList.toggle("is-active", name === "usage");
     document.getElementById("maintab-settings")
       .classList.toggle("is-active", name === "settings");
-    if (name === "sessions") { pollTick(); } else {
+    // Switching tabs from inside a sub-page returns to the top level -
+    // the back button is for going back, the tab bar is for switching.
+    if (name === "usage") {
+      openUsage();                              // fresh numbers on every open
+    } else if (name === "settings") {
+      showView("settings");
       updatesAutoWanted = true;                 // opening Settings checks for updates
       loadSettings();
+    } else {
+      showView("grid");
+      pollTick();
     }
+  }
+
+  // A 403 from /api/usage outranks the grid's hint until the chat changes,
+  // so the tab cannot come back only to be refused again.
+  var usageDenied = false;
+
+  // The Usage tab shows only to someone who may read usage in the chat on
+  // screen. Losing the right while on it (another chat, a role change)
+  // takes the viewer back to Sessions.
+  function syncUsageTab(can) {
+    if (usageDenied) { can = false; }
+    document.getElementById("maintab-usage").hidden = !can;
+    if (!can && mainTab === "usage") { setMainTab("sessions"); }
   }
 
   if (tg && tg.BackButton) {
@@ -4455,6 +4489,8 @@ APP_JS = r"""
   });
   document.getElementById("maintab-sessions")
     .addEventListener("click", function () { setMainTab("sessions"); });
+  document.getElementById("maintab-usage")
+    .addEventListener("click", function () { setMainTab("usage"); });
   document.getElementById("maintab-settings")
     .addEventListener("click", function () { setMainTab("settings"); });
   document.getElementById("updates-check")
@@ -4591,6 +4627,20 @@ APP_JS = r"""
     newState.modePicked = false;
     hideUpdates();
     hideReport();
+    usageDenied = false;
+    // The old chat's Usage tab is not this chat's: hidden until this
+    // chat's grid (or its /api/usage, when on that tab) says otherwise.
+    if (mainTab !== "usage") { document.getElementById("maintab-usage").hidden = true; }
+  }
+
+  // The Usage tab's hint for the chat on screen when no grid poll runs
+  // (the Settings tab): one /api/sessions read, for its can_usage only.
+  function refreshUsageHint() {
+    var epoch = chatEpoch;
+    apiFetch("/api/sessions").then(function (data) {
+      if (epoch !== chatEpoch) { return; }
+      syncUsageTab(!!data && data.can_usage === true);
+    }, function () { /* the tab stays hidden: fail closed */ });
   }
 
   function refreshChatView() {
@@ -4598,6 +4648,10 @@ APP_JS = r"""
     if (mainTab === "settings") {
       showView("settings");
       loadSettings();
+      refreshUsageHint();
+    } else if (mainTab === "usage") {
+      showGridSkeleton();   // the old chat's tiles go, should a 403 land on Sessions
+      openUsage(true);      // the new chat's numbers, or a 403 back to Sessions
     } else {
       showView("grid");
       showGridSkeleton();

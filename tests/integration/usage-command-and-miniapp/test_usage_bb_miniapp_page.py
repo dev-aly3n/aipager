@@ -4,7 +4,7 @@ Success criterion 17; entrypoints.md "Mini App (page)").
 ``usage_page.js`` runs the page GET / serves in a small DOM shim; the
 /api/sessions and /api/usage answers are the real server's bodies for the
 caller. Partitions: a caller with ``can_usage`` true vs false; a reading
-with an ok window vs a reset window; Back. Error guessing: markup in a
+with an ok window vs a reset window; the Usage tab and back to Sessions. Error guessing: markup in a
 model id must stay text; a failed fetch must not throw."""
 
 from __future__ import annotations
@@ -26,8 +26,9 @@ pytestmark = pytest.mark.usefixtures("local_day_centred")
 
 HARNESS = Path(__file__).parent / "usage_page.js"
 NOW = time.time()
-OPEN = [["wait", 40], ["snap", "home"], ["click", "usage-open"], ["wait", 40],
+OPEN = [["wait", 40], ["snap", "home"], ["click", "maintab-usage"], ["wait", 40],
         ["snap", "open"]]
+TO_SESSIONS = [["click", "maintab-sessions"], ["wait", 20], ["snap", "sessions"]]
 
 
 @pytest.fixture(scope="module")
@@ -79,20 +80,20 @@ def test_the_page_runs_without_errors(owner_run):
     assert owner_run()["errors"] == []
 
 
-def test_the_home_button_shows_for_an_admin(owner_run):
-    assert owner_run()["snaps"]["home"]["usageOpenShown"] is True
+def test_the_usage_tab_shows_for_an_admin(owner_run):
+    assert owner_run()["snaps"]["home"]["usageTabShown"] is True
 
 
-def test_the_home_button_is_hidden_for_a_plain_member(node_bin, tmp_path, h, world, run_async):
+def test_the_usage_tab_is_hidden_for_a_plain_member(node_bin, tmp_path, h, world, run_async):
     out = _run(node_bin, tmp_path, h, world, run_async, h.USER, h.GROUP, OPEN[:2])
-    assert out["snaps"]["home"]["usageOpenShown"] is False
+    assert out["snaps"]["home"]["usageTabShown"] is False
 
 
 def test_the_page_is_hidden_before_opening(owner_run):
     assert owner_run()["snaps"]["home"]["usageView"] is False
 
 
-def test_tapping_the_button_opens_the_usage_page(owner_run):
+def test_tapping_the_tab_opens_the_usage_page(owner_run):
     assert owner_run()["snaps"]["open"]["usageView"] is True
 
 
@@ -104,8 +105,13 @@ def test_opening_fetches_api_usage(owner_run):
     assert any(f.startswith("GET /api/usage") for f in owner_run()["fetched"])
 
 
-def test_opening_shows_telegrams_back_button(owner_run):
-    assert owner_run()["snaps"]["open"]["back"] is True
+def test_the_usage_tab_has_no_telegram_back_button(owner_run):
+    assert owner_run()["snaps"]["open"]["back"] is False
+
+
+def test_the_usage_tab_keeps_the_tab_bar_and_shows_active(owner_run):
+    out = owner_run()["snaps"]["open"]
+    assert (out["tabbar"], out["usageTabActive"], out["sessionsTabActive"]) == (True, True, False)
 
 
 def test_the_page_shows_the_window_line(owner_run):
@@ -143,9 +149,15 @@ def test_no_dollar_on_the_page(owner_run):
     assert "$" not in owner_run()["snaps"]["open"]["body"]
 
 
-def test_back_returns_to_the_grid(owner_run):
-    out = owner_run(OPEN + [["back"], ["wait", 20], ["snap", "back"]])
-    assert (out["snaps"]["back"]["gridView"], out["snaps"]["back"]["usageView"]) == (True, False)
+def test_the_sessions_tab_returns_to_the_grid(owner_run):
+    out = owner_run(OPEN + TO_SESSIONS)["snaps"]["sessions"]
+    assert (out["gridView"], out["usageView"], out["sessionsTabActive"],
+            out["usageTabActive"]) == (True, False, True, False)
+
+
+def test_reopening_the_tab_fetches_usage_again(owner_run):
+    out = owner_run(OPEN + TO_SESSIONS + [["click", "maintab-usage"], ["wait", 40]])
+    assert sum(f.startswith("GET /api/usage") for f in out["fetched"]) == 2
 
 
 def test_a_bar_over_100_is_capped(node_bin, tmp_path, h, world, run_async):
@@ -164,3 +176,14 @@ def test_a_failed_fetch_never_throws(owner_run):
 def test_a_403_never_throws(owner_run):
     out = owner_run(usage_answer={"status": 403, "body": {"error": "forbidden"}})
     assert out["errors"] == []
+
+
+def test_a_403_hides_the_tab_and_returns_to_sessions(owner_run):
+    out = owner_run(usage_answer={"status": 403, "body": {"error": "forbidden"}})["snaps"]["open"]
+    assert (out["usageTabShown"], out["gridView"], out["usageView"],
+            out["sessionsTabActive"]) == (False, True, False, True)
+
+
+def test_a_failed_fetch_returns_to_sessions_and_keeps_the_tab(owner_run):
+    out = owner_run(usage_answer="reject")["snaps"]["open"]
+    assert (out["usageTabShown"], out["gridView"], out["sessionsTabActive"]) == (True, True, True)

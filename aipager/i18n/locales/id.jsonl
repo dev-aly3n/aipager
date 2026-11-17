@@ -1157,7 +1157,6 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Beralih ke Mode Auto"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Beralih ke Mode Akses penuh"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Coba lagi"}
-{"k": "ui.btn.usage", "src": "0bb18642", "v": "Pemakaian"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "Tunggu 10 menit lagi"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "Hapus percakapan di {session}?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude memulai percakapan baru dan melupakan yang ini; percakapan lama tetap tersimpan di komputer, tapi tidak bisa dilanjutkan dari sini."}
@@ -1437,6 +1436,7 @@
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Bekerja ({clock})"}
 {"k": "ui.tab.sessions", "src": "e11e37a9", "v": "Sesi"}
 {"k": "ui.tab.settings", "src": "c7f73bb5", "v": "Pengaturan"}
+{"k": "ui.tab.usage", "src": "0bb18642", "v": "Pemakaian"}
 {"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, konteks {pct}%, {model}, {cost}"}
 {"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, konteks {pct}%, {cost}"}
 {"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "tanpa folder"}
@@ -1478,7 +1478,6 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Diperbarui ke {version}."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "Diperbarui ke {version}, {n} sesi tersambung lagi."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} sudah terpasang dan menunggu dimulai ulang."}
-{"k": "ui.usage.title", "src": "0bb18642", "v": "Pemakaian"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude sedang bertanya kepadamu"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude butuh izinmu"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Ada permintaan izin yang terbuka di chat."}

@@ -1157,7 +1157,6 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "자동 모드로 전환"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "전체 권한 모드로 전환"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "다시 시도"}
-{"k": "ui.btn.usage", "src": "0bb18642", "v": "사용량"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "10분 더 기다리기"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "{session} 세션의 대화를 지울까요?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude가 새 대화를 시작하고 이 대화는 잊어요. 이전 대화는 컴퓨터에 저장된 채로 남지만, 여기서 다시 이어갈 수는 없어요."}
@@ -1437,6 +1436,7 @@
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "작업 중 ({clock})"}
 {"k": "ui.tab.sessions", "src": "e11e37a9", "v": "세션"}
 {"k": "ui.tab.settings", "src": "c7f73bb5", "v": "설정"}
+{"k": "ui.tab.usage", "src": "0bb18642", "v": "사용량"}
 {"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, 컨텍스트 {pct}%, {model}, {cost}"}
 {"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, 컨텍스트 {pct}%, {cost}"}
 {"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "폴더 없음"}
@@ -1478,7 +1478,6 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "{version} 버전으로 업데이트했어요."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "{version} 버전으로 업데이트했어요. 세션 {n}개를 다시 연결했어요."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} 버전이 설치됐고 재시작을 기다리고 있어요."}
-{"k": "ui.usage.title", "src": "0bb18642", "v": "사용량"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude가 묻고 있어요"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude가 권한을 요청하고 있어요"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "채팅에 열린 권한 요청이 있어요."}

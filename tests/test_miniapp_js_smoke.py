@@ -2441,9 +2441,12 @@ def test_the_report_harness_detects_a_broken_page(node_bin, tmp_path):
 # ----- the Usage page (roadmap 8.131) -------------------------------------------
 
 @pytest.mark.parametrize("scenario, expected", [
-    ("usage_open", "ok: usage -> bars, tables, back to the grid"),
-    ("usage_hidden", "ok: no can_usage -> no Usage button"),
-    ("usage_refused", "ok: usage 403 -> back to the grid with a notice, app not expired"),
+    ("usage_open", "ok: usage tab -> bars, tables, no Back, Sessions and back again"),
+    ("usage_hidden", "ok: no can_usage -> no Usage tab"),
+    ("usage_refused", "ok: usage 403 -> tab gone, back to the grid with a notice, app not expired"),
+    ("chats_usage", "ok: usage tab + chat without usage -> tab gone, back on Sessions"),
+    ("chats_usage_settings", "ok: settings tab + chat switch -> the Usage tab follows the chat"),
+    ("usage_absent", "ok: no can_usage -> no Usage tab"),
 ])
 def test_usage_page_scenarios(node_bin, tmp_path, scenario, expected):
     from aipager.miniapp.static import INDEX_HTML
@@ -2455,9 +2458,53 @@ def test_usage_page_scenarios(node_bin, tmp_path, scenario, expected):
 
 _USAGE_MUTANTS = [
     pytest.param(
-        '    document.getElementById("usage-open").hidden = data.can_usage !== true;',
-        '    document.getElementById("usage-open").hidden = false;',
-        "usage_hidden", id="button-follows-can-usage"),
+        '    document.getElementById("maintab-usage").hidden = !can;',
+        '    document.getElementById("maintab-usage").hidden = false;',
+        "usage_hidden", id="tab-follows-can-usage"),
+    pytest.param(
+        '    if (!can && mainTab === "usage") { setMainTab("sessions"); }',
+        "",
+        "chats_usage", id="lost-usage-falls-back-to-sessions"),
+    pytest.param(
+        '    usage:    { section: "view-usage",    topLevel: true,  polls: null }',
+        '    usage:    { section: "view-usage",    topLevel: false, polls: null }',
+        "usage_open", id="usage-tab-is-top-level"),
+    pytest.param(
+        '      openUsage(true);      // the new chat\'s numbers, or a 403 back to Sessions',
+        '      showView("grid"); pollTick();',
+        "chats_usage", id="chat-switch-rechecks-usage"),
+    pytest.param(
+        "        if (denied) {",
+        "        if (false) {",
+        "usage_refused", id="403-hides-the-tab"),
+    pytest.param(
+        "    if (usageDenied) { can = false; }",
+        "",
+        "usage_refused", id="403-outranks-the-grid-hint"),
+    pytest.param(
+        "    syncUsageTab(data.can_usage === true);",
+        "    syncUsageTab(data.can_usage !== false);",
+        "usage_absent", id="no-field-no-tab"),
+    pytest.param(
+        '    if (mainTab === "usage") { openUsage(); return; }\n',
+        "",
+        "usage_open", id="showgrid-keeps-the-usage-tab"),
+    pytest.param(
+        "        if (!(quiet && denied)) {",
+        "        if (true) {",
+        "chats_usage", id="no-error-for-a-switch-fallback"),
+    pytest.param(
+        '    if (mainTab !== "usage") { document.getElementById("maintab-usage").hidden = true; }',
+        "",
+        "chats_usage_settings", id="a-switch-hides-the-old-chats-tab"),
+    pytest.param(
+        "      loadSettings();\n      refreshUsageHint();\n",
+        "      loadSettings();\n",
+        "chats_usage_settings", id="settings-switch-asks-the-new-chat"),
+    pytest.param(
+        "    hideReport();\n    usageDenied = false;\n",
+        "    hideReport();\n",
+        "chats_usage", id="a-chat-switch-forgets-the-403"),
     pytest.param(
         '          if (w.state !== "reset") {',
         "          if (true) {",

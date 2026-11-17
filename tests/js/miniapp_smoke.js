@@ -116,7 +116,8 @@ const webApp = {
   // Capture the handler so a scenario can press Back for real. The
   // page registers it once at startup; discarding it here made the
   // back-button behaviour untestable.
-  BackButton: { show(){}, hide(){}, onClick(fn){ global.__back = fn; } },
+  BackButton: { show(){ global.__backShown = true; }, hide(){ global.__backShown = false; },
+                onClick(fn){ global.__back = fn; } },
   HapticFeedback: { notificationOccurred(){} },
 };
 // The default mock stays exactly the old, minimal one: every newer
@@ -880,8 +881,9 @@ const USAGE_BODY = {
   },
 };
 if (SCENARIO.indexOf("usage_") === 0) {
+  // usage_absent: an older or partial grid body without the field.
   FIXTURES["/api/sessions"] = gridOf([row("alpha", "idle")],
-                                     { can_usage: SCENARIO !== "usage_hidden" });
+    SCENARIO === "usage_absent" ? {} : { can_usage: SCENARIO !== "usage_hidden" });
   FIXTURES["/api/usage"] = USAGE_BODY;
 }
 if (SCENARIO === "usage_refused") {
@@ -910,8 +912,10 @@ if (SCENARIO.indexOf("chats_") === 0) {
         current: CHAT_DM };
   // GET answers per chat. The DM's owner may update; in the group they may not.
   const PER_CHAT = {
-    "/api/sessions": { [CHAT_DM]: gridOf([row("mine", "idle")]),
-                       [CHAT_GROUP]: gridOf([row("grp", "busy")]) },
+    // The viewer may read usage in the DM, not in the group.
+    "/api/sessions": { [CHAT_DM]: gridOf([row("mine", "idle")], { can_usage: true }),
+                       [CHAT_GROUP]: gridOf([row("grp", "busy")], { can_usage: false }) },
+    "/api/usage": { [CHAT_DM]: USAGE_BODY },
     "/api/preferences": {
       [CHAT_DM]: { schema: SCHEMA, can_edit: true, can_update: true,
                    values: { answer_length: "none" } },
@@ -3292,18 +3296,28 @@ function usageNodes(cls) {
   return [...byId["usage-body"].walk()].filter(n => n.className.split(" ").includes(cls));
 }
 
+function usageFetches() {
+  return fetchCalls.filter(f => f.url.split("?")[0] === "/api/usage").length;
+}
+
+// The Usage tab: top level (tab bar on, no Telegram Back), active while
+// open, Sessions switches back, every open fetches fresh numbers.
 function driveUsageOpen() {
   setTimeoutReal(() => {
-    const btn = byId["usage-open"];
-    if (btn.hidden) fail("can_usage:true but the Usage button is hidden");
-    const before = fetchCalls.length;
-    btn.click();
+    const tab = byId["maintab-usage"];
+    if (tab.hidden) fail("can_usage:true but the Usage tab is hidden");
+    const before = usageFetches();
+    tab.click();
     if (byId["view-usage"].hidden) fail("tapping Usage did not open the Usage page");
     if (!byId["view-grid"].hidden) fail("the grid stayed on screen under the Usage page");
-    if (!byId["tabbar"].hidden) fail("the tab bar shows on the Usage sub-page");
+    if (byId["tabbar"].hidden) fail("the tab bar is hidden on the Usage tab");
+    if (global.__backShown !== false) fail("Telegram's Back button shows on the Usage tab");
+    if (!tab.className.includes("is-active")) fail("the Usage tab is not marked active");
+    if (byId["maintab-sessions"].className.includes("is-active"))
+      fail("the Sessions tab stayed active on the Usage tab");
     setTimeoutReal(() => {
-      const asked = fetchCalls.slice(before).filter(f => f.url.split("?")[0] === "/api/usage");
-      if (asked.length !== 1) fail("expected one GET /api/usage, got " + asked.length);
+      if (usageFetches() - before !== 1) fail("expected one GET /api/usage, got " +
+                                               (usageFetches() - before));
       const text = byId["usage-body"].textContent;
       for (const want of ["Plan limits", "This week (all models): 42% used", "Resets in 2 d 5 h",
                           "5-hour window: reset since the last reading",
@@ -3319,34 +3333,113 @@ function driveUsageOpen() {
       const tables = usageNodes("utable");
       if (tables.length !== 3) fail("expected 3 tables, got " + tables.length);
       if (tables[0].children[1].children.length !== 5) fail("a row has not 1 label + 4 cells");
-      global.__back();
+      byId["maintab-sessions"].click();
       if (byId["view-grid"].hidden || !byId["view-usage"].hidden)
-        fail("Back did not return to the grid");
-      console.log("ok: usage -> bars, tables, back to the grid");
-      process.exit(0);
+        fail("the Sessions tab did not return to the grid");
+      if (tab.className.includes("is-active")) fail("the Usage tab stayed active on Sessions");
+      tab.click();
+      setTimeoutReal(() => {
+        if (usageFetches() - before !== 2) fail("reopening the Usage tab did not fetch again");
+        if (byId["view-usage"].hidden) fail("the Usage tab did not reopen");
+        // A late "back to the top level" (a stale session-page 404) while
+        // on the Usage tab stays on it, with fresh numbers.
+        api.showGrid();
+        setTimeoutReal(() => {
+          if (byId["view-usage"].hidden || !byId["view-grid"].hidden)
+            fail("showGrid on the Usage tab left the Usage page");
+          if (usageFetches() - before !== 3) fail("showGrid on the Usage tab did not refetch");
+          console.log("ok: usage tab -> bars, tables, no Back, Sessions and back again");
+          process.exit(0);
+        }, 10);
+      }, 10);
     }, 10);
   }, 10);
 }
 
 function driveUsageHidden() {
   setTimeoutReal(() => {
-    if (!byId["usage-open"].hidden) fail("can_usage:false but the Usage button shows");
-    console.log("ok: no can_usage -> no Usage button");
+    if (!byId["maintab-usage"].hidden) fail("can_usage:false but the Usage tab shows");
+    console.log("ok: no can_usage -> no Usage tab");
     process.exit(0);
   }, 10);
 }
 
 function driveUsageRefused() {
   setTimeoutReal(() => {
-    byId["usage-open"].click();
+    byId["maintab-usage"].click();
     setTimeoutReal(() => {
       if (byId["view-grid"].hidden) fail("a refused Usage page did not return to the grid");
+      if (!byId["maintab-usage"].hidden) fail("a refused Usage tab stayed in the tab bar");
+      if (!byId["maintab-sessions"].className.includes("is-active"))
+        fail("a refused Usage tab did not make Sessions active");
       if (byId["notice"].textContent.indexOf("Couldn't complete that.") === -1)
         fail("a refused Usage page said nothing: " + byId["notice"].textContent);
       if ((byId["error"].textContent || "").indexOf("expired") !== -1)
         fail("a 403 expired the whole app");
-      console.log("ok: usage 403 -> back to the grid with a notice, app not expired");
+      // The grid still says can_usage; the refusal outranks it.
+      if (!fetchCalls.some(f => f.url === "/api/sessions")) fail("Sessions did not poll");
+      console.log("ok: usage 403 -> tab gone, back to the grid with a notice, app not expired");
       process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+// On the Usage tab, the chat switcher moves to a chat where the viewer may
+// not read usage: the tab goes and the page is back on Sessions.
+function driveChatsUsage() {
+  setTimeoutReal(() => {
+    if (byId["maintab-usage"].hidden) fail("the DM's admin has no Usage tab");
+    byId["maintab-usage"].click();
+    setTimeoutReal(() => {
+      if (byId["view-usage"].hidden) fail("the Usage tab did not open in the DM");
+      chipNamed("team").click();
+      setTimeoutReal(() => {
+        const calls = fetchCalls.filter(f => f.url.split("?")[0] === "/api/usage");
+        if (scopeOf(calls[calls.length - 1]) !== CHAT_GROUP)
+          fail("the switch did not ask the group for usage");
+        if (!byId["view-usage"].hidden) fail("the Usage page stayed open in the group");
+        if (byId["view-grid"].hidden) fail("the group did not land on Sessions");
+        if (!byId["maintab-usage"].hidden) fail("the Usage tab stayed for a plain member");
+        if (!byId["maintab-sessions"].className.includes("is-active"))
+          fail("Sessions is not the active tab after the fallback");
+        if (byId["notice"].textContent.indexOf("Couldn't complete that.") !== -1)
+          fail("the expected fallback after a chat switch showed an error");
+        setTimeoutReal(() => {
+          if (JSON.stringify(liveLabels()) !== '["grp"]')
+            fail("the group grid did not load: " + JSON.stringify(liveLabels()));
+          if (!byId["maintab-usage"].hidden) fail("the group's grid brought the Usage tab back");
+          // The refusal belonged to the group: back in the DM the tab returns.
+          chipNamed("owner DM").click();
+          setTimeoutReal(() => {
+            if (byId["maintab-usage"].hidden) fail("the DM lost its Usage tab after the group");
+            console.log("ok: usage tab + chat without usage -> tab gone, back on Sessions");
+            process.exit(0);
+          }, 10);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+// On the Settings tab (no grid poll), a chat switch still decides the
+// Usage tab for the chat on screen, both ways.
+function driveChatsUsageSettings() {
+  setTimeoutReal(() => {
+    if (byId["maintab-usage"].hidden) fail("the DM's admin has no Usage tab");
+    byId["maintab-settings"].click();
+    chipNamed("team").click();
+    // At once, before any answer: the old chat's tab is not this one's.
+    if (!byId["maintab-usage"].hidden) fail("the switch kept the DM's Usage tab on screen");
+    setTimeoutReal(() => {
+      if (byId["view-settings"].hidden) fail("the switch left the Settings tab");
+      if (!byId["maintab-usage"].hidden) fail("the DM's Usage tab stayed in the group");
+      chipNamed("owner DM").click();
+      setTimeoutReal(() => {
+        if (byId["maintab-usage"].hidden) fail("back in the DM, Settings has no Usage tab");
+        if (byId["view-settings"].hidden) fail("the switch back left the Settings tab");
+        console.log("ok: settings tab + chat switch -> the Usage tab follows the chat");
+        process.exit(0);
+      }, 10);
     }, 10);
   }, 10);
 }
@@ -4366,5 +4459,8 @@ Object.assign(DRIVERS, {
   usage_open: driveUsageOpen,
   usage_hidden: driveUsageHidden,
   usage_refused: driveUsageRefused,
+  chats_usage: driveChatsUsage,
+  chats_usage_settings: driveChatsUsageSettings,
+  usage_absent: driveUsageHidden,
 });
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

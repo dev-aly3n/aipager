@@ -219,6 +219,11 @@ CSS = """
     color: var(--ink-2);
     transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease);
   }
+  /* Three tabs (Usage shown) at 320px: long labels (ru, uk) take a size
+     smaller and may break onto a second line, never past the bar. */
+  .tabbar-btn { min-width: 0; padding: 0 2px; }
+  .tabbar-label { min-width: 0; line-height: 18px; text-align: center; overflow-wrap: anywhere; hyphens: auto; }
+  .tabbar:has(> #maintab-usage:not([hidden])) .tabbar-btn { font-size: 14px; }
   .tabbar-btn.is-active {
     color: var(--ink);
     background: var(--surface);
@@ -1369,16 +1374,6 @@ CSS = """
   }
 
   /* ---- the usage page (roadmap 8.131) --------------------------------- */
-  .usage-link {
-    min-height: 36px;
-    margin: 0 0 var(--s4);
-    padding: 0 var(--s4);
-    border-radius: var(--r-pill);
-    font-size: var(--fs-sm);
-    font-weight: 600;
-    color: var(--ink);
-    background: var(--fill);
-  }
   .usage-card { margin: 0 0 var(--s3); padding: var(--s3) var(--s4); border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); }
   .usage-name { margin: 0 0 var(--s2); font-weight: 600; }
   .usage-line { margin: var(--s2) 0 var(--s1); font-size: var(--fs-sm); line-height: var(--lh-sm); }

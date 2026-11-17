@@ -1157,7 +1157,6 @@
 {"k": "ui.btn.switch_to_auto", "src": "6f248734", "v": "Otomatik moda geç"}
 {"k": "ui.btn.switch_to_full", "src": "6b0abf06", "v": "Tam erişim moduna geç"}
 {"k": "ui.btn.try_again", "src": "042c862e", "v": "Tekrar dene"}
-{"k": "ui.btn.usage", "src": "0bb18642", "v": "Kullanım"}
 {"k": "ui.btn.wait_more", "src": "6ffe3082", "v": "10 dk daha bekle"}
 {"k": "ui.confirm.clear", "src": "b164a2b8", "v": "{session} içindeki konuşma temizlensin mi?"}
 {"k": "ui.confirm.clear_body", "src": "7d0b8e1b", "v": "Claude yeni bir konuşma başlatır ve bunu unutur; eski konuşma bilgisayarda kayıtlı kalır, ama buradan devam ettirilemez."}
@@ -1437,6 +1436,7 @@
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Çalışıyor ({clock})"}
 {"k": "ui.tab.sessions", "src": "e11e37a9", "v": "Oturumlar"}
 {"k": "ui.tab.settings", "src": "c7f73bb5", "v": "Ayarlar"}
+{"k": "ui.tab.usage", "src": "0bb18642", "v": "Kullanım"}
 {"k": "ui.tile.aria", "src": "eaa1d742", "v": "{session}, {state}, bağlam %{pct}, {model}, {cost}"}
 {"k": "ui.tile.aria_no_model", "src": "667d58b3", "v": "{session}, {state}, bağlam %{pct}, {cost}"}
 {"k": "ui.tile.no_folder", "src": "25fe67b1", "v": "klasör yok"}
@@ -1478,7 +1478,6 @@
 {"k": "ui.update.updated", "src": "a56afb67", "v": "{version} sürümüne güncellendi."}
 {"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "{version} sürümüne güncellendi; {n} oturum yeniden bağlandı.", "other": "{version} sürümüne güncellendi; {n} oturum yeniden bağlandı."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} kurulu ve yeniden başlatılmayı bekliyor."}
-{"k": "ui.usage.title", "src": "0bb18642", "v": "Kullanım"}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude sana soruyor"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude'un senin iznine ihtiyacı var"}
 {"k": "ui.waiting.permission_open", "src": "1f475be8", "v": "Sohbette açık bir izin isteği var."}

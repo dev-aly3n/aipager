@@ -895,7 +895,7 @@ class MiniAppServer:
         # "needs you" tray can grey out "Answer in chat" with a reason
         # instead of offering a tap that would only 403.
         payload["can_act"] = bool(self.bot._can_prompt_user(user_id, scope_chat_id))
-        # Whether the home's Usage button shows (a hint: /api/usage itself
+        # Whether the Usage tab shows (a hint: /api/usage itself
         # enforces the rule).
         payload["can_usage"] = self._usage_access(user_id, scope_chat_id) is not None
         return web.json_response(payload)

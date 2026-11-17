@@ -2,8 +2,9 @@
 // from tests/integration/miniapp-problem-report-page/report_page.js.
 //   node usage_page.js <page.html> <config.json>
 // The page's own script runs in a small DOM shim. It is driven only from
-// the outside: element ids from entrypoints.md (#usage-open, #view-usage,
-// #usage-body, #view-grid), clicks, and the Telegram BackButton callback.
+// the outside: element ids (#maintab-usage, #maintab-sessions, #view-usage,
+// #usage-body, #view-grid, #tabbar), clicks, and the Telegram BackButton
+// callback.
 // No page function is exported or called. fetch is stubbed: each path's
 // answer comes from the config (the real server's bodies), every request
 // is recorded. The run prints one JSON line: {snaps, fetched, errors}.
@@ -213,7 +214,10 @@ function snap() {
   }
   const body = byId["usage-body"];
   return {
-    usageOpenShown: shown("usage-open"),
+    usageTabShown: shown("maintab-usage"),
+    usageTabActive: byId["maintab-usage"].classList.contains("is-active"),
+    sessionsTabActive: byId["maintab-sessions"].classList.contains("is-active"),
+    tabbar: shown("tabbar"),
     usageView: shown("view-usage"),
     gridView: shown("view-grid"),
     back: !!global.__backShown,
