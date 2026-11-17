@@ -479,6 +479,7 @@ class StandIn:
         tool_use_id = f"toolu_standin_{uuid.uuid4().hex[:12]}"
         self.assistant([{"type": "tool_use", "id": tool_use_id, "name": "Bash",
                          "input": tool_input}])
+        self.log(event="bash_call", command=command)
         pre = self.fire("PreToolUse", {"tool_name": "Bash", "tool_input": tool_input,
                                        "tool_use_id": tool_use_id}, tool="Bash")
         for o in pre:

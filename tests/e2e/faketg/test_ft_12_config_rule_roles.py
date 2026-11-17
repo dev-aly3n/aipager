@@ -71,7 +71,7 @@ def _bash_commands(inst, name: str) -> list[str]:
     """Every Bash command the session's Claude asked to run, in order."""
     if inst.claude_mode == "standin":
         return [e.get("command", "") for e in inst.standin_log(name)
-                if e.get("event") == "decision" and e.get("tool") == "Bash"]
+                if e.get("event") == "bash_call"]
     path = inst._registry_transcript(name)
     out = []
     try:
