@@ -83,6 +83,19 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   dialog it reached (``dialog_key``, ``hook_decision``,
   ``question_answered``, ``agent_answer``). Then A's tool ends, A stops,
   and the main loop answers and stops.
+- A prompt containing ``agent asks after stop`` plays a background
+  agent that asks for permission after Claude's own turn ended (the
+  session idle, the job waiting on the agent): the main loop's Agent call
+  starts agent A in the background, the answer comes and ``Stop`` fires
+  with ``background_tasks`` listing A. 11 s after that Stop's hook
+  returned (past aipager's 10 s re-idle debounce, as minutes pass in
+  use), A runs ``touch marker-a``: ``PreToolUse``, then
+  ``PermissionRequest`` (logged ``agent_after_stop_asked`` first). With no
+  hook decision its dialog enters the terminal, where Enter answers it.
+  Its answer is logged (``agent_answer``, by ``hook`` or ``key``), its
+  ``PostToolUse`` (or ``PostToolUseFailure``) fires at once, and A then
+  works on: it waits on ``standin-hold-<session>`` (if present, up to
+  5 min) before its ``SubagentStop``.
 - A prompt asking for a file, "send me the image at <path>" (or the
   Persian "... \u062f\u0631 <path> \u0647\u0633\u062a ..."), plays Claude
   Code 2.1.302's SendUserFile with ``CLAUDE_CODE_ATTACHMENTS_BY_PATH``: the
@@ -134,6 +147,11 @@ _TWO_RE = re.compile(r"two prompts:\s*(agent-first|claude-first)\b", re.I)
 #: "hold this turn": the turn waits on the hold file before it answers (a
 #: turn that is still running when the test sends the next message).
 _HOLD_RE = re.compile(r"\bhold this turn\b", re.I)
+#: A background agent that asks after Claude's own turn ended.
+_AFTER_STOP_RE = re.compile(r"\bagent asks after stop\b", re.I)
+#: How long after that Stop the agent asks: past aipager's re-idle
+#: debounce (``IDLE_DEBOUNCE``, 10 s), as in use, where minutes pass.
+AFTER_STOP_DELAY = 11.0
 #: Claude Code 2.1.302's Bash permission dialog for an agent, top to bottom.
 AGENT_ROWS = ("Yes", "Yes, and don't ask again for make commands in this folder",
               "No, and tell Claude what to do differently (esc)")
@@ -202,6 +220,10 @@ class StandIn:
         self.dialogs: list[dict] = []
         # The hook processes of that scenario's threads ({"proc": ...}).
         self.holders: list[dict] = []
+        # The "agent asks after stop" scenario: set once the turn's Stop
+        # hook returned; its agent's id while the Stop is pending.
+        self.after_stop = threading.Event()
+        self.after_stop_agent: str | None = None
 
     # -- records -------------------------------------------------------------
 
@@ -370,7 +392,9 @@ class StandIn:
             self._wait_hold()
         agents = _AGENTS_RE.search(prompt)
         two = _TWO_RE.search(prompt)
-        if two:
+        if _AFTER_STOP_RE.search(prompt):
+            decision = self._after_stop_turn()
+        elif two:
             decision = self._two_prompts_turn(two.group(1).lower())
             if self.interrupted:
                 self.log(event="interrupted")
@@ -422,8 +446,17 @@ class StandIn:
         self.assistant([{"type": "text", "text": answer}])
         if self.interrupted:
             return
-        self.fire("Stop", {"stop_hook_active": False, "last_assistant_message": answer})
+        stop = {"stop_hook_active": False, "last_assistant_message": answer}
+        waiting_on = self.after_stop_agent
+        if waiting_on:
+            stop["background_tasks"] = [{
+                "id": waiting_on, "type": "local_agent", "status": "running",
+                "description": "Touch the marker", "agent_type": "ship-developer"}]
+        self.fire("Stop", stop)
         self.log(event="stop", answer=answer)
+        if waiting_on:
+            self.after_stop_agent = None
+            self.after_stop.set()
         self.statusline()
 
     # -- a file sent to the person (SendUserFile) ------------------------------
@@ -739,6 +772,84 @@ class StandIn:
         if self.interrupted:
             return "interrupted"
         return f"question {label}; agent {agent_out.get('answer', 'no decision')}"
+
+    # -- a background agent asks after the turn ended --------------------------
+
+    def _after_stop_turn(self) -> str:
+        a_id, _c_id = self.agent_ids()
+        prompt_id = str(uuid.uuid4())
+        a_input = {"subagent_type": "ship-developer", "description": "Touch the marker",
+                   "prompt": "Touch the marker", "run_in_background": True}
+        tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.assistant([{"type": "tool_use", "id": tuid, "name": "Agent",
+                         "input": a_input}], stop_reason="tool_use")
+        self.fire("PreToolUse", {"tool_name": "Agent", "tool_input": a_input,
+                                 "tool_use_id": tuid, "prompt_id": prompt_id}, tool="Agent")
+        self.fire("SubagentStart", {"agent_id": a_id, "agent_type": "ship-developer"})
+        self.fire("PostToolUse", {
+            "tool_name": "Agent", "tool_input": a_input, "tool_use_id": tuid,
+            "prompt_id": prompt_id,
+            "tool_response": {"isAsync": True, "status": "async_launched",
+                              "agentId": a_id, "description": "Touch the marker"}},
+            tool="Agent")
+        self.tool_result(tuid, f"Async agent launched successfully. agentId: {a_id}", False)
+        self.after_stop.clear()
+        self.after_stop_agent = a_id
+        threading.Thread(target=self._agent_asks_after_stop, args=(a_id, prompt_id),
+                         daemon=True).start()
+        return "agent launched"
+
+    def _agent_asks_after_stop(self, agent_id: str, prompt_id: str) -> None:
+        if not self.after_stop.wait(600):
+            return
+        time.sleep(AFTER_STOP_DELAY)
+        inner = self._in_agent(agent_id, "ship-developer", prompt_id)
+        b_input = {"command": "touch marker-a", "description": "Touch the marker"}
+        tuid = f"toolu_standin_{uuid.uuid4().hex[:12]}"
+        self.fire("PreToolUse", dict(inner, tool_name="Bash", tool_input=b_input,
+                                     tool_use_id=tuid), tool="Bash")
+        holder: dict = {}
+        with self.lock:
+            self.holders.append(holder)
+        self.log(event="agent_after_stop_asked", agent=agent_id)
+        outs = self.fire("PermissionRequest", dict(
+            inner, tool_name="Bash", tool_input=b_input, permission_suggestions=[]),
+            tool="Bash", holder=holder)
+        behavior = None
+        for o in outs:
+            behavior = ((o.get("hookSpecificOutput") or {}).get("decision")
+                        or {}).get("behavior") or behavior
+        if behavior in ("allow", "deny"):
+            self.log(event="hook_decision", dialog="A", behavior=behavior)
+            answer, by = ("allowed" if behavior == "allow" else "denied"), "hook"
+        else:
+            # Claude's own turn is over: the agent's dialog is the only
+            # one, on screen at once.
+            dialog = {"id": "A", "kind": "tool", "rows": AGENT_ROWS, "row": 0,
+                      "answer": None}
+            self._push_dialog(dialog)
+            answer, by = self._wait_dialog(dialog) or "no decision", "key"
+        self.log(event="agent_answer", dialog="A", answer=answer, by=by)
+        if answer == "allowed":
+            with open(os.path.join(self.cwd, "marker-a"), "w", encoding="utf-8"):
+                pass
+            self.fire("PostToolUse", dict(
+                inner, tool_name="Bash", tool_input=b_input, tool_use_id=tuid,
+                tool_response={"stdout": "", "stderr": "", "interrupted": False}),
+                tool="Bash")
+        else:
+            self.fire("PostToolUseFailure", dict(
+                inner, tool_name="Bash", tool_input=b_input, tool_use_id=tuid,
+                error="The user doesn't want to proceed with this tool use."),
+                tool="Bash")
+        # The agent works on after its tool (the job stays open).
+        deadline = time.monotonic() + 300.0
+        while os.path.exists(self.hold_path) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        self.fire("SubagentStop", dict(
+            inner, stop_hook_active=False, last_assistant_message="Marker touched.",
+            background_tasks=[], session_crons=[]))
+        self.log(event="agent_after_stop_done", agent=agent_id)
 
     def _wait_hold(self, limit: float = 120.0) -> None:
         """A test may hold this session's next tool call (file
