@@ -17,6 +17,15 @@ from aipager import config, usage_store
 from aipager.claude_bootstrap import SessionLogin
 from aipager.statusline_file import Window, parse_rate_limits
 
+
+def _plain(windows):
+    """Windows as plain values: another test reloads ``statusline_file``,
+    which swaps the ``Window`` class this module imported, so compare the
+    fields (and resets_at's type), never the class."""
+    if windows is None:
+        return None
+    return {name: (w.pct, w.resets_at, type(w.resets_at)) for name, w in windows.items()}
+
 NOW = 1_794_000_000.0
 LATER = int(NOW) + 2 * 86400
 SAVED = SessionLogin("saved", "", "/home/alice/.claude")
@@ -35,8 +44,9 @@ def test_valid_windows_are_kept_in_the_known_names_only():
         seven_day={"used_percentage": 83.5, "resets_at": float(LATER) + 0.9},
         spend_limit={"used_percentage": 140, "resets_at": LATER, "used_usd": 3.2},
         fourteen_day={"used_percentage": 1, "resets_at": LATER}))
-    assert got == {"five_hour": Window(7.0, LATER), "seven_day": Window(83.5, LATER),
-                   "spend_limit": Window(140.0, LATER)}
+    assert _plain(got) == _plain({"five_hour": Window(7.0, LATER),
+                                  "seven_day": Window(83.5, LATER),
+                                  "spend_limit": Window(140.0, LATER)})
 
 
 @pytest.mark.parametrize("window", [
@@ -60,7 +70,7 @@ def test_valid_windows_are_kept_in_the_known_names_only():
         "not-object", "null"])
 def test_a_malformed_window_is_dropped(window):
     data = _rl(seven_day=window, five_hour={"used_percentage": 5, "resets_at": LATER})
-    assert parse_rate_limits(data) == {"five_hour": Window(5.0, LATER)}
+    assert _plain(parse_rate_limits(data)) == _plain({"five_hour": Window(5.0, LATER)})
     # Alone, nothing valid remains: nothing is returned at all.
     assert parse_rate_limits(_rl(seven_day=window)) is None
 

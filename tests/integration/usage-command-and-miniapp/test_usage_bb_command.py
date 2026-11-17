@@ -24,6 +24,9 @@ from aipager.bot import group_intake, usage_cmd
 from aipager.claude_bootstrap import SessionLogin
 from aipager.statusline_file import Window
 
+# Token days must not straddle midnight between import and run.
+pytestmark = pytest.mark.usefixtures("local_day_centred")
+
 NOW = time.time()
 DENIED = "🚫 Only an admin can see usage."
 GROUP_NOTE = ("Plan limits are not shown in a group. Send /usage in your private chat "

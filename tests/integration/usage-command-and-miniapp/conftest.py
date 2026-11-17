@@ -52,6 +52,24 @@ def _configured_bot_token(monkeypatch):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", BOT_TOKEN)
 
 
+#: The local time of day when this file is imported. Test modules read
+#: ``time.time()`` once at import and again while a test runs; a whole-suite
+#: run can take over an hour, so with the real zone those two can fall on
+#: different days near midnight. Unless a test sets ``zone(...)``, the local
+#: zone is shifted so the import moment is local noon: 12 hours each way.
+#: Token-day modules opt in with ``pytestmark``; the clock-text tests keep
+#: the real zone, since they compare against ``time.localtime``.
+_IMPORT_LOCAL_SECONDS = 12 * 3600
+_CENTER_OFF = _IMPORT_LOCAL_SECONDS - (time.time() % 86400)
+
+
+@pytest.fixture
+def local_day_centred(monkeypatch):
+    monkeypatch.setattr(usage_store, "localtime",
+                        lambda t=None: time.gmtime((time.time() if t is None else t)
+                                                   + _CENTER_OFF))
+
+
 def en():
     return i18n.get("en")
 

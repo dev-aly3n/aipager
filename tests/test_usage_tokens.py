@@ -460,7 +460,9 @@ def test_the_monitor_tick_scans_and_saves(world, monkeypatch):
     monkeypatch.setattr("aipager.dtach.inject.list_sessions", AsyncMock(return_value=[]))
     monitor = SessionMonitor(registry, _noop)
     asyncio.run(monitor.tick())
-    assert _today(now=time.time())[0] == 10
+    # The week, not today: NOW is read when the file is imported, and a
+    # whole-suite run can reach this test after midnight.
+    assert usage_store.snapshot(None, now=time.time()).week[0] == 10
     assert config.USAGE_STATE_FILE.is_file()
 
 

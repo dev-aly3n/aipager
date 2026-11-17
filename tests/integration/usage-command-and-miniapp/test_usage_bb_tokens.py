@@ -21,6 +21,9 @@ import pytest
 from aipager import usage_store
 from aipager.state import SessionRegistry
 
+# Token days must not straddle midnight between import and run.
+pytestmark = pytest.mark.usefixtures("local_day_centred")
+
 SCOPE = -100777
 OTHER = -100888
 

@@ -21,6 +21,9 @@ from aipager.claude_bootstrap import SessionLogin
 from aipager.state import SessionRegistry
 from aipager.statusline_file import Window
 
+# Token days must not straddle midnight between import and run.
+pytestmark = pytest.mark.usefixtures("local_day_centred")
+
 NOW = time.time()
 SAVED = SessionLogin("saved", "", "/home/alice/.claude")
 SCOPE = -100777

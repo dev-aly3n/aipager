@@ -21,6 +21,9 @@ from aipager import usage_store
 from aipager.claude_bootstrap import SessionLogin
 from aipager.statusline_file import Window
 
+# Token days must not straddle midnight between import and run.
+pytestmark = pytest.mark.usefixtures("local_day_centred")
+
 HARNESS = Path(__file__).parent / "usage_page.js"
 NOW = time.time()
 OPEN = [["wait", 40], ["snap", "home"], ["click", "usage-open"], ["wait", 40],
