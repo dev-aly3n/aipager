@@ -1,6 +1,6 @@
 # Architektur
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Setz `AIPAGER_INSTANCE_DIR` auf einen absoluten Ordner, der dir gehört, und jed
 
 Die Dateien in deinem Home-Ordner ziehen nicht um, lass also auch `HOME` auf einen eigenen Ordner zeigen. `aipager start` verweigert den Start, wenn der Instanzordner gesetzt ist und `HOME` dein echter Home-Ordner ist, wenn der Ordner kein absoluter Pfad zu einem Ordner ist, der dir gehört, oder wenn er für einen Socket-Pfad zu lang ist.
 
-`/update` und `/restart` sind nicht isoliert: Sie wirken auf das installierte Paket aipager und den Dienst `aipager.service`, also schick sie nie an eine Testinstanz.
+`/update` und `/restart` sind nicht isoliert: Sie wirken auf das installierte Paket aipager und den Dienst `aipager.service`, also schick sie nie an eine Testinstanz. Aus demselben Grund verweigert `aipager service` den Start, wenn `AIPAGER_INSTANCE_DIR` gesetzt ist: Starte die Instanz mit `aipager start`.
 
 `AIPAGER_TELEGRAM_API_BASE` (zum Beispiel `http://127.0.0.1:41234`) schickt jede Anfrage an die Bot-API und jeden Datei-Download an diese Adresse statt an `https://api.telegram.org`. Sie muss dieser Computer sein (`localhost` oder eine Loopback-Adresse), außer bei `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`, damit ein Tippfehler den Token des Bots nicht woandershin schicken kann.
 

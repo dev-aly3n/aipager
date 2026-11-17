@@ -1,6 +1,6 @@
 # 架构
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../architecture.md)）
 
@@ -145,7 +145,7 @@ flowchart LR
 
 主文件夹下的文件不会移动，所以也要把 `HOME` 指向一个单独的文件夹。当设置了实例文件夹而 `HOME` 却是你真实的主文件夹时、当这个文件夹不是指向你自己文件夹的绝对路径时，或当它太长不能作为套接字路径时，`aipager start` 会拒绝运行。
 
-`/update` 和 `/restart` 不受隔离：它们作用于已安装的 aipager 软件包和 `aipager.service`，所以绝不要把它们发给测试实例。
+`/update` 和 `/restart` 不受隔离：它们作用于已安装的 aipager 软件包和 `aipager.service`，所以绝不要把它们发给测试实例。出于同样的原因，设置了 `AIPAGER_INSTANCE_DIR` 时 `aipager service` 会拒绝运行：请用 `aipager start` 运行该实例。
 
 `AIPAGER_TELEGRAM_API_BASE`（例如 `http://127.0.0.1:41234`）会把每个 Bot API 请求和每次文件下载发到那个地址，而不是 `https://api.telegram.org`。除非设置了 `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`，这个地址必须是本机（`localhost` 或回环地址），这样一个笔误不会把机器人 token 发到别处。
 

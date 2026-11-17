@@ -1,6 +1,6 @@
 # Architecture
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Définissez `AIPAGER_INSTANCE_DIR` comme un dossier absolu qui vous appartient e
 
 Les fichiers de votre dossier personnel ne bougent pas, donc faites aussi pointer `HOME` vers un dossier à part. `aipager start` refuse de tourner quand le dossier d'instance est défini et que `HOME` est votre vrai dossier personnel, quand le dossier n'est pas un chemin absolu vers un dossier qui vous appartient, ou quand il est trop long pour un chemin de socket.
 
-`/update` et `/restart` ne sont pas isolés : ils agissent sur le paquet aipager installé et sur le service `aipager.service`, alors ne les envoyez jamais à une instance de test.
+`/update` et `/restart` ne sont pas isolés : ils agissent sur le paquet aipager installé et sur le service `aipager.service`, alors ne les envoyez jamais à une instance de test. Pour la même raison, `aipager service` refuse de se lancer quand `AIPAGER_INSTANCE_DIR` est défini : lancez l'instance avec `aipager start`.
 
 `AIPAGER_TELEGRAM_API_BASE` (par exemple `http://127.0.0.1:41234`) envoie chaque requête à la Bot API et chaque téléchargement de fichier à cette adresse au lieu de `https://api.telegram.org`. Elle doit être cet ordinateur (`localhost` ou une adresse de bouclage) sauf si `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`, pour qu'une faute de frappe ne puisse pas envoyer le token du bot ailleurs.
 

@@ -1,6 +1,6 @@
 # Hook 이벤트
 
-<!-- i18n-source: docs/hooks.md @ 92c37755 -->
+<!-- i18n-source: docs/hooks.md @ b664aeaf -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../hooks.md))
 
@@ -32,14 +32,14 @@ hook은 자기 메모리를 1 GB로 제한해요. 이 한도에 닿은 hook은 �
 |---|---|
 | `hook_event_name` | 이벤트(Claude Code의 필드예요. aipager는 이것으로 나눠 보내요). |
 | `session_id`, `transcript_path`, `cwd`, ... | Claude Code 자체 필드, 그대로 유지해요. `session_id`는 Claude Code의 대화 ID예요. |
-| `session` | aipager가 추가: aipager가 세션에 붙인 이름 `claude-<name>`, aipager가 세션을 시작할 때 설정하는 변수 `CLAUDE_DTACH_SESSION`에서 와요. aipager가 시작하지 않은 Claude Code 세션의 이벤트에는 이름이 없고, aipager는 그런 이벤트를 무시해요. |
+| `session` | aipager가 추가: aipager가 세션에 붙인 이름 `claude-<name>`, aipager가 세션을 시작할 때 설정하는 변수 `CLAUDE_DTACH_SESSION`에서 와요. aipager가 시작하지 않은 Claude Code 세션의 이벤트에는 이름이 없고, aipager는 그런 이벤트를 무시하고, 그 세션의 도구 호출에도 손대지 않아요([PreToolUse](#pretooluse) 참고). |
 | `sl_tokens` | aipager가 추가, `MessageDisplay`를 뺀 모든 이벤트에, 그 세션의 상태 줄 파일이 있을 때: `context_pct`, `total_output`, `total_input`, `current_output`, `lines_added`, `lines_removed`. |
 | `claude_pid` | aipager가 추가, 세션 자신의 이벤트에: 그 세션 `claude`의 PID(Claude Code의 `CLAUDE_PID`)예요. aipager는 이것으로 Claude Code 세션 목록에서 그 claude를 찾아요. |
 | `bg_job` | aipager가 추가, 그 세션 몫으로 치는 Claude Code 백그라운드 작업의 모든 이벤트에(아래 참고): 그 작업의 ID예요. |
 
 도구 이벤트에는 `tool_name`과 `tool_input`도 있어요. 서브에이전트(subagent) 안에서 일어난 모든 이벤트에는 `agent_id`가 있고(서브에이전트 이벤트에는 `agent_type`도 있어요), 메인 루프 자체의 이벤트에는 없어요. aipager는 이것으로 에이전트의 도구 호출을 그 에이전트 자기 줄에 넣어요.
 
-Claude Code의 백그라운드 작업도 hook을 실행해요. 입력란이 비어 있을 때 ←를 누르면 세션의 대화가 백그라운드 작업으로 옮겨지고(Claude Code의 에이전트 보기), Claude Code는 다음 작업을 위해 여분의 백그라운드 프로세스도 준비해 둬요. 이들의 hook은 `CLAUDE_JOB_DIR`이 설정된 채로 실행되고, Claude Code 백그라운드 서비스를 시작한 claude가 무엇이든 그 세션 이름을 물려받아서, 그 이름으로는 이들에 대해 아무것도 알 수 없어요. 그래서 hook은 백그라운드 작업을, 자기 claude가 대화를 그 작업으로 옮긴 세션의 몫으로만 쳐요. 그 세션은 작업의 연결 파일(`claude-bgjob-<job>.json`, aipager가 옮겨 간 것을 보면 써요. [아키텍처](architecture.md#file-and-socket-layout) 참고)에서 찾고, 없으면 Claude Code 세션 목록과 aipager의 PID 목록을 함께 보고 찾아요. 그런 작업의 이벤트는 `bg_job`이 설정된 채 그 세션의 이벤트로 aipager에 가서, 답변, 카드, 요청이 그 세션의 채팅에 도착해요. 다른 백그라운드 프로세스는 모두 남의 것이에요. 그 hook은 아무것도 쓰지 않고, 보내지 않고, 출력하지 않아요. 다만 `PreToolUse`는 물려받은 세션 규칙으로 그 도구 호출을 계속 검사하고 거부를 출력해요(그 세션이 허용할 것보다 더 허용하는 일은 절대 없어요). aipager는 백그라운드에 있는 세션과 짝지을 수 없는 `bg_job` 이벤트를 버리고, 그것을 위해 아무것도 만들지 않아요.
+Claude Code의 백그라운드 작업도 hook을 실행해요. 입력란이 비어 있을 때 ←를 누르면 세션의 대화가 백그라운드 작업으로 옮겨지고(Claude Code의 에이전트 보기), Claude Code는 다음 작업을 위해 여분의 백그라운드 프로세스도 준비해 둬요. 이들의 hook은 `CLAUDE_JOB_DIR`이 설정된 채로 실행되고, Claude Code 백그라운드 서비스를 시작한 claude가 무엇이든 그 세션 이름을 물려받아서, 그 이름으로는 이들에 대해 아무것도 알 수 없어요. 그래서 hook은 백그라운드 작업을, 자기 claude가 대화를 그 작업으로 옮긴 세션의 몫으로만 쳐요. 그 세션은 작업의 연결 파일(`claude-bgjob-<job>.json`, aipager가 옮겨 간 것을 보면 써요. [아키텍처](architecture.md#file-and-socket-layout) 참고)에서 찾고, 없으면 Claude Code 세션 목록과 aipager의 PID 목록을 함께 보고 찾아요. 그런 작업의 이벤트는 `bg_job`이 설정된 채 그 세션의 이벤트로 aipager에 가서, 답변, 카드, 요청이 그 세션의 채팅에 도착해요. 다른 백그라운드 프로세스는 모두 남의 것이에요. 그 hook은 아무것도 쓰지 않고, 보내지 않고, 출력하지 않아요. 다만 `PreToolUse`는 물려받은 세션 규칙으로 그 도구 호출을 계속 검사하고 거부를 출력해요(그 세션이 허용할 것보다 더 허용하는 일은 절대 없어요). aipager가 시작하지 않은 세션의 백그라운드 프로세스는 그 세션과 마찬가지로 건드리지 않아요. aipager는 백그라운드에 있는 세션과 짝지을 수 없는 `bg_job` 이벤트를 버리고, 그것을 위해 아무것도 만들지 않아요.
 
 ## <a id="event-reference"></a>이벤트 레퍼런스
 
@@ -67,8 +67,9 @@ aipager는 세션을 작업 중으로 표시하고, 작업 카드가 아직 없�
 
 - Telegram에서 시작한 작업은 보낸 사람 역할의 규칙과 안전 기준선(보호된 경로, 명령 패턴)을 따르고, `owner` 역할만 건너뛸 수 있어요. aipager가 누구의 것인지 알 수 없는 작업은 안전 기준선을 받아요. 터미널에서 입력한 메시지는 제한되지 않아요. 규칙은 [그룹](groups.md#how-rules-work)과 [보안](security.md#team-mode-enforcement)에 있어요.
 - 규칙이 이 호출을 거부하면 hook은 `deny` 결정을 출력하고, Claude Code는 묻지 않고 그 도구를 거부하고, aipager에 알려요(`safety_blocked`). 작업은 `🛑 x1 · 안전 규칙으로 차단됨: ... (중지됨)`으로 멈추고, 그 작업의 이후 모든 도구 호출도 거부돼요.
-- `SendUserFile` 호출(Claude가 채팅으로 파일을 보내는 것)은 owner의 작업과 터미널에서 입력한 메시지를 포함해 모든 작업에서 확인해요: 전송 하한선, 파일 확인, 작업 자체의 규칙([보안](security.md#files-claude-sends)). 거부된 호출은 "aipager safety policy" 표시가 없는 `deny`를 받아요. Claude는 이유를 읽고 알려 주며, 작업은 계속되고, 훅은 감사 로그를 위해 파일마다 이름을 적은 `send_files_refused`를 aipager에 보내요.
+- `SendUserFile` 호출(Claude가 채팅으로 파일을 보내는 것)은 owner의 작업과 터미널에서 입력한 메시지를 포함해 aipager가 시작한 세션의 모든 작업에서 확인해요: 전송 하한선, 파일 확인, 작업 자체의 규칙([보안](security.md#files-claude-sends)). 거부된 호출은 "aipager safety policy" 표시가 없는 `deny`를 받아요. Claude는 이유를 읽고 알려 주며, 작업은 계속되고, 훅은 감사 로그를 위해 파일마다 이름을 적은 `send_files_refused`를 aipager에 보내요.
 - 검사 자체에서 오류가 나면 거부해요. 세션의 규칙을 읽을 수 있고 소유자에게 건너뛰기 권한을 주는 경우는 예외예요.
+- aipager가 시작하지 않은 세션(aipager 이름이 없는 일반 `claude`, 또는 그 백그라운드 작업)은 건드리지 않아요. hook은 아무것도 출력하지 않고 Claude Code는 aipager가 없을 때처럼 결정하니, 그 세션의 cron, `/loop`, 다른 세션에서 온 메시지는 평소처럼 실행돼요. 그런 세션은 Telegram에서 아무 입력도 받지 않으니 aipager가 그 세션을 묶어 둘 기준이 없어요. 그래도 aipager의 `[via Telegram` 표시가 있는 작업은 확인하고, 저장된 대화를 읽을 수 없는 작업도 확인해요. 그래서 aipager의 세션이 어떤 이유로 이름을 잃어도 그 안의 표시가 있는 Telegram 메시지는 전처럼 확인해요.
 - 마지막으로, 통과시키는 호출이면 hook은 aipager 소켓 옆 폴더에 잠깐 쓰는 표시를 남기고, aipager가 그 세션에 메시지를 입력하는 중이면 입력이 끝날 때까지 기다려요(최대 5초). Claude Code는 이 hook이 끝나는 순간 권한 요청을 보여 주는데, 그때 입력된 키가 있으면 그 요청에 답하게 돼요. 메시지의 Enter가 “Yes”를 고르는 거예요. aipager 쪽에서도 입력을 시작하기 직전에 통과한 호출이 끝나기를 기다리고, 그래도 요청을 만난 메시지는 입력하지 않아요. 그 메시지는 기다렸다가(👀) 요청에 답이 나면 Claude에게 가요.
 
 aipager 쪽에서는 이 호출이 작업 카드의 한 줄이 되고(서브에이전트의 호출은 그 에이전트 줄에 들어가요), `/settings` → 변경 사항 미리 보기 (diff)가 켜져 있으면(기본은 꺼짐) `Write`나 `Edit`가 변경 미리 보기를 보여 줘요. `AskUserQuestion` 호출은 선택지마다 버튼이 하나씩 있는 질문이 돼요. 작업이 진행 중이지 않을 때 Claude Code의 보조 에이전트가 하는 질문은 보여 주지 않아요(Claude가 나에게 묻는 게 아니니까요). Claude 자신의 `Agent` 호출은 시작한 에이전트의 `subagent_type`과 `description`을 남기고, 서브에이전트의 호출은 그 에이전트의 최신 활동이에요. 에이전트가 백그라운드에서 실행되는 동안 둘 다 답변 아래 상태에 나와요.
@@ -77,7 +78,7 @@ aipager 쪽에서는 이 호출이 작업 카드의 한 줄이 되고(서브에�
 
 Claude Code가 곧 권한을 요청해요. 작업 카드가 이 요청으로 바뀌고, Claude의 설명 아래에 실제 명령이나 경로를 보여 줘요([명령 → 권한 요청](commands.md#permission-prompts) 참고). 허용, 거부, 중지, 그리고 Claude Code가 정말로 기억할 수 있는 규칙을 줄 때만 나오는 항상 허용이 있어요.
 
-hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응답 소켓을 열고, 그 주소를 이벤트와 함께 보내고, 내가 누를 때까지 최대 20초 기다려요. 그동안 Claude Code도 터미널에 자기 대화 상자를 보여 줘요(서브에이전트의 호출이면 hook이 끝난 뒤에야). 제때 누르면 `PermissionRequest` 결정으로 돌아가서(허용, 규칙과 함께 허용, 또는 거부) 그 대화 상자가 닫혀요. 제때 누르지 않으면 hook은 기다림이 끝났다고 aipager에 알리고(`permission_reply_timeout`) 아무것도 출력하지 않아요. aipager에 연결할 수 없거나 이 경로에서 무엇이든 실패해도 아무것도 출력하지 않아요. 그러면 대화 상자가 터미널에서 기다리고, 나중에 누르면 키를 입력해서 답해요. 감사 로그(`~/.claude/aipager-audit.jsonl`)에는 각 누름이 어느 방식으로 답했는지 남아요. `"via": "hook_decision"` 또는 `"via": "keystroke_fallback"`이에요.
+hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응답 소켓을 열고, 그 주소를 이벤트와 함께 보내고, 내가 누를 때까지 최대 20초 기다려요. 그동안 Claude Code도 터미널에 자기 대화 상자를 보여 줘요(서브에이전트의 호출이면 hook이 끝난 뒤에야). 제때 누르면 `PermissionRequest` 결정으로 돌아가서(허용, 규칙과 함께 허용, 또는 거부) 그 대화 상자가 닫혀요. 제때 누르지 않으면 hook은 기다림이 끝났다고 aipager에 알리고(`permission_reply_timeout`) 아무것도 출력하지 않아요. aipager에 연결할 수 없거나 이 경로에서 무엇이든 실패해도 아무것도 출력하지 않아요. aipager가 시작하지 않은 세션에서는 아예 기다리지 않아요. aipager가 그 세션을 무시하니 누름이 올 수 없거든요. 그러면 대화 상자가 터미널에서 기다리고, 나중에 누르면 키를 입력해서 답해요. 감사 로그(`~/.claude/aipager-audit.jsonl`)에는 각 누름이 어느 방식으로 답했는지 남아요. `"via": "hook_decision"` 또는 `"via": "keystroke_fallback"`이에요.
 
 다른 요청이 열려 있는 동안 도착한 `PermissionRequest`도 작업 카드 아래 별도 메시지로 보여 줘요. 같은 대화 상자가 다시 오면(같은 요청자, 같은 도구와 같은 호출, 또는 같은 입력) 한 번만 보여 줘요. Claude Code는 `AskUserQuestion`에도 이 hook을 실행하는데, 그 질문은 이미 `PreToolUse`로 보여 줬으니 두 번 보여 주지 않아요. 백그라운드 에이전트의 대화 상자는 그 hook이 기다리기를 멈춘 뒤에야 터미널에 나타나고, 이미 열린 대화 상자들 아래에 놓여요. 그래서 탭은 Claude Code가 먼저 보여 주는 요청에만 키를 입력해요([명령 → 권한 요청](commands.md#permission-prompts) 참고).
 

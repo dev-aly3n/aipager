@@ -1,6 +1,6 @@
 # 보안 모델
 
-<!-- i18n-source: docs/security.md @ e085d9a7 -->
+<!-- i18n-source: docs/security.md @ b664aeaf -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../security.md))
 
@@ -219,7 +219,7 @@ Telegram은 서식 있는 메시지의 미리 보기 옵션을 문서에 적어 
 
 Mini App은(`--url`로 대신하지 않는 한) 관리형 [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)을 aipager 자체의 루프백 서버로 시작하고, 받은 공개 주소 `https://*.trycloudflare.com`을 Telegram 메뉴 버튼과 `/app`의 답변으로 올려요.
 
-이 주소는 **비밀이 아니고, 비밀일 필요도 없어요**. Mini App이 처리하는 모든 요청은 Telegram의 `initData` 서명으로 확인하고(위의 [신뢰 경계](#trust-boundary) 참고), 주소를 어떻게 얻었든 그것을 지키는 것은 이 같은 확인이에요. 서버 이름을 아는 것만으로는 `trycloudflare.com` 하위 도메인을 아무렇게나 짐작하는 것보다 공격자에게 나을 게 없어요. 서명 확인이 진짜 문이에요. 공개하지는 않지만 비밀도 아닌 다른 주소처럼 다루세요. 계속 실행해도 괜찮지만, 이유 없이 공개 채널에 붙여 넣지는 마세요.
+이 주소는 **비밀이 아니고, 비밀일 필요도 없어요**. Mini App이 처리하는 모든 요청은 Telegram의 `initData` 서명으로 확인하고(위의 [신뢰 경계](#trust-boundary) 참고), 주소를 어떻게 얻었든 그것을 지키는 것은 이 같은 확인이에요. 서버 이름을 아는 것만으로는 `trycloudflare.com` 하위 도메인을 아무렇게나 짐작하는 것보다 공격자에게 나을 게 없어요. 서명 확인이 진짜 문이에요. 이 확인 없이 제공되는 파일은 공개 파일뿐이에요. 페이지 자체, Telegram의 SDK 스크립트, aipager에 포함된 글꼴(`/fonts/`, 정해진 이름 목록)이에요. 공개하지는 않지만 비밀도 아닌 다른 주소처럼 다루세요. 계속 실행해도 괜찮지만, 이유 없이 공개 채널에 붙여 넣지는 마세요.
 
 서버 이름은 메모리에만 있어요. `aipager.yaml`이나 `~/.config/aipager/` 아래 어디에도 절대 쓰지 않아요. 계획된 재시작(업데이트 후 재시작, **지금 재시작**, 서비스 없이 제자리에서 하는 재시작)은 터널을 그대로 켜 둬서, 주소와 메뉴 버튼과 열려 있는 Mini App이 계속 동작해요. 다음 aipager는 같은 부팅인지, 같은 포트인지, 그 프로세스가 바로 그 `cloudflared`인지(명령줄로 확인), 아직 같은 주소를 알려 주는지(`~/.claude/aipager-tunnel.json`에는 주소가 아니라 주소의 해시만 있어요), 그 주소가 응답하는지 확인한 뒤에만 터널을 이어받아요. 그 밖의 경우에는 터널을 멈추고 새로 시작하고, 3분 안에 아무 aipager도 이어받지 않은 유지된 터널은 작은 감시 프로세스가 멈춰요. 다른 방식으로 멈추면(Ctrl+C, `docker stop`, `systemctl stop`) 터널도 멈추고, 컴퓨터를 재부팅하거나 컨테이너를 다시 시작하면 주소가 새로 생겨요. `MINIAPP_KEEP_TUNNEL=0`으로 터널 유지를 끌 수 있어요. aipager가 강제로 종료되면(메모리 부족, `kill -9`) aipager가 관리형 터널을 켠 채(Mini App 사용, `MINIAPP_PUBLIC_URL` 없음) 다시 시작해서 터널을 이어받거나 멈출 때까지, 또는 컴퓨터를 재부팅할 때까지 터널이 계속 실행돼요. `aipager uninstall`도 터널을 멈춰요. 터널이 도중에 끊기면 aipager는 점점 길어지는 간격으로 다시 시작하고 새 주소를 다시 올려요. 몇 번 시도해도 살아나지 않으면 죽은 주소를 가리키게 두지 않고 버튼을 없애요.
 

@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ 92c37755 -->
+<!-- i18n-source: docs/hooks.md @ b664aeaf -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -32,14 +32,14 @@ hook 把自己的内存限制在 1 GB。触到这个上限的 hook 会以错误�
 |---|---|
 | `hook_event_name` | 事件（Claude Code 的字段；aipager 按它分派）。 |
 | `session_id`、`transcript_path`、`cwd`、... | Claude Code 自己的字段，原样保留。`session_id` 是 Claude Code 的对话 ID。 |
-| `session` | 由 aipager 添加：它给会话起的名字 `claude-<name>`，来自 aipager 启动会话时设置的变量 `CLAUDE_DTACH_SESSION`。不是 aipager 启动的 Claude Code 会话发来的事件不带名字，aipager 会忽略它们。 |
+| `session` | 由 aipager 添加：它给会话起的名字 `claude-<name>`，来自 aipager 启动会话时设置的变量 `CLAUDE_DTACH_SESSION`。不是 aipager 启动的 Claude Code 会话发来的事件不带名字，aipager 会忽略它们，也不会去管它的工具调用（见 [PreToolUse](#pretooluse)）。 |
 | `sl_tokens` | 由 aipager 添加，在除 `MessageDisplay` 之外的每个事件上，当该会话的状态行文件存在时：`context_pct`、`total_output`、`total_input`、`current_output`、`lines_added` 和 `lines_removed`。 |
 | `claude_pid` | 由 aipager 添加在会话自己的事件上：它的 `claude` 的 PID（Claude Code 的 `CLAUDE_PID`），aipager 用它在 Claude Code 的会话列表里找到这个 claude。 |
 | `bg_job` | 由 aipager 添加在算作该会话的 Claude Code 后台任务的每个事件上（见下文）：该任务的 ID。 |
 
 工具事件还带有 `tool_name` 和 `tool_input`。在子代理（subagent）内部触发的每个事件都带有 `agent_id`（子代理事件还带有 `agent_type`）；主循环自己的事件不带，aipager 借此把代理的工具调用放到该代理自己的那一行上。
 
-Claude Code 的后台任务也会运行它们的 hook。在空的输入框里按 ← 会把会话的对话移到一个后台任务里（Claude Code 的代理视图），Claude Code 还会预先备好几个空闲的后台进程，留给下一个任务。它们的 hook 运行时设置了 `CLAUDE_JOB_DIR`，并且继承了启动 Claude Code 后台服务的那个 claude（不管是哪个）的会话名，所以这个名字说明不了它们的任何事。因此 hook 只把后台任务算给自己的 claude 把对话移进这个任务的那个会话：它在任务的链接文件里找这个会话（`claude-bgjob-<job>.json`，aipager 看到移动时写入，见 [架构](architecture.md#file-and-socket-layout)），找不到时就在 Claude Code 的会话列表里，结合 aipager 的 PID 列表来找。这样的任务的事件会作为那个会话的事件发给 aipager，并带上 `bg_job`，所以它的回答、卡片和请求都会到达该会话的聊天。其他任何后台进程都是外来的：它的 hook 不写任何东西，不发送任何东西，也不打印任何东西，只是 `PreToolUse` 仍会按它继承来的会话规则检查它的工具调用，并打印拒绝（它允许的绝不会比那个会话更多）。aipager 会丢弃无法对应到某个在后台的会话的 `bg_job` 事件，也不会为它创建任何东西。
+Claude Code 的后台任务也会运行它们的 hook。在空的输入框里按 ← 会把会话的对话移到一个后台任务里（Claude Code 的代理视图），Claude Code 还会预先备好几个空闲的后台进程，留给下一个任务。它们的 hook 运行时设置了 `CLAUDE_JOB_DIR`，并且继承了启动 Claude Code 后台服务的那个 claude（不管是哪个）的会话名，所以这个名字说明不了它们的任何事。因此 hook 只把后台任务算给自己的 claude 把对话移进这个任务的那个会话：它在任务的链接文件里找这个会话（`claude-bgjob-<job>.json`，aipager 看到移动时写入，见 [架构](architecture.md#file-and-socket-layout)），找不到时就在 Claude Code 的会话列表里，结合 aipager 的 PID 列表来找。这样的任务的事件会作为那个会话的事件发给 aipager，并带上 `bg_job`，所以它的回答、卡片和请求都会到达该会话的聊天。其他任何后台进程都是外来的：它的 hook 不写任何东西，不发送任何东西，也不打印任何东西，只是 `PreToolUse` 仍会按它继承来的会话规则检查它的工具调用，并打印拒绝（它允许的绝不会比那个会话更多）。不是 aipager 启动的会话的后台进程，aipager 也不会去管，和那个会话本身一样。aipager 会丢弃无法对应到某个在后台的会话的 `bg_job` 事件，也不会为它创建任何东西。
 
 ## <a id="event-reference"></a>事件参考
 
@@ -67,8 +67,9 @@ aipager 把会话标记为工作中，如果还没有工作卡片就打开一张
 
 - 从 Telegram 开始的任务要遵守发送者角色的规则和安全底线（受保护的路径、命令模式），只有 `owner` 角色可以绕过；aipager 无法归属的任务会得到安全底线；你在终端里输入的消息不受限制。规则见[群组](groups.md#how-rules-work)和[安全](security.md#team-mode-enforcement)。
 - 当某条规则拒绝了这次调用时，hook 打印 `deny` 决定，Claude Code 不经询问就拒绝该工具，并通知 aipager（`safety_blocked`）：任务以 `🛑 x1 · 被安全规则阻止：...（已停止）` 停止，该任务之后的每一次工具调用也都会被拒绝。
-- `SendUserFile` 调用（Claude 往聊天里发文件）对每个任务都会检查，owner 的任务和在终端输入的消息也包括在内：发送底线、文件检查和任务自己的规则（[安全](security.md#files-claude-sends)）。被拒绝的调用会得到一个不带 "aipager safety policy" 标记的 `deny`：Claude 读到原因并告诉你，任务继续，钩子会把列出每个文件的 `send_files_refused` 发给 aipager，用于审计日志。
+- `SendUserFile` 调用（Claude 往聊天里发文件）对 aipager 启动的会话里的每个任务都会检查，owner 的任务和在终端输入的消息也包括在内：发送底线、文件检查和任务自己的规则（[安全](security.md#files-claude-sends)）。被拒绝的调用会得到一个不带 "aipager safety policy" 标记的 `deny`：Claude 读到原因并告诉你，任务继续，钩子会把列出每个文件的 `send_files_refused` 发给 aipager，用于审计日志。
 - 检查本身出错时会拒绝，除非会话的规则能读取并授予所有者绕过权限。
+- 不是 aipager 启动的会话（普通的 `claude`，没有 aipager 起的名字，或者它的后台任务）不会被管：hook 什么都不打印，Claude Code 照没有 aipager 时那样做决定，所以它的 cron、`/loop` 和来自其他会话的消息照常运行。aipager 没有什么可以拿来约束这种会话：它收不到任何 Telegram 输入。带有 aipager 的 `[via Telegram` 标记的任务仍会检查，保存的对话读不出来的任务也一样，所以 aipager 自己的会话即使不知怎么丢了名字，其中带标记的 Telegram 消息也会像以前一样被检查。
 - 最后，对于放行的调用，hook 会在 aipager 套接字旁边的一个文件夹里留下一个短期标记；如果 aipager 正在往这个会话里输入消息，它会等输入结束（最多 5 秒）。这个 hook 一返回，Claude Code 就会显示权限请求，这时输入的按键会回答这个请求：消息末尾的 Enter 会选中“Yes”。aipager 这边也会等开始输入前刚放行的调用结束；仍然碰上请求的消息不会被输入：它会等待（👀），请求有了回答后再交给 Claude。
 
 在 aipager 这一边，这次调用会成为工作卡片上的一行（子代理的调用会放到该代理的那一行上），当 `/settings` → 改动预览（diff）打开时（默认关闭），`Write` 或 `Edit` 会显示改动预览。`AskUserQuestion` 调用会变成问题，每个选项一个按钮；在没有任务运行时由 Claude Code 的辅助代理提出的问题不会显示（那不是 Claude 在问你）。Claude 自己的 `Agent` 调用会为它启动的代理留下 `subagent_type` 和 `description`，而子代理的调用就是该代理最新的动态：在代理于后台运行期间，两者都会显示在回答下方的状态里。
@@ -77,7 +78,7 @@ aipager 把会话标记为工作中，如果还没有工作卡片就打开一张
 
 Claude Code 即将请求权限。工作卡片变成这个请求，在 Claude 对它的描述下方显示真实的命令或路径（见[命令 → 权限请求](commands.md#permission-prompts)）：允许、拒绝、停止，以及只有在 Claude Code 提供了一条真正可以记住的规则时才出现的始终允许。
 
-hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。Claude Code 同时会在终端里显示它自己的对话框（子代理的调用要等 hook 结束后才显示）。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），并关闭这个对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。这时对话框会在终端里等着，之后的点按会通过输入按键来回答它。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
+hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。Claude Code 同时会在终端里显示它自己的对话框（子代理的调用要等 hook 结束后才显示）。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），并关闭这个对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。在不是 aipager 启动的会话里，它根本不等：aipager 忽略那个会话，所以不会有点按过来。这时对话框会在终端里等着，之后的点按会通过输入按键来回答它。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
 
 在另一个请求开着时到达的 `PermissionRequest` 也会显示，作为单独的消息放在工作卡片下面。同一个对话框再次到达（同一个提问者、同一个工具和同一次调用，或者同样的输入）只显示一次。Claude Code 也会为 `AskUserQuestion` 运行这个 hook；这个问题已经通过它的 `PreToolUse` 显示了，所以永远不会显示第二次。后台代理的对话框只有在它的 hook 不再等待之后才会出现在终端里，排在那里已经打开的所有对话框下面；所以点按只会把按键输入到 Claude Code 最先显示的那个请求里（见[命令 → 权限请求](commands.md#permission-prompts)）。
 

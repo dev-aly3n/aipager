@@ -1,6 +1,6 @@
 # Arquitetura
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Defina `AIPAGER_INSTANCE_DIR` como uma pasta absoluta que seja sua e todos os ar
 
 Os arquivos da sua pasta pessoal não mudam de lugar, então aponte o `HOME` também para outra pasta. O `aipager start` se recusa a iniciar quando a pasta da instância está definida e o `HOME` é a sua pasta pessoal de verdade, quando a pasta não é um caminho absoluto para uma pasta sua, ou quando ela é longa demais para o caminho de um socket.
 
-O `/update` e o `/restart` não ficam isolados: eles agem sobre o pacote aipager instalado e o serviço `aipager.service`, então nunca os mande para uma instância de teste.
+O `/update` e o `/restart` não ficam isolados: eles agem sobre o pacote aipager instalado e o serviço `aipager.service`, então nunca os mande para uma instância de teste. Pelo mesmo motivo, o `aipager service` se recusa a rodar com `AIPAGER_INSTANCE_DIR` definida: rode a instância com `aipager start`.
 
 `AIPAGER_TELEGRAM_API_BASE` (por exemplo `http://127.0.0.1:41234`) manda todos os pedidos à Bot API e os downloads de arquivos para esse endereço em vez de `https://api.telegram.org`. Precisa ser este computador (`localhost` ou um endereço loopback), a não ser que você defina `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`, para um erro de digitação não poder mandar o token do bot para outro lugar.
 

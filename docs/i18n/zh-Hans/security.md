@@ -1,6 +1,6 @@
 # 安全模型
 
-<!-- i18n-source: docs/security.md @ e085d9a7 -->
+<!-- i18n-source: docs/security.md @ b664aeaf -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../security.md)）
 
@@ -219,7 +219,7 @@ Telegram 没有为富文本消息提供任何预览选项的文档；它会不�
 
 Mini App（除非用 `--url` 代替）会启动一个托管的 [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)，指向 aipager 自己的回环服务器，并把它得到的公开地址 `https://*.trycloudflare.com` 发布为 Telegram 的菜单按钮和 `/app` 的回复。
 
-这个地址**不是机密，也不需要是机密**：Mini App 提供的每个请求都会用 Telegram 的 `initData` 签名校验（见上面的[信任边界](#trust-boundary)），无论网址是怎么得到的，保护它的都是这同一项检查。仅仅知道主机名，攻击者得到的并不比随便猜一个 `trycloudflare.com` 子域名更多：签名检查才是真正的大门。像对待任何不公开但也不机密的网址那样对待它：让它运行没问题，但没有理由就不要贴到公开的频道里。
+这个地址**不是机密，也不需要是机密**：Mini App 提供的每个请求都会用 Telegram 的 `initData` 签名校验（见上面的[信任边界](#trust-boundary)），无论网址是怎么得到的，保护它的都是这同一项检查。仅仅知道主机名，攻击者得到的并不比随便猜一个 `trycloudflare.com` 子域名更多：签名检查才是真正的大门。不经过这项检查就提供的只有公开文件：页面本身、Telegram 的 SDK 脚本和 aipager 自带的字体（`/fonts/`，一份固定的文件名列表）。像对待任何不公开但也不机密的网址那样对待它：让它运行没问题，但没有理由就不要贴到公开的频道里。
 
 主机名只保存在内存里：它绝不会写入 `aipager.yaml` 或 `~/.config/aipager/` 下的任何地方。计划内的重启（更新后的重启、**立即重启**、没有服务时的原地重启）会让隧道继续运行，所以地址、菜单按钮和已打开的 Mini App 都照常可用：下一个 aipager 只有在确认是同一次开机、同一个端口、进程正是那个 `cloudflared`（看它的命令行）、它报告的仍是同一个地址（`~/.claude/aipager-tunnel.json` 只保存地址的哈希，从不保存地址本身）并且这个地址能应答之后，才会接管它。其他任何情况都会停掉它并启动一个新的；保留下来的隧道如果 3 分钟内没有 aipager 接管，会被一个小的看守进程停掉。其他任何停止方式（Ctrl+C、`docker stop`、`systemctl stop`）都会停掉隧道，重启电脑或容器会得到新地址。`MINIAPP_KEEP_TUNNEL=0` 会关闭保留。如果 aipager 被直接杀掉（内存不足、`kill -9`），隧道会一直运行，直到 aipager 在开启托管隧道的情况下（启用 Mini App、没有 `MINIAPP_PUBLIC_URL`）再次启动并接管或停掉它，或者直到电脑重启；`aipager uninstall` 也会停掉它。如果隧道中途断了，aipager 会以逐渐拉长的间隔重启它，并重新发布新地址；如果试了几次仍然起不来，按钮会被移除，而不是指向一个已经失效的地址。
 

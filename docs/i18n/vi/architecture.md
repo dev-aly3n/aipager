@@ -1,6 +1,6 @@
 # Kiến trúc
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Ngoài những file này, aipager tạo một thư mục phiên mới khi bạn 
 
 Các file trong thư mục home của bạn không chuyển theo, nên hãy trỏ cả `HOME` tới một thư mục riêng. `aipager start` từ chối chạy khi thư mục bản chạy được đặt mà `HOME` lại là thư mục home thật của bạn, khi thư mục đó không phải đường dẫn tuyệt đối tới một thư mục thuộc về bạn, hoặc khi nó quá dài để làm đường dẫn socket.
 
-`/update` và `/restart` không được tách biệt: chúng tác động lên gói aipager đã cài và dịch vụ `aipager.service`, nên đừng bao giờ gửi chúng tới một bản chạy thử nghiệm.
+`/update` và `/restart` không được tách biệt: chúng tác động lên gói aipager đã cài và dịch vụ `aipager.service`, nên đừng bao giờ gửi chúng tới một bản chạy thử nghiệm. Cũng vì lý do đó, `aipager service` từ chối chạy khi `AIPAGER_INSTANCE_DIR` đã được đặt: hãy chạy bản chạy đó bằng `aipager start`.
 
 `AIPAGER_TELEGRAM_API_BASE` (ví dụ `http://127.0.0.1:41234`) gửi mọi yêu cầu Bot API và mọi lượt tải file tới địa chỉ đó thay vì `https://api.telegram.org`. Địa chỉ đó phải là máy tính này (`localhost` hoặc một địa chỉ loopback), trừ khi đặt `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`, để một lỗi gõ nhầm không thể gửi token của bot đi nơi khác.
 

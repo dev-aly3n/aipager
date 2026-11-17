@@ -1,6 +1,6 @@
 # 아키텍처
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > 이 페이지는 영어 문서를 번역한 거예요. 내용이 서로 다르면 영어 문서가 맞아요. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Telegram에서 시작한 자체 재시작은 대신 들어올 프로세스가 �
 
 홈 폴더 아래의 파일은 옮겨지지 않으니 `HOME`도 별도 폴더로 지정하세요. 인스턴스 폴더를 설정했는데 `HOME`이 내 실제 홈 폴더일 때, 이 폴더가 내 폴더를 가리키는 절대 경로가 아닐 때, 또는 소켓 경로로 쓰기에 너무 길 때 `aipager start`는 실행을 거부해요.
 
-`/update`와 `/restart`는 격리되지 않아요. 설치된 aipager 패키지와 `aipager.service`에 작용하니 테스트 인스턴스에 절대 보내지 마세요.
+`/update`와 `/restart`는 격리되지 않아요. 설치된 aipager 패키지와 `aipager.service`에 작용하니 테스트 인스턴스에 절대 보내지 마세요. 같은 이유로 `AIPAGER_INSTANCE_DIR`가 설정되어 있으면 `aipager service`는 실행을 거부해요. 인스턴스는 `aipager start`로 실행하세요.
 
 `AIPAGER_TELEGRAM_API_BASE`(예: `http://127.0.0.1:41234`)는 모든 Bot API 요청과 파일 다운로드를 `https://api.telegram.org` 대신 그 주소로 보내요. `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1`을 설정하지 않는 한 이 주소는 이 컴퓨터(`localhost`나 루프백 주소)여야 해요. 그래야 오타 하나로 봇 token이 다른 곳으로 가지 않아요.
 

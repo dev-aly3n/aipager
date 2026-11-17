@@ -1,6 +1,6 @@
 # Arsitektur
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Atur `AIPAGER_INSTANCE_DIR` ke folder absolut milikmu, dan setiap file kerja ber
 
 File di folder home-mu tidak ikut pindah, jadi arahkan juga `HOME` ke folder terpisah. `aipager start` menolak berjalan kalau folder instance diatur sementara `HOME` adalah folder home-mu yang asli, kalau folder itu bukan path absolut ke folder milikmu, atau kalau terlalu panjang untuk path soket.
 
-`/update` dan `/restart` tidak terisolasi: keduanya bekerja pada paket aipager yang terpasang dan layanan `aipager.service`, jadi jangan pernah mengirimnya ke instance pengujian.
+`/update` dan `/restart` tidak terisolasi: keduanya bekerja pada paket aipager yang terpasang dan layanan `aipager.service`, jadi jangan pernah mengirimnya ke instance pengujian. Karena alasan yang sama, `aipager service` menolak berjalan kalau `AIPAGER_INSTANCE_DIR` diatur: jalankan instance itu dengan `aipager start`.
 
 `AIPAGER_TELEGRAM_API_BASE` (misalnya `http://127.0.0.1:41234`) mengirim setiap permintaan Bot API dan setiap unduhan file ke alamat itu sebagai ganti `https://api.telegram.org`. Alamat itu harus komputer ini (`localhost` atau alamat loopback) kecuali `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1` diatur, supaya salah ketik tidak bisa mengirim token bot ke tempat lain.
 

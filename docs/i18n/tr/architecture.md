@@ -1,6 +1,6 @@
 # Mimari
 
-<!-- i18n-source: docs/architecture.md @ 7881bd9e -->
+<!-- i18n-source: docs/architecture.md @ b664aeaf -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../architecture.md))
 
@@ -145,7 +145,7 @@ Bunun dışında aipager, sen istediğinde yeni bir oturum klasörü oluşturur 
 
 Ev klasöründeki dosyalar taşınmaz, bu yüzden `HOME` değerini de ayrı bir klasöre yönlendir. Örnek klasörü ayarlıyken `HOME` gerçek ev klasörünse, klasör sana ait bir klasörün mutlak yolu değilse ya da soket yolu için çok uzunsa `aipager start` çalışmayı reddeder.
 
-`/update` ve `/restart` yalıtılmış değildir: kurulu aipager paketine ve `aipager.service` hizmetine etki ederler, bu yüzden onları asla bir test örneğine gönderme.
+`/update` ve `/restart` yalıtılmış değildir: kurulu aipager paketine ve `aipager.service` hizmetine etki ederler, bu yüzden onları asla bir test örneğine gönderme. Aynı nedenle `aipager service`, `AIPAGER_INSTANCE_DIR` ayarlıyken çalışmayı reddeder: örneği `aipager start` ile çalıştır.
 
 `AIPAGER_TELEGRAM_API_BASE` (örneğin `http://127.0.0.1:41234`), her Bot API isteğini ve her dosya indirmesini `https://api.telegram.org` yerine bu adrese gönderir. `AIPAGER_TELEGRAM_API_ALLOW_REMOTE=1` ayarlı değilse bu adres bu bilgisayar olmalıdır (`localhost` ya da bir loopback adresi), böylece bir yazım hatası bot token'ını başka bir yere gönderemez.
 
