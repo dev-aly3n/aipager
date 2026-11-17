@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Redémarrez aipager pour terminer la mise à jour."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ La mise à jour s'est arrêtée sur une erreur inattendue (voir le journal d'aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Le redémarrage prévu n'a pas eu lieu : la nouvelle version est installée, mais l'ancienne tourne toujours. Redémarrez-le vous-même : {command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "Tokens d'entrée et de sortie pour chacun des 7 derniers jours."}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "Les barres ne comptent que les tokens d'entrée et de sortie, car les lectures et écritures du cache sont bien plus grandes."}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Cache lu"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "Cache écrit"}
 {"k": "usage.col.input", "src": "aef36502", "v": "Entrée"}

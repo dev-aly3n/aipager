@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Mulai ulang aipager untuk menyelesaikan pembaruan."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Pembaruan berhenti karena error yang tidak terduga (lihat log aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Mulai ulang yang dijadwalkan tidak terjadi - versi baru sudah terpasang, tapi versi lama masih berjalan. Mulai ulang sendiri: {command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "Token masuk dan keluar untuk tiap hari dalam 7 hari terakhir."}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "Batang hanya menghitung token masuk dan keluar, karena baca dan tulis cache jauh lebih besar."}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Cache dibaca"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "Cache ditulis"}
 {"k": "usage.col.input", "src": "aef36502", "v": "Masuk"}

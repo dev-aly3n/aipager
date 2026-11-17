@@ -51,6 +51,14 @@ class El {
     this._html = v; this.children = [];
   }
   get parentNode() { return this.parent || null; }
+  get firstChild() { return this.children[0] || null; }
+  // Layout widths only for the usage_chart_* scenarios (global.__measure):
+  // a chart day's slot is __measure.slot px, a word 6px per character.
+  get clientWidth() {
+    const m = global.__measure;
+    return m && this._class.split(" ").includes("uchart-day") ? m.slot : undefined;
+  }
+  get offsetWidth() { return global.__measure ? this.textContent.length * 6 : undefined; }
   // Real appendChild MOVES a node that already has a parent. The page
   // relies on that: reveals are parked in a stash and moved into place.
   appendChild(c) {
@@ -878,8 +886,26 @@ const USAGE_BODY = {
     models_title: "By model, last 7 days",
     models: [{ label: "claude-haiku-4-5", cells: ["1.2k", "45", "30.0k", "2.1k"] }],
     note: null, empty: null,
+    // The 7-day chart, oldest first: a zero day, the tallest (2000) sets
+    // the scale, today last.
+    chart: [["2026-11-11", 0], ["2026-11-12", 500], ["2026-11-13", 1000], ["2026-11-14", 2000],
+            ["2026-11-15", 250], ["2026-11-16", 1000], ["2026-11-17", 1500]].map(([day, value], i) =>
+      ({ day, value, text: String(value), today: i === 6, label: i === 6 ? "Today" : null })),
+    chart_aria: "Input and output tokens for each of the last 7 days.",
+    chart_note: "The bars count input and output tokens only, since cache reads and writes are much larger.",
   },
 };
+// usage_chart_*: a slot where everything fits, one where "Today" does not
+// (6 x 5 = 30px > 28 - 4), one where a short weekday does not either.
+const CHART_SLOT = { usage_chart_fits: 40, usage_chart_today: 28, usage_chart_narrow: 16,
+                     usage_chart_resize: 16 };
+if (SCENARIO === "usage_chart_resize") {
+  global.window.addEventListener = (ev, fn) => { if (ev === "resize") global.__resize = fn; };
+}
+if (SCENARIO in CHART_SLOT) global.__measure = { slot: CHART_SLOT[SCENARIO] };
+if (SCENARIO === "usage_no_tokens") {
+  USAGE_BODY.tokens = Object.assign({}, USAGE_BODY.tokens, { empty: "No tokens recorded yet." });
+}
 if (SCENARIO.indexOf("usage_") === 0) {
   // usage_absent: an older or partial grid body without the field.
   FIXTURES["/api/sessions"] = gridOf([row("alpha", "idle")],
@@ -974,6 +1000,9 @@ if (SCENARIO.indexOf("chats_") === 0) {
       ? { ok: true, status: 200, json: () => Promise.resolve(body) }
       : failed ? { ok: false, status: 500, json: () => Promise.resolve({}) }
       : { ok: false, status: 403, json: () => Promise.resolve({ error: "forbidden" }) };
+    if (SCENARIO === "chats_usage_settings_race" && key === "/api/usage" && chat === CHAT_GROUP) {
+      return new Promise((res) => { global.__held.push(() => res(resp)); });
+    }
     if (HOLD[SCENARIO] === key && chat === CHAT_DM && !global.__heldOnce) {
       global.__heldOnce = true;
       return new Promise((res) => { global.__held.push(() => res(resp)); });
@@ -3330,6 +3359,9 @@ function driveUsageOpen() {
       if (fills[0].attrs.style !== "--pct:42") fail("bar 1 style: " + fills[0].attrs.style);
       if (fills[1].attrs.style !== "--pct:100") fail("an over-limit bar is not capped: " +
                                                     fills[1].attrs.style);
+      if (fills[0].className.includes("is-near")) fail("a 42% bar is marked near the limit");
+      if (!fills[1].className.includes("is-near")) fail("a 100% bar is not marked near the limit");
+      checkUsageChart();
       const tables = usageNodes("utable");
       if (tables.length !== 3) fail("expected 3 tables, got " + tables.length);
       if (tables[0].children[1].children.length !== 5) fail("a row has not 1 label + 4 cells");
@@ -3349,6 +3381,110 @@ function driveUsageOpen() {
             fail("showGrid on the Usage tab left the Usage page");
           if (usageFetches() - before !== 3) fail("showGrid on the Usage tab did not refetch");
           console.log("ok: usage tab -> bars, tables, no Back, Sessions and back again");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+// The 7-day chart: 7 bars oldest first, heights against the tallest day,
+// today highlighted and named, a zero day a stub, the note under it.
+function checkUsageChart() {
+  const plots = usageNodes("uchart-plot");
+  if (plots.length !== 1) fail("expected one chart, got " + plots.length);
+  const plot = plots[0];
+  if (plot.attrs.role !== "img" || !plot.attrs["aria-label"]) fail("the chart has no accessible name");
+  if (plot.attrs.dir) fail("the chart fixes its direction, so it would not mirror in RTL");
+  const cols = plot.children;
+  if (cols.length !== 7) fail("expected 7 bars, got " + cols.length);
+  const heights = cols.map(c => c.children[1].attrs.style);
+  const want = ["height:2px", "height:24px", "height:48px", "height:96px", "height:12px",
+                "height:48px", "height:72px"];
+  if (JSON.stringify(heights) !== JSON.stringify(want)) fail("bar heights: " + JSON.stringify(heights));
+  const today = cols.map(c => c.className.includes("is-today"));
+  if (JSON.stringify(today) !== "[false,false,false,false,false,false,true]")
+    fail("today is not the last (newest) bar alone: " + JSON.stringify(today));
+  if (!cols[0].children[1].className.includes("is-zero")) fail("a zero day is not a stub");
+  if (cols[1].children[1].className.includes("is-zero")) fail("a non-zero day is a stub");
+  if (cols[3].children[0].textContent !== "2000") fail("the value above a bar: " + cols[3].children[0].textContent);
+  const days = usageNodes("uchart-day");
+  if (days[6].textContent !== "Today") fail("today's label: " + days[6].textContent);
+  if (!days[0].textContent || days[0].textContent === "Today") fail("a weekday label: " + days[0].textContent);
+  if (byId["usage-body"].textContent.indexOf("The bars count input and output tokens only") === -1)
+    fail("the chart's note is missing");
+}
+
+// The chart's day labels under three widths: "Today" when it fits, else
+// today's weekday; short weekdays, or all narrow when one does not fit.
+function driveUsageChartLabels() {
+  const want = {
+    usage_chart_fits: ["Wed", "Today"],
+    usage_chart_today: ["Wed", "Tue"],
+    usage_chart_narrow: ["W", "T"],
+  }[SCENARIO];
+  setTimeoutReal(() => {
+    byId["maintab-usage"].click();
+    setTimeoutReal(() => {
+      const days = usageNodes("uchart-day").map(d => d.textContent);
+      if (days.length !== 7) fail("expected 7 day labels, got " + days.length);
+      if (days[0] !== want[0] || days[6] !== want[1])
+        fail("day labels: " + JSON.stringify(days) + ", want first/last " + JSON.stringify(want));
+      if (SCENARIO === "usage_chart_narrow" && days.some(d => d.length !== 1))
+        fail("not every label took its narrow form: " + JSON.stringify(days));
+      console.log("ok: chart labels " + SCENARIO);
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+// Narrow first (all labels narrow), then the page widens: the labels go
+// back to "Today" and the short weekdays.
+function driveUsageChartResize() {
+  setTimeoutReal(() => {
+    byId["maintab-usage"].click();
+    setTimeoutReal(() => {
+      const days = () => usageNodes("uchart-day").map(d => d.textContent);
+      if (days()[0] !== "W") fail("narrow first: " + JSON.stringify(days()));
+      if (typeof global.__resize !== "function") fail("no resize listener");
+      global.__measure.slot = 40;
+      global.__resize();
+      if (days()[0] !== "Wed" || days()[6] !== "Today")
+        fail("after widening: " + JSON.stringify(days()));
+      console.log("ok: chart labels follow a resize");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveUsageNoTokens() {
+  setTimeoutReal(() => {
+    byId["maintab-usage"].click();
+    setTimeoutReal(() => {
+      if (usageNodes("uchart").length) fail("a chart shows with no token data");
+      if (byId["usage-body"].textContent.indexOf("No tokens recorded yet.") === -1)
+        fail("the empty text is missing");
+      console.log("ok: no tokens -> no chart");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+// On the Usage tab, a chat switch whose /api/usage answer is slow, then a
+// tap on Settings: Settings asks the new chat itself and drops the tab.
+function driveChatsUsageSettingsRace() {
+  setTimeoutReal(() => {
+    byId["maintab-usage"].click();
+    setTimeoutReal(() => {
+      chipNamed("team").click();           // the group's /api/usage is held
+      byId["maintab-settings"].click();
+      setTimeoutReal(() => {
+        if (byId["view-settings"].hidden) fail("Settings did not open");
+        if (!byId["maintab-usage"].hidden) fail("Settings kept the DM's Usage tab in the group");
+        global.__held.forEach(f => f());   // the late answer changes nothing
+        setTimeoutReal(() => {
+          if (byId["view-settings"].hidden) fail("the late usage answer left Settings");
+          console.log("ok: usage tab -> switch -> settings -> the tab follows the chat");
           process.exit(0);
         }, 10);
       }, 10);
@@ -4461,6 +4597,12 @@ Object.assign(DRIVERS, {
   usage_refused: driveUsageRefused,
   chats_usage: driveChatsUsage,
   chats_usage_settings: driveChatsUsageSettings,
+  chats_usage_settings_race: driveChatsUsageSettingsRace,
+  usage_no_tokens: driveUsageNoTokens,
+  usage_chart_fits: driveUsageChartLabels,
+  usage_chart_today: driveUsageChartLabels,
+  usage_chart_narrow: driveUsageChartLabels,
+  usage_chart_resize: driveUsageChartResize,
   usage_absent: driveUsageHidden,
 });
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

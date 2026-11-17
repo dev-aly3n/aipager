@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "重启 aipager 即可完成更新。"}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ 更新因意外错误而停止（详见 aipager 日志）。"}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ 计划的重启没有发生：新版本已安装，但旧版本仍在运行。请手动重启：{command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "最近 7 天每天的输入和输出 token。"}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "柱形只计入输入和输出 token，因为缓存读取和写入要大得多。"}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "缓存读取"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "缓存写入"}
 {"k": "usage.col.input", "src": "aef36502", "v": "输入"}

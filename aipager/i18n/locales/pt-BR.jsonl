@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Reinicie o aipager para concluir a atualização."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ A atualização parou por um erro inesperado (veja o log do aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ O reinício agendado não aconteceu: a nova versão está instalada, mas a antiga continua rodando. Reinicie por conta própria: {command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "Tokens de entrada e de saída de cada um dos últimos 7 dias."}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "As barras contam só os tokens de entrada e de saída, porque as leituras e gravações de cache são muito maiores."}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Cache lido"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "Cache gravado"}
 {"k": "usage.col.input", "src": "aef36502", "v": "Entrada"}

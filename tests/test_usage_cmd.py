@@ -245,6 +245,26 @@ def test_the_view_has_seven_day_rows_newest_first():
     assert [r["label"] for r in tokens["rows"]] == ["Today", "Last 7 days"]
 
 
+def test_the_chart_is_oldest_first_with_today_last():
+    days = tuple((f"2026-11-{17 - i:02d}", (i * 100, i, 9_000_000, 7)) for i in range(7))
+    chart = usage_view(_snap(days=days, week=(1, 0, 0, 0)), ALL, EN, NOW)["tokens"]["chart"]
+    assert [c["day"] for c in chart] == [f"2026-11-{d}" for d in range(11, 18)]
+    assert [c["today"] for c in chart] == [False] * 6 + [True]
+    assert [c["label"] for c in chart] == [None] * 6 + ["Today"]
+
+
+def test_the_chart_counts_input_and_output_without_cache():
+    days = tuple((f"d{i}", (1200, 34, 9_000_000, 5_000)) for i in range(7))
+    chart = usage_view(_snap(days=days, week=(1, 0, 0, 0)), ALL, EN, NOW)["tokens"]["chart"]
+    assert (chart[0]["value"], chart[0]["text"]) == (1234, "1.2k")
+
+
+def test_the_chart_has_its_name_and_note():
+    tokens = usage_view(_snap(week=(1, 0, 0, 0)), ALL, EN, NOW)["tokens"]
+    assert tokens["chart_aria"] == "Input and output tokens for each of the last 7 days."
+    assert tokens["chart_note"].startswith("The bars count input and output tokens only")
+
+
 def test_an_rtl_reply_renders():
     reading = _reading({"seven_day": Window(83, int(NOW) + 9000)})
     text = usage_html(_snap([reading], today=(1, 1, 1, 1), week=(1, 1, 1, 1)), ALL,

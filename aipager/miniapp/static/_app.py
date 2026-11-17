@@ -3051,9 +3051,90 @@ APP_JS = r"""
     host.appendChild(table);
   }
 
+  // A weekday's short name in the page's language ("Mon", "lun."), or ""
+  // where Intl is missing. day is YYYY-MM-DD, a local date.
+  function weekdayName(day, code, style) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ""));
+    if (!m || typeof Intl === "undefined" || !Intl.DateTimeFormat) { return ""; }
+    try {
+      return new Intl.DateTimeFormat(code || "en", { weekday: style || "short" })
+        .format(new Date(+m[1], +m[2] - 1, +m[3], 12));
+    } catch (e) { return ""; }
+  }
+
+  // The 7-day chart: one bar per day, oldest first in reading order (so it
+  // mirrors in a right-to-left page), input + output tokens, the tallest
+  // day sets the scale, today in the accent colour, a zero day a stub.
+  var CHART_PX = 96;          // the tallest bar's height
+  function usageChart(host, tok, code) {
+    var days = tok.chart || [];
+    if (!days.length) { return; }
+    var max = 0;
+    days.forEach(function (c) { max = Math.max(max, Number(c.value) || 0); });
+    var box = make("div", "uchart");
+    var plot = make("div", "uchart-plot");
+    setAttr(plot, "role", "img");
+    if (tok.chart_aria) { setAttr(plot, "aria-label", plain(tok.chart_aria)); }
+    var labels = make("div", "uchart-days");
+    setAttr(labels, "aria-hidden", "true");
+    var marks = [];           // [label, its first text, its weekday, day, today]
+    days.forEach(function (c) {
+      var v = Math.max(0, Number(c.value) || 0);
+      var col = make("div", c.today ? "uchart-col is-today" : "uchart-col");
+      var val = make("span", "uchart-val");
+      val.textContent = String(c.text === undefined || c.text === null ? v : c.text);
+      var bar = make("span", v > 0 ? "uchart-bar" : "uchart-bar is-zero");
+      var h = max > 0 ? Math.round(v / max * CHART_PX) : 0;
+      setAttr(bar, "style", "height:" + (v > 0 ? Math.max(3, h) : 2) + "px");
+      col.appendChild(val);
+      col.appendChild(bar);
+      plot.appendChild(col);
+      var name = weekdayName(c.day, code, "short");
+      var lab = make("span", c.today ? "uchart-day is-today" : "uchart-day");
+      var first = c.today && c.label ? plain(c.label) : name;
+      lab.appendChild(make("span")).textContent = first;
+      labels.appendChild(lab);
+      marks.push([lab, first, name, c.day, !!(c.today && c.label)]);
+    });
+    box.appendChild(plot);
+    box.appendChild(labels);
+    host.appendChild(box);
+    chartFit = function () { fitChartLabels(marks, code); };
+    chartFit();
+    usageText(host, "sect-note uchart-note", tok.chart_note);
+  }
+
+  // "Today" where it fits under its bar, else the weekday. Weekdays too
+  // long for a narrow screen (Persian, 320px) all take their narrow form.
+  // A word fits when it leaves a little air on each side of its slot. Run
+  // again when the page changes width (rotation, Telegram expanding it).
+  var chartFit = null;
+  function fitChartLabels(marks, code) {
+    var over = function (el) {
+      var word = el.firstChild;
+      return !!word && word.offsetWidth > el.clientWidth - 4;
+    };
+    var put = function (el, text) { el.firstChild.textContent = text; };
+    var names = [];
+    marks.forEach(function (m) { put(m[0], m[1]); });
+    marks.forEach(function (m) {
+      if (!m[4]) { names.push(m); return; }
+      if (m[2] && over(m[0])) { put(m[0], m[2]); names.push(m); }
+    });
+    if (names.some(function (m) { return over(m[0]); })) {
+      names.forEach(function (m) { put(m[0], weekdayName(m[3], code, "narrow")); });
+    }
+  }
+  if (typeof window.addEventListener === "function") {
+    window.addEventListener("resize", function () {
+      if (chartFit && currentView.type === "usage") { chartFit(); }
+    });
+  }
+
   function renderUsage(d) {
     var host = document.getElementById("usage-body");
     host.innerHTML = "";
+    chartFit = null;            // set again when this reading draws a chart
     var plan = d.plan || {};
     if (plan.shown) {
       usageText(host, "sect-title", plan.title, "h3");
@@ -3064,8 +3145,10 @@ APP_JS = r"""
           usageText(card, "usage-line", w.line);
           if (w.state !== "reset") {
             var bar = make("div", "ubar");
-            var fill = make("div", "ubar-fill");
-            setAttr(fill, "style", "--pct:" + Math.max(0, Math.min(100, Number(w.pct) || 0)));
+            var pct = Math.max(0, Math.min(100, Number(w.pct) || 0));
+            // 90% and over: near the limit, in the amber of "needs you".
+            var fill = make("div", pct >= 90 ? "ubar-fill is-near" : "ubar-fill");
+            setAttr(fill, "style", "--pct:" + pct);
             bar.appendChild(fill);
             card.appendChild(bar);
           }
@@ -3081,6 +3164,7 @@ APP_JS = r"""
     if (tok.empty) {
       usageText(host, "sect-note", tok.empty);
     } else {
+      usageChart(host, tok, (d.ui && d.ui.code) || L.code);
       usageTable(host, "", tok.columns, tok.rows, false);
       usageTable(host, tok.days_title, tok.columns, tok.days, false);
       usageTable(host, tok.models_title, tok.columns, tok.models, true);
@@ -4427,6 +4511,7 @@ APP_JS = r"""
       showView("settings");
       updatesAutoWanted = true;                 // opening Settings checks for updates
       loadSettings();
+      refreshUsageHint();                       // Settings polls no grid
     } else {
       showView("grid");
       pollTick();

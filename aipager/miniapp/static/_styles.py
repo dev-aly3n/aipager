@@ -47,6 +47,12 @@ CSS = """
     --line: var(--tg-theme-section-separator-color, color-mix(in srgb, var(--ink) 12%, var(--surface)));
     --fill: color-mix(in srgb, var(--ink) 6%, var(--surface));
     --track: color-mix(in srgb, var(--ink) 8%, var(--canvas));
+    /* A meter's empty part on a card (--track is mixed with the canvas,
+       which in a dark theme is as dark as the card). */
+    --meter-track: color-mix(in srgb, var(--ink) 16%, var(--surface));
+    /* The 7-day chart: other days a quiet tint of the accent, a baseline. */
+    --chart-rest: color-mix(in srgb, var(--accent) 42%, var(--surface));
+    --chart-base: color-mix(in srgb, var(--ink) 35%, var(--surface));
     --accent: var(--tg-theme-button-color, #2481cc);
     --on-accent: var(--tg-theme-button-text-color, #ffffff);
     --lamp-work: var(--accent);
@@ -76,6 +82,9 @@ CSS = """
       --line: var(--tg-theme-section-separator-color, #d9d9d9);
       --fill: var(--tg-theme-secondary-bg-color, #f1f1f1);
       --track: var(--tg-theme-section-separator-color, #d9d9d9);
+      --meter-track: var(--tg-theme-section-separator-color, #d9d9d9);
+      --chart-rest: var(--tg-theme-hint-color, #999999);
+      --chart-base: var(--ink);
       --lamp-work-soft: var(--surface);
       --need-soft: var(--surface);
       --lamp-out: var(--tg-theme-hint-color, #999999);
@@ -1378,13 +1387,34 @@ CSS = """
   .usage-name { margin: 0 0 var(--s2); font-weight: 600; }
   .usage-line { margin: var(--s2) 0 var(--s1); font-size: var(--fs-sm); line-height: var(--lh-sm); }
   .usage-sub { margin: var(--s1) 0 0; font-size: 13px; line-height: 18px; color: var(--ink-3); }
-  .ubar { block-size: 8px; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
+  .ubar { block-size: 8px; border-radius: var(--r-pill); background: var(--meter-track); overflow: hidden; }
   .ubar-fill { block-size: 100%; inline-size: calc(var(--pct, 0) * 1%); border-radius: var(--r-pill); background: var(--accent); }
-  .utable { display: grid; gap: 1px; border-radius: var(--r-card); overflow: hidden; background: var(--line); border: 1px solid var(--line); }
-  .utable-row { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); gap: var(--s2); padding: var(--s2) var(--s3); background: var(--surface); font-size: 13px; line-height: 18px; }
-  .utable-head { color: var(--ink-3); font-weight: 600; }
-  .utable-label { min-width: 0; overflow-wrap: anywhere; }
+  /* 90% and over: the amber the page uses for "needs you". */
+  .ubar-fill.is-near { background: var(--lamp-need); }
+  /* One set of columns for the whole table (rows are subgrids): the
+     number columns take what their header and numbers need, the label
+     column the rest, so a long header wraps in its own column and never
+     runs into the next one. */
+  .utable { display: grid; grid-template-columns: minmax(min(7em, 22%), max-content) repeat(4, auto); row-gap: 1px; border-radius: var(--r-card); overflow: hidden; background: var(--line); border: 1px solid var(--line); }
+  .utable-row { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); grid-template-columns: subgrid; column-gap: 6px; padding: var(--s2) var(--s3); background: var(--surface); font-size: 13px; line-height: 18px; }
+  .utable-head { align-items: end; font-size: 12px; line-height: 15px; color: var(--ink-3); font-weight: 600; }
+  .utable-head .utable-num { justify-self: end; width: min-content; max-inline-size: 100%; overflow-wrap: break-word; hyphens: auto; }
+  .utable-label { min-width: 0; overflow-wrap: break-word; }
   .utable-num { text-align: end; font-variant-numeric: tabular-nums; }
+  /* The 7-day chart: flex rows follow the page's direction, so oldest to
+     newest reads right to left in Persian and Arabic. */
+  .uchart { margin: 0 0 var(--s2); padding: var(--s3) var(--s3) var(--s2); border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); }
+  .uchart-plot { display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--chart-base); }
+  .uchart-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+  .uchart-val { margin-bottom: 4px; font-size: 11px; line-height: 14px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .uchart-bar { inline-size: min(24px, 72%); border-radius: 4px 4px 0 0; background: var(--chart-rest); }
+  .uchart-bar.is-zero { background: var(--chart-base); }
+  .is-today > .uchart-bar { background: var(--accent); }
+  .is-today > .uchart-val { color: var(--ink); font-weight: 600; }
+  .uchart-days { display: flex; gap: 2px; margin-top: 6px; }
+  .uchart-day { flex: 1 1 0; min-width: 0; overflow: hidden; font-size: 11px; line-height: 14px; text-align: center; white-space: nowrap; color: var(--ink-3); }
+  .uchart-day.is-today { color: var(--ink); font-weight: 600; }
+  .uchart-note { margin-bottom: var(--s3); }
 
   /* ---- the problem report page ---------------------------------------- */
   .rp-text { min-height: 88px; max-height: 220px; padding: var(--s3) 14px; resize: none; }

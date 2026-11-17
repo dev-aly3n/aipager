@@ -140,6 +140,15 @@ def test_the_page_shows_by_day_and_by_model(owner_run):
     assert ("By day" in body, "By model, last 7 days" in body) == (True, True)
 
 
+def test_the_page_shows_a_seven_day_chart_with_today_last(owner_run):
+    out = owner_run()["snaps"]["open"]
+    assert (out["chartBars"], out["chartToday"]) == (7, [False] * 6 + [True])
+
+
+def test_the_page_says_the_chart_leaves_cache_out(owner_run):
+    assert "since cache reads and writes are much larger." in owner_run()["snaps"]["open"]["body"]
+
+
 def test_a_model_id_with_markup_stays_text(owner_run):
     out = owner_run()["snaps"]["open"]
     assert ("<b>claude-x</b>" in out["body"], "<b>claude-x" in out["html"]) == (True, False)

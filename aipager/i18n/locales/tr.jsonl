@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Güncellemeyi bitirmek için aipager'ı yeniden başlat."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Güncelleme beklenmedik bir hatayla durdu (aipager günlüğüne bak)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Planlanan yeniden başlatma olmadı: yeni sürüm kurulu ama eskisi hâlâ çalışıyor. Elle yeniden başlat: {command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "Son 7 günün her biri için giriş ve çıkış token'ları."}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "Çubuklar yalnızca giriş ve çıkış token'larını sayar, çünkü önbellek okuma ve yazma çok daha büyüktür."}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Önbellek okuma"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "Önbellek yazma"}
 {"k": "usage.col.input", "src": "aef36502", "v": "Giriş"}

@@ -201,6 +201,12 @@ ROW_DAYS_AGO = Plural("usage.row.days_ago", one="{n} day ago", other="{n} days a
 DAYS_TITLE = Msg("usage.days.title", "By day", note="Mini App Usage page: a heading")
 MODELS_TITLE = Msg("usage.models.title", "By model, last 7 days",
                    note="Mini App Usage page: a heading; rows are model names")
+CHART_ARIA = Msg("usage.chart.aria", "Input and output tokens for each of the last 7 days.",
+                 note="Mini App Usage page: screen-reader name of the 7-day bar chart")
+CHART_NOTE = Msg("usage.chart.note",
+                 "The bars count input and output tokens only, since cache reads and writes "
+                 "are much larger.",
+                 note="Mini App Usage page: the line under the 7-day bar chart")
 
 #: Window order on both surfaces.
 WINDOW_ORDER = ("five_hour", "seven_day", "spend_limit")
@@ -388,6 +394,15 @@ def _view(snapshot, access: UsageAccess, tr, now: float, kind: str) -> dict:
             "models_title": _render(tr, kind, MODELS_TITLE),
             "models": [{"label": model, "cells": _cells(counts, tr)}
                        for model, counts in snapshot.models],
+            # The 7-day chart, oldest day first: input + output tokens (cache
+            # is left out, it would flatten the rest), the day as YYYY-MM-DD
+            # for the page's own weekday name, today's own label.
+            "chart": [{"day": day, "today": back == 0, "value": counts[0] + counts[1],
+                       "text": fmt_tokens(counts[0] + counts[1], tr),
+                       "label": _render(tr, kind, ROW_TODAY) if back == 0 else None}
+                      for back, (day, counts) in reversed(list(enumerate(snapshot.days)))],
+            "chart_aria": _render(tr, kind, CHART_ARIA),
+            "chart_note": _render(tr, kind, CHART_NOTE),
             "note": _render(tr, kind, TOKENS_BEHIND) if snapshot.behind else None,
             "empty": _render(tr, kind, TOKENS_NONE) if empty else None,
         },

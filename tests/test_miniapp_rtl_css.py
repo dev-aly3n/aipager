@@ -227,22 +227,49 @@ _TASKS_ADDED = {
 }
 
 
-#: The Usage page (roadmap 8.131): the window
-#: cards and bars, and the token tables; after ``.updates-again``.
+#: The Usage page (roadmap 8.131): the window cards and bars (on a meter
+#: track, amber near the limit), the 7-day chart and the token tables (one
+#: column set, rows are subgrids); after ``.updates-again``.
 _USAGE_ADDED = {
     ("", ".updates-again"): [
         ["", ".usage-card", [["background", "var(--surface)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["margin-bottom", "var(--s3)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"], ["padding-bottom", "var(--s3)"], ["padding-left", "var(--s4)"], ["padding-right", "var(--s4)"], ["padding-top", "var(--s3)"]]],
         ["", ".usage-name", [["font-weight", "600"], ["margin-bottom", "var(--s2)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"]]],
         ["", ".usage-line", [["font-size", "var(--fs-sm)"], ["line-height", "var(--lh-sm)"], ["margin-bottom", "var(--s1)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "var(--s2)"]]],
         ["", ".usage-sub", [["color", "var(--ink-3)"], ["font-size", "13px"], ["line-height", "18px"], ["margin-bottom", "0"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "var(--s1)"]]],
-        ["", ".ubar", [["background", "var(--track)"], ["block-size", "8px"], ["border-radius", "var(--r-pill)"], ["overflow", "hidden"]]],
+        ["", ".ubar", [["background", "var(--meter-track)"], ["block-size", "8px"], ["border-radius", "var(--r-pill)"], ["overflow", "hidden"]]],
         ["", ".ubar-fill", [["background", "var(--accent)"], ["block-size", "100%"], ["border-radius", "var(--r-pill)"], ["inline-size", "calc(var(--pct, 0) * 1%)"]]],
-        ["", ".utable", [["background", "var(--line)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["display", "grid"], ["gap", "1px"], ["overflow", "hidden"]]],
-        ["", ".utable-row", [["background", "var(--surface)"], ["display", "grid"], ["font-size", "13px"], ["gap", "var(--s2)"], ["grid-template-columns", "minmax(0, 1.4fr) repeat(4, minmax(0, 1fr))"], ["line-height", "18px"], ["padding-bottom", "var(--s2)"], ["padding-left", "var(--s3)"], ["padding-right", "var(--s3)"], ["padding-top", "var(--s2)"]]],
-        ["", ".utable-head", [["color", "var(--ink-3)"], ["font-weight", "600"]]],
-        ["", ".utable-label", [["min-width", "0"], ["overflow-wrap", "anywhere"]]],
+        ["", ".ubar-fill.is-near", [["background", "var(--lamp-need)"]]],
+        ["", ".utable", [["background", "var(--line)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["display", "grid"], ["grid-template-columns", "minmax(min(7em, 22%), max-content) repeat(4, auto)"], ["overflow", "hidden"], ["row-gap", "1px"]]],
+        ["", ".utable-row", [["background", "var(--surface)"], ["column-gap", "6px"], ["display", "grid"], ["font-size", "13px"], ["grid-column", "1 / -1"], ["grid-template-columns", "subgrid"], ["line-height", "18px"], ["padding-bottom", "var(--s2)"], ["padding-left", "var(--s3)"], ["padding-right", "var(--s3)"], ["padding-top", "var(--s2)"]]],
+        ["", ".utable-head", [["align-items", "end"], ["color", "var(--ink-3)"], ["font-size", "12px"], ["font-weight", "600"], ["line-height", "15px"]]],
+        ["", ".utable-head .utable-num", [["hyphens", "auto"], ["justify-self", "end"], ["max-inline-size", "100%"], ["overflow-wrap", "break-word"], ["width", "min-content"]]],
+        ["", ".utable-label", [["min-width", "0"], ["overflow-wrap", "break-word"]]],
         ["", ".utable-num", [["font-variant-numeric", "tabular-nums"], ["text-align", "right"]]],
+        ["", ".uchart", [["background", "var(--surface)"], ["border", "1px solid var(--line)"], ["border-radius", "var(--r-card)"], ["margin-bottom", "var(--s2)"], ["margin-left", "0"], ["margin-right", "0"], ["margin-top", "0"], ["padding-bottom", "var(--s2)"], ["padding-left", "var(--s3)"], ["padding-right", "var(--s3)"], ["padding-top", "var(--s3)"]]],
+        ["", ".uchart-plot", [["align-items", "flex-end"], ["border-bottom", "1px solid var(--chart-base)"], ["display", "flex"], ["gap", "2px"]]],
+        ["", ".uchart-col", [["align-items", "center"], ["display", "flex"], ["flex", "1 1 0"], ["flex-direction", "column"], ["justify-content", "flex-end"], ["min-width", "0"]]],
+        ["", ".uchart-val", [["color", "var(--ink-2)"], ["font-size", "11px"], ["font-variant-numeric", "tabular-nums"], ["line-height", "14px"], ["margin-bottom", "4px"], ["white-space", "nowrap"]]],
+        ["", ".uchart-bar", [["background", "var(--chart-rest)"], ["border-radius", "4px 4px 0 0"], ["inline-size", "min(24px, 72%)"]]],
+        ["", ".uchart-bar.is-zero", [["background", "var(--chart-base)"]]],
+        ["", ".is-today > .uchart-bar", [["background", "var(--accent)"]]],
+        ["", ".is-today > .uchart-val", [["color", "var(--ink)"], ["font-weight", "600"]]],
+        ["", ".uchart-days", [["display", "flex"], ["gap", "2px"], ["margin-top", "6px"]]],
+        ["", ".uchart-day", [["color", "var(--ink-3)"], ["flex", "1 1 0"], ["font-size", "11px"], ["line-height", "14px"], ["min-width", "0"], ["overflow", "hidden"], ["text-align", "center"], ["white-space", "nowrap"]]],
+        ["", ".uchart-day.is-today", [["color", "var(--ink)"], ["font-weight", "600"]]],
+        ["", ".uchart-note", [["margin-bottom", "var(--s3)"]]],
     ],
+}
+
+#: Custom properties the Usage page added to ``:root`` (and the no
+#: color-mix fallback): the meter track and the chart's two tones.
+_ROOT_ADDED = {
+    "": [["--chart-base", "color-mix(in srgb, var(--ink) 35%, var(--surface))"],
+         ["--chart-rest", "color-mix(in srgb, var(--accent) 42%, var(--surface))"],
+         ["--meter-track", "color-mix(in srgb, var(--ink) 16%, var(--surface))"]],
+    "@supports not (color: color-mix(in srgb, red 50%, blue))": [
+        ["--chart-base", "var(--ink)"],
+        ["--chart-rest", "var(--tg-theme-hint-color, #999999)"],
+        ["--meter-track", "var(--tg-theme-section-separator-color, #d9d9d9)"]],
 }
 
 
@@ -262,6 +289,8 @@ _USAGE_TAB_ADDED = {
 def _expected_now(golden: list) -> list:
     out = []
     for ctx, sel, props in golden:
+        if sel == ":root" and ctx in _ROOT_ADDED:
+            props = sorted(props + _ROOT_ADDED[ctx])
         if sel in _PERCENT_BEFORE:
             out.append([ctx, _PERCENT_AFTER, [p for p in props if p[0] != "content"]])
         else:
@@ -364,3 +393,12 @@ def test_percent_is_text():
     assert 'content: "%"' not in CSS
     pct = dict(next(d for _c, s, d in rules() if s == ".lamp-pct"))
     assert pct == {"font-size": "0.72em", "font-weight": "600", "opacity": "0.75"}
+
+
+def test_the_token_rows_keep_a_layout_without_subgrid():
+    """A WebView without subgrid drops ``grid-template-columns: subgrid``
+    and keeps the row's own columns, declared before it in the same rule
+    (the resolver above sees only the last one)."""
+    rule = re.search(r"\.utable-row \{([^}]*)\}", _strip_comments(CSS)).group(1)
+    own = rule.index("grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));")
+    assert own < rule.index("grid-template-columns: subgrid;")

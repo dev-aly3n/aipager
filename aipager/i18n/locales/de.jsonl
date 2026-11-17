@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "Starte aipager neu, um das Update abzuschließen."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ Das Update wurde durch einen unerwarteten Fehler gestoppt (siehe Log von aipager)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ Der geplante Neustart hat nicht stattgefunden: Die neue Version ist installiert, aber die alte läuft noch. Starte es selbst neu: {command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "Eingabe- und Ausgabe-Tokens für jeden der letzten 7 Tage."}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "Die Balken zählen nur Eingabe- und Ausgabe-Tokens, weil Cache-Lesen und -Schreiben viel größer sind."}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "Cache gelesen"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "Cache geschrieben"}
 {"k": "usage.col.input", "src": "aef36502", "v": "Rein"}

@@ -1582,6 +1582,8 @@
 {"k": "upd.summary.waiting", "src": "819e869e", "v": "업데이트를 마치려면 aipager를 재시작하세요."}
 {"k": "upd.unexpected_error", "src": "8507483a", "v": "❌ 예기치 않은 오류로 업데이트가 멈췄어요 (aipager 로그를 확인하세요)."}
 {"k": "upd.watchdog", "src": "3bcff8f7", "v": "⚠️ 예약된 재시작이 일어나지 않았어요. 새 버전은 설치됐지만 이전 버전이 아직 실행 중이에요. 직접 재시작하세요: {command}"}
+{"k": "usage.chart.aria", "src": "0dcfca19", "v": "최근 7일 동안 날마다 쓴 입력 토큰과 출력 토큰이에요."}
+{"k": "usage.chart.note", "src": "2c0694a3", "v": "막대는 입력 토큰과 출력 토큰만 세요. 캐시 읽기와 쓰기는 훨씬 커서 빼 두었어요."}
 {"k": "usage.col.cache_read", "src": "62df4f2a", "v": "캐시 읽기"}
 {"k": "usage.col.cache_write", "src": "d725b361", "v": "캐시 쓰기"}
 {"k": "usage.col.input", "src": "aef36502", "v": "입력"}

@@ -213,7 +213,11 @@ function snap() {
     if (el.classList.contains("ubar")) bars.push(true);
   }
   const body = byId["usage-body"];
+  const cols = all.filter(el => el.classList.contains("uchart-col") &&
+                         body && body.contains(el));
   return {
+    chartBars: cols.length,
+    chartToday: cols.map(c => c.classList.contains("is-today")),
     usageTabShown: shown("maintab-usage"),
     usageTabActive: byId["maintab-usage"].classList.contains("is-active"),
     sessionsTabActive: byId["maintab-sessions"].classList.contains("is-active"),

@@ -2447,6 +2447,12 @@ def test_the_report_harness_detects_a_broken_page(node_bin, tmp_path):
     ("chats_usage", "ok: usage tab + chat without usage -> tab gone, back on Sessions"),
     ("chats_usage_settings", "ok: settings tab + chat switch -> the Usage tab follows the chat"),
     ("usage_absent", "ok: no can_usage -> no Usage tab"),
+    ("usage_no_tokens", "ok: no tokens -> no chart"),
+    ("usage_chart_fits", "ok: chart labels usage_chart_fits"),
+    ("usage_chart_today", "ok: chart labels usage_chart_today"),
+    ("usage_chart_narrow", "ok: chart labels usage_chart_narrow"),
+    ("usage_chart_resize", "ok: chart labels follow a resize"),
+    ("chats_usage_settings_race", "ok: usage tab -> switch -> settings -> the tab follows the chat"),
 ])
 def test_usage_page_scenarios(node_bin, tmp_path, scenario, expected):
     from aipager.miniapp.static import INDEX_HTML
@@ -2502,6 +2508,58 @@ _USAGE_MUTANTS = [
         "      loadSettings();\n",
         "chats_usage_settings", id="settings-switch-asks-the-new-chat"),
     pytest.param(
+        "      refreshUsageHint();                       // Settings polls no grid\n",
+        "",
+        "chats_usage_settings_race", id="opening-settings-asks-for-the-tab"),
+    pytest.param(
+        '            var fill = make("div", pct >= 90 ? "ubar-fill is-near" : "ubar-fill");',
+        '            var fill = make("div", "ubar-fill");',
+        "usage_open", id="near-the-limit-is-amber"),
+    pytest.param(
+        "      var h = max > 0 ? Math.round(v / max * CHART_PX) : 0;",
+        "      var h = max > 0 ? Math.round(v / (max + 1000) * CHART_PX) : 0;",
+        "usage_open", id="the-tallest-day-sets-the-scale"),
+    pytest.param(
+        "    days.forEach(function (c) { max = Math.max(max, Number(c.value) || 0); });",
+        "    days.forEach(function (c) { max = Math.max(max, 1500); });",
+        "usage_open", id="the-scale-is-the-max-not-today"),
+    pytest.param(
+        '      var col = make("div", c.today ? "uchart-col is-today" : "uchart-col");',
+        '      var col = make("div", "uchart-col");',
+        "usage_open", id="today-is-highlighted"),
+    pytest.param(
+        '      setAttr(bar, "style", "height:" + (v > 0 ? Math.max(3, h) : 2) + "px");',
+        '      setAttr(bar, "style", "height:" + h + "px");',
+        "usage_open", id="a-zero-day-is-a-stub"),
+    pytest.param(
+        "      usageChart(host, tok, (d.ui && d.ui.code) || L.code);\n",
+        "",
+        "usage_open", id="the-chart-renders"),
+    pytest.param(
+        "      if (m[2] && over(m[0])) { put(m[0], m[2]); names.push(m); }",
+        "",
+        "usage_chart_today", id="today-gives-way-to-its-weekday"),
+    pytest.param(
+        "      names.forEach(function (m) { put(m[0], weekdayName(m[3], code, \"narrow\")); });",
+        "",
+        "usage_chart_narrow", id="too-long-weekdays-go-narrow"),
+    pytest.param(
+        "      return !!word && word.offsetWidth > el.clientWidth - 4;",
+        "      return false;",
+        "usage_chart_today", id="labels-are-measured"),
+    pytest.param(
+        "      return !!word && word.offsetWidth > el.clientWidth - 4;",
+        "      return true;",
+        "usage_chart_fits", id="a-fitting-label-stays"),
+    pytest.param(
+        "      if (chartFit && currentView.type === \"usage\") { chartFit(); }",
+        "",
+        "usage_chart_resize", id="a-resize-fits-the-labels-again"),
+    pytest.param(
+        "    marks.forEach(function (m) { put(m[0], m[1]); });\n",
+        "",
+        "usage_chart_resize", id="a-refit-starts-from-the-first-texts"),
+    pytest.param(
         "    hideReport();\n    usageDenied = false;\n",
         "    hideReport();\n",
         "chats_usage", id="a-chat-switch-forgets-the-403"),
@@ -2510,8 +2568,8 @@ _USAGE_MUTANTS = [
         "          if (true) {",
         "usage_open", id="no-bar-for-a-reset-window"),
     pytest.param(
-        '"--pct:" + Math.max(0, Math.min(100, Number(w.pct) || 0))',
-        '"--pct:" + Math.max(0, Number(w.pct) || 0)',
+        "var pct = Math.max(0, Math.min(100, Number(w.pct) || 0));",
+        "var pct = Math.max(0, Number(w.pct) || 0);",
         "usage_open", id="bar-capped"),
     pytest.param(
         "        if (res.status === 401) {",
