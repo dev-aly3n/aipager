@@ -174,7 +174,7 @@ def personal(make_bot, tmp_path, h):
     p = tmp_path / "solo.jsonl"
     h.append(p, h.entry("msg_solo", NOW - 30, 42, 7))
     h.idle(h.add_session(bot.registry, "claude-dev", scope=h.OWNER, transcript=p))
-    usage_store.note_plan("dev", {"five_hour": Window(7.0, int(NOW + 3 * 3600))},
+    usage_store.note_plan("dev", {"five_hour": Window(7.0, int(time.time() + 3 * 3600))},
                           SessionLogin("token", "env", "/home/alice/.claude"), now=NOW)
     return bot
 
@@ -254,7 +254,7 @@ def test_no_dollar_in_the_owner_reply_with_a_gateway_and_gpt5(h, world, run_asyn
     h.append(p, h.entry("msg_gpt", NOW - 30, 12_345_678, 9_999, 1_000_000, 5,
                         model="gpt-5"))
     h.add_session(world.registry, "claude-gw__d", scope=h.OWNER, transcript=p)
-    usage_store.note_plan("gw", {"spend_limit": Window(30.0, int(NOW + 3600))},
+    usage_store.note_plan("gw", {"spend_limit": Window(30.0, int(time.time() + 3600))},
                           SessionLogin("gateway", "gw.example.com", "/home/alice/.claude"),
                           now=NOW)
     assert "$" not in _usage(h, world, run_async, h.OWNER, h.OWNER)

@@ -149,7 +149,7 @@ def test_back_returns_to_the_grid(owner_run):
 
 
 def test_a_bar_over_100_is_capped(node_bin, tmp_path, h, world, run_async):
-    usage_store.note_plan("gw", {"spend_limit": Window(150.0, int(NOW + 3600))},
+    usage_store.note_plan("gw", {"spend_limit": Window(150.0, int(time.time() + 3600))},
                           SessionLogin("gateway", "gw.example.com", "/home/alice/.claude"),
                           now=NOW)
     out = _run(node_bin, tmp_path, h, world, run_async, h.OWNER, h.OWNER, OPEN)
