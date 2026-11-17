@@ -410,7 +410,7 @@ may not run what it looks like.`
   can't derive a per-file rule for - a permission-mode switch such as
   auto-accepting all file edits (`acceptEdits`); aipager never selects
   any of these; change modes deliberately with `/mode`.
-- **Stop** - interrupt the turn instead of answering. On a background agent's prompt after Claude's own turn has ended, Stop stops the background agents instead (as `/stop`), and the prompt closes.
+- **Stop** - interrupt the turn instead of answering. A background agent's prompt that opens after Claude's own turn has ended comes as its own message with Allow and Deny; the Stop on the waiting card then stops the background agents instead (as `/stop`), and the prompt closes.
 
 The answer goes to Claude Code through aipager's permission hook, which
 waits up to 20 seconds for it. A prompt that came before the busy

@@ -192,7 +192,7 @@ ls -la /tmp
 - **허용**: 이번 호출을 승인해요.
 - **거부**: 거부해요. Claude는 그 도구를 실행하지 않아요.
 - **항상 허용**: 승인하고, Claude가 제안하는 오래 가는 규칙(“don't ask again for …”)을 더해요. 이 버튼은 **Claude가 그런 규칙을 제안할 때만 나와요**. 규칙을 만들 수 없는 명령(대부분의 복합 명령)에는 카드가 대신 허용 / 거부 / 중지를 보여 주고, 세션 작업 폴더 밖의 읽기 전용 파일 접근(`Read`, `Grep`, `Glob`)도 그래요. Claude Code 2.1.259 이상은 그 자리에 Bash 대화 상자에서는 “switch to auto mode” 줄을, 바깥 읽기 대화 상자에서는 “block reads outside the working directories from now on” 줄을, 파일별 규칙을 만들 수 없는 Write/Edit에서는 모든 파일 편집을 자동으로 받아들이는 것(`acceptEdits`) 같은 권한 모드 전환을 둬요. aipager는 이런 줄을 절대 고르지 않아요. 모드는 `/mode`로 직접 바꾸세요.
-- **중지**: 답하는 대신 작업을 중단해요. Claude의 작업이 끝난 뒤 백그라운드 에이전트의 요청에서 누르면, 중지는 대신 백그라운드 에이전트들을 멈추고(`/stop`처럼요) 요청이 닫혀요.
+- **중지**: 답하는 대신 작업을 중단해요. Claude의 작업이 끝난 뒤에 열린 백그라운드 에이전트의 요청은 허용과 거부가 있는 별도 메시지로 와요. 그때 에이전트를 기다리는 카드의 중지는 대신 백그라운드 에이전트들을 멈추고(`/stop`처럼요) 요청이 닫혀요.
 
 답은 aipager의 권한 hook을 거쳐 Claude Code로 가고, 이 hook은 최대 20초 기다려요. 작업 카드보다 먼저 도착한 요청(그때는 허용과 거부만 있는 별도 메시지로 보내요)도 같은 방식으로 답해요. 그 기다림이 이미 지났으면 버튼이 Claude Code 자체 대화 상자에 답을 입력해요. 그때 거부는 Escape를 눌러요(“No, and tell Claude what to do differently”). 이 키는 중지처럼 Claude의 작업을 끝내고, 카드에 `🚫 jim · 거부됨`이 나와요. 자동 모드에서 프로젝트 밖의 파일을 처음 읽기 전에 Claude Code가 묻는 질문에는 늦게 누른 허용을 입력하지 않아요. 그 Enter가 “Yes, and keep allowing any reads outside the working directories”를 고르게 되기 때문이에요. 그래서 탭하면 터미널에서 답하라고 알려 줘요(거부는 그대로 돼요).
 
