@@ -1127,6 +1127,12 @@ class HookReceiver:
         claudes_own = (source in ("permission_request", "question")
                        and isinstance(tool_info, dict)
                        and not tool_info.get("agent_id"))
+        # A prompt that names no agent (the Notification, or no tool known)
+        # may be an agent's only while one runs: with none running, only
+        # Claude's own turn can have opened it, so it is Claude's own too.
+        unnamed_no_agents = (
+            not (isinstance(tool_info, dict) and tool_info.get("agent_id"))
+            and not (sess.active_subagents or sess.bg_agents))
         if sess.status != Status.INTERACTIVE and not sess.prompt_wait_carry:
             # During the carry (Claude's Stop with an agent's prompt still
             # open) the session is already waiting: a prompt then is one
@@ -1141,7 +1147,7 @@ class HookReceiver:
                 # above the answer, whoever asks (notify draws the prompt
                 # as its own message).
                 context["from_idle"] = moved.wait_from_idle
-                if claudes_own:
+                if claudes_own or unnamed_no_agents:
                     moved.wait_from_idle = False
                 await self.notify_fn(moved, "permission_prompt", context)
             return
