@@ -395,3 +395,83 @@ def test_control_message_behind_claudes_own_turn_is_still_queued(rig, caplog):
     finally:
         for timer in list(getattr(sess, "queued_line_timers", {}).values()):
             timer.cancel()
+
+
+# -- Claude's own prompt while aipager shows IDLE (rev-iter1-002) ------------
+# A Stop hook carrying the turn on, or a false idle: Claude's question comes
+# at PreToolUse, before the parent PreToolUse that would make it BUSY. Its
+# turn runs, so the close goes BUSY; the prompt is still its own message
+# when the job's card is kept above the answer.
+
+def _new_prompt_msg(rig, n):
+    [msg] = [m for m in rig.sent[n:] if m.get("reply_markup") is not None]
+    return msg
+
+
+def test_claudes_own_question_while_idle_is_its_own_message_and_closes_busy(rig, caplog):
+    caplog.set_level(logging.INFO)
+    _after_stop(rig)
+    n = len(rig.sent)
+    rig.question()
+    sess = rig.sess
+    assert sess.status == Status.INTERACTIVE
+    assert not sess.wait_from_idle
+    msg = _new_prompt_msg(rig, n)
+    assert "Only the card" in " ".join(rig.buttons(msg))
+    assert _card_buttons(rig) == []
+    assert any("Claude's prompt while idle - sent as its own message" in m
+               for m in _messages(caplog))
+    rig.tap(msg["msg_id"], "opt0")
+    assert sess.open_prompts() == []
+    assert sess.status == Status.BUSY
+
+
+def test_claudes_own_permission_request_while_idle_closes_busy(rig):
+    _after_stop(rig)
+    n = len(rig.sent)
+    rig.claude_bash("make build")
+    sess = rig.sess
+    assert sess.status == Status.INTERACTIVE
+    assert not sess.wait_from_idle
+    msg = _new_prompt_msg(rig, n)
+    assert _card_buttons(rig) == []
+    rig.tap(msg["msg_id"], "allow")
+    assert sess.open_prompts() == []
+    assert sess.status == Status.BUSY
+
+
+def test_claudes_own_question_during_an_agents_wait_from_idle_closes_busy(rig):
+    _after_stop(rig)
+    rig.agent_bash(BG, CMD, request_id="req-1")
+    sess = rig.sess
+    assert sess.wait_from_idle
+    [agent_msg] = _prompt_msgs(rig)
+    n = len(rig.sent)
+    rig.question()
+    assert not sess.wait_from_idle
+    question_msg = _new_prompt_msg(rig, n)
+    rig.tap(agent_msg["msg_id"], "allow")
+    assert sess.status == Status.INTERACTIVE
+    rig.tap(question_msg["msg_id"], "opt0")
+    assert sess.open_prompts() == []
+    assert sess.status == Status.BUSY
+
+
+def test_notification_naming_no_agent_still_counts_as_a_wait_after_the_turn(rig, tmp_path):
+    """Claude Code's Notification never names the agent (2.1.326), and the
+    tool read from the main transcript is Claude's last one: that proves
+    nothing about whose dialog it is."""
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text(json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash", "id": "toolu_x",
+         "input": {"command": "ls", "description": "ls"}}]}}) + "\n")
+    _after_stop(rig)
+    rig.hook("Notification", notification_type="permission_prompt",
+             message="Claude needs your permission",
+             transcript_path=str(transcript))
+    sess = rig.sess
+    assert sess.status == Status.INTERACTIVE
+    [perm] = sess.open_prompts()
+    assert isinstance(perm["tool_info"], dict)
+    assert not perm["tool_info"].get("agent_id")
+    assert sess.wait_from_idle
