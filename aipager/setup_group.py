@@ -31,7 +31,7 @@ from dataclasses import dataclass, field, replace
 
 from aipager.setup_cmd import (
     EXIT_EXISTING_INSTALL, EXIT_FAILURE, EXIT_NOT_SET_UP, EXIT_OK, EXIT_USAGE,
-    SetupError, _Run, _START_HOW, _daemon_running, _given, _reload_after_write,
+    SetupError, _Run, _start_how, _daemon_running, _given, _reload_after_write,
     _restart_or_refused_step,
 )
 
@@ -673,7 +673,7 @@ def _next_step(doc: dict) -> str:
     if codes & set(PERSON_ONLY_WARNINGS):
         return PERSON_ONLY_STEP
     if not (doc.get("daemon") or {}).get("running"):
-        return (f"Start aipager with {_START_HOW}, then check it with "
+        return (f"Start aipager with {_start_how()}, then check it with "
                 "`aipager doctor --json`.")
     return "Check the group with `aipager doctor --json`."
 

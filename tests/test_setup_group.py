@@ -1097,3 +1097,30 @@ def test_help_names_the_group_forms_and_flags(env):
                  "--root", "--block-edits"):
         assert word in out
     assert env.tg.urls == []
+
+
+# ===========================================================================
+# the next step with no daemon running, from an instance and from a normal install
+# ===========================================================================
+
+def _stopped_doc():
+    return {"daemon": {"running": False, "restart_needed": False},
+            "warnings": [], "changed": ["group"]}
+
+
+def test_group_next_step_of_an_instance_never_names_the_service(monkeypatch, tmp_path):
+    """`aipager service` is the main install's: from an isolated instance the
+    group setup's start hint names only the instance's own `aipager start`."""
+    from aipager import setup_group
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(tmp_path / "inst"))
+    assert setup_group._next_step(_stopped_doc()) == (
+        "Start aipager with `aipager start`, then check it with "
+        "`aipager doctor --json`.")
+
+
+def test_group_next_step_of_a_normal_install_names_the_service(monkeypatch):
+    from aipager import setup_group
+    monkeypatch.delenv("AIPAGER_INSTANCE_DIR", raising=False)
+    step = setup_group._next_step(_stopped_doc())
+    assert "`aipager service install` (background service)" in step, step
+    assert "`aipager start` (foreground)" in step, step
