@@ -909,9 +909,12 @@ class AuthMixin:
             now = _time.monotonic()
             looks = []
             # A session /kill removed is out of every later close's reach:
-            # never a retry for it.
+            # never a retry for it. Nor for one being killed and
+            # relaunched: the relaunch dropped the retry once, before its
+            # kill, and a retry woken meanwhile must not put one back.
             if (sess.status == Status.INTERACTIVE
-                    and self.registry.get(sess.name) is sess):
+                    and self.registry.get(sess.name) is sess
+                    and not sess.relaunch_in_flight):
                 for rec in sess.extra_prompts:
                     if not (isinstance(rec, dict) and rec.get("auto_deny_due")
                             and not rec.get("auto_deny_typing")):
