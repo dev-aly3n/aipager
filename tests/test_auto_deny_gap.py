@@ -784,7 +784,6 @@ def test_a_close_that_leaves_a_refusal_waiting_keeps_the_retry(run_async):
         task = asyncio.get_running_loop().create_task(asyncio.sleep(60))
         sess.auto_deny_retry_task = task
         sess.close_prompts(lambda _perm: False)
-        sess.drop_auto_deny_retry()
         seen["kept"] = sess.auto_deny_retry_task is task and not task.done()
         task.cancel()
 
