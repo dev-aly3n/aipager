@@ -203,6 +203,48 @@ def test_quotes_show_with_a_marker_and_their_credit():
         "> said\n> someone\n> long\n> story\n> pulled")
 
 
+def test_an_expandable_quote_reads_its_blocks_bot_api_10_5():
+    """Bot API 10.5 moved the expandable quote's content from ``text`` to
+    ``blocks``; reading only ``text`` gave Claude nothing from it."""
+    block = {"type": "expandable_blockquote", "blocks": [
+        _para("first ", {"type": "bold", "text": "line"}),
+        _para("second"),
+        {"type": "list", "items": [
+            {"label": "•", "blocks": [_para("point")]},
+            {"label": "•", "blocks": [_para("other"), {"type": "list", "items": [
+                {"label": "1.", "blocks": [_para("inner")]}]}]}]},
+    ]}
+    assert _plain(block) == (
+        "> first line\n> second\n> • point\n> • other\n>   1. inner")
+
+
+def test_an_expandable_quote_of_blocks_keeps_its_credit():
+    assert _plain({"type": "expandable_blockquote", "blocks": [_para("said")],
+                   "credit": ["by ", {"type": "italic", "text": "someone"}]}
+                  ) == "> said\n> by someone"
+
+
+def test_an_expandable_quote_in_the_old_text_shape_still_reads():
+    assert _plain({"type": "expandable_blockquote", "text": "old\nshape",
+                   "credit": "c"}) == "> old\n> shape\n> c"
+
+
+def test_an_expandable_quote_with_both_shapes_shows_only_its_blocks():
+    assert _plain({"type": "expandable_blockquote", "blocks": [_para("new")],
+                   "text": "old"}) == "> new"
+
+
+@pytest.mark.parametrize("block", [
+    {"type": "expandable_blockquote"},
+    {"type": "expandable_blockquote", "blocks": [], "text": ""},
+    {"type": "expandable_blockquote", "blocks": [{"type": "anchor", "name": "x"}],
+     "text": "   "},
+    {"type": "expandable_blockquote", "blocks": "not a list", "text": None},
+], ids=["no-fields", "both-empty", "nothing-readable", "malformed"])
+def test_an_empty_expandable_quote_shows_nothing(block):
+    assert _plain(_para("a"), block, _para("b")) == "a\nb"
+
+
 def test_details_show_the_summary_and_the_content():
     assert _plain({"type": "details", "summary": "More", "blocks": [_para("inside")]}) == "More\ninside"
 

@@ -23,11 +23,13 @@ Shapes (core.telegram.org/bots/api, "Rich messages"):
   through the generic reader, which finds no text in them.
 - ``RichMessage``: ``{"blocks": [RichBlock, ...], "is_rtl": ...}``.
 - ``RichBlock``: an object with a ``type``; text blocks carry ``text``,
-  containers carry ``blocks`` (``blockquote``, ``collage``,
-  ``slideshow``, ``details`` with a ``summary``), ``list`` has ``items``
-  (each with ``label`` and ``blocks``), ``table`` has ``cells`` (rows of
-  cells with ``text``), media blocks have a ``caption``
+  containers carry ``blocks`` (``blockquote``, ``expandable_blockquote``,
+  ``collage``, ``slideshow``, ``details`` with a ``summary``),
+  ``list`` has ``items`` (each with ``label`` and ``blocks``), ``table``
+  has ``cells`` (rows of cells with ``text``), media blocks have a ``caption``
   (``RichBlockCaption``: ``text`` and ``credit``).
+- ``expandable_blockquote`` carried ``text`` before Bot API 10.5; that
+  shape is still read when the block has no readable ``blocks``.
 """
 
 from __future__ import annotations
@@ -141,13 +143,18 @@ def _block_lines(block, depth: int, indent: str) -> list[str]:
     if kind == "pre":
         text = rich_text_plain(block.get("text"), depth + 1)
         return [indent + line for line in text.split("\n")] if text.strip() else []
-    if kind == "blockquote":
+    if kind in ("blockquote", "expandable_blockquote"):
+        # Bot API 10.5 gave the expandable quote ``blocks`` in place of
+        # ``text``; a message from before then still carries ``text``.
         inner = _blocks_lines(block.get("blocks"), depth + 1, "")
+        if not inner:
+            text = rich_text_plain(block.get("text"), depth + 1)
+            inner = text.split("\n") if text.strip() else []
         credit = rich_text_plain(block.get("credit"), depth + 1)
         if credit.strip():
             inner.append(credit)
         return [f"{indent}> {line}" for line in inner]
-    if kind in ("expandable_blockquote", "pullquote"):
+    if kind == "pullquote":
         text = rich_text_plain(block.get("text"), depth + 1)
         credit = rich_text_plain(block.get("credit"), depth + 1)
         inner = [line for line in text.split("\n")] if text.strip() else []

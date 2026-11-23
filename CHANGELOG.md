@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- When you reply to one of Claude's answers that holds an expandable quote, Claude now gets the quote's content; since Telegram's Bot API 10.5 it got nothing from it.
+
 ## [1.6.0] - 2026-11-18
 
 ### Added
