@@ -79,6 +79,7 @@ def test_typed_answers_follow_claude_codes_order(rig):
     assert rig.keys == [] and rig.decisions == []
     assert "another prompt first" in " ".join(c.args[0] for c in q.answer.await_args_list)
     rig.tap(question_msg, "opt0")
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(agent_msg, "allow")
     assert rig.keys == ["Enter", "Enter"]
     assert rig.sess.status == Status.BUSY

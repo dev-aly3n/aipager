@@ -639,7 +639,11 @@ class NotifyMixin:
         8.120): when the card's own prompt went, the card shows the
         Waiting frame with no answer buttons (the others keep theirs), and
         a refusal that waited for its dialog to be on top is typed once it
-        is."""
+        is. With no refusal left waiting, a retry scheduled for one goes
+        (a closed prompt, /stop, a kill: nothing may type later)."""
+        if not any(isinstance(rec, dict) and rec.get("auto_deny_due")
+                   for rec in sess.extra_prompts):
+            self.cancel_auto_deny_retry(sess.name)
         if sess.status != Status.INTERACTIVE:
             return
         card = sess.busy_msg_id

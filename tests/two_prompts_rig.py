@@ -10,6 +10,8 @@ outside effect recorded.
   for Bash, parked on a hook reply channel unless *hook* is False;
 - ``question(...)`` Claude's own AskUserQuestion at PreToolUse;
 - ``tap(msg_id, verb)`` a tap on a message's button;
+- ``elapse(seconds)`` lets time pass for the open prompts' dialog order
+  (a background agent's prompt leaves its gap after the hook's end);
 - ``keys``, ``decisions`` (hook replies), ``sent`` (sendMessage calls),
   ``card_edits`` (the busy card's edits).
 """
@@ -22,6 +24,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 from aipager.dtach import hook_receiver as hr
+from aipager import prompt_stack
 from aipager.dtach import hook_reply, inject
 from aipager.policy import load_policy
 from aipager.scope import Member, Scope
@@ -187,6 +190,25 @@ class Rig:
 
     def timeout(self, request_id):
         self.hook("permission_reply_timeout", aipager_request_id=request_id)
+
+    def elapse(self, seconds: float = prompt_stack.OPEN_GRACE + 0.01) -> None:
+        """Let *seconds* pass for the open prompts' dialog order: each
+        order's stamps (arrival, the hook's timeout, dialog evidence) move
+        back by it, keeping their order. A background (or unknown-launch)
+        agent's prompt is out of its gap once ``OPEN_GRACE`` has passed
+        since its hook's end (aipager/prompt_stack.py ``dialog_gap``): in
+        the field a tap comes seconds after the timeout, not in the same
+        instant."""
+        for perm in self.sess.open_prompts():
+            info = perm.get("tool_info") if isinstance(perm, dict) else None
+            order = info.get("order") if isinstance(info, dict) else None
+            if not isinstance(order, dict):
+                continue
+            for key in ("arrived", "timed_out_at", "dialog_seen_at"):
+                value = order.get(key)
+                if (isinstance(value, (int, float)) and not isinstance(value, bool)
+                        and value > 0):
+                    order[key] = value - seconds
 
     # -- what the chat shows -------------------------------------------------
 

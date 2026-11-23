@@ -1014,6 +1014,7 @@
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} todavía está arrancando: vuelve a intentarlo en un momento"}
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "Claude Code muestra primero otra solicitud: responde esa antes que esta."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "esta solicitud ya no está abierta"}
+{"k": "toast.prompt_opening", "src": "ae9484f3", "v": "Claude Code todavía está abriendo esta solicitud en la terminal, así que vuelve a tocarla en un momento."}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "aipager no puede saber qué solicitud muestra primero Claude Code, así que responde esta en la terminal."}
 {"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "Claude Code ya rechazó esta solicitud por su cuenta, así que la pregunta ya no está abierta."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "Claude está terminando su tarea, así que vuelve a tocar esta solicitud en un momento."}

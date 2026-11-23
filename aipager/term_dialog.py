@@ -66,6 +66,10 @@ OTHER = "other"
 DIALOG_OPEN = " ".join(("dialog", "open"))
 #: The record's status while a dialog is up.
 WAITING = "waiting"
+#: The ``waitingFor`` Claude Code writes while a permission dialog is up
+#: (2.1.326, live). Compared, never shown; two words for the same reason
+#: as :data:`DIALOG_OPEN`.
+PERMISSION_PROMPT = " ".join(("permission", "prompt"))
 
 # -- constants (live, Claude Code 2.1.311, release harness 2026-10-28) ---------
 
@@ -127,6 +131,23 @@ _now_mono = time.monotonic
 def record_waiting(entry: dict | None) -> bool:
     """Whether *entry* (a normalised registry entry) says a dialog is up."""
     return isinstance(entry, dict) and entry.get("status") == WAITING
+
+
+def permission_waiting_since(entry: dict | None, since_wall: float) -> float | None:
+    """The record's ``statusAt`` (wall seconds) when *entry* says a
+    permission dialog is up (``status`` waiting, ``waitingFor``
+    :data:`PERMISSION_PROMPT`) since no earlier than *since_wall*; else
+    None. Never raises."""
+    try:
+        if not (record_waiting(entry)
+                and entry.get("waitingFor") == PERMISSION_PROMPT):
+            return None
+        at = entry.get("statusAt")
+        if isinstance(at, bool) or not isinstance(at, (int, float)):
+            return None
+        return float(at) if float(at) >= since_wall else None
+    except Exception:  # noqa: BLE001 - a reader never raises
+        return None
 
 
 def explained_by_hooks(sess) -> bool:

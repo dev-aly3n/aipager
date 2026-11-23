@@ -44,10 +44,16 @@ def test_place(order, expected):
     assert ps.place(order, NOW) == expected
 
 
-def test_a_single_prompt_is_always_yes():
-    for target in (own(1.0), agent(NOW - 1, "background", request_id="r"),
-                   agent(1.0, "unknown")):
+def test_a_single_prompt_out_of_any_gap_is_yes():
+    for target in (own(1.0), agent(1.0, "unknown")):
         assert ps.keys_verdict(target, [], NOW) == "yes"
+
+
+def test_a_single_parked_background_prompt_is_opening():
+    """Its dialog is not in the terminal while its hook waits (and after,
+    until it is drawn and settled): no key reaches it."""
+    assert ps.keys_verdict(agent(NOW - 1, "background", request_id="r"), [],
+                           NOW) == "opening"
 
 
 @pytest.mark.parametrize("target, others, expected", [

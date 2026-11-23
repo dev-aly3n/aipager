@@ -3678,8 +3678,10 @@ class TrackedSession:
 
     def keys_verdict(self, perm, now: float) -> str:
         """Whether keys typed now reach open prompt *perm*'s dialog:
-        ``"yes"``, ``"behind"`` or ``"unknown"`` (aipager.prompt_stack).
-        Always ``"yes"`` with one prompt open."""
+        ``"yes"``, ``"behind"``, ``"unknown"`` or ``"opening"``
+        (aipager.prompt_stack). With one prompt open: ``"yes"``, or
+        ``"opening"`` while a background (or unknown-launch) agent's
+        dialog is still entering the terminal after its hook gave up."""
         def order_of(p) -> dict:
             info = p.get("tool_info") if isinstance(p, dict) else None
             order = info.get("order") if isinstance(info, dict) else None

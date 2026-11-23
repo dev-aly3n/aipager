@@ -1,0 +1,330 @@
+"""A rule's automatic Deny of a background agent's prompt in its gap.
+
+The agent's dialog enters Claude Code's terminal only once its hook is
+gone (and a fresh dialog ignores a key for a moment), so the Escape waits:
+it is typed once, when the gap closes (Claude Code's record proved the
+dialog up for a moment, or the grace after the hook's end ran out), on a
+retry nothing else has to wake. A prompt closed, a /stop or a turn end
+during the wait types nothing and leaves no retry behind.
+
+Every retry runs on one event loop: each test plays its datagrams and taps
+inside one ``run_async`` coroutine and awaits the bot's retry task. The
+wait goes through ``auth._sleep`` (replaced here; it moves the prompt's
+stamps back by the delay, as time passing would).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+import tests.two_prompts_rig as rigmod
+from aipager import prompt_gap, prompt_stack
+from aipager.bot import auth
+from aipager.scope import Member, Scope
+from aipager.state import Status
+from tests.two_prompts_rig import ALICE, BG, BOB, CARD, GROUP, S, Rig
+
+WRITE = {"file_path": "/src/a.py", "content": "x"}
+
+
+def deny_write_scopes():
+    return [Scope(chat_id=GROUP, kind="group", label="team", deny_tools=("Write",),
+                  members=(Member(id=ALICE, label="alice", role="owner"),
+                           Member(id=BOB, label="bob", role="user")))]
+
+
+@pytest.fixture
+def drig(mk_bot, monkeypatch, run_async):
+    monkeypatch.setattr(rigmod, "scopes", deny_write_scopes)
+    rig = Rig(mk_bot, monkeypatch, run_async)
+    rig.sess.last_driver_user_id = BOB
+    rig.record = None
+
+    async def _record(sess):
+        return rig.record(sess) if callable(rig.record) else rig.record
+
+    monkeypatch.setattr(prompt_gap, "_record", _record)
+    return rig
+
+
+def datagram(rig, event, **fields) -> bytes:
+    rig.recv._recent_fingerprints.clear()
+    return json.dumps(dict({"session": S, "hook_event_name": event,
+                            "transcript_path": "", "_seq": next(rig.n)},
+                           **fields)).encode()
+
+
+def agent_write(rig, *, request_id="req-bg-w"):
+    fields = {"tool_name": "Write", "tool_input": WRITE, "agent_id": BG,
+              "agent_type": "ship-reviewer"}
+    if request_id:
+        fields.update(aipager_reply_addr="/nonexistent/reply-bg.sock",
+                      aipager_request_id=request_id)
+    return datagram(rig, "PermissionRequest", **fields)
+
+
+def tap_update(msg_id, verb, uid):
+    q = MagicMock()
+    q.data = f"{S}:{verb}"
+    q.from_user = MagicMock(id=uid)
+    q.message = MagicMock()
+    q.message.chat = MagicMock(id=GROUP)
+    q.message.chat_id = GROUP
+    q.message.message_id = msg_id
+    q.message.text = "🔐 api · Permission needed"
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    q.edit_message_reply_markup = AsyncMock()
+    u = MagicMock()
+    u.callback_query = q
+    u.effective_chat = q.message.chat
+    u.effective_user = q.from_user
+    u.message = None
+    return u
+
+
+def due_orders(sess):
+    return [rec["perm"]["tool_info"]["order"] for rec in sess.extra_prompts
+            if isinstance(rec, dict) and rec.get("auto_deny_due")]
+
+
+def fake_sleep(monkeypatch, rig):
+    """``auth._sleep`` that records the delay and moves every open
+    prompt's stamps back by it (the time passing)."""
+    delays: list[float] = []
+
+    async def _sleep(delay):
+        delays.append(delay)
+        assert len(delays) < 20, "the retry did not settle"
+        # Every order, a refusal's too when the session no longer waits
+        # (open_prompts() lists none then).
+        perms = list(rig.sess.open_prompts()) + [
+            rec.get("perm") for rec in rig.sess.extra_prompts if isinstance(rec, dict)]
+        orders = {id(o): o for o in (prompt_gap.order_of(p) for p in perms)
+                  if o is not None}
+        for order in orders.values():
+            for key in ("arrived", "timed_out_at", "dialog_seen_at"):
+                if order.get(key):
+                    order[key] -= delay
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(auth, "_sleep", _sleep)
+    return delays
+
+
+async def drain(bot):
+    """Await the session's retries until none is pending."""
+    for _ in range(10):
+        task = bot.auto_deny_retry_task(S)
+        if task is None or task.done():
+            return
+        try:
+            await task
+        except asyncio.CancelledError:
+            return
+
+
+def blocked_notices(rig):
+    return [m for m in rig.sent if "blocked" in (m.get("text") or "")]
+
+
+def _extra_waiting(drig):
+    """Claude's own question open, then the agent's refused Write whose
+    hook decision fails (a due refusal, parked, behind the question)."""
+    drig.launch(BG)
+    drig.question()
+    drig.hook_ok = False
+    drig.hook("PermissionRequest", tool_name="Write", tool_input=WRITE, agent_id=BG,
+              agent_type="ship-reviewer", aipager_reply_addr="/nonexistent/reply-bg.sock",
+              aipager_request_id="req-bg-w")
+    assert drig.keys == []
+    assert len(due_orders(drig.sess)) == 1
+
+
+def test_due_refusal_waits_through_gap_then_types_escape(drig, monkeypatch, run_async):
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def go():
+        delays = fake_sleep(monkeypatch, drig)
+        await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
+        drig.keys.clear()
+        n_notices = len(blocked_notices(drig))
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        seen["keys_at_timeout"] = list(drig.keys)
+        seen["pending"] = bot.pending_auto_deny_retry(S)
+        await asyncio.sleep(0)
+        await drain(bot)
+        seen["delays"] = delays
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert seen["keys_at_timeout"] == []
+    assert seen["pending"] is True
+    assert seen["delays"][0] == pytest.approx(prompt_stack.DIALOG_SETTLE, abs=0.2)
+    assert drig.keys == ["Escape"]
+    assert seen["notices"] == 1
+    assert sess.open_prompts() == []
+    assert sess.status == Status.BUSY
+    assert not bot.pending_auto_deny_retry(S)
+
+
+def test_probe_finds_record_and_reschedules_to_seen_plus_settle(
+        drig, monkeypatch, run_async):
+    _extra_waiting(drig)
+    bot = drig.bot
+
+    def _record(sess):
+        [order] = due_orders(sess)
+        gone = order["timed_out_at"]
+        wall_gone = time.time() - (time.monotonic() - gone)
+        return {"status": "waiting", "waitingFor": "permission prompt",
+                "statusAt": wall_gone + 0.3}
+
+    drig.record = _record
+    seen = {}
+
+    async def go():
+        delays = fake_sleep(monkeypatch, drig)
+        await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
+        drig.keys.clear()
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        await asyncio.sleep(0)
+        await drain(bot)
+        seen["delays"] = list(delays)
+
+    run_async(go())
+    # The probe at timeout + settle finds the record (waiting from 0.3 s
+    # after the timeout): the gap closes 0.3 s later, not at the grace.
+    assert seen["delays"][0] == pytest.approx(2.0, abs=0.2)
+    assert seen["delays"][1] == pytest.approx(0.3, abs=0.2)
+    assert drig.keys == ["Escape"]
+
+
+def test_close_during_wait_types_nothing_and_leaves_no_task(
+        drig, monkeypatch, run_async):
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def go():
+        fake_sleep(monkeypatch, drig)
+        await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
+        drig.keys.clear()
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        task = bot.auto_deny_retry_task(S)
+        seen["before"] = bot.pending_auto_deny_retry(S)
+        # The turn ended at the dialog (or /stop): every prompt closed, the
+        # session no longer waiting, and the closers tell the bot.
+        sess.close_all_prompts()
+        bot.registry.transition(sess.name, Status.IDLE)
+        await bot._after_prompts_changed(sess, {"inline_closed": False})
+        seen["after"] = bot.pending_auto_deny_retry(S)
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        await drain(bot)
+
+    run_async(go())
+    assert seen["before"] is True
+    assert seen["after"] is False
+    assert drig.keys == []
+
+
+def _left_the_wait(drig, monkeypatch, run_async, *, gap_over):
+    """The retry is scheduled, then the session leaves the wait before it
+    fires (no closer ran yet: the record is still there). *gap_over*: by
+    then the dialog's gap is over too. Returns what was seen."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def go():
+        delays = fake_sleep(monkeypatch, drig)
+        await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
+        drig.keys.clear()
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        seen["before"] = bot.pending_auto_deny_retry(S)
+        n = len(delays)
+        sess.status = Status.IDLE
+        if gap_over:
+            for order in due_orders(sess):
+                order["timed_out_at"] -= prompt_stack.OPEN_GRACE
+        await drain(bot)
+        seen["after"] = bot.pending_auto_deny_retry(S)
+        seen["retries"] = len(delays) - n
+
+    run_async(go())
+    return seen
+
+
+def test_stop_during_wait_types_nothing(drig, monkeypatch, run_async):
+    """The retry fires with the gap over: only its check that the session
+    still waits on the prompt keeps the Escape out."""
+    seen = _left_the_wait(drig, monkeypatch, run_async, gap_over=True)
+    assert seen["before"] is True
+    assert drig.keys == []
+    assert seen["after"] is False
+    assert len(due_orders(drig.sess)) == 1
+
+
+def test_stop_during_wait_schedules_no_further_retry(drig, monkeypatch, run_async):
+    """The retry fires still in the gap: with the session no longer
+    waiting, no later retry is scheduled."""
+    seen = _left_the_wait(drig, monkeypatch, run_async, gap_over=False)
+    assert seen["before"] is True
+    assert seen["retries"] == 1
+    assert seen["after"] is False
+    assert drig.keys == []
+
+
+def test_lone_auto_deny_in_gap_becomes_due_and_types_after_grace(
+        drig, monkeypatch, run_async):
+    """An agent's refused tool with no reply channel: its dialog appears
+    only once the hook is gone, so the Escape waits the grace instead of
+    going into the input line at once."""
+    drig.launch(BG)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def go():
+        delays = fake_sleep(monkeypatch, drig)
+        await drig.recv._on_datagram(agent_write(drig, request_id=""))
+        seen["keys_at_arrival"] = list(drig.keys)
+        seen["due"] = len(due_orders(sess))
+        seen["pending"] = bot.pending_auto_deny_retry(S)
+        seen["status"] = sess.status
+        await asyncio.sleep(0)
+        await drain(bot)
+        seen["delays"] = list(delays)
+
+    run_async(go())
+    assert seen["keys_at_arrival"] == []
+    assert seen["due"] == 1
+    assert seen["pending"] is True
+    assert seen["status"] == Status.INTERACTIVE
+    assert seen["delays"][0] == pytest.approx(prompt_stack.OPEN_GRACE, abs=0.2)
+    assert drig.keys == ["Escape"]
+    assert len(blocked_notices(drig)) == 1
+    assert sess.open_prompts() == []
+    assert sess.status == Status.BUSY
+
+
+def test_control_claudes_own_lone_auto_deny_types_at_once(drig):
+    """Claude's own refused tool with no hook: its dialog is up from
+    arrival, so the Escape goes in at once, as before."""
+    drig.hook("PermissionRequest", tool_name="Write", tool_input=WRITE,
+              tool_use_id="toolu_w1")
+    assert drig.keys == ["Escape"]
+    assert not drig.bot.pending_auto_deny_retry(S)

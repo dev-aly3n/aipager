@@ -16,6 +16,8 @@ import time
 
 import pytest
 
+from aipager import i18n
+from aipager.bot.callbacks import PROMPT_OPENING
 from aipager.state import Status
 from tests.two_prompts_rig import BG, CARD, GROUP, OTHER, TRIGGER, Rig, answers
 
@@ -163,11 +165,27 @@ def test_tap_before_the_deadline_answers_through_the_hook(rig):
     assert rig.keys == []
 
 
+def test_tap_right_after_the_timeout_types_nothing_yet(rig):
+    """The agent's dialog is drawn only once the hook is gone, and a fresh
+    dialog ignores a key for a moment: the tap is refused, buttons kept."""
+    _after_stop(rig)
+    rig.agent_bash(BG, CMD, request_id="req-1")
+    [msg] = _prompt_msgs(rig)
+    rig.timeout("req-1")
+    q = rig.tap(msg["msg_id"], "allow")
+    assert answers(q) == [i18n.get("en").text(PROMPT_OPENING)]
+    assert rig.keys == []
+    assert rig.decisions == []
+    assert len(rig.sess.open_prompts()) == 1
+
+
 def test_tap_after_the_timeout_types_the_answer(rig):
     _after_stop(rig)
     rig.agent_bash(BG, CMD, request_id="req-1")
     [msg] = _prompt_msgs(rig)
     rig.timeout("req-1")
+    [perm] = rig.sess.open_prompts()
+    perm["tool_info"]["order"]["timed_out_at"] = time.monotonic() - 4.01
     rig.tap(msg["msg_id"], "allow")
     assert rig.keys
     assert rig.decisions == []

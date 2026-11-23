@@ -422,5 +422,6 @@ def test_named_then_unnamed_notification_tap_ends_idle(rig):
     msg = _only(_new_prompts(rig, before))
     rig.timeout(REQ_BG)
     _unnamed(rig)
+    rig.elapse()  # past the agent's dialog draw after the hook's end
     rig.tap(msg, "allow")
     assert rig.sess.status == Status.IDLE

@@ -130,6 +130,7 @@ def test_q6_rm_hook_answered_then_agent_alone_types(cenv):
     cenv.rig.timeout("req-bg")
     cenv.rm(request_id="req-rm")
     cenv.rig.tap(extra_ids(cenv)[0], "deny")
+    cenv.rig.elapse()  # past the agent's dialog draw after its hook's end
     cenv.rig.tap(CARD, "allow")
     assert cenv.rig.keys != []
 

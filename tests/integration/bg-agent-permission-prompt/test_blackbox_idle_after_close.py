@@ -66,6 +66,7 @@ def _close(rig, how):
         rig.tap(msg, "deny")
     elif how == "keys-after-timeout":
         rig.timeout(REQ)
+        rig.elapse()  # the agent's dialog is drawn after the hook's end
         rig.tap(msg, "allow")
     elif how == "terminal-tool-ran":
         rig.timeout(REQ)

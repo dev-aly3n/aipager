@@ -342,6 +342,13 @@ PROMPT_ORDER_UNKNOWN = Msg(
     "in the terminal.",
     note="Pop-up: two prompts are open and the order Claude Code shows them in is not "
          "known, so typing could answer the wrong one; nothing was typed")
+PROMPT_OPENING = Msg(
+    "toast.prompt_opening",
+    "Claude Code is still opening this prompt in the terminal, so tap it again in a "
+    "moment.",
+    note="Pop-up: the permission prompt's own wait just ended and an agent's dialog is "
+         "only now entering Claude Code's terminal (or is not there yet); a key typed "
+         "now would land in the input line, so nothing was typed and the buttons stay")
 PROMPT_REFUSED_CLOSED = Msg(
     "toast.prompt_refused_closed",
     "Claude Code already refused this by itself, so the question is no longer open.",
@@ -2596,7 +2603,12 @@ class CallbackDispatchMixin:
 
         Also refused, whatever is open, while the session is parked on a
         Claude Code background job: no key goes to a parked client. An
-        answer through the permission hook (no keys) is not asked here."""
+        answer through the permission hook (no keys) is not asked here.
+
+        And refused while the prompt's dialog is still entering the
+        terminal (``"opening"``: a background agent's, right after its hook
+        gave up): Claude Code's record is read once for evidence that it
+        is on screen, and the tap waits for the next one otherwise."""
         if _parked(sess):
             log.info("[%s] tap refused: parked on a background job", sess.label)
             from aipager.bot.session_ops import BG_TOAST_ANSWER_REFUSED
@@ -2606,9 +2618,22 @@ class CallbackDispatchMixin:
         if not isinstance(perm, dict) or not perm:
             return False
         verdict = sess.keys_verdict(perm, time.monotonic())
+        if verdict == "opening":
+            from aipager import prompt_gap
+            if await prompt_gap.look_for_dialog(sess, perm):
+                verdict = sess.keys_verdict(perm, time.monotonic())
+            if sess.prompt_record_of(perm) == (None, None):
+                log.info("[%s] tap refused: its prompt closed meanwhile",
+                         sess.label)
+                await self._safe_answer(query, person.text(PROMPT_EXPIRED))
+                return True
         if verdict == "yes":
             return False
-        if verdict == "behind":
+        if verdict == "opening":
+            log.info("[%s] tap refused: its dialog is still opening in the "
+                     "terminal", sess.label)
+            await self._safe_answer(query, person.text(PROMPT_OPENING))
+        elif verdict == "behind":
             log.info("[%s] tap refused: another prompt is on top", sess.label)
             await self._safe_answer(query, person.text(PROMPT_BEHIND))
         else:

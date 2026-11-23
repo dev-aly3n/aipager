@@ -236,6 +236,7 @@ def test_timed_out_agent_typed_after_question_answered(rig):
     agent, question = timed_out_agent_first(rig)
     rig.tap(question, "opt0")
     typed = len(rig.keys)
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(agent, "allow")
     assert len(rig.keys) > typed
 

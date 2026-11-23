@@ -235,6 +235,7 @@ def test_survivor_typed_once_its_hook_gave_up(rig, interrupt, order):
     rig.timeout("req-bg")
     interrupt()
     rig.hook_ok = False
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(surface(rig, order, "bg"), "allow")
     assert rig.keys != []
 
