@@ -857,6 +857,198 @@ def test_a_relaunch_whose_old_claude_outlives_the_kill_keeps_its_refusal(
     assert drig.keys == ["Escape"]
 
 
+def test_a_still_stopping_relaunch_types_its_kept_refusal_with_no_other_event(
+        drig, monkeypatch, run_async):
+    """still_stopping drops the retry before the kill and keeps the
+    refusal (the old claude and its dialog live on). Once the relaunch is
+    over the runner looks again by itself: the retry is back and types the
+    one Escape when the gap closes, with no prompt event and no manual run."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    _kill_ok(monkeypatch)
+    launches = _launch_fails(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", MagicMock(
+        return_value=MagicMock(is_socket=MagicMock(return_value=True))))
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        _delays, n_notices = await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        outcome = await bot._kill_and_relaunch_core(
+            sess, target_mode="default", interrupt_first=False)
+        seen["reason"] = outcome.reason
+        seen["pending_after"] = (bot.pending_auto_deny_retry(S)
+                                 and bot.auto_deny_retry_task(S) is not task)
+        seen["keys_after"] = list(drig.keys)
+        await _wait_out(task)
+        seen["old_cancelled"] = task.cancelled()
+        hold.set()
+        await drain(bot)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert seen["reason"] == "still_stopping"
+    assert launches == []
+    assert seen["old_cancelled"] is True
+    assert seen["pending_after"] is True
+    assert seen["keys_after"] == []
+    assert drig.keys == ["Escape"]
+    assert seen["notices"] == 1
+    assert not bot.pending_auto_deny_retry(S)
+
+
+def test_a_relaunch_refused_after_its_retry_woke_puts_the_retry_back(
+        drig, monkeypatch, run_async):
+    """The retry woke for its record probe while a relaunch was checking
+    its conversation (``_resume_target``, which may take seconds), so it
+    scheduled none (``relaunch_in_flight``). The relaunch then refuses
+    (bg_busy) before any kill: the old claude's dialog still waits, so its
+    refusal gets its retry back and types its Escape once the gap closes."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    sess.claude_session_id = "conv-1"
+    kills = _kill_ok(monkeypatch)
+    launches = _launch_fails(monkeypatch)
+    resume_hold = asyncio.Event()
+    seen = {"reads": 0}
+
+    async def _resume_target(resume_id, *, force):
+        seen["resume_checked"] = resume_id
+        await resume_hold.wait()
+        return resume_id, ("bg_busy", ())
+
+    monkeypatch.setattr(bot, "_resume_target", _resume_target)
+
+    async def _record(s):
+        seen["reads"] += 1
+        if s is sess and "relaunch" not in seen:
+            seen["relaunch"] = asyncio.get_running_loop().create_task(
+                bot._kill_and_relaunch_core(sess, target_mode="default",
+                                            interrupt_first=False))
+            while "resume_checked" not in seen:
+                await asyncio.sleep(0)
+            seen["in_flight"] = (sess.relaunch_in_flight, sess.status)
+        return None
+
+    monkeypatch.setattr(prompt_gap, "_record", _record)
+
+    async def go():
+        delays, n_notices = await _due_after_timeout(drig, monkeypatch)
+        await _wait_out(bot.auto_deny_retry_task(S))
+        seen["after_probe"] = sess.auto_deny_retry_task
+        seen["keys_during"] = list(drig.keys)
+        resume_hold.set()
+        outcome = await seen["relaunch"]
+        seen["reason"] = outcome.reason
+        seen["pending_after"] = bot.pending_auto_deny_retry(S)
+        await drain(bot)
+        seen["delays"] = list(delays)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert seen["in_flight"] == (True, Status.INTERACTIVE)
+    assert seen["after_probe"] is None
+    assert seen["keys_during"] == []
+    assert seen["reason"] == "bg_busy"
+    assert kills == [] and launches == []
+    assert seen["pending_after"] is True
+    assert drig.keys == ["Escape"]
+    assert seen["notices"] == 1
+    assert not bot.pending_auto_deny_retry(S)
+
+
+def test_a_relaunch_whose_kill_raises_runs_its_kept_refusal_again(
+        drig, monkeypatch, run_async):
+    """``inject.kill_session`` raising leaves the old claude (and its
+    dialog) where it was: the error still reaches the caller, and the
+    refusal the relaunch kept gets its retry back."""
+    from aipager.dtach import inject
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    launches = _launch_fails(monkeypatch)
+
+    async def _kill(name):
+        raise OSError("kill failed")
+
+    monkeypatch.setattr(inject, "kill_session", _kill)
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        _delays, n_notices = await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        try:
+            await bot._kill_and_relaunch_core(
+                sess, target_mode="default", interrupt_first=False)
+        except OSError:
+            seen["raised"] = True
+        seen["flag"] = sess.relaunch_in_flight
+        seen["pending_after"] = (bot.pending_auto_deny_retry(S)
+                                 and bot.auto_deny_retry_task(S) is not task)
+        hold.set()
+        await _wait_out(task)
+        await drain(bot)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert seen["raised"] is True
+    assert seen["flag"] is False
+    assert launches == []
+    assert seen["pending_after"] is True
+    assert drig.keys == ["Escape"]
+    assert seen["notices"] == 1
+
+
+@pytest.mark.parametrize("how", ["refused", "raised"])
+def test_a_refused_bring_back_runs_its_kept_refusal_again(
+        drig, monkeypatch, run_async, how):
+    """The bring-back holds ``relaunch_in_flight`` itself: one that did not
+    replace the claude (refused, or its body raised) looks at a kept
+    refusal again once the flag is down, the same as a refused kill and
+    relaunch."""
+    from aipager.bot.session_ops import RestartOutcome
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def _in_flight(s, **kw):
+        # What the relaunch body does before a refusal after its kill.
+        s.drop_auto_deny_retry(force=True)
+        seen["in_flight"] = s.relaunch_in_flight
+        if how == "raised":
+            raise RuntimeError("kill failed")
+        return RestartOutcome(ok=False, reason="bg_stop_failed", label=s.label)
+
+    monkeypatch.setattr(bot, "_bring_back_in_flight", _in_flight)
+
+    async def go():
+        hold = asyncio.Event()
+        _delays, n_notices = await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        sess.parked_job = "job-1"
+        try:
+            outcome = await bot._bring_back_core(sess, force=False)
+            seen["reason"] = outcome.reason
+        except RuntimeError:
+            seen["reason"] = "raised"
+        sess.parked_job = ""
+        seen["pending_after"] = (bot.pending_auto_deny_retry(S)
+                                 and bot.auto_deny_retry_task(S) is not task)
+        hold.set()
+        await _wait_out(task)
+        await drain(bot)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert seen["in_flight"] is True
+    assert seen["reason"] == ("raised" if how == "raised" else "bg_stop_failed")
+    assert sess.relaunch_in_flight is False
+    assert seen["pending_after"] is True
+    assert drig.keys == ["Escape"]
+    assert seen["notices"] == 1
+
+
 # -- /new conflict Replace: same entry, fresh claude --------------------------------------
 
 def _replace_pending(bot):
@@ -990,6 +1182,192 @@ def test_create_session_reusing_a_name_abandons_its_waiting_refusal(
     assert drig.keys == []
     assert seen["notices"] == 0
     assert sess.status == Status.INTERACTIVE
+
+
+def test_new_replace_abandons_the_refusal_as_soon_as_the_old_socket_is_gone(
+        drig, monkeypatch, run_async):
+    """Between the kill and ``create_session`` Replace awaits its own
+    message edit ("starting fresh"); a runner pass then (a late datagram
+    of the old hook, the gap long over) must already find no refusal: the
+    old claude is gone, so nothing is typed, no notice, no BUSY."""
+    from aipager.bot import callbacks
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    kills = _kill_ok(monkeypatch)
+    launches = _launch_ok(monkeypatch)
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    seen = {}
+
+    async def _edit(*a, **kw):
+        if "between" in seen:
+            return None
+        seen["between"] = len(due_orders(sess))
+        drig.elapse()
+        await bot._run_due_auto_denies(sess)
+        seen["keys"] = list(drig.keys)
+        seen["status"] = sess.status
+        return None
+
+    monkeypatch.setattr(callbacks, "edit_text", _edit)
+
+    async def go():
+        hold = asyncio.Event()
+        _delays, n_notices = await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        _replace_pending(bot)
+        await bot._handle_callback(tap_update(CARD + 500, "new_replace", ALICE),
+                                   MagicMock())
+        hold.set()
+        await _wait_out(task)
+        await drain(bot)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert kills == [S]
+    assert launches == [S.removeprefix("claude-")]
+    assert seen["between"] == 0
+    assert seen["keys"] == []
+    assert seen["status"] == Status.INTERACTIVE
+    assert drig.keys == []
+    assert seen["notices"] == 0
+
+
+def _old_claude_survives(monkeypatch):
+    """The old claude outlives Replace's kill: its socket stays, so the
+    launch refuses as the real one does ("already exists")."""
+    from aipager.dtach import inject
+    launches: list[str] = []
+    kills: list[str] = []
+
+    async def _kill(name):
+        kills.append(name)
+        return False
+
+    async def _launch(short_name, **kw):
+        launches.append(short_name)
+        return False, f"Session '{short_name}' already exists"
+
+    async def _no_sleep(_secs):
+        pass
+
+    monkeypatch.setattr(inject, "kill_session", _kill)
+    monkeypatch.setattr(inject, "launch_session", _launch)
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: True)
+    return kills, launches
+
+
+def test_new_replace_whose_kill_fails_keeps_the_refusal_and_types_it_after_the_gap(
+        drig, monkeypatch, run_async):
+    """Replace's kill fails and the old claude lives on, its dialog with
+    it. Replace still tries the launch (which refuses), as before; the
+    refusal is kept (only a confirmed-gone process abandons it) and gets
+    its retry back, which types the one Escape into the old claude once
+    the gap closes, with no other event."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    kills, launches = _old_claude_survives(monkeypatch)
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        _delays, n_notices = await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        for _ in range(3):
+            await asyncio.sleep(0)  # the retry is asleep in its wait
+        _replace_pending(bot)
+        await bot._handle_callback(tap_update(CARD + 500, "new_replace", ALICE),
+                                   MagicMock())
+        seen["due_after"] = len(due_orders(sess))
+        seen["pending_after"] = (bot.pending_auto_deny_retry(S)
+                                 and bot.auto_deny_retry_task(S) is not task)
+        seen["keys_after"] = list(drig.keys)
+        await _wait_out(task)
+        seen["old_cancelled"] = task.cancelled()
+        hold.set()
+        await drain(bot)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert kills == [S]
+    assert launches == [S.removeprefix("claude-")]
+    assert seen["old_cancelled"] is True
+    assert seen["due_after"] == 1
+    assert seen["pending_after"] is True
+    assert seen["keys_after"] == []
+    assert drig.keys == ["Escape"]
+    assert seen["notices"] == 1
+    assert bot.registry.get(S) is sess
+    assert not bot.pending_auto_deny_retry(S)
+
+
+def test_new_replace_whose_kill_raises_keeps_the_refusal_and_its_retry(
+        drig, monkeypatch, run_async):
+    """Replace's kill raising leaves the old claude alive: the refusal is
+    not abandoned, and its retry comes back and types the Escape."""
+    from aipager.dtach import inject
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    _kills, _launches = _old_claude_survives(monkeypatch)
+
+    async def _kill(name):
+        raise OSError("kill failed")
+
+    monkeypatch.setattr(inject, "kill_session", _kill)
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        _replace_pending(bot)
+        try:
+            await bot._handle_callback(tap_update(CARD + 500, "new_replace", ALICE),
+                                       MagicMock())
+        except OSError:
+            pass
+        seen["due_after"] = len(due_orders(sess))
+        seen["pending_after"] = (bot.pending_auto_deny_retry(S)
+                                 and bot.auto_deny_retry_task(S) is not task)
+        hold.set()
+        await _wait_out(task)
+        await drain(bot)
+
+    run_async(go())
+    assert seen["due_after"] == 1
+    assert seen["pending_after"] is True
+    assert drig.keys == ["Escape"]
+
+
+def test_create_session_reusing_a_live_name_keeps_its_waiting_refusal(
+        drig, monkeypatch, run_async):
+    """``create_session(reuse_name=...)`` while the old socket is still
+    there: the old claude lives (the launch refuses "already exists"), so
+    the refusal for its dialog stays, and so does its retry."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    _kills, launches = _old_claude_survives(monkeypatch)
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        await _due_after_timeout(drig, monkeypatch, hold)
+        task = bot.auto_deny_retry_task(S)
+        name, err = await bot.create_session(
+            "api", scope_chat_id=GROUP, reuse_name=S, mode="ask",
+            driver_user_id=ALICE)
+        seen["created"] = (name, bool(err))
+        seen["due"] = len(due_orders(sess))
+        seen["same_task"] = bot.auto_deny_retry_task(S) is task and not task.done()
+        hold.set()
+        await drain(bot)
+
+    run_async(go())
+    assert seen["created"] == ("", True)
+    assert launches == [S.removeprefix("claude-")]
+    assert seen["due"] == 1
+    assert seen["same_task"] is True
+    assert drig.keys == ["Escape"]
 
 
 # -- TrackedSession.drop_auto_deny_retry: the one place every close ends ----------------
