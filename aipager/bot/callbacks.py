@@ -1851,24 +1851,36 @@ class CallbackDispatchMixin:
                     # up for the dead turn before the new session starts.
                     # (No card lock: nothing below settles a card.)
                     self._cancel_lazy_card(sess)
-                    # A rule's refusal waiting for an agent's dialog dies
-                    # with the old process: this entry stays INTERACTIVE
-                    # through the kill and the fresh launch, so its retry
-                    # (or the fresh claude's first prompt) would type the
-                    # Escape into the new claude.
-                    sess.abandon_auto_denies()
-                    await inject.kill_session(session_name)
-                    # Wait briefly for socket to disappear so the next
-                    # launch's "already exists" check passes. The socket
-                    # is named after the INTERNAL name (chat-suffixed in a
-                    # scoped chat), never the bare label.
+                    # A rule's refusal waiting for an agent's dialog: this
+                    # entry stays INTERACTIVE through the kill and the
+                    # fresh launch, so a retry waking meanwhile would type
+                    # the Escape into the dying or the new claude. Its
+                    # retry goes now; the refusal itself only once the old
+                    # process is gone (as the relaunch does it).
+                    sess.drop_auto_deny_retry(force=True)
+                    # The socket is named after the INTERNAL name
+                    # (chat-suffixed in a scoped chat), never the bare label.
                     sock = (f"{inject.SOCK_PREFIX}"
                             f"{session_name.removeprefix('claude-')}.sock")
                     from pathlib import Path as _Path
-                    for _ in range(10):
-                        await _sleep(0.2)
+                    try:
+                        await inject.kill_session(session_name)
+                        # Wait briefly for socket to disappear so the next
+                        # launch's "already exists" check passes.
+                        for _ in range(10):
+                            await _sleep(0.2)
+                            if not _Path(sock).is_socket():
+                                break
+                    finally:
                         if not _Path(sock).is_socket():
-                            break
+                            # Gone, its dialogs with it: never typed, by a
+                            # retry or by the fresh claude's first prompt.
+                            sess.abandon_auto_denies()
+                        else:
+                            # The kill failed: the old claude and its
+                            # dialog live on (the launch below refuses), so
+                            # its refusal stays and is looked at again.
+                            await self._rerun_kept_auto_denies(sess)
                 # Drop the resume metadata so the new session is truly fresh.
                 if sess:
                     sess.claude_session_id = ""

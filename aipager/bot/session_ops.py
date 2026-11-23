@@ -1934,10 +1934,14 @@ class SessionOpsMixin:
         # first prompt join that turn's rules.
         _clear_turn_open(session_name)
         replaced = self.registry.get(session_name) if reuse_name else None
-        if replaced is not None:
+        if (replaced is not None
+                and not Path(f"{inject.SOCK_PREFIX}{short_name}.sock").is_socket()):
             # Replace keeps the old process's entry: a refusal still
             # waiting for one of its dialogs must never reach the fresh
-            # claude, whichever caller killed the old one.
+            # claude, whichever caller killed the old one. While the old
+            # socket is still there its claude lives (the launch below
+            # refuses "already exists"), and so does the dialog the
+            # refusal answers: it stays.
             replaced.abandon_auto_denies()
         ok, err = await inject.launch_session(
             short_name, mode=mode, cwd=cwd or None,

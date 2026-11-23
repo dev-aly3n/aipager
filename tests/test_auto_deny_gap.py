@@ -884,9 +884,10 @@ def test_new_replace_during_the_wait_types_nothing_into_the_fresh_claude(
         drig, monkeypatch, run_async):
     """/new's Replace kills the session and starts a fresh claude under the
     same name and the same entry, which stays INTERACTIVE. With no
-    SessionEnd, the waiting refusal is gone before the kill: no retry
-    waking during the kill or after the launch, and no later run, types
-    its Escape, posts a notice or moves the session to BUSY."""
+    SessionEnd, the waiting refusal's retry is gone before the kill and
+    the refusal once the old socket is: no retry waking during the kill
+    or after the launch, and no later run, types its Escape, posts a
+    notice or moves the session to BUSY."""
     _extra_waiting(drig)
     bot, sess = drig.bot, drig.sess
     from aipager.dtach import inject
@@ -928,7 +929,9 @@ def test_new_replace_during_the_wait_types_nothing_into_the_fresh_claude(
 
     run_async(go())
     assert seen["before"] is True
-    assert seen["at_kill"] == (False, 0, Status.INTERACTIVE)
+    # The refusal is still recorded at the kill: the old claude might
+    # outlive it (see the kill-fails test below).
+    assert seen["at_kill"] == (False, 1, Status.INTERACTIVE)
     assert seen["cancelled"] is True
     assert launches == [S.removeprefix("claude-")]
     assert seen["slept"] == 0
