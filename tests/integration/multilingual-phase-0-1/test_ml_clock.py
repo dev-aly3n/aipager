@@ -211,11 +211,21 @@ def test_status_says_working_with_a_true_seconds_clock(
     started = time.monotonic()
     line = _status_line(status_bot, mk_update, run_async, age)
     # The clock is real, and each age leaves 0.7 s before the next second.
-    # A loaded CI runner took longer than that once (2026-10-18), so only a
-    # call that slow may show the next second.
-    crossed = time.monotonic() - started >= 0.7
-    assert (f"⚙️ working {clock}" in line
-            or (crossed and f"⚙️ working {next_clock}" in line))
+    # A loaded CI runner took longer than that (0.7 s on 2026-10-18, over
+    # 1.7 s on 2026-11-23), so the line may show any second the session
+    # reached during the call, and no other.
+    took = time.monotonic() - started
+    assert _clock(int(age)) == clock and _clock(int(age) + 1) == next_clock
+    shown = {f"⚙️ working {_clock(s)}"
+             for s in range(int(age), int(age + took) + 1)}
+    assert any(s in line for s in shown), (line, took)
+
+
+def _clock(seconds: int) -> str:
+    """m:ss under an hour, h:mm:ss from one hour (the expected format)."""
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
 # ---- the busy card status line and the settled card -------------------------------
