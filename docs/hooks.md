@@ -214,7 +214,9 @@ when the daemon cannot be reached or anything on that path fails. In a
 session aipager did not start it does not wait at all: the daemon
 ignores that session, so no tap can come. The
 dialog then waits in the terminal, and a later tap answers it by typing
-the keys. The audit log
+the keys. For a subagent's call that dialog appears only after the hook
+is done, so a tap in the first few seconds after that is refused until
+the dialog is on screen. The audit log
 (`~/.claude/aipager-audit.jsonl`) records which way each tap answered,
 `"via": "hook_decision"` or `"via": "keystroke_fallback"`.
 
@@ -450,7 +452,7 @@ claude              aipager-hook             aipager daemon          Telegram
 ```
 
 With no tap within 20 seconds the hook prints nothing and Claude Code
-shows its own dialog; a later tap types the answer into that dialog
+shows its own dialog (a subagent's a few seconds later); a later tap types the answer into that dialog
 through the session's terminal (`dtach -p`). Either way the tap is
 recorded in the audit log and posted under the card (`✅ jim · Allowed
 · @alice · Bash: ls -la /tmp`).

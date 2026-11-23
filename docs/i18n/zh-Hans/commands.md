@@ -194,7 +194,7 @@ ls -la /tmp
 - **始终允许**：批准，并加上 Claude 建议的长期规则（“不要再问关于……”）。这个按钮**只在 Claude 建议了这样的规则时才出现**；对于它无法生成规则的命令（大多数组合命令），卡片会改为显示允许 / 拒绝 / 停止，对会话工作文件夹之外的只读文件访问（`Read`、`Grep`、`Glob`）也是如此。Claude Code 2.1.259 及更高版本会在那个位置放上：Bash 对话框里的一行“切换到 auto 模式”、外部读取对话框里的一行“从现在起阻止在工作文件夹之外读取”，以及对它无法生成单文件规则的 Write/Edit，一次权限模式的切换，例如自动接受所有文件编辑（`acceptEdits`）；aipager 绝不会选择这些行；请用 `/mode` 主动切换模式。
 - **停止**：中断任务，而不是回答。在 Claude 自己的任务结束后才出现的后台代理请求，会作为单独的消息发来，带有允许和拒绝；这时点等待代理的卡片上的停止，会改为停止后台代理（和 `/stop` 一样），这个请求随之关闭。
 
-回答会通过 aipager 的权限 hook 到达 Claude Code，这个 hook 最多等它 20 秒。在工作卡片之前到达的请求（这时它会作为单独的消息发送，只有允许和拒绝）也以同样的方式回答。当这段等待时间已经过去时，按钮会把回答输入到 Claude Code 自己的对话框里；这时“拒绝”会按 Escape（“No, and tell Claude what to do differently”），像“停止”一样结束 Claude 的任务，卡片会显示 `🚫 jim · 已拒绝`。对于 Claude Code 在自动模式下第一次读取项目外的文件之前提出的问题，迟到的“允许”不会被输入：它的 Enter 会选中“Yes, and keep allowing any reads outside the working directories”，所以这次点按会提示你在终端里回答（“拒绝”仍然有效）。
+回答会通过 aipager 的权限 hook 到达 Claude Code，这个 hook 最多等它 20 秒。在工作卡片之前到达的请求（这时它会作为单独的消息发送，只有允许和拒绝）也以同样的方式回答。当这段等待时间已经过去时，按钮会把回答输入到 Claude Code 自己的对话框里；这时“拒绝”会按 Escape（“No, and tell Claude what to do differently”），像“停止”一样结束 Claude 的任务，卡片会显示 `🚫 jim · 已拒绝`。对于 Claude Code 在自动模式下第一次读取项目外的文件之前提出的问题，迟到的“允许”不会被输入：它的 Enter 会选中“Yes, and keep allowing any reads outside the working directories”，所以这次点按会提示你在终端里回答（“拒绝”仍然有效）。后台代理的对话框要等这段等待结束后才会进入终端，所以在最初几秒里点按它的请求不会输入任何内容，按钮会保留，并提示 `Claude Code 还在终端中打开这个请求，请稍后再点一次。`。
 
 每次点按都会记录到 `~/.claude/aipager-audit.jsonl`，并作为一行回复重复显示在工作卡片下方：`✅ jim · 已允许 · @alice · Bash: List the temp directory`（调用的说明，没有说明时是它的命令；这是用 `aipager config` 设置的聊天；在个人模式下只有 `已允许`）。
 

@@ -78,7 +78,7 @@ aipager 쪽에서는 이 호출이 작업 카드의 한 줄이 되고(서브에�
 
 Claude Code가 곧 권한을 요청해요. 작업 카드가 이 요청으로 바뀌고, Claude의 설명 아래에 실제 명령이나 경로를 보여 줘요([명령 → 권한 요청](commands.md#permission-prompts) 참고). 허용, 거부, 중지, 그리고 Claude Code가 정말로 기억할 수 있는 규칙을 줄 때만 나오는 항상 허용이 있어요.
 
-hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응답 소켓을 열고, 그 주소를 이벤트와 함께 보내고, 내가 누를 때까지 최대 20초 기다려요. 그동안 Claude Code도 터미널에 자기 대화 상자를 보여 줘요(서브에이전트의 호출이면 hook이 끝난 뒤에야). 제때 누르면 `PermissionRequest` 결정으로 돌아가서(허용, 규칙과 함께 허용, 또는 거부) 그 대화 상자가 닫혀요. 제때 누르지 않으면 hook은 기다림이 끝났다고 aipager에 알리고(`permission_reply_timeout`) 아무것도 출력하지 않아요. aipager에 연결할 수 없거나 이 경로에서 무엇이든 실패해도 아무것도 출력하지 않아요. aipager가 시작하지 않은 세션에서는 아예 기다리지 않아요. aipager가 그 세션을 무시하니 누름이 올 수 없거든요. 그러면 대화 상자가 터미널에서 기다리고, 나중에 누르면 키를 입력해서 답해요. 감사 로그(`~/.claude/aipager-audit.jsonl`)에는 각 누름이 어느 방식으로 답했는지 남아요. `"via": "hook_decision"` 또는 `"via": "keystroke_fallback"`이에요.
+hook은 답할 수 있으면 직접 이 요청에 답해요. 짧게 쓰는 응답 소켓을 열고, 그 주소를 이벤트와 함께 보내고, 내가 누를 때까지 최대 20초 기다려요. 그동안 Claude Code도 터미널에 자기 대화 상자를 보여 줘요(서브에이전트의 호출이면 hook이 끝난 뒤에야). 제때 누르면 `PermissionRequest` 결정으로 돌아가서(허용, 규칙과 함께 허용, 또는 거부) 그 대화 상자가 닫혀요. 제때 누르지 않으면 hook은 기다림이 끝났다고 aipager에 알리고(`permission_reply_timeout`) 아무것도 출력하지 않아요. aipager에 연결할 수 없거나 이 경로에서 무엇이든 실패해도 아무것도 출력하지 않아요. aipager가 시작하지 않은 세션에서는 아예 기다리지 않아요. aipager가 그 세션을 무시하니 누름이 올 수 없거든요. 그러면 대화 상자가 터미널에서 기다리고, 나중에 누르면 키를 입력해서 답해요. 서브에이전트의 호출이면 그 대화 상자는 hook이 끝난 뒤에야 나타나요. 그래서 그 뒤 처음 몇 초 동안 누르면 대화 상자가 화면에 뜰 때까지 거절돼요. 감사 로그(`~/.claude/aipager-audit.jsonl`)에는 각 누름이 어느 방식으로 답했는지 남아요. `"via": "hook_decision"` 또는 `"via": "keystroke_fallback"`이에요.
 
 다른 요청이 열려 있는 동안 도착한 `PermissionRequest`도 작업 카드 아래 별도 메시지로 보여 줘요. 같은 대화 상자가 다시 오면(같은 요청자, 같은 도구와 같은 호출, 또는 같은 입력) 한 번만 보여 줘요. Claude Code는 `AskUserQuestion`에도 이 hook을 실행하는데, 그 질문은 이미 `PreToolUse`로 보여 줬으니 두 번 보여 주지 않아요. 백그라운드 에이전트의 대화 상자는 그 hook이 기다리기를 멈춘 뒤에야 터미널에 나타나고, 이미 열린 대화 상자들 아래에 놓여요. 그래서 탭은 Claude Code가 먼저 보여 주는 요청에만 키를 입력해요([명령 → 권한 요청](commands.md#permission-prompts) 참고).
 
@@ -188,7 +188,7 @@ claude              aipager-hook             aipager daemon          Telegram
   | tool runs            |                         |                     |
 ```
 
-20초 안에 누르지 않으면 hook은 아무것도 출력하지 않고 Claude Code가 자기 대화 상자를 보여 줘요. 나중에 누르면 세션의 터미널(`dtach -p`)을 통해 그 대화 상자에 답을 입력해요. 어느 쪽이든 누름은 감사 로그에 남고 카드 아래에 올라가요(`✅ jim · 허용됨 · @alice · Bash: ls -la /tmp`).
+20초 안에 누르지 않으면 hook은 아무것도 출력하지 않고 Claude Code가 자기 대화 상자를 보여 줘요(서브에이전트의 대화 상자는 몇 초 뒤에). 나중에 누르면 세션의 터미널(`dtach -p`)을 통해 그 대화 상자에 답을 입력해요. 어느 쪽이든 누름은 감사 로그에 남고 카드 아래에 올라가요(`✅ jim · 허용됨 · @alice · Bash: ls -la /tmp`).
 
 ## <a id="see-also"></a>함께 보기
 
