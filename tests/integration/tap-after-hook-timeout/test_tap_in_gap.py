@@ -17,7 +17,7 @@ import pytest
 
 from aipager import prompt_gap
 from aipager.state import Status
-from tests.two_prompts_rig import BG, CARD, FG, OTHER, answers
+from tests.two_prompts_rig import BG, CARD, FG, OTHER, QUESTION, answers
 
 OPENING = "Claude Code is still opening this prompt in the terminal, so tap it again in a moment."
 BEHIND = "Claude Code is showing another prompt first, so answer that one before this one."
@@ -472,3 +472,130 @@ def test_claudes_question_beside_overlapping_agent_says_order_unknown(rig):
     [qmsg] = [m for m in rig.prompt_messages() if "Only the card" in " ".join(rig.buttons(m))]
     q = rig.tap(qmsg["msg_id"], "opt0")
     assert answers(q) == [ORDER_UNKNOWN]
+
+
+# -- iteration 2: an agent's question parked on its PermissionRequest hook -----------------
+#
+# entrypoints.md keys_verdict: "opening" while the hook is parked (request_id
+# set and now < arrived + reply_deadline + grace), then until gone + 4.0. The
+# rule is the same for a background and an unknown-launch agent. The question
+# arrives at PreToolUse and then parks on its PermissionRequest hook, as
+# Claude Code sends both for AskUserQuestion.
+
+LAUNCHES = ["background", "unknown"]
+REQ_Q = "req-q"
+
+
+def parked_question(rig, launch):
+    agent = BG if launch == "background" else OTHER
+    if launch == "background":
+        rig.launch(agent)
+    rig.question(agent=agent, tool_use_id="toolu_aq")
+    rig.hook("PermissionRequest", tool_name="AskUserQuestion",
+             tool_input=QUESTION, tool_use_id="toolu_aq",
+             agent_id=agent, agent_type="ship-reviewer",
+             aipager_reply_addr=f"/nonexistent/reply-q-{agent}.sock",
+             aipager_request_id=REQ_Q)
+    return agent
+
+
+def question_msg(rig):
+    """The message carrying the question's options."""
+    for m in reversed(rig.prompt_messages()):
+        if "Only the card" in " ".join(rig.buttons(m)):
+            return m["msg_id"]
+    return CARD
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_launch_kind(rig, launch):
+    """Precondition: the order records the launch kind under test."""
+    agent = parked_question(rig, launch)
+    assert the_order(rig, agent)["launch"] == launch
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_option_at_arrival_is_refused(rig, launch):
+    parked_question(rig, launch)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert (answers(q), rig.keys) == ([OPENING], [])
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_option_just_before_hook_deadline_is_refused(rig, launch):
+    """Still parked 19.9 s after arrival (well past OPEN_GRACE after it)."""
+    parked_question(rig, launch)
+    rig.elapse(19.9)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert (answers(q), rig.keys) == ([OPENING], [])
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_option_right_after_hook_timeout_is_refused(rig, launch):
+    parked_question(rig, launch)
+    rig.elapse(20.0)
+    rig.timeout(REQ_Q)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert (answers(q), rig.keys) == ([OPENING], [])
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_option_inside_grace_after_timeout_is_refused(rig, launch):
+    parked_question(rig, launch)
+    rig.elapse(20.0)
+    rig.timeout(REQ_Q)
+    rig.elapse(3.9)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert (answers(q), rig.keys) == ([OPENING], [])
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_option_after_grace_types(rig, launch):
+    parked_question(rig, launch)
+    rig.elapse(20.0)
+    rig.timeout(REQ_Q)
+    rig.elapse(4.01)
+    rig.tap(question_msg(rig), "opt0")
+    assert rig.keys
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_option_after_grace_is_not_refused(rig, launch):
+    parked_question(rig, launch)
+    rig.elapse(20.0)
+    rig.timeout(REQ_Q)
+    rig.elapse(4.01)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert OPENING not in answers(q)
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_with_lost_timeout_refused_inside_parked_window(rig, launch):
+    """No timeout datagram: parked until arrived + 20 + 10."""
+    parked_question(rig, launch)
+    rig.elapse(29.9)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert (answers(q), rig.keys) == ([OPENING], [])
+
+
+@pytest.mark.parametrize("launch", LAUNCHES)
+def test_parked_agent_question_with_lost_timeout_types_after_parked_window(rig, launch):
+    """No timeout datagram: past arrived + 30 the hook counts as gone at
+    arrived + 20, whose grace (+4) is long over."""
+    parked_question(rig, launch)
+    rig.elapse(30.01)
+    rig.tap(question_msg(rig), "opt0")
+    assert rig.keys
+
+
+def test_foreground_agent_parked_question_is_not_gated(rig):
+    """Control: a foreground agent's dialog races its hook; never gated."""
+    rig.launch(FG, background=False)
+    rig.question(agent=FG, tool_use_id="toolu_aq")
+    rig.hook("PermissionRequest", tool_name="AskUserQuestion",
+             tool_input=QUESTION, tool_use_id="toolu_aq",
+             agent_id=FG, agent_type="ship-reviewer",
+             aipager_reply_addr="/nonexistent/reply-q-fg.sock",
+             aipager_request_id=REQ_Q)
+    q = rig.tap(question_msg(rig), "opt0")
+    assert OPENING not in answers(q)

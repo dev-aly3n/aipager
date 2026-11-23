@@ -110,9 +110,11 @@ async def alaunch(rig, agent=BG):
                                "agentId": agent})
 
 
-async def agent_write(rig, *, hook=False, req="req-w", agent=BG):
+async def agent_write(rig, *, hook=False, req="req-w", agent=BG, tool_use_id=None):
     fields = {"tool_name": "Write", "tool_input": WRITE, "agent_id": agent,
               "agent_type": "ship-reviewer"}
+    if tool_use_id:
+        fields["tool_use_id"] = tool_use_id
     if hook:
         fields.update(aipager_reply_addr="/nonexistent/reply-w.sock",
                       aipager_request_id=req)
@@ -451,3 +453,145 @@ def test_owner_turn_schedules_no_refusal(drig):
         await agent_write(drig)
         return drig.bot.pending_auto_deny_retry(S)
     assert (run(drig, _scenario), drig.keys) == (False, [])
+
+
+# -- iteration 2: every close path cancels the retry at once --------------------------------
+#
+# The retry is held (``Clock`` lets no time pass until ``drain``), so
+# "pending right after the close" is read before the retry could run on
+# its own. Close paths, each through a black-box surface:
+# - next-call: the agent's next PreToolUse (its prompt was answered elsewhere);
+# - tool-ran: the agent's PostToolUse for the refused call;
+# - subagent-stop: the agent's SubagentStop;
+# - stop-button: the owner taps Stop on the session's card;
+# - gone: the session goes GONE, as the session monitor records it.
+
+ALL_CLOSES = ["next-call", "tool-ran", "subagent-stop", "stop-button", "gone"]
+
+
+async def close_by(rig, how):
+    if how == "next-call":
+        await agent_next_call(rig)
+    elif how == "tool-ran":
+        await ahook(rig, "PostToolUse", tool_name="Write", tool_input=WRITE,
+                    tool_use_id="toolu_w", agent_id=BG, agent_type="ship-reviewer",
+                    tool_response={"type": "create", "filePath": WRITE["file_path"]})
+    elif how == "subagent-stop":
+        await ahook(rig, "SubagentStop", agent_id=BG, agent_type="ship-reviewer")
+    elif how == "stop-button":
+        await atap(rig, CARD, "stop", uid=ALICE)
+    elif how == "gone":
+        rig.bot.registry.transition(S, Status.GONE)
+    else:
+        raise AssertionError(how)
+
+
+def waiting_then_closed(drig, how):
+    """The lone gapped refusal waits; then *how* ends it; then time runs."""
+    async def _scenario():
+        await alaunch(drig)
+        await agent_write(drig, tool_use_id="toolu_w")
+        snap = {"pending_before": drig.bot.pending_auto_deny_retry(S)}
+        await close_by(drig, how)
+        snap["pending_after"] = drig.bot.pending_auto_deny_retry(S)
+        snap["task_after"] = drig.bot.auto_deny_retry_task(S)
+        snap["keys_at_close"] = list(drig.keys)
+        snap["sent_at_close"] = len(drig.sent)
+        snap["open_at_close"] = len(drig.sess.open_prompts())
+        snap["status_at_close"] = drig.sess.status
+        await drain(drig)
+        snap["pending_end"] = drig.bot.pending_auto_deny_retry(S)
+        return snap
+    return run(drig, _scenario)
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_refusal_waits_before_each_close(drig, how):
+    """Precondition: before the close a retry is pending."""
+    assert waiting_then_closed(drig, how)["pending_before"] is True
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_each_close_ends_the_wait(drig, how):
+    """Precondition: the close really ended the refusal's prompt or the
+    session's wait (no prompt open, or the session left INTERACTIVE)."""
+    snap = waiting_then_closed(drig, how)
+    assert (snap["open_at_close"] == 0
+            or snap["status_at_close"] != Status.INTERACTIVE) is True
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_each_close_leaves_no_pending_retry_at_once(drig, how):
+    assert waiting_then_closed(drig, how)["pending_after"] is False
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_each_close_leaves_no_retry_task(drig, how):
+    assert waiting_then_closed(drig, how)["task_after"] is None
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_each_close_then_time_types_no_further_key(drig, how):
+    """The close's own keys (Stop's Escape) aside, nothing is typed later."""
+    snap = waiting_then_closed(drig, how)
+    assert drig.keys[len(snap["keys_at_close"]):] == []
+
+
+@pytest.mark.parametrize("how", [h for h in ALL_CLOSES if h != "stop-button"])
+def test_each_close_types_no_escape_for_the_refusal(drig, how):
+    """No Escape went in before the close either (the refusal never typed;
+    Stop is left out, it types its own Escape)."""
+    assert waiting_then_closed(drig, how)["keys_at_close"] == []
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_each_close_then_time_posts_no_notice(drig, how):
+    snap = waiting_then_closed(drig, how)
+    assert drig.sent[snap["sent_at_close"]:] == []
+
+
+@pytest.mark.parametrize("how", ALL_CLOSES)
+def test_each_close_settles_with_no_retry(drig, how):
+    assert waiting_then_closed(drig, how)["pending_end"] is False
+
+
+# -- the refusal closes while another prompt stays open ------------------------------------
+
+def refusal_closed_beside_question(drig):
+    async def _scenario():
+        await alaunch(drig)
+        await ahook(drig, "PreToolUse", tool_name="AskUserQuestion",
+                    tool_input=rigmod.QUESTION, tool_use_id="toolu_q1")
+        await agent_write(drig)
+        await atap(drig, CARD, "opt0")     # Claude's question answered: refusal now waits
+        before = drig.bot.pending_auto_deny_retry(S)
+        await ahook(drig, "PreToolUse", tool_name="AskUserQuestion",
+                    tool_input=rigmod.QUESTION, tool_use_id="toolu_q2")
+        await agent_next_call(drig)        # the refusal's prompt ends; the question stays
+        after = drig.bot.pending_auto_deny_retry(S)
+        keys = len(drig.keys)
+        await drain(drig)
+        return before, after, keys
+    return run(drig, _scenario)
+
+
+def test_refusal_closed_beside_an_open_question_was_waiting(drig):
+    before, _after, _keys = refusal_closed_beside_question(drig)
+    assert before is True
+
+
+def test_refusal_closed_beside_an_open_question_leaves_no_retry(drig):
+    _before, after, _keys = refusal_closed_beside_question(drig)
+    assert after is False
+
+
+def test_refusal_closed_beside_an_open_question_types_nothing_later(drig):
+    _before, _after, keys = refusal_closed_beside_question(drig)
+    assert drig.keys[keys:] == []
+
+
+def test_question_close_beside_a_waiting_refusal_keeps_its_retry(drig):
+    """Control: closing another prompt while the refusal still waits in its
+    gap keeps the retry (it is not over-cancelled)."""
+    _typed, _mid, pending = extra_after_question(drig)
+    assert pending is True
