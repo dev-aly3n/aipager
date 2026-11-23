@@ -532,11 +532,6 @@ def test_survived_kill_leaves_no_task_running(drig, monkeypatch, hook_gone):
     assert snap["leftover_tasks"] == 0
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "documented edge (fixes-4 'Issues NOT addressed'): a relaunch whose old "
-    "claude outlives the kill drops the retry, so the kept refusal waits "
-    "for the next prompt event instead of firing on its own as design.md "
-    "success criterion 6 promises ('with no other event needed')"))
 def test_survived_kill_types_the_escape_with_no_other_event(drig, monkeypatch):
     snap = survived_relaunch(drig, monkeypatch, hook_gone=False, run_after=False,
                              poke_in_gap=False)

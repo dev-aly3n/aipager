@@ -3450,11 +3450,39 @@ class SessionOpsMixin:
             return RestartOutcome(ok=False, reason="already_restarting", label=label)
         sess.relaunch_in_flight = True
         try:
-            return await self._kill_and_relaunch_in_flight(
+            outcome = await self._kill_and_relaunch_in_flight(
                 sess, target_mode=target_mode,
                 interrupt_first=interrupt_first, force=force)
+        except Exception:
+            sess.relaunch_in_flight = False
+            await self._rerun_kept_auto_denies(sess)
+            raise
         finally:
             sess.relaunch_in_flight = False
+        if not outcome.ok:
+            await self._rerun_kept_auto_denies(sess)
+        return outcome
+
+    async def _rerun_kept_auto_denies(self, sess: TrackedSession) -> None:
+        """A kill and relaunch (or a /new Replace) that did not replace
+        the claude (refused before the kill, or the old process outlived
+        it) leaves its waiting auto-deny with no retry: it dropped the
+        retry before the kill, and a retry woken meanwhile scheduled none
+        (``relaunch_in_flight``).
+        The old claude and its dialog still live, so once the flag is down
+        the runner looks again (typing now, or scheduling the retry). A
+        no-op when no refusal waits (the relaunch abandoned them once the
+        old process was gone). Never raises."""
+        if not any(isinstance(rec, dict) and rec.get("auto_deny_due")
+                   for rec in sess.extra_prompts):
+            return
+        try:
+            await self._run_due_auto_denies(sess)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - the next prompt event looks again
+            log.debug("[%s] kept auto-deny not run again", sess.label,
+                      exc_info=True)
 
     async def _kill_and_relaunch_in_flight(
         self, sess: TrackedSession, *, target_mode: str,
@@ -3871,11 +3899,18 @@ class SessionOpsMixin:
                                   mode=mode)
         sess.relaunch_in_flight = True
         try:
-            return await self._bring_back_in_flight(
+            outcome = await self._bring_back_in_flight(
                 sess, force=force, release_held=release_held, mode=mode,
                 settled=settled)
+        except Exception:
+            sess.relaunch_in_flight = False
+            await self._rerun_kept_auto_denies(sess)
+            raise
         finally:
             sess.relaunch_in_flight = False
+        if not outcome.ok:
+            await self._rerun_kept_auto_denies(sess)
+        return outcome
 
     @staticmethod
     def _turn_in_flight(sess: TrackedSession) -> bool:
