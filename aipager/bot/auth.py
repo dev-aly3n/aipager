@@ -899,16 +899,19 @@ class AuthMixin:
         dialog is in its gap (:func:`aipager.prompt_stack.dialog_gap`): at
         the earliest instant one of them may be typed or Claude Code's
         record may prove its dialog is up (``gap_next_look``). With none
-        such (or the session no longer waiting on a prompt) any pending
-        retry goes. Reads the orders directly, never
-        :meth:`TrackedSession.keys_verdict`. Never raises."""
+        such (or the session no longer waiting on a prompt, or no longer
+        the registry's) any pending retry goes. Reads the orders directly,
+        never :meth:`TrackedSession.keys_verdict`. Never raises."""
         import time as _time
 
         from aipager import prompt_gap
         try:
             now = _time.monotonic()
             looks = []
-            if sess.status == Status.INTERACTIVE:
+            # A session /kill removed is out of every later close's reach:
+            # never a retry for it.
+            if (sess.status == Status.INTERACTIVE
+                    and self.registry.get(sess.name) is sess):
                 for rec in sess.extra_prompts:
                     if not (isinstance(rec, dict) and rec.get("auto_deny_due")
                             and not rec.get("auto_deny_typing")):
@@ -987,8 +990,17 @@ class AuthMixin:
                     and not rm_countdown.refusal_window_open(
                         perm, rm_countdown._now_wall()))
 
+        def waiting() -> bool:
+            # Still the registry's live session, waiting on its prompts:
+            # never a session /kill removed (a woken retry outlives it, and
+            # its name may answer to a new process) or one being killed
+            # and relaunched (still INTERACTIVE until the new claude is up).
+            return (sess.status == Status.INTERACTIVE
+                    and self.registry.get(sess.name) is sess
+                    and not sess.relaunch_in_flight)
+
         for _ in range(len(sess.extra_prompts) + 1):
-            if sess.status != Status.INTERACTIVE:
+            if not waiting():
                 return
             due = [rec for rec in sess.extra_prompts
                    if isinstance(rec, dict) and rec.get("auto_deny_due")
@@ -1009,7 +1021,7 @@ class AuthMixin:
                     await _sleep(wait)
             finally:
                 ready.pop("auto_deny_typing", None)
-            if (sess.status != Status.INTERACTIVE
+            if (not waiting()
                     or not any(rec is ready for rec in sess.extra_prompts)
                     or not typable(perm)):
                 return
@@ -1029,7 +1041,7 @@ class AuthMixin:
                     ready.pop("auto_deny_typing", None)
                 # That read can wait: the same checks again, right before
                 # the key.
-                if (sess.status != Status.INTERACTIVE
+                if (not waiting()
                         or not any(rec is ready for rec in sess.extra_prompts)
                         or not typable(perm)):
                     if held_back is not None:

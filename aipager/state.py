@@ -4888,6 +4888,12 @@ class SessionRegistry:
         internal name.
         """
         sess = self._sessions.pop(name, None)
+        if sess is not None:
+            # Out of the registry, out of reach of every later close: a
+            # waiting auto-deny's retry would wake to type into whatever
+            # answers to this name next (a /kill handled before Claude
+            # Code's SessionEnd).
+            sess.drop_auto_deny_retry(force=True)
         self._forget_target(name)
         self._blank_button_slots(name)
         if sess and remember_label and sess.label:

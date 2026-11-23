@@ -3511,6 +3511,11 @@ class SessionOpsMixin:
         # No card lock needed: nothing here settles a card afterwards, and
         # a send already in flight is past the point a cancel can reach.
         self._cancel_lazy_card(sess)
+        # Likewise a waiting auto-deny's retry: its dialog dies with the
+        # old process, and the session stays INTERACTIVE until the
+        # relaunch is done, so a retry waking in between would type an
+        # Escape into the new claude.
+        sess.drop_auto_deny_retry(force=True)
 
         held: list[dict] = []
         if interrupt_first:
