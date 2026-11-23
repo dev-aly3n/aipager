@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - When you reply to one of Claude's answers that holds an expandable quote, Claude now gets the quote's content; since Telegram's Bot API 10.5 it got nothing from it.
+- On a narrow phone the Mini App's session tiles no longer cut their state word ("working", "waiting for 2 agents") or draw it and its time over the ring in any language: it moves below the ring and wraps, a waiting session's name is no longer squeezed to a letter or two, and the Sessions tab's count goes under its label instead of splitting the word.
 
 ## [1.6.0] - 2026-11-18
 

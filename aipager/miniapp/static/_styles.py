@@ -313,6 +313,9 @@ CSS = """
   .tabbar-btn { min-width: 0; padding: 0 2px; }
   .tabbar-label { min-width: 0; line-height: 18px; text-align: center; overflow-wrap: anywhere; hyphens: auto; }
   .tabbar:has(> #maintab-usage:not([hidden])) .tabbar-btn { font-size: 14px; }
+  /* A count on a narrow tab ("Sessions 12" at 320px) goes under the
+     label rather than breaking the word. */
+  .tabbar-btn { flex-wrap: wrap; column-gap: var(--s2); row-gap: 0; }
   .tabbar-btn.is-active {
     color: var(--ink);
     background: var(--surface);
@@ -670,6 +673,9 @@ CSS = """
     line-height: var(--lh-cap);
     color: var(--ink-2);
   }
+  /* A narrow phone: the age drops to its own line before the name is cut
+     (Russian at 320px left one letter of it). */
+  .beacon-top { flex-wrap: wrap; row-gap: 2px; }
   .beacon-summary {
     margin: 0;
     font-size: var(--fs-sm);
@@ -725,15 +731,26 @@ CSS = """
     white-space: nowrap;
   }
   .tile-busy .tile-state { color: var(--ink); background: var(--lamp-work-soft); }
-  /* "waiting for 2 agents" may not fit a narrow tile. */
-  .tile-tasks .tile-state {
-    color: var(--ink);
-    background: var(--lamp-work-soft);
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .tile-tasks .tile-state { color: var(--ink); background: var(--lamp-work-soft); }
   .tile-age { font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-3); white-space: nowrap; }
+  /* A narrow phone (320px) or a long word ("đang làm việc", "waiting for
+     2 agents"): the state word and its age never run under the ring or get
+     cut. When they do not fit beside the ring they drop below it, take a
+     second line if they must, and the tile grows to hold them (a row of
+     tiles keeps one height). */
+  .tile { height: auto; min-height: 132px; }
+  .tile-top { flex-wrap: wrap; }
+  .tile-side { flex: 1 1 auto; }
+  .tile-state, .tile-age { max-width: 100%; white-space: normal; overflow-wrap: break-word; text-align: end; }
+  .tile-state { border-radius: var(--r-chip); }
+  .tile-project.tile-none { white-space: normal; overflow-wrap: break-word; }
+  /* Korean wraps between words, never inside one. */
+  :root:lang(ko) .tile-state, :root:lang(ko) .tile-age { word-break: keep-all; }
+  /* 320px: a little less padding, so one long word ("desconhecido") fits. */
+  @media (max-width: 359px) {
+    .tile { padding-inline: 12px; }
+    .tile-state { padding-inline: 6px; }
+  }
   .tile-label, .tile-project, .tile-meta {
     display: block;
     white-space: nowrap;

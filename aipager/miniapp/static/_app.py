@@ -515,6 +515,8 @@ APP_JS = r"""
     setText(tile.state, word);
     setText(tile.label, s.label);
     setText(tile.project, s.project || t("ui.tile.no_folder"));
+    // "no folder" is the page's own words: never cut, a folder name may be.
+    setClass(tile.project, s.project ? "tile-project" : "tile-project tile-none");
     setText(tile.meta, (s.model ? s.model + " · " : "") + money(s.cost_usd));
     setAttr(tile.el, "aria-label", s.model
       ? t("ui.tile.aria", { session: s.label, state: word, pct: pct, model: s.model,
