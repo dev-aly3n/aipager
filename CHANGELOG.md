@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- When a plan limit is at 90% or more, the busy card in the owner's or an admin's private chat says so, with when it resets; group cards never show it.
+
 ### Fixed
 - When you reply to one of Claude's answers that holds an expandable quote, Claude now gets the quote's content; since Telegram's Bot API 10.5 it got nothing from it.
 
