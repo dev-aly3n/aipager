@@ -133,9 +133,13 @@ def test_agent_prompt_after_the_turn_is_its_own_message(fresh, case):
         assert not [ln for ln in inst.log_lines(log0)
                     if f"[{label}] INTERACTIVE → BUSY" in ln]
 
-        # 5. The next message is a new turn with its own card.
+        # 5. The next message is a new turn with its own card. Sent as a
+        # reply to the session's own prompt, so it reaches this session
+        # even when an earlier case's session (gone by now) posts a late
+        # card meanwhile, which makes that one the chat's target.
         since2, log1 = fake.mark(), inst.log_mark()
-        sent = fake.inject_text(DM, fti.user(fti.ALICE), "Reply with exactly: OK")
+        sent = fake.inject_text(DM, fti.user(fti.ALICE), "Reply with exactly: OK",
+                                reply_to=a_msg["message_id"])
         mid = sent["message_id"]
         fake.wait_for(lambda c: c.method in SEND and c.chat_id == DM
                       and _replies_to(c, mid), timeout=10, since=since2,
