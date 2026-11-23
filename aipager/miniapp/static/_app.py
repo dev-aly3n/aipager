@@ -3146,8 +3146,9 @@ APP_JS = r"""
           if (w.state !== "reset") {
             var bar = make("div", "ubar");
             var pct = Math.max(0, Math.min(100, Number(w.pct) || 0));
-            // 90% and over: near the limit, in the amber of "needs you".
-            var fill = make("div", pct >= 90 ? "ubar-fill is-near" : "ubar-fill");
+            // Near the limit, in the amber of "needs you": the server
+            // decides (`near`, one rule with the busy card's note).
+            var fill = make("div", w.near ? "ubar-fill is-near" : "ubar-fill");
             setAttr(fill, "style", "--pct:" + pct);
             bar.appendChild(fill);
             card.appendChild(bar);

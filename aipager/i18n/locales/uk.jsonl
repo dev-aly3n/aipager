@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Токен входу Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Невідомий вхід"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "За моделями, за 7 днів"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ 5-годинний ліміт майже вичерпано: використано {pct}"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ 5-годинний ліміт вичерпано: використано {pct}"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Тижневий ліміт майже вичерпано: використано {pct}"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Тижневий ліміт вичерпано: використано {pct}"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Ліміт витрат майже вичерпано: використано {pct}"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Ліміт витрат вичерпано: використано {pct}"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Ліміти плану з'являться тут, коли Claude відповість у сесії, де вхід виконано за підпискою Claude. API-ключі та шлюзи без ліміту витрат їх не повідомляють."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Ліміти плану"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Скидання через {days} д {hours} год"}

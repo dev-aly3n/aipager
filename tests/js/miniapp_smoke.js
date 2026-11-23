@@ -870,9 +870,9 @@ const USAGE_BODY = {
       windows: [
         { id: "five_hour", state: "reset", line: "5-hour window: reset since the last reading",
           reset: "" },
-        { id: "seven_day", state: "ok", pct: 42, line: "This week (all models): 42% used",
-          reset: "Resets in 2 d 5 h" },
-        { id: "spend_limit", state: "ok", pct: 140, line: "Spend limit: 140% used",
+        { id: "seven_day", state: "ok", pct: 42, near: false,
+          line: "This week (all models): 42% used", reset: "Resets in 2 d 5 h" },
+        { id: "spend_limit", state: "ok", pct: 140, near: true, line: "Spend limit: 140% used",
           reset: "Resets in 3 h 10 min, at 21:00" },
       ] }],
   },
@@ -903,6 +903,17 @@ if (SCENARIO === "usage_chart_resize") {
   global.window.addEventListener = (ev, fn) => { if (ev === "resize") global.__resize = fn; };
 }
 if (SCENARIO in CHART_SLOT) global.__measure = { slot: CHART_SLOT[SCENARIO] };
+if (SCENARIO === "usage_near_flag") {
+  // The server's `near` decides the amber, never the page's own reading
+  // of `pct` (roadmap 8.131: one rule with the busy card's note).
+  USAGE_BODY.plan = Object.assign({}, USAGE_BODY.plan, { logins: [{ name: null, fresh: "",
+    windows: [
+      { id: "seven_day", state: "ok", pct: 95, near: false,
+        line: "This week (all models): 95% used", reset: "Resets in 2 d 5 h" },
+      { id: "five_hour", state: "ok", pct: 50, near: true,
+        line: "5-hour window: 50% used", reset: "Resets in 3 h 10 min, at 21:00" },
+    ] }] });
+}
 if (SCENARIO === "usage_no_tokens") {
   USAGE_BODY.tokens = Object.assign({}, USAGE_BODY.tokens, { empty: "No tokens recorded yet." });
 }
@@ -3457,6 +3468,20 @@ function driveUsageChartResize() {
   }, 10);
 }
 
+function driveUsageNearFlag() {
+  setTimeoutReal(() => {
+    byId["maintab-usage"].click();
+    setTimeoutReal(() => {
+      const fills = usageNodes("ubar-fill");
+      if (fills.length !== 2) fail("expected 2 bars, got " + fills.length);
+      if (fills[0].className.includes("is-near")) fail("a 95% bar the server did not flag is amber");
+      if (!fills[1].className.includes("is-near")) fail("a 50% bar the server flagged is not amber");
+      console.log("ok: the server's near flag decides the amber bar");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 function driveUsageNoTokens() {
   setTimeoutReal(() => {
     byId["maintab-usage"].click();
@@ -4599,6 +4624,7 @@ Object.assign(DRIVERS, {
   chats_usage_settings: driveChatsUsageSettings,
   chats_usage_settings_race: driveChatsUsageSettingsRace,
   usage_no_tokens: driveUsageNoTokens,
+  usage_near_flag: driveUsageNearFlag,
   usage_chart_fits: driveUsageChartLabels,
   usage_chart_today: driveUsageChartLabels,
   usage_chart_narrow: driveUsageChartLabels,

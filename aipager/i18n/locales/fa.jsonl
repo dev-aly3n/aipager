@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "توکن ورود Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "ورود نامشخص"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "به تفکیک مدل، ۷ روز اخیر"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ محدودیت ۵ ساعته تقریباً پر شده: {pct} مصرف شده"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ محدودیت ۵ ساعته پر شده: {pct} مصرف شده"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ محدودیت هفتگی تقریباً پر شده: {pct} مصرف شده"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ محدودیت هفتگی پر شده: {pct} مصرف شده"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ سقف هزینه تقریباً پر شده: {pct} مصرف شده"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ سقف هزینه پر شده: {pct} مصرف شده"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "محدودیت‌های اشتراک وقتی Claude در سشنی که با اشتراک Claude وارد شده جواب بدهد، اینجا نشان داده می‌شوند. کلیدهای API و گیت‌وی‌های بدون سقف هزینه آن‌ها را گزارش نمی‌دهند."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "محدودیت‌های اشتراک"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "ریست در {days} روز و {hours} ساعت دیگر"}

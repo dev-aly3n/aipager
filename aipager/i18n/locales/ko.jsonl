@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Claude 로그인 토큰"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "알 수 없는 로그인"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "모델별, 최근 7일"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ 5시간 한도에 거의 도달: {pct} 사용"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ 5시간 한도 도달: {pct} 사용"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ 주간 한도에 거의 도달: {pct} 사용"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ 주간 한도 도달: {pct} 사용"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ 지출 한도에 거의 도달: {pct} 사용"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ 지출 한도 도달: {pct} 사용"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Claude 구독으로 로그인한 세션에서 Claude가 답하면 여기에 요금제 한도가 나와요. API 키와 지출 한도가 없는 게이트웨이는 한도를 알려 주지 않아요."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "요금제 한도"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "{days}일 {hours}시간 후 초기화"}

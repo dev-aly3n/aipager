@@ -122,6 +122,12 @@ MODEL_MAX_CHARS = 64
 OTHER_MODEL = "other"
 UNKNOWN_MODEL = "unknown"
 SYNTHETIC_MODEL = "<synthetic>"
+#: A plan window this full is "near the limit" (the busy card's note and
+#: the Mini App's amber bar), and this full "reached" (roadmap 8.131). One
+#: rule for both, judged on the rounded percentage /usage displays
+#: (:func:`limit_level`).
+NEAR_LIMIT_PERCENT = 90
+LIMIT_REACHED_PERCENT = 100
 #: A count above this is not a token count.
 COUNT_MAX = 10**9
 #: A stored sum above this is not ours.
@@ -210,6 +216,28 @@ def _plan_key(login: SessionLogin) -> str:
         digest = hashlib.blake2b(key.encode("utf-8"), digest_size=16).hexdigest()
         key = key[:1024 - 33] + "#" + digest
     return key
+
+
+def plan_key(login: SessionLogin) -> str:
+    """The key :func:`note_plan` stores a reading of *login* under (what
+    :func:`plan_windows` looks up). ``unknown`` for an unknown sign-in."""
+    return _plan_key(login)
+
+
+def limit_level(pct: Any) -> int:
+    """0 below the near-limit step, 1 near it, 2 at or past the limit, for
+    a window *pct* percent used (roadmap 8.131). Judged on the rounded
+    value /usage displays, so a window shown as "90%" always counts as
+    near; a spend limit over 100 counts as reached. Not a finite real
+    number (a bool, a string, NaN, infinity): 0."""
+    if isinstance(pct, bool) or not isinstance(pct, (int, float)) or not math.isfinite(pct):
+        return 0
+    shown = round(pct)
+    if shown >= LIMIT_REACHED_PERCENT:
+        return 2
+    if shown >= NEAR_LIMIT_PERCENT:
+        return 1
+    return 0
 
 
 # ---- time ------------------------------------------------------------------------
@@ -333,6 +361,29 @@ def note_plan(session_label: str, windows: dict[str, Window], login: SessionLogi
 def _drop_reading(key: str) -> None:
     _plan.pop(key, None)
     _plan_marked.pop(key, None)
+
+
+def plan_windows(key: str, *, now: float | None = None) -> dict[str, Window] | None:
+    """The windows of the newest reading stored under *key*
+    (:func:`plan_key`), as a new dict, or ``None``: for an empty or
+    ``unknown`` key (an unknown reading is shared by every session whose
+    sign-in is unknown, so it is nobody's in particular), a key with no
+    reading, or one older than ``KEEP_DAYS`` (the :func:`snapshot` rule).
+    Memory only, never a file read past the first load: the busy card
+    asks on every edit (roadmap 8.131). Never raises."""
+    try:
+        if not isinstance(key, str) or not key or key == "unknown":
+            return None
+        with _lock:
+            _ensure_loaded()
+            entry = _plan.get(key)
+            if entry is None or entry["seen_at"] < _now(now) - KEEP_DAYS * 86400:
+                return None
+            return {n: Window(pct=w["pct"], resets_at=w["resets_at"])
+                    for n, w in entry["windows"].items()}
+    except Exception:  # noqa: BLE001 - no note rather than an error
+        log.debug("usage: plan windows not read", exc_info=True)
+        return None
 
 
 # ---- the token tally -------------------------------------------------------------

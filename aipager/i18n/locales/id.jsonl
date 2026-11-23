@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Token login Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Login tidak dikenal"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "Per model, 7 hari terakhir"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ Batas 5 jam hampir habis: {pct} terpakai"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ Batas 5 jam habis: {pct} terpakai"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Batas mingguan hampir habis: {pct} terpakai"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Batas mingguan habis: {pct} terpakai"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Batas biaya hampir habis: {pct} terpakai"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Batas biaya habis: {pct} terpakai"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Batas paket muncul di sini setelah Claude menjawab di sesi yang masuk dengan langganan Claude. Kunci API dan gateway tanpa batas biaya tidak melaporkannya."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Batas paket"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Direset dalam {days} hari {hours} jam"}

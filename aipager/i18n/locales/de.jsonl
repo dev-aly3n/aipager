@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Claude-Login-Token"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Unbekannte Anmeldung"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "Nach Modell, letzte 7 Tage"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ 5-Stunden-Limit fast erreicht: {pct} verbraucht"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ 5-Stunden-Limit erreicht: {pct} verbraucht"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Wochenlimit fast erreicht: {pct} verbraucht"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Wochenlimit erreicht: {pct} verbraucht"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Ausgabenlimit fast erreicht: {pct} verbraucht"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Ausgabenlimit erreicht: {pct} verbraucht"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Planlimits erscheinen hier, sobald Claude in einer Sitzung antwortet, die mit einem Claude-Abo angemeldet ist. API-Schlüssel und Gateways ohne Ausgabenlimit melden keine."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Planlimits"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Wird in {days} T. {hours} Std. zurückgesetzt"}

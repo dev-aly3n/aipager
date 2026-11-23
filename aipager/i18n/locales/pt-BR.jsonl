@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Token de login do Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Login desconhecido"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "Por modelo, últimos 7 dias"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ Limite de 5 horas quase atingido: {pct} usado"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ Limite de 5 horas atingido: {pct} usado"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Limite semanal quase atingido: {pct} usado"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Limite semanal atingido: {pct} usado"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Limite de gastos quase atingido: {pct} usado"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Limite de gastos atingido: {pct} usado"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Os limites do plano aparecem aqui depois que o Claude responde em uma sessão conectada com uma assinatura do Claude. Chaves de API e gateways sem limite de gastos não informam esses limites."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Limites do plano"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Zera em {days} d {hours} h"}

@@ -1606,6 +1606,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "token تسجيل الدخول إلى Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "تسجيل دخول غير معروف"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "حسب النموذج، آخر ٧ أيام"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ حد الـ ٥ ساعات على وشك النفاد: استُخدم {pct}"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ نفد حد الـ ٥ ساعات: استُخدم {pct}"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ الحد الأسبوعي على وشك النفاد: استُخدم {pct}"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ نفد الحد الأسبوعي: استُخدم {pct}"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ حد الإنفاق على وشك النفاد: استُخدم {pct}"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ نفد حد الإنفاق: استُخدم {pct}"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "تظهر حدود الاشتراك هنا بعد أن يجيب Claude في جلسة مسجّلة باشتراك Claude. مفاتيح API والبوابات التي ليس لها حد إنفاق لا تُبلغ عنها."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "حدود الاشتراك"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "يُعاد الضبط بعد {days} ي {hours} س"}

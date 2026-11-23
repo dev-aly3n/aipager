@@ -286,7 +286,11 @@ def _pct(value: float, tr) -> str:
 
 
 def _render(tr, kind: str, msg, **params):
-    return tr.html(msg, **params) if kind == "html" else tr.text(msg, **params)
+    if kind == "html":
+        return tr.html(msg, **params)
+    if kind == "md":
+        return tr.md(msg, **params)
+    return tr.text(msg, **params)
 
 
 def _render_n(tr, kind: str, plural: Plural, count: int, **params):
@@ -303,6 +307,13 @@ def _reset_line(window, now: float, tr, kind: str) -> str:
         return _render(tr, kind, RESETS_HOURS, hours=int(left // 3600),
                        minutes=int(left % 3600 // 60), time=at)
     return _render(tr, kind, RESETS_MINUTES, minutes=max(1, math.ceil(left / 60)), time=at)
+
+
+def reset_text(window, now: float, tr, kind: str) -> str:
+    """/usage's sentence for when *window* resets, seen at *now*, in *tr*'s
+    language for *kind* (``"html"``, ``"text"`` or ``"md"``: the busy
+    card's near-limit note, roadmap 8.131)."""
+    return _reset_line(window, now, tr, kind)
 
 
 def _fresh_line(reading, now: float, tr, kind: str, *, named: bool = True) -> str:
@@ -336,7 +347,10 @@ def _window_entry(name: str, window, now: float, tr, kind: str) -> dict:
         # Its old percentage would be wrong: the window has reset since.
         return {"id": name, "state": "reset",
                 "line": _render(tr, kind, _WINDOW_RESET[name]), "reset": ""}
+    # `near`: the page's amber bar, by the one rule the busy card's note
+    # uses too (usage_store.limit_level), so the page never decides alone.
     return {"id": name, "state": "ok", "pct": max(0, min(1000, round(window.pct))),
+            "near": usage_store.limit_level(window.pct) >= 1,
             "line": _render(tr, kind, _WINDOW[name], pct=_pct(window.pct, tr)),
             "reset": _reset_line(window, now, tr, kind)}
 
