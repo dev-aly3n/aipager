@@ -1933,6 +1933,12 @@ class SessionOpsMixin:
         # file left by an earlier one under this name must not make its
         # first prompt join that turn's rules.
         _clear_turn_open(session_name)
+        replaced = self.registry.get(session_name) if reuse_name else None
+        if replaced is not None:
+            # Replace keeps the old process's entry: a refusal still
+            # waiting for one of its dialogs must never reach the fresh
+            # claude, whichever caller killed the old one.
+            replaced.abandon_auto_denies()
         ok, err = await inject.launch_session(
             short_name, mode=mode, cwd=cwd or None,
             system_prompt_extra=sys_extra, model=model or None,
@@ -3568,6 +3574,11 @@ class SessionOpsMixin:
             # session is in now is news the caller needs.
             sess.restarting_until = earlier_window
             return RestartOutcome(ok=False, reason="still_stopping", label=label)
+
+        # The old process is gone, and its dialogs with it: a refusal still
+        # waiting for one is never typed, whether the launch below works or
+        # fails (this entry stays INTERACTIVE until then).
+        sess.abandon_auto_denies()
 
         short_name = session_name.removeprefix("claude-")
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)

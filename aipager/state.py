@@ -3696,6 +3696,25 @@ class TrackedSession:
         if not task.done():
             task.cancel()
 
+    def abandon_auto_denies(self) -> int:
+        """The process whose dialogs the waiting auto-denies are for is
+        being replaced by a fresh one under the same name and the same
+        entry (a /new Replace): none of them may ever be typed, by their
+        retry or by a later run (the fresh claude's first prompt would get
+        the Escape). Their records close (they have no message) and the
+        retry goes. Returns how many were waiting."""
+        due = [rec.get("perm") for rec in self.extra_prompts
+               if isinstance(rec, dict) and rec.get("auto_deny_due")]
+        if due:
+            self.close_prompts(lambda perm: any(perm is d for d in due))
+            # Whatever the status says (close_prompts sees records only
+            # while the session waits): none is left to type.
+            self.extra_prompts = [
+                rec for rec in self.extra_prompts
+                if not (isinstance(rec, dict) and rec.get("auto_deny_due"))]
+        self.drop_auto_deny_retry(force=True)
+        return len(due)
+
     def prompt_surface(self, perm) -> int | None:
         """The message an open prompt's buttons sit on: the busy card for
         the inline one, else its own message. None when not open."""

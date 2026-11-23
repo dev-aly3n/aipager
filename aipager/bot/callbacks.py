@@ -1851,6 +1851,12 @@ class CallbackDispatchMixin:
                     # up for the dead turn before the new session starts.
                     # (No card lock: nothing below settles a card.)
                     self._cancel_lazy_card(sess)
+                    # A rule's refusal waiting for an agent's dialog dies
+                    # with the old process: this entry stays INTERACTIVE
+                    # through the kill and the fresh launch, so its retry
+                    # (or the fresh claude's first prompt) would type the
+                    # Escape into the new claude.
+                    sess.abandon_auto_denies()
                     await inject.kill_session(session_name)
                     # Wait briefly for socket to disappear so the next
                     # launch's "already exists" check passes. The socket
