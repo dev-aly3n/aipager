@@ -31,9 +31,11 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   no decision, after it (as Claude shows its own dialog then). Its rows
   are Claude Code 2.1.291's for Write: "Yes", "Yes, allow all edits
   during this session", "No, and tell Claude what to do differently
-  (esc)"; arrows move and clamp at the ends, Enter chooses. A key while
-  the hook still waits ends the hook, as Claude does. The last row ends
-  the turn like an interrupt, as 2.1.291 does: a rejected tool result,
+  (esc)"; arrows move and clamp at the ends, Enter chooses, and a lone
+  Escape takes the last row, as Claude Code's tool dialog does (aipager
+  types its Deny fallback as one Escape). A key while the hook still
+  waits ends the hook, as Claude does. The last row ends the turn like
+  an interrupt, as 2.1.291 does: a rejected tool result,
   ``[Request interrupted by user for tool use]``, no ``PostToolUse``
   and no ``Stop`` (aipager's keystroke-fallback Deny).
 - Hooks run in their own process group and a key kills the whole group,
@@ -213,6 +215,8 @@ class StandIn:
         self.dialog_answer: str | None = None
         self.in_permission = False
         self.dialog_row = 0
+        #: When an Escape last declined the permission dialog (monotonic).
+        self.declined_at: float | None = None
         self.lock = threading.Lock()
         self.queue: list[tuple[str, bool]] = []
         self.turn: threading.Thread | None = None
@@ -1013,17 +1017,47 @@ class StandIn:
             # knows the daemon was told before this turn ends.
             self.log(event="queued", prompt=prompt)
 
-    def _answer_dialog(self, answer: str) -> bool:
-        """A key while the permission dialog is up answers it."""
+    def _answer_dialog(self, answer: str, key: str) -> bool:
+        """A key while the permission dialog is up answers it (*key*:
+        ``enter`` or ``escape``, logged so a scenario can tell how)."""
         with self.lock:
             if not self.in_permission:
                 return False
             self.dialog_answer = answer
             proc = self.hook_proc
-        self.log(event="dialog_key", answer=answer)
+        self.log(event="dialog_key", answer=answer, key=key)
         if proc is not None:
             _kill_group(proc)
         return True
+
+    def _permission_key(self, text: str) -> bool:
+        """One read's keys on the permission dialog: True when the dialog
+        took them. aipager paces its keys (0.1 s apart), so an arrow and
+        the Enter after it arrive in separate reads; an Enter in the same
+        read as an arrow falls through to the input buffer."""
+        if self.in_permission and _ARROWS_RE.fullmatch(text):
+            with self.lock:
+                for key in re.findall(r"\x1b\[([AB])", text):
+                    # Clamps at both ends, as 2.1.291's menu did (newer
+                    # Claude Code menus wrap; aipager no longer types arrows
+                    # into a tool dialog).
+                    self.dialog_row = min(len(DIALOG_ROWS) - 1, max(
+                        0, self.dialog_row + (1 if key == "B" else -1)))
+            return True
+        if text == "\r":
+            return self._answer_dialog(
+                "rejected" if self.dialog_row == len(DIALOG_ROWS) - 1 else "allowed", "enter")
+        # A lone Escape declines the dialog, as its "(esc)" row does,
+        # instead of interrupting the turn.
+        if text == "\x1b":
+            if self._answer_dialog("rejected", "escape"):
+                self.declined_at = time.monotonic()
+                return True
+            if self.declined_at is not None and time.monotonic() - self.declined_at < 10:
+                # A second Escape soon after the decline: the dialog is
+                # gone and the turn may be too, so nothing else logs it.
+                self.log(event="escape_after_decline")
+        return False
 
     def interrupt(self) -> None:
         with self.lock:
@@ -1086,19 +1120,9 @@ class StandIn:
             if self.dialogs and text == "\r" and self._answer_top():
                 buf = ""
                 continue
-            # aipager paces its keys (0.1 s apart), so an arrow and the
-            # Enter after it arrive in separate reads; an Enter in the same
-            # read as an arrow would fall through to the input buffer.
-            if self.in_permission and _ARROWS_RE.fullmatch(text):
-                with self.lock:
-                    for key in re.findall(r"\x1b\[([AB])", text):
-                        # Claude's menu clamps at both ends; it never wraps.
-                        self.dialog_row = min(len(DIALOG_ROWS) - 1, max(
-                            0, self.dialog_row + (1 if key == "B" else -1)))
-                continue
-            if text == "\r" and self._answer_dialog(
-                    "rejected" if self.dialog_row == len(DIALOG_ROWS) - 1 else "allowed"):
-                buf = ""
+            if self._permission_key(text):
+                if not _ARROWS_RE.fullmatch(text):
+                    buf = ""
                 continue
             if text == "\r":
                 prompt = buf.strip()

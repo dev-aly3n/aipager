@@ -1,8 +1,9 @@
 """Scenario 10 (roadmap 8.99): a Deny typed into Claude Code's dialog.
 
 When the PermissionRequest hook has stopped waiting, a Deny tap falls
-back to typing keys into Claude Code's dialog: Downs that clamp on the
-last row, "No, and tell Claude what to do differently (esc)", and Enter.
+back to typing into Claude Code's dialog: one Escape (since roadmap
+8.126), which declines a tool dialog as its "No, and tell Claude what to
+do differently (esc)" row does.
 Claude Code 2.1.291 then ends the turn like an interrupt: no PostToolUse
 and no Stop. The daemon must still settle the card as Denied and return
 the session to IDLE (it used to stay BUSY until its 900 s cap), whether
@@ -93,13 +94,15 @@ def _standin(inst, where):
     fake.wait_answer(cb, timeout=15 if where == "separate" else 90)
     answered = time.monotonic()
     settle_within = 30 if where == "card" else 90
-    # Typed: the stand-in's dialog took the last row, and its turn ended
-    # like an interrupt (no Stop).
+    # Typed: one Escape declined the stand-in's dialog, and its turn ended
+    # like an interrupt (no Stop). Any other keys (arrows and Enter, an
+    # Escape that interrupted instead) or none fail here.
     fti.wait_until(lambda: any(e.get("event") == "interrupted" and e.get("by") == "dialog"
                                for e in inst.standin_log(name)),
-                   30, "the typed Deny to reach the dialog's last row")
-    assert [e.get("answer") for e in inst.standin_log(name)
-            if e.get("event") == "dialog_key"] == ["rejected"]
+                   30, "the typed Deny (one Escape) to decline the dialog")
+    assert [(e.get("answer"), e.get("key")) for e in inst.standin_log(name)
+            if e.get("event") == "dialog_key"] == [("rejected", "escape")]
+    assert not [e for e in inst.standin_log(name) if e.get("event") == "escape"]
     flows.wait_text(fake, G, "Denied by @bob", since=since, timeout=settle_within)
     # The session is IDLE again within seconds, not after the 900 s cap.
     flows.wait_turn_end(inst, name, label, since_log=log_since, timeout=settle_within)
@@ -108,6 +111,9 @@ def _standin(inst, where):
     assert not [e for e in inst.standin_log(name) if e.get("event") == "stop"]
     inst.wait_log(f"[{label}] turn ended at the permission dialog", since=log_since,
                   timeout=settle_within)
+    # One Escape, not two: a second would reach whatever is on screen next.
+    assert not [e for e in inst.standin_log(name)
+                if e.get("event") == "escape_after_decline"]
 
     # And it takes the next message as a new turn.
     (inst.inst_dir / f"standin-hook-deadline-{name}").unlink(missing_ok=True)

@@ -135,7 +135,49 @@ def make_root() -> Path:
     if explicit is None:
         real_home = os.path.realpath(os.path.expanduser("~" + _login_name()))
         assert not str(root).startswith(real_home + os.sep), root
+    write_owner_marker(root)
     return root
+
+
+#: The file in every instance root that names the process using it:
+#: ``"<pid> <start>\n"``, *start* being that process's start time
+#: (``/proc/<pid>/stat`` field 22, clock ticks since boot), so a reused
+#: pid is never taken for the owner. run_e2e.sh's leftover cleanup removes
+#: a root's credential only when that process is gone, so a run beside
+#: another (the release harness, a second fake-Telegram run) keeps its
+#: own. The release harness's pinst.py writes the same format.
+OWNER_MARKER = "owner"
+
+
+def process_start_ticks(pid: int) -> int | None:
+    """*pid*'s start time in clock ticks since boot, or None when there
+    is no such process. The command name in ``stat`` may hold spaces and
+    parentheses, so the fields are read after its last ``)``."""
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as f:
+            stat = f.read().decode("ascii", "replace")
+    except OSError:
+        return None
+    fields = stat[stat.rfind(")") + 2:].split()
+    try:
+        return int(fields[19])
+    except (IndexError, ValueError):
+        return None
+
+
+def write_owner_marker(root: Path, pid: int | None = None) -> Path:
+    """Write *root*'s :data:`OWNER_MARKER` for *pid* (default: this
+    process), all at once (a reader never sees half of it)."""
+    pid = os.getpid() if pid is None else pid
+    start = process_start_ticks(pid)
+    assert start is not None, f"no process {pid}"
+    path = root / OWNER_MARKER
+    tmp = root / f".{OWNER_MARKER}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(f"{pid} {start}\n")
+    os.replace(tmp, path)
+    return path
 
 
 def _login_name() -> str:

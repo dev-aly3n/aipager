@@ -44,6 +44,32 @@ def test_make_root_is_a_short_apg_folder_in_tmp(root):
     fti.assert_socket_lengths(root / "i", ["ft1", "ft14"])
 
 
+def test_make_root_names_this_process_as_its_owner(root):
+    # run_e2e.sh's leftover cleanup reads this file: a root whose owner is
+    # alive keeps its credential.
+    marker = root / fti.OWNER_MARKER
+    start = fti.process_start_ticks(os.getpid())
+    assert start is not None and start > 0
+    assert marker.read_text() == f"{os.getpid()} {start}\n"
+    assert marker.stat().st_mode & 0o777 == 0o600
+    assert sorted(p.name for p in root.iterdir()) == [fti.OWNER_MARKER]
+
+
+def test_owner_start_ticks_tell_a_gone_or_other_process_apart(tmp_path):
+    child = subprocess.Popen(["sleep", "30"])
+    try:
+        mine, theirs = fti.process_start_ticks(os.getpid()), fti.process_start_ticks(child.pid)
+        assert theirs is not None and mine is not None and theirs >= mine
+        fti.write_owner_marker(tmp_path, child.pid)
+        assert (tmp_path / fti.OWNER_MARKER).read_text() == f"{child.pid} {theirs}\n"
+    finally:
+        child.kill()
+        child.wait()
+    assert fti.process_start_ticks(child.pid) is None
+    with pytest.raises(AssertionError, match="no process"):
+        fti.write_owner_marker(tmp_path / "x", child.pid)
+
+
 def test_config_ids_roles_and_loads(tmp_path):
     cfg = fti.build_config("/x/claude")
     p = tmp_path / "aipager.yaml"
@@ -223,6 +249,49 @@ def test_standin_turn_writes_a_transcript_aipager_reads(tmp_path, monkeypatch):
            .splitlines()]
     assert [e["event"] for e in log] == ["prompt", "stop", "prompt", "decision", "stop"]
     assert log[3]["decision"] == "allowed"
+
+
+def _standin_at_dialog(tmp_path, monkeypatch):
+    home, inst, proj = tmp_path / "h", tmp_path / "i", tmp_path / "p"
+    for d in (home / ".claude", inst, proj):
+        d.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("AIPAGER_INSTANCE_DIR", str(inst))
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-ftt__k1")
+    monkeypatch.chdir(proj)
+    s = standin_claude.StandIn([])
+    log = inst / "standin-claude-ftt__k1.jsonl"
+    return s, lambda: [json.loads(line) for line in log.read_text().splitlines()
+                       if json.loads(line)["event"] == "dialog_key"] if log.exists() else []
+
+
+def test_standin_dialog_declines_on_a_lone_escape(tmp_path, monkeypatch):
+    # aipager types a Deny as one Escape: Claude Code's tool dialog takes
+    # it as its "(esc)" row, so the stand-in must too (not an interrupt).
+    s, keys = _standin_at_dialog(tmp_path, monkeypatch)
+    assert not s._permission_key("\x1b")  # no dialog: left to interrupt()
+    s.in_permission = True
+    assert s._permission_key("\x1b")
+    assert s.dialog_answer == "rejected"
+    assert [(k["answer"], k["key"]) for k in keys()] == [("rejected", "escape")]
+    assert not s._permission_key("\x1bx")  # not a lone Escape
+    # A second Escape after the decline is left to interrupt(), and logged
+    # so a scenario can tell one Escape from two.
+    s.in_permission = False
+    assert not s._permission_key("\x1b")
+    events = [json.loads(line)["event"] for line in
+              (tmp_path / "i" / "standin-claude-ftt__k1.jsonl").read_text().splitlines()]
+    assert events.count("escape_after_decline") == 1
+
+
+@pytest.mark.parametrize("downs, answer", [(0, "allowed"), (1, "allowed"), (5, "rejected")])
+def test_standin_dialog_arrows_then_enter(tmp_path, monkeypatch, downs, answer):
+    s, keys = _standin_at_dialog(tmp_path, monkeypatch)
+    s.in_permission = True
+    for _ in range(downs):
+        assert s._permission_key("\x1b[B")
+    assert s._permission_key("\r")
+    assert [(k["answer"], k["key"]) for k in keys()] == [(answer, "enter")]
 
 
 def _sleeper(env=None):
