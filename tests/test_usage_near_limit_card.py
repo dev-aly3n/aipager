@@ -33,7 +33,7 @@ from tests.footer_text import as_md
 OWNER, USER, GROUP = 111, 777, -100
 ALICE = SessionLogin("saved", "", "/home/alice/.claude")
 WEEK_ROW = "⚠️ Weekly limit almost reached: 92% used · Resets in 2 d"
-INVISIBLE = "‎‏⁦⁧⁨⁩"
+INVISIBLE = "\u200e\u200f\u2066\u2067\u2068\u2069"
 
 
 @pytest.fixture(autouse=True)
