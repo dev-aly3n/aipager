@@ -23,8 +23,6 @@ Run with ``AIPAGER_E2E_FAKETG=1 AIPAGER_E2E_FAKETG_CLAUDE=standin``.
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from aipager import i18n
@@ -57,18 +55,6 @@ def _wait_event(inst, name, event, what, timeout=60, **match):
 def _tap(fake, msg, data):
     cb = fake.inject_callback(fti.user(fti.ALICE), fake.message(DM, msg["message_id"]), data)
     return flows.wait_toast(fake, cb, timeout=30)
-
-
-def _tap_until_answered(fake, msg, data, limit=15):
-    """Tap, and again once a second while the pop-up says the prompt is
-    still opening (aipager waits out the agent's dialog's gap after its
-    hook's end, at most a few seconds). The last pop-up."""
-    deadline = time.monotonic() + limit
-    while True:
-        toast = _tap(fake, msg, data)
-        if toast != OPENING or time.monotonic() >= deadline:
-            return toast
-        time.sleep(1.0)
 
 
 def _sent_id(call) -> int | None:
@@ -134,7 +120,7 @@ def test_agent_prompt_after_the_turn_is_its_own_message(fresh, case):
                 assert again["message_id"] == a_msg["message_id"]
             _wait_event(inst, name, "dialog_open", "A's dialog on screen", dialog="A")
             if case in ("typed", "gap"):
-                toast = _tap_until_answered(fake, a_msg, a_allow)
+                toast = flows.tap_until(fake, DM, fti.ALICE, a_msg, a_allow, retry_on=OPENING)
                 assert toast != OPENING, toast
             else:
                 inst.send_keys(name, b"\r")

@@ -23,8 +23,8 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-from aipager.dtach import hook_receiver as hr
 from aipager import prompt_stack
+from aipager.dtach import hook_receiver as hr
 from aipager.dtach import hook_reply, inject
 from aipager.policy import load_policy
 from aipager.scope import Member, Scope

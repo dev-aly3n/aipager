@@ -24,13 +24,10 @@ Run with ``AIPAGER_E2E_FAKETG=1 AIPAGER_E2E_FAKETG_CLAUDE=standin``.
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from aipager import i18n
 from aipager.bot.callbacks import PROMPT_OPENING
-
 from tests.e2e.fake_telegram import instance as fti
 from tests.e2e.faketg import conftest as ftc
 from tests.e2e.faketg import flows
@@ -60,17 +57,6 @@ def _wait_event(inst, name, event, what, timeout=60, **match):
 def _tap(fake, msg, data):
     cb = fake.inject_callback(fti.user(fti.ALICE), fake.message(DM, msg["message_id"]), data)
     return flows.wait_toast(fake, cb, timeout=30)
-
-
-def _tap_until_answered(fake, msg, data, limit=15):
-    """Tap, and again once a second while the pop-up says the prompt is
-    still opening. The last pop-up."""
-    deadline = time.monotonic() + limit
-    while True:
-        toast = _tap(fake, msg, data)
-        if toast != OPENING or time.monotonic() >= deadline:
-            return toast
-        time.sleep(1.0)
 
 
 @pytest.mark.parametrize("case", list(LABELS))
@@ -116,7 +102,8 @@ def test_both_prompts_show_and_both_answers_land(fresh, case):
         assert [e["dialog"] for e in _events(inst, name, "dialog_key")] == ["Q"]
         a_msg2, a_allow2 = fake.wait_button(DM, "Allow", since=since, timeout=10)
         assert a_msg2["message_id"] == a_msg["message_id"]
-        toast = _tap_until_answered(fake, a_msg2, a_allow2)
+        toast = flows.tap_until(fake, DM, fti.ALICE, a_msg2, a_allow2,
+                                retry_on=OPENING)
         assert toast != OPENING, toast
         _wait_event(inst, name, "agent_answer", "A answered by its key",
                     answer="allowed", by="key")

@@ -88,6 +88,22 @@ def wait_toast(fake, callback_id: str, timeout: float = 30) -> str:
     return str(fake.wait_answer(callback_id, timeout=timeout).get("text", ""))
 
 
+def tap_until(fake, chat_id: int, uid: int, msg: dict, data: str, *, retry_on: str,
+              limit: float = 15.0) -> str:
+    """Tap *data* on *msg* as *uid*, and again once a second while the
+    pop-up is *retry_on* (e.g. aipager waiting out an agent's dialog's gap
+    after its hook's end, at most a few seconds), for at most *limit*
+    seconds. The last pop-up."""
+    deadline = time.monotonic() + limit
+    while True:
+        cb = fake.inject_callback(fti.user(uid), fake.message(chat_id, msg["message_id"]),
+                                  data)
+        toast = wait_toast(fake, cb)
+        if toast != retry_on or time.monotonic() >= deadline:
+            return toast
+        time.sleep(1.0)
+
+
 def quiet(fake, seconds: float = 3.0, *, since: int, chat_id: int | None = None) -> list:
     """Wait *seconds*, then the calls made since *since* (optionally only
     those naming *chat_id*)."""
