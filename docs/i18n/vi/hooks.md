@@ -1,6 +1,6 @@
 # Sự kiện hook
 
-<!-- i18n-source: docs/hooks.md @ b664aeaf -->
+<!-- i18n-source: docs/hooks.md @ 347acc60 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../hooks.md))
 

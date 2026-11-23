@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ b664aeaf -->
+<!-- i18n-source: docs/commands.md @ 347acc60 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 

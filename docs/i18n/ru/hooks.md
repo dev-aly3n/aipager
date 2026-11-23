@@ -1,6 +1,6 @@
 # События hooks
 
-<!-- i18n-source: docs/hooks.md @ b664aeaf -->
+<!-- i18n-source: docs/hooks.md @ 347acc60 -->
 
 > Эта страница переведена с английской; если они расходятся, верна английская версия. ([English](../../hooks.md))
 

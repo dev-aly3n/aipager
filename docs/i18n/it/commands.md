@@ -1,6 +1,6 @@
 # Comandi del bot e interfaccia
 
-<!-- i18n-source: docs/commands.md @ b664aeaf -->
+<!-- i18n-source: docs/commands.md @ 347acc60 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../commands.md))
 
