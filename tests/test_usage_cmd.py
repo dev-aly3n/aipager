@@ -149,6 +149,26 @@ def test_a_passed_reset_shows_reset_never_the_old_percentage(left):
     assert five["state"] == "ok" and five["pct"] == 12
 
 
+@pytest.mark.parametrize("pct,near", [
+    pytest.param(89.4, False, id="89_4"),
+    pytest.param(89.5, True, id="89_5"),
+    pytest.param(89.9, True, id="89_9"),
+    pytest.param(90, True, id="90"),
+    pytest.param(100, True, id="100"),
+    pytest.param(250, True, id="250"),
+])
+def test_window_entry_near_flag_edges(pct, near):
+    """The Mini App's amber bar comes from the server's `near`: the one
+    rule the busy card's near-limit note uses (roadmap 8.131)."""
+    reading = _reading({"seven_day": Window(pct, int(NOW) + 600),
+                        "five_hour": Window(97, int(NOW) - 1)})
+    view = usage_view(_snap([reading]), ALL, EN, NOW)
+    windows = {w["id"]: w for w in view["plan"]["logins"][0]["windows"]}
+    assert windows["seven_day"]["near"] is near
+    # A reset window has no percentage, so no flag either.
+    assert windows["five_hour"]["state"] == "reset" and "near" not in windows["five_hour"]
+
+
 @pytest.mark.parametrize("age,expected", [
     (0, "(just now)"), (59, "(just now)"), (60, "(1 minute ago)"), (3599, "(59 minutes ago)"),
     (3600, "(1 hour ago)"), (7200, "(2 hours ago)"), (86400, "(1 day ago)"),
