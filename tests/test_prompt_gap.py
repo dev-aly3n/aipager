@@ -150,6 +150,22 @@ def test_no_reply_channel_gap_runs_from_arrival():
     assert ps.dialog_gap(agent(at=NOW - 4.0, request_id=""), NOW, **KW) is None
 
 
+@pytest.mark.parametrize("launch", ["background", "unknown"])
+def test_a_parked_agent_question_stays_gated_until_its_hook_is_gone(launch):
+    """Decision (fixes-2.md, rev-iter1-002): an agent's AskUserQuestion
+    whose PermissionRequest hook is parked is gated like any other prompt,
+    for unknown launch too, although no hook decision can answer a
+    question. Its dialog may not be drawn until the hook leaves (a
+    background agent's, or one moved there), and option keys with no
+    dialog go into Claude's input line: up and down walk its history,
+    Enter sends what is there. Failing closed costs a person at most the
+    hook's wait plus the grace."""
+    order = dict(agent(launch, at=NOW - 15.0), tool="AskUserQuestion")
+    assert ps.keys_verdict(order, [], NOW, **KW) == "opening"
+    gone = dict(order, timed_out_at=NOW - 4.0)
+    assert ps.keys_verdict(gone, [], NOW, **KW) == "yes"
+
+
 def test_gap_next_look_probes_at_timeout_plus_settle():
     gone = NOW - 1
     order = agent(timed_out_at=gone)

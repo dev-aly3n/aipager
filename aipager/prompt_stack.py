@@ -142,7 +142,10 @@ def dialog_gap(order: object, now: float, *,
     timeout datagram was lost). From the hook's end the gap lasts
     *open_grace*, cut to *settle* after ``dialog_seen_at`` when that
     evidence is no older than the end. Half-open: at the end instant the
-    prompt is out of its gap."""
+    prompt is out of its gap. An agent's AskUserQuestion is gated the
+    same way, its parked hook included, although no hook decision answers
+    it: its option keys with no dialog would walk and send Claude's input
+    history, so it fails closed for the hook's whole wait."""
     if not isinstance(order, dict):
         return None
     if not order.get("owner") or order.get("launch") not in (BACKGROUND, UNKNOWN):
