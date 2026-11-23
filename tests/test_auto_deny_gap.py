@@ -93,13 +93,16 @@ def due_orders(sess):
             if isinstance(rec, dict) and rec.get("auto_deny_due")]
 
 
-def fake_sleep(monkeypatch, rig):
+def fake_sleep(monkeypatch, rig, hold: asyncio.Event | None = None):
     """``auth._sleep`` that records the delay and moves every open
-    prompt's stamps back by it (the time passing)."""
+    prompt's stamps back by it (the time passing). With *hold*, the time
+    passes only once it is set."""
     delays: list[float] = []
 
     async def _sleep(delay):
         delays.append(delay)
+        if hold is not None:
+            await hold.wait()
         assert len(delays) < 20, "the retry did not settle"
         # Every order, a refusal's too when the session no longer waits
         # (open_prompts() lists none then).
@@ -209,36 +212,157 @@ def test_probe_finds_record_and_reschedules_to_seen_plus_settle(
     assert drig.keys == ["Escape"]
 
 
-def test_close_during_wait_types_nothing_and_leaves_no_task(
-        drig, monkeypatch, run_async):
-    _extra_waiting(drig)
+async def _close_the_agents_prompt(drig, how):
+    """The production paths that close the waiting refusal's prompt."""
     bot, sess = drig.bot, drig.sess
+    if how == "next-call":
+        # The agent carried on (its dialog was answered in the terminal).
+        await drig.recv._on_datagram(datagram(
+            drig, "PreToolUse", tool_name="Read", tool_input={"file_path": "/a"},
+            tool_use_id="toolu_next", agent_id=BG, agent_type="ship-reviewer"))
+    elif how == "subagent-stop":
+        await drig.recv._on_datagram(datagram(
+            drig, "SubagentStop", agent_id=BG, agent_type="ship-reviewer"))
+    elif how == "stop":
+        await bot._stop_session_core(sess)
+    else:
+        # The session monitor found the session gone (a kill, a crash).
+        bot.registry.transition(sess.name, Status.GONE)
+
+
+CLOSES = ["next-call", "subagent-stop", "stop", "gone"]
+
+
+@pytest.mark.parametrize("how", CLOSES)
+def test_close_during_wait_types_nothing_and_leaves_no_task(
+        drig, monkeypatch, run_async, how):
+    """Every path that closes the last waiting refusal cancels its retry
+    at once (``TrackedSession.drop_auto_deny_retry``), with no further
+    call from the closer."""
+    _extra_waiting(drig)
+    bot = drig.bot
     seen = {}
 
     async def go():
-        fake_sleep(monkeypatch, drig)
+        hold = asyncio.Event()
+        delays = fake_sleep(monkeypatch, drig, hold)
         await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
         drig.keys.clear()
         await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
                                               aipager_request_id="req-bg-w"))
         task = bot.auto_deny_retry_task(S)
         seen["before"] = bot.pending_auto_deny_retry(S)
-        # The turn ended at the dialog (or /stop): every prompt closed, the
-        # session no longer waiting, and the closers tell the bot.
-        sess.close_all_prompts()
-        bot.registry.transition(sess.name, Status.IDLE)
-        await bot._after_prompts_changed(sess, {"inline_closed": False})
+        await _close_the_agents_prompt(drig, how)
         seen["after"] = bot.pending_auto_deny_retry(S)
+        n, k = len(delays), len(drig.keys)
+        hold.set()
         try:
             await task
         except asyncio.CancelledError:
             pass
+        seen["cancelled"] = task is not None and task.cancelled()
         await drain(bot)
+        seen["slept"] = len(delays) - n
+        # The closer's own keys (/stop's Escapes) aside: nothing later.
+        seen["keys"] = drig.keys[k:]
 
     run_async(go())
     assert seen["before"] is True
     assert seen["after"] is False
-    assert drig.keys == []
+    assert seen["cancelled"] is True
+    assert seen["slept"] == 0
+    assert seen["keys"] == []
+    assert due_orders(drig.sess) == []
+
+
+def test_closing_the_refusal_while_another_prompt_stays_open_cancels_its_retry(
+        drig, monkeypatch, run_async):
+    """Claude's own question stays open (the session still waits, so no
+    status change drops anything): the agent's next call closing its
+    refused prompt alone cancels the retry."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        fake_sleep(monkeypatch, drig, hold)
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        seen["before"] = bot.pending_auto_deny_retry(S)
+        await _close_the_agents_prompt(drig, "next-call")
+        seen["after"] = bot.pending_auto_deny_retry(S)
+        seen["status"] = sess.status
+        seen["open"] = len(sess.open_prompts())
+        hold.set()
+        await drain(bot)
+
+    run_async(go())
+    assert seen == {"before": True, "after": False, "status": Status.INTERACTIVE,
+                    "open": 1}
+    assert "Escape" not in drig.keys
+
+
+def test_a_retry_survives_a_close_that_leaves_its_refusal_waiting(
+        drig, monkeypatch, run_async):
+    """Control for the cancel above: another prompt closing while the
+    refusal still waits keeps the retry."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    seen = {}
+
+    async def go():
+        hold = asyncio.Event()
+        fake_sleep(monkeypatch, drig, hold)
+        await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        sess.close_prompts(lambda _perm: False)
+        seen["after"] = bot.pending_auto_deny_retry(S)
+        hold.set()
+        await drain(bot)
+
+    run_async(go())
+    assert seen["after"] is True
+    assert drig.keys.count("Escape") == 1
+
+
+def test_a_close_elsewhere_while_the_woken_retry_types_does_not_cut_it_short(
+        drig, monkeypatch, run_async):
+    """Once its sleep is over the retry is no longer the pending one: a
+    close in another task while it types (its refusal no longer due, so
+    none is left waiting) must not cancel it before its notice and the
+    BUSY transition."""
+    _extra_waiting(drig)
+    bot, sess = drig.bot, drig.sess
+    real_type = bot._type_auto_deny
+    seen = {}
+
+    async def _typing(s, tool_name):
+        async def _elsewhere():
+            sess.close_prompts(lambda _perm: False)
+        await asyncio.get_running_loop().create_task(_elsewhere())
+        return await real_type(s, tool_name)
+
+    monkeypatch.setattr(bot, "_type_auto_deny", _typing)
+
+    async def go():
+        fake_sleep(monkeypatch, drig)
+        await bot._handle_callback(tap_update(CARD, "opt0", ALICE), MagicMock())
+        drig.keys.clear()
+        n_notices = len(blocked_notices(drig))
+        await drig.recv._on_datagram(datagram(drig, "permission_reply_timeout",
+                                              aipager_request_id="req-bg-w"))
+        task = bot.auto_deny_retry_task(S)
+        await task
+        seen["cancelled"] = task.cancelled()
+        await drain(bot)
+        seen["notices"] = len(blocked_notices(drig)) - n_notices
+
+    run_async(go())
+    assert seen == {"cancelled": False, "notices": 1}
+    assert drig.keys == ["Escape"]
+    assert sess.status == Status.BUSY
 
 
 def _left_the_wait(drig, monkeypatch, run_async, *, gap_over):
@@ -328,3 +452,97 @@ def test_control_claudes_own_lone_auto_deny_types_at_once(drig):
               tool_use_id="toolu_w1")
     assert drig.keys == ["Escape"]
     assert not drig.bot.pending_auto_deny_retry(S)
+
+
+# -- TrackedSession.drop_auto_deny_retry: the one place every close ends ----------------
+
+def _sess_with_retry(status, *, due=True):
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-solo", label="solo", status=status)
+    sess.extra_prompts.append({"text": "", "keyboard": None, "summary": "x",
+                               "prompt_token": None,
+                               "perm": {"tool_info": {"name": "Write"}},
+                               "auto_deny_due": due})
+    return sess
+
+
+@pytest.mark.parametrize("status", [Status.INTERACTIVE, Status.IDLE],
+                         ids=["waiting", "no-longer-waiting"])
+def test_close_all_prompts_cancels_the_retry(run_async, status):
+    """/stop, a halt and a turn ended at its dialog close every prompt,
+    whatever the status already says (a record left outside the open list
+    is dropped all the same, and its retry with it)."""
+    seen = {}
+
+    async def go():
+        sess = _sess_with_retry(status)
+        task = asyncio.get_running_loop().create_task(asyncio.sleep(60))
+        sess.auto_deny_retry_task = task
+        sess.close_all_prompts()
+        await asyncio.sleep(0)
+        seen["slot"] = sess.auto_deny_retry_task
+        seen["cancelled"] = task.cancelled()
+
+    run_async(go())
+    assert seen == {"slot": None, "cancelled": True}
+
+
+def test_close_prompts_cancels_the_retry_once_its_refusal_is_gone(run_async):
+    """The state's own contract, whoever closes: another prompt still open
+    (no status change), only the refusal's record closed."""
+    seen = {}
+
+    async def go():
+        sess = _sess_with_retry(Status.INTERACTIVE)
+        due_perm = sess.extra_prompts[0]["perm"]
+        sess.extra_prompts.append({"text": "q", "keyboard": None, "summary": "q",
+                                   "prompt_token": None, "msg_id": 7,
+                                   "perm": {"tool_info": {"name": "AskUserQuestion"}}})
+        task = asyncio.get_running_loop().create_task(asyncio.sleep(60))
+        sess.auto_deny_retry_task = task
+        sess.close_prompts(lambda perm: perm is due_perm)
+        await asyncio.sleep(0)
+        seen["open"] = len(sess.open_prompts())
+        seen["slot"] = sess.auto_deny_retry_task
+        seen["cancelled"] = task.cancelled()
+
+    run_async(go())
+    assert seen == {"open": 1, "slot": None, "cancelled": True}
+
+
+def test_a_close_that_leaves_a_refusal_waiting_keeps_the_retry(run_async):
+    seen = {}
+
+    async def go():
+        sess = _sess_with_retry(Status.INTERACTIVE)
+        task = asyncio.get_running_loop().create_task(asyncio.sleep(60))
+        sess.auto_deny_retry_task = task
+        sess.close_prompts(lambda _perm: False)
+        sess.drop_auto_deny_retry()
+        seen["kept"] = sess.auto_deny_retry_task is task and not task.done()
+        task.cancel()
+
+    run_async(go())
+    assert seen["kept"] is True
+
+
+def test_a_running_retry_is_never_cancelled_by_its_own_close(run_async):
+    """The retry that types the last refusal closes it itself: the close
+    must not cancel the task it runs in (its notice and BUSY come after)."""
+    seen = {}
+
+    async def go():
+        sess = _sess_with_retry(Status.INTERACTIVE)
+
+        async def _retry():
+            sess.close_all_prompts()
+            await asyncio.sleep(0)
+            seen["ran_on"] = True
+
+        task = asyncio.get_running_loop().create_task(_retry())
+        sess.auto_deny_retry_task = task
+        await task
+        seen["cancelled"] = task.cancelled()
+
+    run_async(go())
+    assert seen == {"ran_on": True, "cancelled": False}

@@ -877,41 +877,22 @@ class AuthMixin:
             raise
         self._schedule_auto_deny_retry(sess)
 
-    def _auto_deny_retries(self) -> dict:
-        """The pending gap retry of each session, by session name."""
-        retries = vars(self).get("_auto_deny_retry_tasks")
-        if not isinstance(retries, dict):
-            retries = {}
-            vars(self)["_auto_deny_retry_tasks"] = retries
-        return retries
+    def _auto_deny_retry_of(self, session_name: str) -> asyncio.Task | None:
+        """The retry asleep for *session_name*'s waiting auto-deny
+        (``TrackedSession.auto_deny_retry_task``), or None."""
+        sess = self.registry.get(session_name)
+        return getattr(sess, "auto_deny_retry_task", None) if sess else None
 
     def pending_auto_deny_retry(self, session_name: str) -> bool:
         """Whether a waiting auto-deny of *session_name* has a retry
         scheduled."""
-        task = self._auto_deny_retries().get(session_name)
+        task = self._auto_deny_retry_of(session_name)
         return task is not None and not task.done()
 
     def auto_deny_retry_task(self, session_name: str) -> asyncio.Task | None:
         """The scheduled retry of *session_name*'s waiting auto-deny, or
         None."""
-        return self._auto_deny_retries().get(session_name)
-
-    def cancel_auto_deny_retry(self, session_name: str) -> None:
-        """Drop *session_name*'s scheduled retry (never the task this runs
-        in: that one ends by itself)."""
-        retries = self._auto_deny_retries()
-        task = retries.get(session_name)
-        if task is None:
-            return
-        try:
-            current = asyncio.current_task()
-        except RuntimeError:
-            current = None
-        if task is current:
-            return
-        retries.pop(session_name, None)
-        if not task.done():
-            task.cancel()
+        return self._auto_deny_retry_of(session_name)
 
     def _schedule_auto_deny_retry(self, sess: TrackedSession) -> None:
         """Schedule one look again at *sess*'s waiting auto-denies whose
@@ -939,12 +920,11 @@ class AuthMixin:
                     looks.append(at if at is not None
                                  else now + prompt_stack.OPEN_GRACE)
             if not looks:
-                self.cancel_auto_deny_retry(sess.name)
+                sess.drop_auto_deny_retry(force=True)
                 return
             delay = max(0.05, min(looks) - now)
-            retries = self._auto_deny_retries()
-            self.cancel_auto_deny_retry(sess.name)
-            retries[sess.name] = asyncio.get_running_loop().create_task(
+            sess.drop_auto_deny_retry(force=True)
+            sess.auto_deny_retry_task = asyncio.get_running_loop().create_task(
                 self._auto_deny_retry(sess, delay))
         except Exception:  # noqa: BLE001 - the next prompt event looks again
             log.debug("[%s] auto-deny retry not scheduled", sess.label,
@@ -959,6 +939,10 @@ class AuthMixin:
         from aipager import prompt_gap
         try:
             await _sleep(delay)
+            # Awake: no longer the pending retry, so no close cancels it
+            # halfway through typing (the runner re-checks everything).
+            if sess.auto_deny_retry_task is asyncio.current_task():
+                sess.auto_deny_retry_task = None
             now = _time.monotonic()
             for rec in list(sess.extra_prompts):
                 if (isinstance(rec, dict) and rec.get("auto_deny_due")
@@ -971,9 +955,8 @@ class AuthMixin:
         except Exception:  # noqa: BLE001 - a retry never raises
             log.debug("[%s] auto-deny retry failed", sess.label, exc_info=True)
         finally:
-            retries = self._auto_deny_retries()
-            if retries.get(sess.name) is asyncio.current_task():
-                retries.pop(sess.name, None)
+            if sess.auto_deny_retry_task is asyncio.current_task():
+                sess.auto_deny_retry_task = None
 
     async def _run_due_once(self, sess: TrackedSession) -> None:
         """Type each waiting auto-deny whose dialog is now certainly on top
