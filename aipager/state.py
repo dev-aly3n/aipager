@@ -4777,10 +4777,16 @@ class SessionRegistry:
         Keyed by ``(chat_id, msg_id)`` (design.md Part 0) so a message id
         that collides across two different chats can never resolve into
         the wrong chat's session — see :meth:`get_session_by_msg`.
+
+        It also makes the session the chat's target, except for a session
+        that has ended: a message of its that lands late (a busy card that
+        waited behind the chat's pace) is still a reply target, but the
+        chat's next plain message must not go to a session that is gone.
         """
         self._msg_map[(chat_id, msg_id)] = session_name
-        self.last_active_session = session_name
         sess = self._sessions.get(session_name)
+        if sess is None or sess.status is not Status.GONE:
+            self.last_active_session = session_name
         if sess:
             sess.last_msg_id = msg_id
         self._dirty = True
