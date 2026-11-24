@@ -233,3 +233,58 @@ def test_a_dropped_reading_takes_its_resave_mark_with_it():
     usage_store.scan(SessionRegistry(), now=NOW + usage_store.KEEP_DAYS * 86400 + 100,
                      force=True)
     assert usage_store._plan == {} and usage_store._plan_marked == {}
+
+
+# ---- a number too big for a float ------------------------------------------------------
+
+_HUGE = 10 ** 400  # json reads it as an int; math.isfinite cannot take it
+
+
+def _reading(key: str, **over) -> dict:
+    raw = {"key": key, "kind": "token", "host": "", "session": "x1", "scope": -1,
+           "seen_at": NOW, "windows": {"seven_day": {"pct": 40.0, "resets_at": int(NOW) + 3600}}}
+    raw.update(over)
+    return raw
+
+
+def _cursor(**over) -> dict:
+    raw = {"ino": 1, "dev": 2, "offset": 3, "skip": False, "scope": -1, "session": "x1",
+           "grown_at": NOW, "read_at": NOW}
+    raw.update(over)
+    return raw
+
+
+@pytest.mark.parametrize("where", ["seen_at", "pct", "grown_at", "read_at"])
+def test_a_huge_integer_drops_only_its_own_entry(where):
+    """A number with hundreds of digits in one entry (a hand edit, a bad
+    disk) drops that entry alone: before, ``math.isfinite`` raised
+    OverflowError on it and the whole file read as empty, so the next save
+    wrote every reading and day away."""
+    good, bad = _reading("token|a"), _reading("token|b")
+    if where == "seen_at":
+        bad["seen_at"] = _HUGE
+    elif where == "pct":
+        bad["windows"]["seven_day"]["pct"] = _HUGE
+    cursors = {"/t/good.jsonl": _cursor(), "/t/bad.jsonl": _cursor()}
+    if where in ("grown_at", "read_at"):
+        cursors["/t/bad.jsonl"][where] = _HUGE
+    doc = {"version": usage_store.SCHEMA_VERSION, "plan": [good, bad],
+           "days": {"2026-11-16": {"-1": {"m": [1, 2, 3, 4]}}},
+           "cursors": cursors}
+    target = Path(config.USAGE_STATE_FILE)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(doc), encoding="utf-8")
+    loaded = usage_store.read()
+    assert loaded["days"] == {"2026-11-16": {-1: {"m": [1, 2, 3, 4]}}}
+    keys = [r["key"] for r in loaded["plan"]]
+    assert keys == (["token|a"] if where in ("seen_at", "pct") else ["token|a", "token|b"])
+    assert set(loaded["cursors"]) == ({"/t/good.jsonl"} if where in ("grown_at", "read_at")
+                                      else {"/t/good.jsonl", "/t/bad.jsonl"})
+
+
+def test_a_huge_but_in_range_shape_is_still_a_number_check_not_a_bool():
+    """``True`` is an int to Python, never a timestamp or a percent."""
+    assert not usage_store._finite(True)
+    assert usage_store._finite(_HUGE) and usage_store._finite(3) and usage_store._finite(2.5)
+    assert not usage_store._finite(float("inf")) and not usage_store._finite(float("nan"))
+    assert not usage_store._is_ts(_HUGE)

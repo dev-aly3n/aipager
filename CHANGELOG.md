@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - A tap on a background agent's permission prompt in the first seconds after aipager's wait for it ended no longer presses a key into Claude Code's input line before the agent's dialog is there; the tap types nothing and says the prompt is still opening, and a rule's automatic Deny waits for the dialog the same way.
 - When you reply to one of Claude's answers that holds an expandable quote, Claude now gets the quote's content; since Telegram's Bot API 10.5 it got nothing from it.
+- One corrupted, absurdly large number in aipager's saved usage file no longer makes the whole file read as empty (and the next save wipe every plan reading and token count); only the entry holding it is dropped.
 
 ## [1.6.0] - 2026-11-18
 

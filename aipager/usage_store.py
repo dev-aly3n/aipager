@@ -671,9 +671,20 @@ def _reject_constant(name: str):
     raise ValueError(name)
 
 
+def _finite(value: Any) -> bool:
+    """A JSON number aipager can compare: an int of any size (Python's
+    ``json`` reads one with hundreds of digits, which ``math.isfinite``
+    cannot take: OverflowError, and the whole file then read as empty),
+    or a finite float. Never a bool."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
+
+
 def _is_ts(value: Any) -> bool:
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value) and TS_MIN <= value <= TS_MAX)
+    return _finite(value) and TS_MIN <= value <= TS_MAX
 
 
 def _clean_reading(raw: Any) -> dict | None:
@@ -699,8 +710,7 @@ def _clean_reading(raw: Any) -> dict | None:
         if name not in RATE_WINDOWS or not isinstance(w, dict) or set(w) != {"pct", "resets_at"}:
             continue
         pct, resets = w["pct"], w["resets_at"]
-        if (isinstance(pct, (int, float)) and not isinstance(pct, bool)
-                and math.isfinite(pct) and 0 <= pct <= 1000
+        if (_finite(pct) and 0 <= pct <= 1000
                 and type(resets) is int and TS_MIN <= resets <= TS_MAX):
             clean[name] = {"pct": float(pct), "resets_at": resets}
     if not clean:
@@ -730,8 +740,7 @@ def _clean_cursor(path: Any, raw: Any) -> dict | None:
         return None
     for k in ("grown_at", "read_at"):
         v = raw.get(k)
-        if not (isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-                and 0 <= v <= TS_MAX):
+        if not (_finite(v) and 0 <= v <= TS_MAX):
             return None
     return {"ino": raw["ino"], "dev": raw["dev"], "offset": raw["offset"],
             "skip": raw["skip"], "scope": raw["scope"],
