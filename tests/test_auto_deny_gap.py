@@ -1075,8 +1075,8 @@ def _launch_ok(monkeypatch):
 def test_new_replace_during_the_wait_types_nothing_into_the_fresh_claude(
         drig, monkeypatch, run_async):
     """/new's Replace kills the session and starts a fresh claude under the
-    same name and the same entry, which stays INTERACTIVE. With no
-    SessionEnd, the waiting refusal's retry is gone before the kill and
+    same name and the same entry, which stays INTERACTIVE until the old
+    socket is gone (then idle). With no SessionEnd, the waiting refusal's retry is gone before the kill and
     the refusal once the old socket is: no retry waking during the kill
     or after the launch, and no later run, types its Escape, posts a
     notice or moves the session to BUSY."""
@@ -1131,7 +1131,9 @@ def test_new_replace_during_the_wait_types_nothing_into_the_fresh_claude(
     assert seen["notices"] == 0
     assert due_orders(sess) == []
     assert not bot.pending_auto_deny_retry(S)
-    assert sess.status == Status.INTERACTIVE
+    # Never BUSY; idle, since Replace ends the old claude's turn and
+    # prompts once its socket is gone (tests/test_old_process_prompts.py).
+    assert sess.status == Status.IDLE
     assert bot.registry.get(S) is sess
 
 
@@ -1227,7 +1229,9 @@ def test_new_replace_abandons_the_refusal_as_soon_as_the_old_socket_is_gone(
     assert launches == [S.removeprefix("claude-")]
     assert seen["between"] == 0
     assert seen["keys"] == []
-    assert seen["status"] == Status.INTERACTIVE
+    # Never BUSY; idle, since Replace ends the old claude's turn and
+    # prompts once its socket is gone (tests/test_old_process_prompts.py).
+    assert seen["status"] == Status.IDLE
     assert drig.keys == []
     assert seen["notices"] == 0
 

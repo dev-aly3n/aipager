@@ -3411,6 +3411,50 @@ class SessionOpsMixin:
     # ── Mini App session menu actions (perms / clear-queue / compact /
     #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──
 
+    async def _close_old_process_prompts(self, sess: TrackedSession) -> None:
+        """The old claude is gone (its socket is, after a kill): every
+        prompt it showed went with its dialogs. Each is closed, so a tap
+        on one types nothing into the claude started in its place under
+        the same entry (a restart, /new's Replace), and their own messages
+        lose their buttons the way a Stop's do
+        (:meth:`_show_prompts_closed`); the card's inline prompt is marked
+        closed with the card. Read while the entry still waits: the open
+        records are only listed then."""
+        records = [rec for _where, _perm, rec in sess.open_prompt_records()
+                   if isinstance(rec, dict) and not rec.get("final_shown")]
+        sess.close_all_prompts()
+        self.registry.mark_dirty()
+        await self._show_prompts_closed(sess, records)
+
+    async def _end_replaced_turn(self, sess: TrackedSession, *, by: str = "") -> None:
+        """/new's Replace killed the old claude and confirmed it gone: its
+        prompts close (:meth:`_close_old_process_prompts`) and its turn
+        ends here, as a Stop ends one, because the entry is kept for the
+        fresh claude and no SessionEnd will come to do it. The card shows
+        Stopped (by *by*, in a group), the job's agents and the reply
+        target go, and a working or waiting entry is idle again: the fresh
+        claude starts at its prompt."""
+        await self._close_old_process_prompts(sess)
+        async with sess.animate_lock:
+            self._cancel_lazy_card(sess)
+            sess.close_turn()  # no card for this turn from here (8.57)
+        self._stop_animation(sess)
+        await self._settle_card_text(sess, _stopped_card_text(sess.label, by,
+                                                              i18n.for_sess(sess)))
+        sess.busy_msg_id = None
+        sess.active_subagents.clear()
+        sess.bg_shells_leave_job()
+        sess.job_interim_seen = False
+        sess.job_continuation_active = False
+        sess.job_grace_until = 0.0
+        sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
+        _clear_turn_open(sess.name)
+        sess.turn_sender_id = None
+        if sess.status in (Status.BUSY, Status.INTERACTIVE):
+            self.registry.transition(sess.name, Status.IDLE)
+        self.registry.mark_dirty()
+
     async def _kill_and_relaunch_core(
         self, sess: TrackedSession, *, target_mode: str,
         interrupt_first: bool, force: bool = False,
@@ -3609,8 +3653,10 @@ class SessionOpsMixin:
 
         # The old process is gone, and its dialogs with it: a refusal still
         # waiting for one is never typed, whether the launch below works or
-        # fails (this entry stays INTERACTIVE until then).
+        # fails (this entry stays INTERACTIVE until then), and no prompt it
+        # showed can be answered into the relaunched claude.
         sess.abandon_auto_denies()
+        await self._close_old_process_prompts(sess)
 
         short_name = session_name.removeprefix("claude-")
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
