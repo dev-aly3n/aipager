@@ -120,8 +120,8 @@ sign-in that session runs under, and never in a group, where everyone
 reads the card. It shows only while the card is busy, not on the
 finished card, is gone once the limit resets, and never sends a message
 of its own. The numbers are the ones Claude Code last reported (see
-`/usage`), so it first shows on the turn after the one that crossed the
-limit.
+`/usage`), so it shows once Claude Code has reported the new numbers,
+usually from the next turn.
 
 ### Per-session dynamic commands
 
