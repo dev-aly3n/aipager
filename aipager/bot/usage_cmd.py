@@ -285,6 +285,12 @@ def _pct(value: float, tr) -> str:
     return tr.num(f"{round(value)}%")
 
 
+def pct_text(value: float, tr) -> str:
+    """/usage's rounded percent, in *tr*'s digits (the busy card's
+    near-limit note, roadmap 8.131)."""
+    return _pct(value, tr)
+
+
 def _render(tr, kind: str, msg, **params):
     if kind == "html":
         return tr.html(msg, **params)

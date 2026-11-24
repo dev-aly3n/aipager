@@ -97,7 +97,7 @@ def card_rows(tr, windows: Any, *, now: float) -> list[str]:
         level = usage_store.limit_level(window.pct)
         if level < 1:
             continue
-        head = tr.md(_ROWS[(name, min(level, 2))], pct=usage_cmd._pct(window.pct, tr))
+        head = tr.md(_ROWS[(name, min(level, 2))], pct=usage_cmd.pct_text(window.pct, tr))
         rows.append(head + " · " + usage_cmd.reset_text(window, now, tr, "md"))
     return rows
 
