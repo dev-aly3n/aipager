@@ -347,6 +347,7 @@ def _agent_question(rig):
 
 def test_control_agents_question_from_idle_tap_closes_to_idle(rig):
     msg = _agent_question(rig)
+    rig.elapse()  # a background agent's question has no hook: drawn late
     rig.tap(msg, "opt0")
     assert rig.sess.status == Status.IDLE
 

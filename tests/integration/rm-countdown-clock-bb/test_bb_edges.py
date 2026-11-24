@@ -55,6 +55,7 @@ def test_q6_refused_rm_edits_its_extra_message(cenv):
 
 def test_q6_after_the_refusal_the_agents_typed_tap_works(cenv):
     agent, _rm = q6_refused(cenv)
+    cenv.rig.elapse()  # past the agent's dialog draw after its hook's end
     cenv.rig.tap(agent, "allow")
     assert cenv.rig.keys != []
 

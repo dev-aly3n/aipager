@@ -50,6 +50,7 @@ def test_field_sequence_prompt_reaches_the_chat_and_the_tap_reaches_the_pty(rig)
     _pre(rig, BG, "toolu_bg1")
     rig.agent_bash(BG, CMD, request_id="req-1")
     rig.timeout("req-1")
+    rig.elapse()  # the field's Notification came about 6 s after the timeout
     rig.hook("Notification", notification_type="permission_prompt",
              message="Claude needs your permission", agent_id=BG,
              agent_type="ship-developer")

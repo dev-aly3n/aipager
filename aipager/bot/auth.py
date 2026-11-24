@@ -18,6 +18,7 @@ from telegram import (
     Update,
 )
 
+from aipager import prompt_stack
 from aipager.bot import group_intake, tap_gate
 from aipager.i18n import Command, Msg, Span
 
@@ -755,6 +756,27 @@ class AuthMixin:
             except Exception:  # noqa: BLE001 - the key below is the fallback
                 answered = False
         typed, held, answered_at = False, [], 0.0
+        if not answered and prompt_stack.dialog_gap(
+                tool_info.get("order"), _time.monotonic()) is not None:
+            # A background agent's dialog that is not in the terminal yet
+            # (its hook just left, or it had none): an Escape now would go
+            # into Claude's input line. It waits as a refusal with no
+            # message, typed once the dialog is there
+            # (:meth:`_run_due_auto_denies`, which also does the BUSY,
+            # the notice and the watch).
+            from aipager.bot.notify import _separate_prompt_perm
+            summary = tool_info.get("summary", "")
+            sess.pending_permission = None
+            sess.extra_prompts.append({
+                "text": "", "keyboard": None, "summary": summary,
+                "prompt_token": None,
+                "perm": _separate_prompt_perm(tool_info, summary, None),
+                "auto_deny_due": True, "auto_deny_by": triggerer,
+            })
+            log.info("[%s] auto-deny of %s waits until its dialog is in the "
+                     "terminal", sess.label, tool_name)
+            await self._run_due_auto_denies(sess)
+            return
         if not answered:
             # No hook waits for an answer (an older hook, a reply channel
             # that failed to open): the key goes in now, as the old keys
@@ -842,6 +864,107 @@ class AuthMixin:
         await self._run_due_auto_denies(sess)
 
     async def _run_due_auto_denies(self, sess: TrackedSession) -> None:
+        """Type each waiting auto-deny that may be typed now
+        (:meth:`_run_due_once`), then make sure one still waiting on its
+        dialog's gap is looked at again (:meth:`_schedule_auto_deny_retry`):
+        nothing else may come to wake it."""
+        try:
+            await self._run_due_once(sess)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._schedule_auto_deny_retry(sess)
+            raise
+        self._schedule_auto_deny_retry(sess)
+
+    def _auto_deny_retry_of(self, session_name: str) -> asyncio.Task | None:
+        """The retry asleep for *session_name*'s waiting auto-deny
+        (``TrackedSession.auto_deny_retry_task``), or None."""
+        sess = self.registry.get(session_name)
+        return getattr(sess, "auto_deny_retry_task", None) if sess else None
+
+    def pending_auto_deny_retry(self, session_name: str) -> bool:
+        """Whether a waiting auto-deny of *session_name* has a retry
+        scheduled."""
+        task = self._auto_deny_retry_of(session_name)
+        return task is not None and not task.done()
+
+    def auto_deny_retry_task(self, session_name: str) -> asyncio.Task | None:
+        """The scheduled retry of *session_name*'s waiting auto-deny, or
+        None."""
+        return self._auto_deny_retry_of(session_name)
+
+    def _schedule_auto_deny_retry(self, sess: TrackedSession) -> None:
+        """Schedule one look again at *sess*'s waiting auto-denies whose
+        dialog is in its gap (:func:`aipager.prompt_stack.dialog_gap`): at
+        the earliest instant one of them may be typed or Claude Code's
+        record may prove its dialog is up (``gap_next_look``). With none
+        such (or the session no longer waiting on a prompt, or no longer
+        the registry's) any pending retry goes. Reads the orders directly,
+        never :meth:`TrackedSession.keys_verdict`. Never raises."""
+        import time as _time
+
+        from aipager import prompt_gap
+        try:
+            now = _time.monotonic()
+            looks = []
+            # A session /kill removed is out of every later close's reach:
+            # never a retry for it. Nor for one being killed and
+            # relaunched: the relaunch dropped the retry once, before its
+            # kill, and a retry woken meanwhile must not put one back.
+            if (sess.status == Status.INTERACTIVE
+                    and self.registry.get(sess.name) is sess
+                    and not sess.relaunch_in_flight):
+                for rec in sess.extra_prompts:
+                    if not (isinstance(rec, dict) and rec.get("auto_deny_due")
+                            and not rec.get("auto_deny_typing")):
+                        continue
+                    order = prompt_gap.order_of(rec.get("perm"))
+                    if prompt_stack.dialog_gap(order, now) is None:
+                        continue
+                    at = prompt_stack.gap_next_look(order, now)
+                    looks.append(at if at is not None
+                                 else now + prompt_stack.OPEN_GRACE)
+            if not looks:
+                sess.drop_auto_deny_retry(force=True)
+                return
+            delay = max(0.05, min(looks) - now)
+            sess.drop_auto_deny_retry(force=True)
+            sess.auto_deny_retry_task = asyncio.get_running_loop().create_task(
+                self._auto_deny_retry(sess, delay))
+        except Exception:  # noqa: BLE001 - the next prompt event looks again
+            log.debug("[%s] auto-deny retry not scheduled", sess.label,
+                      exc_info=True)
+
+    async def _auto_deny_retry(self, sess: TrackedSession, delay: float) -> None:
+        """After *delay*, look for evidence of each gapped refusal's dialog
+        and run the waiting auto-denies again (they re-check everything:
+        the session still waiting, the record still open, the verdict)."""
+        import time as _time
+
+        from aipager import prompt_gap
+        try:
+            await _sleep(delay)
+            # Awake: no longer the pending retry, so no close cancels it
+            # halfway through typing (the runner re-checks everything).
+            if sess.auto_deny_retry_task is asyncio.current_task():
+                sess.auto_deny_retry_task = None
+            now = _time.monotonic()
+            for rec in list(sess.extra_prompts):
+                if (isinstance(rec, dict) and rec.get("auto_deny_due")
+                        and prompt_stack.dialog_gap(
+                            prompt_gap.order_of(rec.get("perm")), now) is not None):
+                    await prompt_gap.look_for_dialog(sess, rec.get("perm"))
+            await self._run_due_auto_denies(sess)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - a retry never raises
+            log.debug("[%s] auto-deny retry failed", sess.label, exc_info=True)
+        finally:
+            if sess.auto_deny_retry_task is asyncio.current_task():
+                sess.auto_deny_retry_task = None
+
+    async def _run_due_once(self, sess: TrackedSession) -> None:
         """Type each waiting auto-deny whose dialog is now certainly on top
         (:meth:`TrackedSession.keys_verdict`), one at a time: answering
         one uncovers the next. BUSY once no prompt is left open.
@@ -870,8 +993,17 @@ class AuthMixin:
                     and not rm_countdown.refusal_window_open(
                         perm, rm_countdown._now_wall()))
 
+        def waiting() -> bool:
+            # Still the registry's live session, waiting on its prompts:
+            # never a session /kill removed (a woken retry outlives it, and
+            # its name may answer to a new process) or one being killed
+            # and relaunched (still INTERACTIVE until the new claude is up).
+            return (sess.status == Status.INTERACTIVE
+                    and self.registry.get(sess.name) is sess
+                    and not sess.relaunch_in_flight)
+
         for _ in range(len(sess.extra_prompts) + 1):
-            if sess.status != Status.INTERACTIVE:
+            if not waiting():
                 return
             due = [rec for rec in sess.extra_prompts
                    if isinstance(rec, dict) and rec.get("auto_deny_due")
@@ -892,7 +1024,7 @@ class AuthMixin:
                     await _sleep(wait)
             finally:
                 ready.pop("auto_deny_typing", None)
-            if (sess.status != Status.INTERACTIVE
+            if (not waiting()
                     or not any(rec is ready for rec in sess.extra_prompts)
                     or not typable(perm)):
                 return
@@ -912,7 +1044,7 @@ class AuthMixin:
                     ready.pop("auto_deny_typing", None)
                 # That read can wait: the same checks again, right before
                 # the key.
-                if (sess.status != Status.INTERACTIVE
+                if (not waiting()
                         or not any(rec is ready for rec in sess.extra_prompts)
                         or not typable(perm)):
                     if held_back is not None:

@@ -86,6 +86,7 @@ def test_the_agents_answer_is_typed_once_the_rm_is_answered_in_the_terminal(rig)
              tool_input={"command": "rm -rf /home/alice",
                          "description": "rm -rf /home/alice"},
              tool_use_id="toolu_p1")
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     q = rig.tap(agent, "allow")
     assert UNKNOWN not in answers(q)
     assert rig.keys != []
@@ -138,6 +139,7 @@ def test_non_candidate_mode_keeps_arrival_order(rig, mode):
     agent, rm = overlap(rig, mode)
     rig.tap(rm, "allow")
     assert rig.keys == []
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(agent, "allow")
     assert rig.keys != []
 
@@ -149,6 +151,7 @@ def test_agents_bypass_bash_beside_question_keeps_arrival_order(rig):
     rig.question(mode="bypassPermissions")
     q = rig.tap(extra_ids(rig)[0], "opt0")
     assert answers(q) == [BEHIND]
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(CARD, "allow")
     assert rig.keys != []
 

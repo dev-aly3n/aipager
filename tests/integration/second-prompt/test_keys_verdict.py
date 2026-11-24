@@ -1,7 +1,10 @@
 """``aipager.prompt_stack.keys_verdict`` against its contract
 (entrypoints.md): "yes" only when keystrokes are certain to reach the
 target's dialog, "behind" when another prompt is certainly shown first,
-"unknown" otherwise; "yes" whenever *others* is empty; never raises.
+"opening" when the target's dialog may not be drawn and settled yet (a
+background or unknown-launch agent's, from its hook's wait until its
+dialog's gap after the hook's end closes), "unknown" otherwise. With
+*others* empty it is "yes", or "opening" in that gap; never raises.
 
 Claude Code keeps the earliest dialog on top. A foreground prompt enters
 the terminal when it arrives; a background agent's enters only when its
@@ -15,7 +18,7 @@ import pytest
 
 from aipager.prompt_stack import keys_verdict
 
-VERDICTS = {"yes", "behind", "unknown"}
+VERDICTS = {"yes", "behind", "unknown", "opening"}
 
 
 def place(owner="", launch="own", arrived=100.0, request_id="", timed_out_at=0.0):
@@ -32,19 +35,24 @@ def agent(launch, arrived, request_id="", timed_out_at=0.0, owner="a1"):
                  request_id=request_id, timed_out_at=timed_out_at)
 
 
-# -- a single prompt: exactly today ---------------------------------------------
+# -- a single prompt: today, except in a dialog's gap ------------------------------
 
 @pytest.mark.parametrize("target", [
     claude(100.0),
     agent("foreground", 100.0),
-    agent("background", 100.0, request_id="r"),
     agent("background", 100.0),
-    agent("unknown", 100.0, request_id="r"),
-    agent("unknown", 100.0, timed_out_at=110.0),
-], ids=["claude", "foreground", "bg-parked", "bg-no-hook", "unknown-parked",
-        "unknown-timed-out"])
+], ids=["claude", "foreground", "bg-no-hook"])
 def test_no_others_is_always_yes(target):
     assert keys_verdict(target, [], 105.0) == "yes"
+
+
+@pytest.mark.parametrize("target", [
+    agent("background", 100.0, request_id="r"),
+    agent("unknown", 100.0, request_id="r"),
+    agent("unknown", 100.0, timed_out_at=110.0),
+], ids=["bg-parked", "unknown-parked", "unknown-timed-out"])
+def test_no_others_in_gap_is_opening(target):
+    assert keys_verdict(target, [], 105.0) == "opening"
 
 
 # -- main loop and foreground agents: arrival order ------------------------------

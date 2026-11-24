@@ -1014,6 +1014,7 @@
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} لا تزال قيد البدء - يمكنك المحاولة بعد قليل"}
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "يعرض Claude Code طلبًا آخر أولًا، لذا يمكنك الرد على ذلك الطلب قبل هذا الطلب."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "هذا الطلب لم يعد مفتوحًا"}
+{"k": "toast.prompt_opening", "src": "ae9484f3", "v": "لا يزال Claude Code يفتح هذا الطلب في الطرفية، لذا يمكنك الضغط عليه مرة أخرى بعد قليل."}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "لا يستطيع aipager معرفة أي طلب يعرضه Claude Code أولًا، لذا يمكنك الرد على هذا الطلب في الطرفية."}
 {"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "لم يعد هذا السؤال مفتوحًا، فقد رفض Claude Code هذا الطلب من تلقاء نفسه."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "ينهي Claude مهمته الآن، لذا يمكنك الضغط على هذا الطلب مرة أخرى بعد قليل."}

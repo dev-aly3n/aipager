@@ -231,6 +231,7 @@ NC_IDS = ["default", "acceptEdits", "plan", "missing"]
 @pytest.mark.parametrize("mode", NON_CANDIDATE_MODES, ids=NC_IDS)
 def test_non_candidate_mode_agent_allow_still_types_enter(rig, mode):
     agent, _bash = agent_gave_up_then_rm(rig, mode)
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(agent, "allow")
     assert rig.keys == ["Enter"]
 
@@ -251,6 +252,7 @@ def test_non_bash_tool_in_a_candidate_mode_keeps_today(rig, mode):
              tool_input={"file_path": "/home/alice/app/a.py", "old_string": "a",
                          "new_string": "b"},
              tool_use_id="toolu_e1", permission_mode=mode)
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(CARD, "allow")
     assert rig.keys == ["Enter"]
 

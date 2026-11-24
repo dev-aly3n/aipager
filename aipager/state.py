@@ -1308,6 +1308,14 @@ class TrackedSession:
     # a card for.
     lazy_card_at: float = 0.0
     lazy_card_task: Any = field(default=None, repr=False)
+    # A rule's automatic Deny waiting for an agent's dialog to enter the
+    # terminal (aipager.prompt_stack.dialog_gap): the one retry asleep
+    # until it may be typed (`aipager.bot.auth._schedule_auto_deny_retry`).
+    # Every path that closes the last such refusal goes through
+    # `close_prompts` / `close_all_prompts` / `_drop_extra_prompts`, which
+    # cancel it (`drop_auto_deny_retry`); a retry that woke up has left
+    # this slot. Transient, like `animate_task`: never in _PERSIST_FIELDS.
+    auto_deny_retry_task: Any = field(default=None, repr=False)
     # roadmap 8.17c: this turn's busy card was REFUSED by the flood gate —
     # the chat is muted, or in minimal mode and cannot afford an ornament
     # (a ban always leaves it there for a while). The card is owed, not
@@ -3664,7 +3672,48 @@ class TrackedSession:
             self.extra_prompts = [r for r in self.extra_prompts if r is not promoted]
             promoted["promoted"] = True
             self.pending_prompt_msg = promoted
+        self.drop_auto_deny_retry()
         return closed, inline_closed
+
+    def drop_auto_deny_retry(self, *, force: bool = False) -> None:
+        """Cancel the sleeping retry of a waiting auto-deny
+        (``auto_deny_retry_task``) once no refusal waits for it, or at
+        once with *force*. Never the task this runs in: a retry that is
+        running ends by itself."""
+        task = self.auto_deny_retry_task
+        if task is None:
+            return
+        if not force and any(isinstance(rec, dict) and rec.get("auto_deny_due")
+                             for rec in self.extra_prompts):
+            return
+        try:
+            current = asyncio.current_task()
+        except RuntimeError:
+            current = None
+        if task is current:
+            return
+        self.auto_deny_retry_task = None
+        if not task.done():
+            task.cancel()
+
+    def abandon_auto_denies(self) -> int:
+        """The process whose dialogs the waiting auto-denies are for is
+        being replaced by a fresh one under the same name and the same
+        entry (a /new Replace): none of them may ever be typed, by their
+        retry or by a later run (the fresh claude's first prompt would get
+        the Escape). Their records close (they have no message) and the
+        retry goes. Returns how many were waiting."""
+        due = [rec.get("perm") for rec in self.extra_prompts
+               if isinstance(rec, dict) and rec.get("auto_deny_due")]
+        if due:
+            self.close_prompts(lambda perm: any(perm is d for d in due))
+            # Whatever the status says (close_prompts sees records only
+            # while the session waits): none is left to type.
+            self.extra_prompts = [
+                rec for rec in self.extra_prompts
+                if not (isinstance(rec, dict) and rec.get("auto_deny_due"))]
+        self.drop_auto_deny_retry(force=True)
+        return len(due)
 
     def prompt_surface(self, perm) -> int | None:
         """The message an open prompt's buttons sit on: the busy card for
@@ -3678,8 +3727,10 @@ class TrackedSession:
 
     def keys_verdict(self, perm, now: float) -> str:
         """Whether keys typed now reach open prompt *perm*'s dialog:
-        ``"yes"``, ``"behind"`` or ``"unknown"`` (aipager.prompt_stack).
-        Always ``"yes"`` with one prompt open."""
+        ``"yes"``, ``"behind"``, ``"unknown"`` or ``"opening"``
+        (aipager.prompt_stack). With one prompt open: ``"yes"``, or
+        ``"opening"`` while a background (or unknown-launch) agent's
+        dialog is still entering the terminal after its hook gave up."""
         def order_of(p) -> dict:
             info = p.get("tool_info") if isinstance(p, dict) else None
             order = info.get("order") if isinstance(info, dict) else None
@@ -3707,6 +3758,7 @@ class TrackedSession:
         for rec in self.extra_prompts:
             self.mark_prompt_closed(rec.get("msg_id"))
         self.extra_prompts = []
+        self.drop_auto_deny_retry()
         return result
 
     def unsaved_prompt_surfaces(self) -> list[int]:
@@ -3732,6 +3784,7 @@ class TrackedSession:
             if isinstance(rec, dict):
                 self.mark_prompt_closed(rec.get("msg_id"))
         self.extra_prompts = []
+        self.drop_auto_deny_retry()
 
     def dialog_release_pending(self) -> bool:
         """True when a dialog that held messages was answered and those
@@ -4854,6 +4907,12 @@ class SessionRegistry:
         internal name.
         """
         sess = self._sessions.pop(name, None)
+        if sess is not None:
+            # Out of the registry, out of reach of every later close: a
+            # waiting auto-deny's retry would wake to type into whatever
+            # answers to this name next (a /kill handled before Claude
+            # Code's SessionEnd).
+            sess.drop_auto_deny_retry(force=True)
         self._forget_target(name)
         self._blank_button_slots(name)
         if sess and remember_label and sess.label:

@@ -1014,6 +1014,7 @@
 {"k": "toast.perms_starting", "src": "4663c52d", "v": "{session} هنوز در حال بالا آمدن است - چند لحظه بعد دوباره امتحان کنید"}
 {"k": "toast.prompt_behind_other", "src": "25c51410", "v": "فعلاً Claude Code یک درخواست دیگر را جلوتر نشان می‌دهد؛ اول به آن جواب بدهید، بعد به این یکی."}
 {"k": "toast.prompt_expired", "src": "260f4c88", "v": "این درخواست دیگر باز نیست"}
+{"k": "toast.prompt_opening", "src": "ae9484f3", "v": "Claude Code هنوز دارد این درخواست را در ترمینال باز می‌کند؛ چند لحظه بعد دوباره روی آن بزنید."}
 {"k": "toast.prompt_order_unknown", "src": "8687f6b4", "v": "برای aipager معلوم نیست Claude Code کدام درخواست را اول نشان می‌دهد؛ این یکی را در ترمینال جواب بدهید."}
 {"k": "toast.prompt_refused_closed", "src": "4fe6d09b", "v": "این سؤال دیگر باز نیست، چون Claude Code خودش این درخواست را رد کرده."}
 {"k": "toast.prompt_settling", "src": "1f3a5c24", "v": "فعلاً Claude دارد کارش را تمام می‌کند؛ چند لحظه بعد دوباره روی این درخواست بزنید."}

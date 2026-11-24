@@ -97,7 +97,11 @@ payloads (so the real ``aipager-hook`` and ``aipager-statusline`` run).
   returned (past aipager's 10 s re-idle debounce, as minutes pass in
   use), A runs ``touch marker-a``: ``PreToolUse``, then
   ``PermissionRequest`` (logged ``agent_after_stop_asked`` first). With no
-  hook decision its dialog enters the terminal, where Enter answers it.
+  hook decision its dialog enters the terminal
+  ``AGENT_DIALOG_DRAW_DELAY`` (2 s) after the hook gave up (logged
+  ``dialog_pending``, then ``dialog_open``), as Claude Code 2.1.326 draws
+  it only once the hook is gone; there Enter answers it. An Enter in that
+  gap, with nothing typed, reaches no dialog (logged ``stray_enter``).
   Its answer is logged (``agent_answer``, by ``hook`` or ``key``), its
   ``PostToolUse`` (or ``PostToolUseFailure``) fires at once, and A then
   works on: it waits on ``standin-hold-<session>`` (if present, up to
@@ -159,6 +163,10 @@ _AFTER_STOP_RE = re.compile(r"\bagent asks after stop\b", re.I)
 #: How long after that Stop the agent asks: past aipager's re-idle
 #: debounce (``IDLE_DEBOUNCE``, 10 s), as in use, where minutes pass.
 AFTER_STOP_DELAY = 11.0
+#: How long after its hook gave no decision a background agent's dialog
+#: enters the terminal (the gap aipager's taps must wait out; the real
+#: draw is 0.0-0.1 s, and a fresh dialog ignores keys for a moment).
+AGENT_DIALOG_DRAW_DELAY = 2.0
 #: Claude Code 2.1.302's Bash permission dialog for an agent, top to bottom.
 AGENT_ROWS = ("Yes", "Yes, and don't ask again for make commands in this folder",
               "No, and tell Claude what to do differently (esc)")
@@ -859,9 +867,9 @@ class StandIn:
 
     def _agent_asks_after_stop(self, agent_id: str, prompt_id: str) -> None:
         """The background agent's Bash ask, once the turn's Stop is done.
-        Its dialog counts as on screen as soon as the hook gives up: the
-        2 s Claude Code 2.1.326 takes to put it in the terminal is not
-        modelled, so a tap in that gap cannot be shown here."""
+        With no hook decision its dialog enters the terminal
+        :data:`AGENT_DIALOG_DRAW_DELAY` after the hook gave up: a key in
+        that gap reaches no dialog (the gap aipager's taps wait out)."""
         if not self.after_stop.wait(600):
             return
         time.sleep(AFTER_STOP_DELAY)
@@ -886,9 +894,16 @@ class StandIn:
             answer, by = ("allowed" if behavior == "allow" else "denied"), "hook"
         else:
             # Claude's own turn is over: the agent's dialog is the only
-            # one, on screen at once.
+            # one, drawn only a moment after the hook is gone.
             dialog = {"id": "A", "kind": "tool", "rows": AGENT_ROWS, "row": 0,
                       "answer": None}
+            self.log(event="dialog_pending", dialog="A")
+            drawn_at = time.monotonic() + AGENT_DIALOG_DRAW_DELAY
+            while time.monotonic() < drawn_at:
+                with self.lock:
+                    if self.interrupted:
+                        break
+                time.sleep(0.05)
             self._push_dialog(dialog)
             answer, by = self._wait_dialog(dialog) or "no decision", "key"
         self.log(event="agent_answer", dialog="A", answer=answer, by=by)
@@ -1129,6 +1144,10 @@ class StandIn:
                 buf = ""
                 if prompt:
                     self.submit(prompt)
+                elif not self.dialogs and not self.in_permission:
+                    # Nothing happens, as in Claude Code; logged so a test
+                    # sees a key that reached no dialog.
+                    self.log(event="stray_enter")
                 continue
             if text and text == "\x1b[Z" * (len(text) // 3):
                 self._cycle_mode(len(text) // 3)

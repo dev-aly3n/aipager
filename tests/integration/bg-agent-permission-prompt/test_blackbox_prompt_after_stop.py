@@ -188,6 +188,7 @@ def test_prompt_after_stop_without_a_reply_channel_is_a_new_message(rig):
 def test_tap_on_a_prompt_without_a_reply_channel_types_keys(rig):
     _after_stop(rig)
     msg = _the_prompt(rig, hook=False)
+    rig.elapse()  # no hook: its dialog is drawn a moment after it asked
     rig.tap(msg["msg_id"], "allow")
     assert rig.keys != []
 
@@ -260,6 +261,7 @@ def test_tap_after_the_timeout_types_the_answer(rig, verb):
     _after_stop(rig)
     msg = _the_prompt(rig)
     rig.timeout(REQ)
+    rig.elapse()  # past the dialog's draw after the hook's end
     rig.tap(msg["msg_id"], verb)
     assert rig.keys != []
 
@@ -283,6 +285,7 @@ def test_allow_and_deny_type_different_keys_after_the_timeout(mk_bot, monkeypatc
         _after_stop(rig)
         msg = _the_prompt(rig)
         rig.timeout(REQ)
+        rig.elapse()
         rig.tap(msg["msg_id"], verb)
         typed[verb] = list(rig.keys)
     assert typed["allow"] != typed["deny"]

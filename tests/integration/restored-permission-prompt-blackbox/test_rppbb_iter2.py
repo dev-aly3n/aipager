@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 import pytest
 
 from aipager import preferences as prefs
+from aipager import prompt_stack
 from aipager.state import Status
 from aipager.transcript import saved_prompt_evidence
 
@@ -569,6 +570,12 @@ def test_parent_prompt_after_a_subagent_prompt_is_saved(replay, vloop,
 
     async def scenario():
         card = await _subagent_prompt(r, tmp_path)
+        # Its hook gave up (its reply socket is dead) and the subagent's
+        # dialog is drawn after that (aipager/prompt_stack.py dialog_gap):
+        # the tap comes once it is up.
+        await r.hook(hook_event_name="permission_reply_timeout",
+                     aipager_request_id="req-1")
+        await asyncio.sleep(prompt_stack.OPEN_GRACE + 0.5)
         await r.tap(card, "allow")
         await asyncio.sleep(1)
         r.post_tool(tool_use_id="toolu_sub")

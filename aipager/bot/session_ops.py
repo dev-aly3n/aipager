@@ -1933,6 +1933,16 @@ class SessionOpsMixin:
         # file left by an earlier one under this name must not make its
         # first prompt join that turn's rules.
         _clear_turn_open(session_name)
+        replaced = self.registry.get(session_name) if reuse_name else None
+        if (replaced is not None
+                and not Path(f"{inject.SOCK_PREFIX}{short_name}.sock").is_socket()):
+            # Replace keeps the old process's entry: a refusal still
+            # waiting for one of its dialogs must never reach the fresh
+            # claude, whichever caller killed the old one. While the old
+            # socket is still there its claude lives (the launch below
+            # refuses "already exists"), and so does the dialog the
+            # refusal answers: it stays.
+            replaced.abandon_auto_denies()
         ok, err = await inject.launch_session(
             short_name, mode=mode, cwd=cwd or None,
             system_prompt_extra=sys_extra, model=model or None,
@@ -3444,11 +3454,39 @@ class SessionOpsMixin:
             return RestartOutcome(ok=False, reason="already_restarting", label=label)
         sess.relaunch_in_flight = True
         try:
-            return await self._kill_and_relaunch_in_flight(
+            outcome = await self._kill_and_relaunch_in_flight(
                 sess, target_mode=target_mode,
                 interrupt_first=interrupt_first, force=force)
+        except Exception:
+            sess.relaunch_in_flight = False
+            await self._rerun_kept_auto_denies(sess)
+            raise
         finally:
             sess.relaunch_in_flight = False
+        if not outcome.ok:
+            await self._rerun_kept_auto_denies(sess)
+        return outcome
+
+    async def _rerun_kept_auto_denies(self, sess: TrackedSession) -> None:
+        """A kill and relaunch (or a /new Replace) that did not replace
+        the claude (refused before the kill, or the old process outlived
+        it) leaves its waiting auto-deny with no retry: it dropped the
+        retry before the kill, and a retry woken meanwhile scheduled none
+        (``relaunch_in_flight``).
+        The old claude and its dialog still live, so once the flag is down
+        the runner looks again (typing now, or scheduling the retry). A
+        no-op when no refusal waits (the relaunch abandoned them once the
+        old process was gone). Never raises."""
+        if not any(isinstance(rec, dict) and rec.get("auto_deny_due")
+                   for rec in sess.extra_prompts):
+            return
+        try:
+            await self._run_due_auto_denies(sess)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - the next prompt event looks again
+            log.debug("[%s] kept auto-deny not run again", sess.label,
+                      exc_info=True)
 
     async def _kill_and_relaunch_in_flight(
         self, sess: TrackedSession, *, target_mode: str,
@@ -3511,6 +3549,11 @@ class SessionOpsMixin:
         # No card lock needed: nothing here settles a card afterwards, and
         # a send already in flight is past the point a cancel can reach.
         self._cancel_lazy_card(sess)
+        # Likewise a waiting auto-deny's retry: its dialog dies with the
+        # old process, and the session stays INTERACTIVE until the
+        # relaunch is done, so a retry waking in between would type an
+        # Escape into the new claude.
+        sess.drop_auto_deny_retry(force=True)
 
         held: list[dict] = []
         if interrupt_first:
@@ -3563,6 +3606,11 @@ class SessionOpsMixin:
             # session is in now is news the caller needs.
             sess.restarting_until = earlier_window
             return RestartOutcome(ok=False, reason="still_stopping", label=label)
+
+        # The old process is gone, and its dialogs with it: a refusal still
+        # waiting for one is never typed, whether the launch below works or
+        # fails (this entry stays INTERACTIVE until then).
+        sess.abandon_auto_denies()
 
         short_name = session_name.removeprefix("claude-")
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
@@ -3855,11 +3903,18 @@ class SessionOpsMixin:
                                   mode=mode)
         sess.relaunch_in_flight = True
         try:
-            return await self._bring_back_in_flight(
+            outcome = await self._bring_back_in_flight(
                 sess, force=force, release_held=release_held, mode=mode,
                 settled=settled)
+        except Exception:
+            sess.relaunch_in_flight = False
+            await self._rerun_kept_auto_denies(sess)
+            raise
         finally:
             sess.relaunch_in_flight = False
+        if not outcome.ok:
+            await self._rerun_kept_auto_denies(sess)
+        return outcome
 
     @staticmethod
     def _turn_in_flight(sess: TrackedSession) -> bool:

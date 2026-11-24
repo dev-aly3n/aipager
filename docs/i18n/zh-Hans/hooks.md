@@ -1,6 +1,6 @@
 # Hook 事件
 
-<!-- i18n-source: docs/hooks.md @ b664aeaf -->
+<!-- i18n-source: docs/hooks.md @ 347acc60 -->
 
 > 本页译自英文；如果两者不一致，以英文版为准。（[English](../../hooks.md)）
 
@@ -78,7 +78,7 @@ aipager 把会话标记为工作中，如果还没有工作卡片就打开一张
 
 Claude Code 即将请求权限。工作卡片变成这个请求，在 Claude 对它的描述下方显示真实的命令或路径（见[命令 → 权限请求](commands.md#permission-prompts)）：允许、拒绝、停止，以及只有在 Claude Code 提供了一条真正可以记住的规则时才出现的始终允许。
 
-hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。Claude Code 同时会在终端里显示它自己的对话框（子代理的调用要等 hook 结束后才显示）。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），并关闭这个对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。在不是 aipager 启动的会话里，它根本不等：aipager 忽略那个会话，所以不会有点按过来。这时对话框会在终端里等着，之后的点按会通过输入按键来回答它。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
+hook 能回答时就自己回答这个请求。它打开一个短期的回复套接字，把地址随事件一起发出，并最多等你点按 20 秒。Claude Code 同时会在终端里显示它自己的对话框（子代理的调用要等 hook 结束后才显示）。及时的点按会作为 `PermissionRequest` 决定返回（允许、带规则的允许，或拒绝），并关闭这个对话框。如果没有及时的点按，hook 会告诉 aipager 等待结束了（`permission_reply_timeout`），并且不打印任何内容；在联系不上 aipager 或这条路径上任何环节出错时，它也什么都不打印。在不是 aipager 启动的会话里，它根本不等：aipager 忽略那个会话，所以不会有点按过来。这时对话框会在终端里等着，之后的点按会通过输入按键来回答它。后台代理的调用要等 hook 结束后对话框才出现，所以在那之后最初几秒内的点按会被拒绝，直到对话框显示在屏幕上。审计日志（`~/.claude/aipager-audit.jsonl`）记录每次点按是以哪种方式回答的：`"via": "hook_decision"` 或 `"via": "keystroke_fallback"`。
 
 在另一个请求开着时到达的 `PermissionRequest` 也会显示，作为单独的消息放在工作卡片下面。同一个对话框再次到达（同一个提问者、同一个工具和同一次调用，或者同样的输入）只显示一次。Claude Code 也会为 `AskUserQuestion` 运行这个 hook；这个问题已经通过它的 `PreToolUse` 显示了，所以永远不会显示第二次。后台代理的对话框只有在它的 hook 不再等待之后才会出现在终端里，排在那里已经打开的所有对话框下面；所以点按只会把按键输入到 Claude Code 最先显示的那个请求里（见[命令 → 权限请求](commands.md#permission-prompts)）。
 

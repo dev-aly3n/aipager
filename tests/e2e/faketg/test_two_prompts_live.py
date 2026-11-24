@@ -13,7 +13,9 @@ decision reached.
   answered by keys (it is on screen), A by its hook. No key reaches A.
 - ``[agent-first-typed]``: A's hook gives up after 4 s, so A's dialog goes
   under the question. Allow on A is refused (another prompt is on top) and
-  types nothing; once the question is answered, Allow on A types into A.
+  types nothing; once the question is answered, Allow on A types into A
+  (tapped again while it says A's dialog is still opening, in the first
+  seconds after A's hook gave up).
 - ``[claude-first]``: the question first, A second; A answered by its hook
   first, then the question.
 
@@ -24,6 +26,8 @@ from __future__ import annotations
 
 import pytest
 
+from aipager import i18n
+from aipager.bot.callbacks import PROMPT_OPENING
 from tests.e2e.fake_telegram import instance as fti
 from tests.e2e.faketg import conftest as ftc
 from tests.e2e.faketg import flows
@@ -36,6 +40,8 @@ DM = fti.DM_ID
 OPTION_2 = "All of them"
 BEHIND = "Claude Code is showing another prompt first, so answer that one before this one."
 LABELS = {"agent-first-hook": "ft30", "agent-first-typed": "ft31", "claude-first": "ft32"}
+#: The pop-up of a tap in a background agent's dialog's gap.
+OPENING = i18n.get("en").text(PROMPT_OPENING)
 
 
 def _events(inst, name, event, **match):
@@ -96,7 +102,9 @@ def test_both_prompts_show_and_both_answers_land(fresh, case):
         assert [e["dialog"] for e in _events(inst, name, "dialog_key")] == ["Q"]
         a_msg2, a_allow2 = fake.wait_button(DM, "Allow", since=since, timeout=10)
         assert a_msg2["message_id"] == a_msg["message_id"]
-        _tap(fake, a_msg2, a_allow2)
+        toast = flows.tap_until(fake, DM, fti.ALICE, a_msg2, a_allow2,
+                                retry_on=OPENING)
+        assert toast != OPENING, toast
         _wait_event(inst, name, "agent_answer", "A answered by its key",
                     answer="allowed", by="key")
         assert [e["dialog"] for e in _events(inst, name, "dialog_key")] == ["Q", "A"]

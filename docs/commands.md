@@ -423,7 +423,10 @@ says `🚫 jim · Denied`. On the question Claude Code asks in Auto mode
 before the first read outside the project, a late Allow is not typed:
 its Enter would pick "Yes, and keep allowing any reads outside the
 working directories", so the tap says to answer it in the terminal
-(Deny still works).
+(Deny still works). A background agent's dialog enters the terminal only
+once that wait is over, so for a few seconds a tap on its prompt types
+nothing, keeps its buttons and says `Claude Code is still opening this
+prompt in the terminal, so tap it again in a moment.`
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:

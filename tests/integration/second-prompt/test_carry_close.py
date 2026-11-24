@@ -278,6 +278,7 @@ def test_open_carried_prompt_typed_once_its_hook_gave_up(rig, shape):
     rig.keys.clear()
     rig.hook_ok = False
     target = make_prompts(rig)[-1]["msg_id"] if shape == "card-prompt" else surface
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(target, "allow")
     assert rig.keys != []
 
@@ -338,6 +339,7 @@ def test_other_prompt_typed_once_its_hook_gave_up(rig, shape, kind):
     stop(rig)
     rig.keys.clear()
     rig.hook_ok = False
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(other_msg(rig), "allow")
     assert rig.keys != []
 

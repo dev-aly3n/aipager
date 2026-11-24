@@ -140,6 +140,7 @@ def test_background_prompt_after_timeout_refuses_while_question_open(rig):
     # Once the question is answered the agent's dialog is on top.
     rig.tap(_extra_id(rig), "opt0")
     rig.keys.clear()
+    rig.elapse()  # past the agent's dialog draw after its hook's end
     rig.tap(CARD, "allow")
     assert rig.keys == ["Enter"]
     assert rig.sess.status == Status.BUSY
