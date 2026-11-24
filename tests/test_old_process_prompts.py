@@ -328,3 +328,84 @@ async def _tap_coro(rig, msg_id, verb, uid=ALICE):
     u.effective_user = q.from_user
     u.message = None
     await rig.bot._handle_callback(u, MagicMock())
+
+
+# ── the background settle against the fresh claude's first turn ─────────────────
+
+def test_the_settle_waits_for_the_old_card_and_spares_the_fresh_turn(
+        mk_bot, monkeypatch, run_async):
+    """A slow chat: the old turn's card is still being sent (it holds the
+    card lock) when Replace runs and the fresh claude starts its first
+    turn. The settle waits for that send, marks THAT card Stopped, and
+    closes only the replaced turn: the fresh turn still gets its own card.
+    Mutations: the settle not under ``animate_lock`` (the old card lands
+    after it and is never settled), or ``close_turn()`` with no turn (the
+    fresh turn gets no card)."""
+    import json
+
+    from tests.card_tasks import drain_card_tasks
+
+    r = Rig(mk_bot, monkeypatch, run_async, card=False)
+    r.bot._app.bot.edit_message_reply_markup = AsyncMock()
+
+    async def _launch(short, **kw):
+        return True, ""
+
+    async def _no_sleep(_s):
+        pass
+
+    monkeypatch.setattr(inject, "launch_session", _launch)
+    monkeypatch.setattr(inject, "kill_session", AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.bot.callbacks._sleep", _no_sleep)
+    sess, bot = r.sess, r.bot
+    gate = {}
+    ids = iter(range(700, 800))
+    card_sends: list[int] = []
+
+    async def _send(chat_id=None, text=None, **kwargs):
+        msg_id = next(ids)
+        if not card_sends and "first" in gate:
+            await gate["first"].wait()
+        card_sends.append(msg_id)
+        return type("M", (), {"message_id": msg_id})()
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_send)
+    seen = {}
+
+    async def go():
+        gate["first"] = asyncio.Event()
+        old_turn = sess.turn_seq
+        old_card = asyncio.ensure_future(bot._send_busy_and_animate(sess, turn=old_turn))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        seen["claimed"] = sess.busy_msg_id
+        bot._new_conflict_pending[S] = {"prompt": "", "mode": "ask", "user_id": ALICE,
+                                        "msg_id": CARD + 500, "was_working": True}
+        await _tap_coro(r, CARD + 500, "new_replace")
+        # The fresh claude's first turn begins while the old card still waits.
+        # (Its own hooks wait for its card state, which waits behind the
+        # old card's lock, so the datagram is handled as its own task.)
+        r.recv._recent_fingerprints.clear()
+        hook = asyncio.ensure_future(r.recv._on_datagram(json.dumps({
+            "session": S, "hook_event_name": "UserPromptSubmit", "prompt": "hello",
+            "transcript_path": "", "_seq": 999}).encode()))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        seen["fresh_turn"] = (old_turn, sess.turn_seq)
+        gate["first"].set()
+        await old_card
+        await asyncio.wait_for(hook, 5)
+        await drain_card_tasks()
+        for _ in range(20):
+            await asyncio.sleep(0)
+        await drain_card_tasks()
+
+    run_async(asyncio.wait_for(go(), 10))
+    assert seen["claimed"] == -1
+    assert seen["fresh_turn"][1] > seen["fresh_turn"][0]
+    old_id = card_sends[0]
+    assert [t for mid, t, _m in r.card_edits if mid == old_id and "Stopped" in t]
+    # The fresh turn's own card went out after the settle and is live.
+    assert len(card_sends) == 2
+    assert sess.busy_msg_id == card_sends[1]
+    assert sess.status == Status.BUSY
