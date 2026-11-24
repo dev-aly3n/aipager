@@ -1610,7 +1610,7 @@
 {"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ 5 小时额度已用完：已用 {pct}"}
 {"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ 每周额度即将用完：已用 {pct}"}
 {"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ 每周额度已用完：已用 {pct}"}
-{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ 支出上限即将用完：已用 {pct}"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ 即将达到支出上限：已用 {pct}"}
 {"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ 已达支出上限：已用 {pct}"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Claude 在用 Claude 订阅登录的会话里回复后，套餐额度会显示在这里。API 密钥和没有支出上限的网关不会报告额度。"}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "套餐额度"}
