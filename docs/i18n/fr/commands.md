@@ -1,6 +1,6 @@
 # Commandes et interface du bot
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Cette page est une traduction de la page anglaise ; si les deux ne disent pas la même chose, c'est la version anglaise qui fait foi. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ La longueur des réponses, le niveau de vocabulaire et la mise en forme simple a
 
 Quel que soit l'affichage, chaque carte d'activité se termine par la ligne d'état de sa session (`⏳`/`✅ nom · …`) et chaque réponse commence par sa ligne de résultat (`💬 nom`, plus `· Terminé (…)` quand il ne reste aucune carte terminée pour montrer les chiffres) ; l'affichage Réponse dans la carte empile les deux, chaque ligne dans sa propre section. Une ligne de séparation se trouve au-dessus de la ligne d'état de la carte d'activité (en petit texte), et dans l'affichage Réponse dans la carte une seconde sépare la carte terminée de la réponse. Dans l'affichage avec carte, la réponse suit exprès la carte terminée d'un instant, pour qu'on voie la carte dire Terminé avant que la réponse arrive en dessous ; réglez ou supprimez cette avance avec `FINISH_CARD_GRACE_SECONDS` (en secondes, par défaut 0,8 ; 0 envoie les deux en même temps). Dans l'affichage avec carte, une tâche qui n'a appelé aucun outil ne garde pas de carte : la carte est retirée avant de dire Terminé, et la première ligne de la réponse donne les chiffres, comme dans l'affichage « Réponse seule (sans carte) ».
 
-Quand une limite du forfait atteint 90 % ou plus, la carte d'activité de votre discussion privée l'affiche au-dessus de la ligne de séparation, avec le moment où elle se réinitialise (`⚠️ Limite hebdomadaire presque atteinte : 92% utilisé · Réinitialisation dans 2 j 5 h`, ou `⛔ Limite de 5 heures atteinte : 100% utilisé · …` une fois épuisée) : seulement pour l'owner et les admins (en usage personnel, la personne qui a installé aipager), seulement pour le compte sous lequel tourne cette session, et jamais dans un groupe, où tout le monde lit la carte. Elle n'apparaît que tant que la carte est active, pas sur la carte terminée, disparaît dès que la limite se réinitialise et n'envoie jamais de message à part. Les chiffres sont ceux que Claude Code a indiqués en dernier (voir `/usage`), elle apparaît donc d'abord à la tâche qui suit celle qui a dépassé la limite.
+Quand une limite du forfait atteint 90 % ou plus, la carte d'activité de votre discussion privée l'affiche au-dessus de la ligne de séparation, avec le moment où elle se réinitialise (`⚠️ Limite hebdomadaire presque atteinte : 92% utilisé · Réinitialisation dans 2 j 5 h`, ou `⛔ Limite de 5 heures atteinte : 100% utilisé · …` une fois épuisée) : seulement pour l'owner et les admins (en usage personnel, la personne qui a installé aipager), seulement pour le compte sous lequel tourne cette session, et jamais dans un groupe, où tout le monde lit la carte. Elle n'apparaît que tant que la carte est active, pas sur la carte terminée, disparaît dès que la limite se réinitialise et n'envoie jamais de message à part. Les chiffres sont ceux que Claude Code a indiqués en dernier (voir `/usage`), elle apparaît donc dès que Claude Code a indiqué les nouveaux chiffres, en général à partir de la tâche suivante.
 
 ### <a id="per-session-dynamic-commands"></a>Commandes propres à chaque session
 

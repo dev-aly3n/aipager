@@ -1,6 +1,6 @@
 # Comandi del bot e interfaccia
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Questa pagina è tradotta dalla pagina in inglese; se le due versioni non coincidono, vale quella in inglese. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ Lunghezza delle risposte, livello di vocabolario e formattazione semplice arriva
 
 Qualunque sia l'aspetto scelto, ogni scheda di attività finisce con la riga di stato della sessione (`⏳`/`✅ nome · …`) e ogni risposta comincia con la sua riga di risultato (`💬 nome`, più `· Finito (…)` quando non resta una scheda finita a mostrare i numeri); «Risposta dentro la scheda» le mette una sopra l'altra, ognuna nella sua parte. Sopra la riga di stato della scheda di attività c'è una linea divisoria (in testo piccolo), e con «Risposta dentro la scheda» una seconda separa la scheda finita dalla risposta. Negli aspetti con la scheda la risposta arriva apposta un attimo dopo la scheda finita, così vedi la scheda dire Finito prima che sotto compaia la risposta; regola o togli questo ritardo con `FINISH_CARD_GRACE_SECONDS` (secondi, predefinito 0,8; 0 invia entrambe insieme). Nell'aspetto con la scheda, un'attività che non ha chiamato nessuno strumento non lascia la scheda: la scheda viene cancellata prima di dire Finito, e la prima riga della risposta porta i numeri, come in «Solo la risposta (senza scheda)».
 
-Quando un limite del piano arriva al 90% o oltre, la scheda di attività nella tua chat privata lo mostra sopra la linea divisoria, con quando si azzera (`⚠️ Limite settimanale quasi raggiunto: 92% usato · Si azzera tra 2 g 5 h`, oppure `⛔ Limite di 5 ore raggiunto: 100% usato · …` quando è esaurito): solo per l'owner e gli admin (nell'uso personale, il proprietario del bot), solo per l'accesso con cui gira quella sessione, e mai in un gruppo, dove tutti leggono la scheda. Compare solo mentre la scheda è in corso, non sulla scheda finita, sparisce appena il limite si azzera e non invia mai un messaggio a parte. I numeri sono quelli che Claude Code ha riportato l'ultima volta (vedi `/usage`), quindi compare la prima volta nell'attività dopo quella che ha superato il limite.
+Quando un limite del piano arriva al 90% o oltre, la scheda di attività nella tua chat privata lo mostra sopra la linea divisoria, con quando si azzera (`⚠️ Limite settimanale quasi raggiunto: 92% usato · Si azzera tra 2 g 5 h`, oppure `⛔ Limite di 5 ore raggiunto: 100% usato · …` quando è esaurito): solo per l'owner e gli admin (nell'uso personale, il proprietario del bot), solo per l'accesso con cui gira quella sessione, e mai in un gruppo, dove tutti leggono la scheda. Compare solo mentre la scheda è in corso, non sulla scheda finita, sparisce appena il limite si azzera e non invia mai un messaggio a parte. I numeri sono quelli che Claude Code ha riportato l'ultima volta (vedi `/usage`), quindi compare quando Claude Code ha riportato i nuovi numeri, di solito dall'attività successiva.
 
 ### <a id="per-session-dynamic-commands"></a>Comandi di ogni sessione
 

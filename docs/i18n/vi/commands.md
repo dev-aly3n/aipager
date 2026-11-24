@@ -1,6 +1,6 @@
 # Lệnh và giao diện của bot
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Trang này được dịch từ tiếng Anh; nếu hai bản khác nhau, bản tiếng Anh là bản đúng. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ Menu `/` hiện các phiên của bạn trước (`/x1 · Trò chuyện với x1
 
 Dù bố cục nào, mỗi thẻ làm việc đều kết thúc bằng dòng trạng thái của phiên (`⏳`/`✅ tên · …`) và mỗi câu trả lời đều bắt đầu bằng dòng kết quả của nó (`💬 tên`, thêm `· Xong (…)` khi không còn thẻ đã xong nào để hiện số liệu); bố cục “Câu trả lời nằm trong thẻ” xếp hai dòng chồng lên nhau, mỗi dòng ở phần riêng. Phía trên dòng trạng thái của thẻ làm việc có một đường kẻ phân cách (chữ nhỏ), và trong bố cục “Câu trả lời nằm trong thẻ” một đường thứ hai tách thẻ đã xong khỏi câu trả lời. Trong bố cục có thẻ, câu trả lời cố ý đến sau thẻ đã xong một chút, để bạn thấy thẻ ghi Xong trước khi câu trả lời hiện ra bên dưới; chỉnh hoặc tắt khoảng trễ đó bằng `FINISH_CARD_GRACE_SECONDS` (giây, mặc định 0,8; 0 gửi cả hai cùng lúc). Trong bố cục có thẻ, một việc không gọi công cụ nào sẽ không để lại thẻ: thẻ được xóa trước khi ghi Xong, và dòng đầu của câu trả lời hiện số liệu, giống bố cục “Chỉ câu trả lời, xóa thẻ”.
 
-Khi một giới hạn gói đạt 90% trở lên, thẻ làm việc trong chat riêng của bạn hiện điều đó phía trên đường kẻ phân cách, kèm thời điểm đặt lại (`⚠️ Sắp hết giới hạn tuần: đã dùng 92% · Đặt lại sau 2 ngày 5 giờ`, hoặc `⛔ Hết giới hạn 5 giờ: đã dùng 100% · …` khi đã dùng hết): chỉ cho owner và quản trị viên (ở chế độ cá nhân là người vận hành), chỉ cho tài khoản đăng nhập mà phiên đó đang dùng, và không bao giờ trong nhóm, nơi mọi người đều đọc thẻ. Dòng này chỉ hiện khi thẻ đang làm việc, không hiện trên thẻ đã xong, biến mất khi giới hạn được đặt lại và không bao giờ gửi tin nhắn riêng. Số liệu là những gì Claude Code báo gần nhất (xem `/usage`), nên nó hiện lần đầu ở việc tiếp theo sau việc đã vượt giới hạn.
+Khi một giới hạn gói đạt 90% trở lên, thẻ làm việc trong chat riêng của bạn hiện điều đó phía trên đường kẻ phân cách, kèm thời điểm đặt lại (`⚠️ Sắp hết giới hạn tuần: đã dùng 92% · Đặt lại sau 2 ngày 5 giờ`, hoặc `⛔ Hết giới hạn 5 giờ: đã dùng 100% · …` khi đã dùng hết): chỉ cho owner và quản trị viên (ở chế độ cá nhân là người vận hành), chỉ cho tài khoản đăng nhập mà phiên đó đang dùng, và không bao giờ trong nhóm, nơi mọi người đều đọc thẻ. Dòng này chỉ hiện khi thẻ đang làm việc, không hiện trên thẻ đã xong, biến mất khi giới hạn được đặt lại và không bao giờ gửi tin nhắn riêng. Số liệu là những gì Claude Code báo gần nhất (xem `/usage`), nên nó hiện khi Claude Code đã báo số liệu mới, thường là từ việc tiếp theo.
 
 ### <a id="per-session-dynamic-commands"></a>Lệnh riêng của từng phiên
 

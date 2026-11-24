@@ -1,6 +1,6 @@
 # Komutlar ve bot arayüzü
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Bu sayfa İngilizceden çevrildi; ikisi birbirini tutmazsa İngilizce sürüm geçerlidir. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ Yanıt uzunluğu, kelime düzeyi ve sade biçimlendirme, Telegram'dan gelen her 
 
 Görünüm ne olursa olsun her çalışma kartı kendi oturumunun durum satırıyla biter (`⏳`/`✅ ad · …`) ve her yanıt kendi sonuç satırıyla başlar (`💬 ad`, artı rakamları gösterecek biten bir kart kalmadıysa `· Bitti (…)`); “Yanıt kartın içinde” görünümü onları üst üste, her satırı kendi bölümünde koyar. Çalışma kartının durum satırının üstünde bir ayırıcı çizgi durur (küçük yazıyla), ve “Yanıt kartın içinde” görünümünde ikinci bir çizgi biten kartı yanıttan ayırır. Kartlı görünümde yanıt, kartın “Bitti” dediğini, yanıt altında belirmeden önce görebilesin diye biten kartın arkasından bilerek küçük bir gecikmeyle gelir; bu farkı `FINISH_CARD_GRACE_SECONDS` ile ayarla ya da kapat (saniye, varsayılan 0,8; 0 ikisini aynı anda gönderir). Kartlı görünümde hiç araç çağırmayan bir görev kart bırakmaz: kart “Bitti” demeden önce kaldırılır ve yanıtın ilk satırı, “Yalnızca yanıt (kartsız)” görünümündeki gibi rakamları gösterir.
 
-Bir plan sınırı %90 veya üstüne çıkınca özel sohbetindeki çalışma kartı bunu ayırıcı çizginin üstünde, ne zaman sıfırlanacağıyla birlikte gösterir (`⚠️ Haftalık sınıra az kaldı: 92% kullanıldı · 2 g 5 sa sonra sıfırlanır`, sınır dolunca da `⛔ 5 saatlik sınıra ulaşıldı: 100% kullanıldı · …`): yalnızca owner ve yöneticiler için (kişisel modda aipager'ı kuran kişi), yalnızca o oturumun çalıştığı giriş için, ve herkesin kartı okuduğu bir grupta asla. Yalnızca kart çalışırken görünür, biten kartta görünmez, sınır sıfırlanınca kaybolur ve hiçbir zaman ayrı bir mesaj göndermez. Rakamlar Claude Code'un en son bildirdikleridir (bkz. `/usage`), bu yüzden ilk kez sınırı aşan görevden sonraki görevde görünür.
+Bir plan sınırı %90 veya üstüne çıkınca özel sohbetindeki çalışma kartı bunu ayırıcı çizginin üstünde, ne zaman sıfırlanacağıyla birlikte gösterir (`⚠️ Haftalık sınıra az kaldı: 92% kullanıldı · 2 g 5 sa sonra sıfırlanır`, sınır dolunca da `⛔ 5 saatlik sınıra ulaşıldı: 100% kullanıldı · …`): yalnızca owner ve yöneticiler için (kişisel modda aipager'ı kuran kişi), yalnızca o oturumun çalıştığı giriş için, ve herkesin kartı okuduğu bir grupta asla. Yalnızca kart çalışırken görünür, biten kartta görünmez, sınır sıfırlanınca kaybolur ve hiçbir zaman ayrı bir mesaj göndermez. Rakamlar Claude Code'un en son bildirdikleridir (bkz. `/usage`), bu yüzden Claude Code yeni rakamları bildirdiğinde görünür, genellikle bir sonraki görevden itibaren.
 
 ### <a id="per-session-dynamic-commands"></a>Her oturumun kendi komutları
 

@@ -1,6 +1,6 @@
 # Comandos e interfaz del bot
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Esta página es una traducción de la página en inglés; si no coinciden, la versión en inglés es la correcta. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ La longitud de las respuestas, el nivel de vocabulario y el formato simple le ll
 
 Sea cual sea la forma, cada tarjeta de actividad termina con la línea de estado de su sesión (`⏳`/`✅ name · …`) y cada respuesta empieza con su línea de resultado (`💬 name`, más `· Terminado (…)` cuando no queda ninguna tarjeta terminada para mostrar las estadísticas); la forma Respuesta dentro de la tarjeta pone las dos una encima de otra, cada línea en su propia sección. Sobre la línea de estado de la tarjeta de actividad hay una línea divisoria (en letra pequeña), y en la forma Respuesta dentro de la tarjeta una segunda separa la tarjeta terminada de la respuesta. En la forma de tarjeta, la respuesta llega a propósito un momento después de la tarjeta terminada, para que se vea a la tarjeta decir Terminado antes de que la respuesta llegue debajo; ajusta o apaga ese margen con `FINISH_CARD_GRACE_SECONDS` (en segundos, por defecto 0,8; 0 envía las dos a la vez). En la forma de tarjeta, una tarea que no llamó a ninguna herramienta no deja tarjeta: la tarjeta se quita antes de decir Terminado, y la primera línea de la respuesta lleva las estadísticas, como en la forma «Solo la respuesta (sin tarjeta)».
 
-Cuando un límite del plan llega al 90% o más, la tarjeta de actividad de tu chat privado lo muestra sobre la línea divisoria, con cuándo se reinicia (`⚠️ Límite semanal casi agotado: 92% usado · Se reinicia en 2 d 5 h`, o `⛔ Límite de 5 horas alcanzado: 100% usado · …` cuando ya se agotó): solo para el owner y los admins (en uso personal, quien instaló aipager), solo para la cuenta con la que funciona esa sesión, y nunca en un grupo, donde todos leen la tarjeta. Aparece solo mientras la tarjeta está en marcha, no en la tarjeta terminada, desaparece cuando el límite se reinicia y nunca envía un mensaje propio. Los números son los que Claude Code informó por última vez (ver `/usage`), así que aparece por primera vez en la tarea siguiente a la que pasó el límite.
+Cuando un límite del plan llega al 90% o más, la tarjeta de actividad de tu chat privado lo muestra sobre la línea divisoria, con cuándo se reinicia (`⚠️ Límite semanal casi agotado: 92% usado · Se reinicia en 2 d 5 h`, o `⛔ Límite de 5 horas alcanzado: 100% usado · …` cuando ya se agotó): solo para el owner y los admins (en uso personal, quien instaló aipager), solo para la cuenta con la que funciona esa sesión, y nunca en un grupo, donde todos leen la tarjeta. Aparece solo mientras la tarjeta está en marcha, no en la tarjeta terminada, desaparece cuando el límite se reinicia y nunca envía un mensaje propio. Los números son los que Claude Code informó por última vez (ver `/usage`), así que aparece cuando Claude Code ya informó los números nuevos, normalmente desde la tarea siguiente.
 
 ### <a id="per-session-dynamic-commands"></a>Comandos propios de cada sesión
 

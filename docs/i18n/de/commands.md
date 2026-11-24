@@ -1,6 +1,6 @@
 # Befehle und Oberfläche des Bots
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Diese Seite ist eine Übersetzung der englischen Seite; wenn die beiden voneinander abweichen, gilt die englische Fassung. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ Antwortlänge, Wortschatz und einfache Formatierung erreichen Claude als kurze A
 
 Egal welches Layout: Jede Arbeitskarte endet mit der Statuszeile ihrer Sitzung (`⏳`/`✅ Name · …`), und jede Antwort beginnt mit ihrer Ergebniszeile (`💬 Name`, plus `· Fertig (…)`, wenn keine fertige Karte übrig ist, die die Zahlen zeigt); Antwort in der Karte stapelt beide, jede Zeile in ihrem eigenen Abschnitt. Über der Statuszeile der Arbeitskarte steht eine Trennlinie (kleine Schrift), und bei Antwort in der Karte trennt eine zweite die fertige Karte von der Antwort. Beim Layout mit Karte folgt die Antwort der fertigen Karte absichtlich einen Moment später, damit man sieht, wie die Karte Fertig sagt, bevor die Antwort darunter erscheint; stell diesen Vorsprung mit `FINISH_CARD_GRACE_SECONDS` ein oder schalte ihn ab (Sekunden, Standard 0,8; 0 schickt beides gleichzeitig). Beim Layout mit Karte bleibt von einer Aufgabe ohne Tool-Aufruf keine Karte: Die Karte wird entfernt, bevor sie Fertig sagen würde, und die erste Zeile der Antwort zeigt die Zahlen, wie beim Layout „Nur die Antwort (ohne Karte)“.
 
-Steht ein Planlimit bei 90% oder mehr, zeigt die Arbeitskarte in deinem privaten Chat das über der Trennlinie an, mit dem Zeitpunkt, an dem es zurückgesetzt wird (`⚠️ Wochenlimit fast erreicht: 92% verbraucht · Wird in 2 T. 5 Std. zurückgesetzt`, oder `⛔ 5-Stunden-Limit erreicht: 100% verbraucht · …`, sobald es aufgebraucht ist): nur für den Owner und Admins (im persönlichen Betrieb für die Person, die aipager installiert hat), nur für die Anmeldung, unter der diese Sitzung läuft, und nie in einer Gruppe, wo alle die Karte lesen. Der Hinweis steht nur auf der laufenden Karte, nicht auf der fertigen, verschwindet, sobald das Limit zurückgesetzt ist, und schickt nie eine eigene Nachricht. Die Zahlen sind die, die Claude Code zuletzt gemeldet hat (siehe `/usage`), daher erscheint er zuerst bei der Aufgabe nach der, die das Limit überschritten hat.
+Steht ein Planlimit bei 90% oder mehr, zeigt die Arbeitskarte in deinem privaten Chat das über der Trennlinie an, mit dem Zeitpunkt, an dem es zurückgesetzt wird (`⚠️ Wochenlimit fast erreicht: 92% verbraucht · Wird in 2 T. 5 Std. zurückgesetzt`, oder `⛔ 5-Stunden-Limit erreicht: 100% verbraucht · …`, sobald es aufgebraucht ist): nur für den Owner und Admins (im persönlichen Betrieb für die Person, die aipager installiert hat), nur für die Anmeldung, unter der diese Sitzung läuft, und nie in einer Gruppe, wo alle die Karte lesen. Der Hinweis steht nur auf der laufenden Karte, nicht auf der fertigen, verschwindet, sobald das Limit zurückgesetzt ist, und schickt nie eine eigene Nachricht. Die Zahlen sind die, die Claude Code zuletzt gemeldet hat (siehe `/usage`), daher erscheint er, sobald Claude Code die neuen Zahlen gemeldet hat, meist ab der nächsten Aufgabe.
 
 ### <a id="per-session-dynamic-commands"></a>Eigene Befehle jeder Sitzung
 

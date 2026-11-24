@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ Panjang jawaban, tingkat kosakata, dan format sederhana sampai ke Claude sebagai
 
 Dengan tata letak apa pun, setiap kartu kerja diakhiri baris status sesinya (`⏳`/`✅ nama · …`), dan setiap jawaban diawali baris hasilnya (`💬 nama`, ditambah `· Selesai (…)` kalau tidak ada kartu selesai yang tersisa untuk menampilkan angkanya); tata letak “Jawaban di dalam kartu kerja” menumpuk keduanya, masing-masing di bagiannya sendiri. Di atas baris status kartu kerja ada garis pemisah (dengan teks kecil), dan di tata letak “Jawaban di dalam kartu kerja” garis kedua memisahkan kartu yang selesai dari jawabannya. Dalam tata letak kartu, jawaban sengaja datang sedikit di belakang kartu yang selesai, supaya kamu melihat kartu itu bertuliskan “Selesai” sebelum jawabannya muncul di bawahnya; atur atau matikan jeda ini dengan `FINISH_CARD_GRACE_SECONDS` (detik, bawaannya 0,8; 0 mengirim keduanya bersamaan). Dalam tata letak kartu, tugas yang tidak memanggil alat apa pun tidak meninggalkan kartu: kartunya dihapus sebelum bertuliskan “Selesai”, dan baris pertama jawabannya menampilkan angkanya, seperti di tata letak “Hanya jawaban, kartu dihapus”.
 
-Saat sebuah batas paket mencapai 90% atau lebih, kartu kerja di chat pribadimu menampilkannya di atas garis pemisah, beserta kapan batas itu direset (`⚠️ Batas mingguan hampir habis: 92% terpakai · Direset dalam 2 hari 5 jam`, atau `⛔ Batas 5 jam habis: 100% terpakai · …` setelah habis): hanya untuk owner dan admin (dalam mode pribadi, orang yang memasang aipager), hanya untuk login yang dipakai sesi itu, dan tidak pernah di grup, tempat semua orang membaca kartunya. Catatan ini hanya muncul selama kartu masih bekerja, tidak di kartu yang selesai, hilang begitu batasnya direset, dan tidak pernah mengirim pesan sendiri. Angkanya adalah yang terakhir dilaporkan Claude Code (lihat `/usage`), jadi catatan ini pertama kali muncul di tugas sesudah tugas yang melewati batas.
+Saat sebuah batas paket mencapai 90% atau lebih, kartu kerja di chat pribadimu menampilkannya di atas garis pemisah, beserta kapan batas itu direset (`⚠️ Batas mingguan hampir habis: 92% terpakai · Direset dalam 2 hari 5 jam`, atau `⛔ Batas 5 jam habis: 100% terpakai · …` setelah habis): hanya untuk owner dan admin (dalam mode pribadi, orang yang memasang aipager), hanya untuk login yang dipakai sesi itu, dan tidak pernah di grup, tempat semua orang membaca kartunya. Catatan ini hanya muncul selama kartu masih bekerja, tidak di kartu yang selesai, hilang begitu batasnya direset, dan tidak pernah mengirim pesan sendiri. Angkanya adalah yang terakhir dilaporkan Claude Code (lihat `/usage`), jadi catatan ini muncul setelah Claude Code melaporkan angka barunya, biasanya mulai tugas berikutnya.
 
 ### <a id="per-session-dynamic-commands"></a>Perintah milik setiap sesi
 

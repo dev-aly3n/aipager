@@ -1,6 +1,6 @@
 # Comandos e interface do bot
 
-<!-- i18n-source: docs/commands.md @ 65dd986c -->
+<!-- i18n-source: docs/commands.md @ 8074db80 -->
 
 > Esta página é uma tradução da página em inglês; se as duas não baterem, vale a versão em inglês. ([English](../../commands.md))
 
@@ -68,7 +68,7 @@ O tamanho da resposta, o nível de vocabulário e a formatação simples chegam 
 
 Seja qual for a aparência escolhida, todo cartão de atividade termina com a linha de estado da sessão (`⏳`/`✅ nome · …`) e toda resposta começa com a linha de resultado (`💬 nome`, mais `· Concluído (…)` quando não sobra nenhum cartão terminado para mostrar os números); a aparência Resposta dentro do cartão empilha as duas, cada linha na própria seção. Acima da linha de estado do cartão de atividade fica uma linha divisória (em letra pequena), e na aparência Resposta dentro do cartão uma segunda separa o cartão terminado da resposta. Na aparência com cartão, a resposta vem de propósito um instante depois do cartão terminado, para dar para ver o cartão dizer Concluído antes de a resposta chegar embaixo dele; ajuste ou desligue essa vantagem com `FINISH_CARD_GRACE_SECONDS` (segundos, padrão 0,8; 0 manda os dois juntos). Na aparência com cartão, uma tarefa que não chamou nenhuma ferramenta não deixa cartão: o cartão é tirado antes de dizer Concluído, e a primeira linha da resposta traz os números, como na aparência “Só a resposta (sem cartão)”.
 
-Quando um limite do plano chega a 90% ou mais, o cartão de atividade do seu chat privado mostra isso acima da linha divisória, com quando ele zera (`⚠️ Limite semanal quase atingido: 92% usado · Zera em 2 d 5 h`, ou `⛔ Limite de 5 horas atingido: 100% usado · …` quando acabou): só para o owner e os admins (no uso pessoal, quem instalou o aipager), só para o login com que essa sessão roda, e nunca em um grupo, onde todo mundo lê o cartão. Aparece só enquanto o cartão está em andamento, não no cartão terminado, some assim que o limite zera e nunca manda uma mensagem própria. Os números são os que o Claude Code informou por último (veja `/usage`), então ele aparece primeiro na tarefa depois da que passou do limite.
+Quando um limite do plano chega a 90% ou mais, o cartão de atividade do seu chat privado mostra isso acima da linha divisória, com quando ele zera (`⚠️ Limite semanal quase atingido: 92% usado · Zera em 2 d 5 h`, ou `⛔ Limite de 5 horas atingido: 100% usado · …` quando acabou): só para o owner e os admins (no uso pessoal, quem instalou o aipager), só para o login com que essa sessão roda, e nunca em um grupo, onde todo mundo lê o cartão. Aparece só enquanto o cartão está em andamento, não no cartão terminado, some assim que o limite zera e nunca manda uma mensagem própria. Os números são os que o Claude Code informou por último (veja `/usage`), então ele aparece quando o Claude Code informa os números novos, normalmente a partir da tarefa seguinte.
 
 ### <a id="per-session-dynamic-commands"></a>Comandos de cada sessão
 
