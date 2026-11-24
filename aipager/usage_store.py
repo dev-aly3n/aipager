@@ -229,8 +229,12 @@ def limit_level(pct: Any) -> int:
     a window *pct* percent used (roadmap 8.131). Judged on the rounded
     value /usage displays, so a window shown as "90%" always counts as
     near; a spend limit over 100 counts as reached. Not a finite real
-    number (a bool, a string, NaN, infinity): 0."""
-    if isinstance(pct, bool) or not isinstance(pct, (int, float)) or not math.isfinite(pct):
+    number (a bool, a string, NaN, infinity): 0. An int is always finite,
+    however large (``math.isfinite`` would raise on one past float range):
+    a huge one is simply reached."""
+    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
+        return 0
+    if isinstance(pct, float) and not math.isfinite(pct):
         return 0
     shown = round(pct)
     if shown >= LIMIT_REACHED_PERCENT:
