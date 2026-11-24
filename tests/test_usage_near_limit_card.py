@@ -114,14 +114,20 @@ def test_reached_row_on_the_card():
 THREE = ("five_hour", "seven_day", "spend_limit")
 
 
-@pytest.mark.parametrize("code", ["en", "fa"])
-@pytest.mark.parametrize("shape", ["many-rows", "byte-heavy"])
+# "byte-bound" rows (400 four-byte emoji each) and zh-Hans "byte-heavy"
+# rows carry enough bytes per char that the card hits the 32,768-byte
+# ceiling before the 8,800-char one: only the note's BYTE reserve keeps
+# those inside it (the char reserve alone lets them reach ~33,300 bytes).
+@pytest.mark.parametrize("code", ["en", "fa", "zh-Hans"])
+@pytest.mark.parametrize("shape", ["many-rows", "byte-heavy", "byte-bound"])
 def test_note_reserved_within_ceiling(code, shape):
     tr = i18n.get(code)
     if shape == "many-rows":
         rows = [(f"Bash: t-{i} " + "x" * 40, True) for i in range(400)]
-    else:
+    elif shape == "byte-heavy":
         rows = [("Bash: " + "\U0001f600" * 150, True) for _ in range(400)]
+    else:
+        rows = [("Bash: " + "\U0001f600" * 400, True) for _ in range(400)]
     windows = {name: Window(95, int(time.time()) + 3 * 3600) for name in THREE}
     sess = _sess(rows=rows, windows=windows)
     card, dropped = build_stream_card_ex(sess, "Working", tr=tr)
