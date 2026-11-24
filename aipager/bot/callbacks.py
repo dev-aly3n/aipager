@@ -1888,7 +1888,7 @@ class CallbackDispatchMixin:
                         # one's turn and prompts end here: none of its
                         # buttons may type into the new process, and its
                         # card must not stay Working.
-                        await self._end_replaced_turn(sess, by=self._actor_label(
+                        self._end_replaced_turn(sess, by=self._actor_label(
                             tapper, calling_chat_id(update),
                             getattr(query, "from_user", None)))
                 # Drop the resume metadata so the new session is truly fresh.

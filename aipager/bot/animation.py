@@ -3868,7 +3868,7 @@ class AnimationMixin:
             self._start_animation(sess)
             return msg_id
         sess.busy_msg_id = None  # release the slot
-        if self._card_refused_now(sess):
+        if self._card_refused_now(sess) and sess.status is not Status.GONE:
             sess.busy_card_owed = True
             log.info("[%s] busy card held back — the chat is flood-muted or "
                      "in minimal mode; it is sent when the chat can take it, "

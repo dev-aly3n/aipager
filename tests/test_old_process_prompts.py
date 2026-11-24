@@ -19,15 +19,32 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import asyncio
+
 from aipager.bot.dashboard import ALREADY_ANSWERED
 from aipager.dtach import inject
 from aipager.state import Status
-from tests.two_prompts_rig import ALICE, BG, CARD, S, Rig, answers
+from tests.card_tasks import drain_card_tasks
+from tests.two_prompts_rig import ALICE, BG, CARD, GROUP, S, Rig, answers
+
+
+def _draining(r):
+    """Each of the rig's loops waits for the background steps it started
+    (the old claude's buttons, card and reactions) before it ends."""
+    run = r.run_async
+
+    async def _then_drain(coro):
+        out = await coro
+        await drain_card_tasks()
+        return out
+
+    r.run_async = lambda coro: run(_then_drain(coro))
+    return r
 
 
 @pytest.fixture
 def rig(mk_bot, monkeypatch, run_async):
-    r = Rig(mk_bot, monkeypatch, run_async)
+    r = _draining(Rig(mk_bot, monkeypatch, run_async))
     r.bot._app.bot.edit_message_reply_markup = AsyncMock()
     r.launches = []
 
@@ -66,7 +83,7 @@ def _replace(rig):
 
 
 def _restart(rig, run_async):
-    return run_async(rig.bot._kill_and_relaunch_core(
+    return rig.run_async(rig.bot._kill_and_relaunch_core(
         rig.sess, target_mode="ask", interrupt_first=False))
 
 
@@ -185,7 +202,7 @@ def test_replace_with_no_card_closes_the_prompt_sent_as_its_own_message(
     """No card yet: Claude's question went out as its own message (the
     primary prompt, not the card's). Replace closes it too: no prompt is
     left on the entry and its message loses its buttons."""
-    r = Rig(mk_bot, monkeypatch, run_async, card=False)
+    r = _draining(Rig(mk_bot, monkeypatch, run_async, card=False))
     r.bot._app.bot.edit_message_reply_markup = AsyncMock()
 
     async def _launch(short, **kw):
@@ -206,3 +223,108 @@ def test_replace_with_no_card_closes_the_prompt_sent_as_its_own_message(
     r.keys.clear()
     r.tap(msg["msg_id"], "opt0", uid=ALICE)
     assert r.keys == []
+
+
+# ── nothing waits on Telegram between the kill and the launch ───────────────────
+
+def _held_edits(rig):
+    """Every button edit waits until released (a slow chat's pace)."""
+    gate = {}
+
+    async def _slow(**kw):
+        await gate["event"].wait()
+
+    rig.bot._app.bot.edit_message_reply_markup = AsyncMock(side_effect=_slow)
+    return gate
+
+
+def test_a_slow_chat_does_not_hold_the_replace_launch(rig):
+    """The old prompts' button edits wait for the chat: the fresh claude is
+    launched anyway (the prompts are closed before it, the buttons go
+    after). Mutation: the strip awaited before the launch (the launch never
+    comes while the edit is held)."""
+    extra_id = _two_prompts(rig)
+    gate = _held_edits(rig)
+    seen = {}
+
+    async def go():
+        gate["event"] = asyncio.Event()
+        rig.bot._new_conflict_pending[S] = {"prompt": "", "mode": "ask", "user_id": ALICE,
+                                            "msg_id": CARD + 500, "was_working": True}
+        tap = asyncio.ensure_future(_tap_coro(rig, CARD + 500, "new_replace"))
+        for _ in range(50):
+            await asyncio.sleep(0)
+        seen["launched_while_held"] = list(rig.launches)
+        seen["closed"] = rig.sess.open_prompts() == []
+        gate["event"].set()
+        await tap
+        await drain_card_tasks()
+
+    rig.run_async(go())
+    assert seen["launched_while_held"] == [S.removeprefix("claude-")]
+    assert seen["closed"] is True
+    assert extra_id in [c.kwargs.get("message_id") for c in
+                        rig.bot._app.bot.edit_message_reply_markup.await_args_list]
+
+
+def test_a_slow_chat_does_not_hold_the_relaunch(rig):
+    """The same for a restart: its quiet window is short, and the monitor
+    would call the session ended if the relaunch waited for the chat."""
+    _two_prompts(rig)
+    gate = _held_edits(rig)
+    seen = {}
+
+    async def go():
+        gate["event"] = asyncio.Event()
+        task = asyncio.ensure_future(rig.bot._kill_and_relaunch_core(
+            rig.sess, target_mode="ask", interrupt_first=False))
+        for _ in range(50):
+            await asyncio.sleep(0)
+        seen["done_while_held"] = task.done() and task.result().ok
+        seen["launches"] = list(rig.launches)
+        gate["event"].set()
+        await task
+        await drain_card_tasks()
+
+    rig.run_async(go())
+    assert seen["done_while_held"] is True
+    assert seen["launches"] == [S.removeprefix("claude-")]
+
+
+def test_replace_drops_the_messages_held_for_the_old_claude(rig):
+    """Messages held for the old claude's dialog were for the old
+    conversation: Replace drops them as a Stop does (not delivered, the
+    "answer it first" notices deleted), so none reaches the fresh claude
+    ahead of what /new was for. Mutation: the queue not cleared."""
+    rig.question()
+    rig.sess.pending_queue.append(("old message", 321, "", None, ALICE))
+    rig.sess.dialog_hold = {"notices": [(GROUP, 333)]}
+    rig.bot._mark_not_delivered = AsyncMock()
+    rig.bot._app.bot.delete_message = AsyncMock()
+    _replace(rig)
+    assert rig.sess.pending_queue == []
+    assert rig.sess.dialog_hold is None
+    rig.bot._mark_not_delivered.assert_awaited_once()
+    assert rig.bot._mark_not_delivered.await_args.args[1] == [{"msg_id": 321}]
+    rig.bot._app.bot.delete_message.assert_awaited_once_with(chat_id=GROUP, message_id=333)
+
+
+async def _tap_coro(rig, msg_id, verb, uid=ALICE):
+    from unittest.mock import MagicMock
+    q = MagicMock()
+    q.data = f"{S}:{verb}"
+    q.from_user = MagicMock(id=uid)
+    q.message = MagicMock()
+    q.message.chat = MagicMock(id=GROUP)
+    q.message.chat_id = GROUP
+    q.message.message_id = msg_id
+    q.message.text = ""
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    q.edit_message_reply_markup = AsyncMock()
+    u = MagicMock()
+    u.callback_query = q
+    u.effective_chat = q.message.chat
+    u.effective_user = q.from_user
+    u.message = None
+    await rig.bot._handle_callback(u, MagicMock())

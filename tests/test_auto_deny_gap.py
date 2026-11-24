@@ -1076,7 +1076,8 @@ def test_new_replace_during_the_wait_types_nothing_into_the_fresh_claude(
         drig, monkeypatch, run_async):
     """/new's Replace kills the session and starts a fresh claude under the
     same name and the same entry, which stays INTERACTIVE until the old
-    socket is gone (then idle). With no SessionEnd, the waiting refusal's retry is gone before the kill and
+    socket is gone (then idle). With no
+    SessionEnd, the waiting refusal's retry is gone before the kill and
     the refusal once the old socket is: no retry waking during the kill
     or after the launch, and no later run, types its Escape, posts a
     notice or moves the session to BUSY."""

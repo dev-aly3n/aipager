@@ -277,3 +277,143 @@ def test_a_message_of_a_live_session_still_moves_the_target():
     reg.track_message(10, "claude-a", 0)
     reg.track_message(11, "claude-b", 0)
     assert reg.last_active_session == "claude-b"
+
+
+# ── the queue's edges ───────────────────────────────────────────────────────────
+
+def _held_limiter():
+    """A limiter whose sleeps wait until released (real waiting), so a
+    second call stays queued behind the head for as long as the test
+    wants."""
+    clock = FakeClock()
+    state = {"release": None}
+
+    async def _held_sleep(seconds):
+        await state["release"].wait()
+        clock.now += max(seconds, 0.0)
+
+    limiter = BudgetRateLimiter(clock=clock, sleep=_held_sleep)
+    limiter.note_retry_after(5, 30)
+    return limiter, state
+
+
+def test_cancelling_a_queued_card_leaves_the_queue_clean(run_async, monkeypatch):
+    """A card task cancelled while queued (a session torn down) leaves no
+    ticket behind, and the head still runs."""
+    monkeypatch.setattr(flood_budget, "WANTED_POLL_SECONDS", 0.02)
+    limiter, state = _held_limiter()
+    calls: list = []
+    seen = {}
+
+    async def go():
+        state["release"] = asyncio.Event()
+        head = asyncio.ensure_future(_call(limiter, priority="essential", calls=calls))
+        await asyncio.sleep(0)
+        card = asyncio.ensure_future(_call(limiter, wanted=lambda: True, calls=calls))
+        await asyncio.sleep(0.05)
+        card.cancel()
+        await asyncio.sleep(0.05)
+        seen["left"] = len(limiter._budget_for(limiter._key(5)).waiters)
+        state["release"].set()
+        await head
+
+    run_async(go())
+    assert seen["left"] == 1
+    assert calls == [5]
+
+
+def test_a_card_withdrawn_as_it_reaches_the_head_hands_the_queue_on(
+        run_async, monkeypatch):
+    """The head goes out and the card's session ends in the same instant:
+    the card, now at the head, is dropped there and hands the queue on to
+    the call behind it, which is sent."""
+    monkeypatch.setattr(flood_budget, "WANTED_POLL_SECONDS", 0.02)
+    limiter, state = _held_limiter()
+    calls: list = []
+    wanted = {"card": True}
+
+    async def go():
+        state["release"] = asyncio.Event()
+        head = asyncio.ensure_future(_call(limiter, priority="essential", calls=calls))
+        await asyncio.sleep(0)
+        card = asyncio.ensure_future(_call(limiter, chat_id=5, wanted=lambda: wanted["card"],
+                                           calls=calls))
+        await asyncio.sleep(0)
+        last = asyncio.ensure_future(_call(limiter, calls=calls))
+        await asyncio.sleep(0.05)
+        wanted["card"] = False
+        state["release"].set()   # the head leaves in the same step
+        await head
+        with pytest.raises(SendNotWanted):
+            await card
+        await asyncio.wait_for(last, 5)
+
+    run_async(go())
+    assert calls == [5, 5]
+
+
+def test_a_predicate_that_raises_while_waiting_still_sends(run_async):
+    """Fail-open at every check, not only the first: the predicate works
+    at first and raises once the card waits."""
+    clock = FakeClock()
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    calls: list = []
+    asked = {"n": 0}
+    limiter.note_retry_after(5, 10)
+
+    def _flaky():
+        asked["n"] += 1
+        if asked["n"] > 1:
+            raise RuntimeError("boom")
+        return True
+
+    run_async(_call(limiter, wanted=_flaky, calls=calls))
+    assert calls == [5]
+    assert asked["n"] > 2
+
+
+def test_a_card_withdrawn_during_its_429_retry_wait_is_not_sent_again(run_async):
+    """A small 429 on the card's send defers the chat; its one retry waits
+    and asks again, so a session that ended meanwhile gets no second send.
+    Mutation: the retry's acquire not given the predicate."""
+    from telegram.error import RetryAfter
+
+    clock = FakeClock()
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    sent = {"n": 0}
+    start = clock.now
+
+    async def _cb():
+        sent["n"] += 1
+        if sent["n"] == 1:
+            raise RetryAfter(10)
+        return {"ok": True}
+
+    async def go():
+        with pytest.raises(SendNotWanted):
+            await limiter.process_request(
+                callback=_cb, args=(), kwargs={}, endpoint="sendMessage",
+                data={"chat_id": 5},
+                rate_limit_args=rate_limit_args(
+                    priority=PRIORITY_ORNAMENT,
+                    wanted=lambda: clock.now < start + 3))
+
+    run_async(go())
+    assert sent["n"] == 1
+
+
+def test_a_dropped_card_of_an_ended_session_is_not_owed(mk_bot, run_async):
+    """Even in a chat whose ornaments are suspended, a card dropped because
+    its session ended is not owed (it would only be forgotten later, after
+    a misleading "held back" line). Mutation: the GONE check removed."""
+    bot, sess = _bot_with_session(mk_bot)
+    bot._card_refused_now = lambda _s: True
+
+    async def _gone_send(*a, **kw):
+        sess.status = Status.GONE
+        raise SendNotWanted(5, "sendMessage")
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_gone_send)
+    sess.busy_msg_id = -1
+    run_async(bot._open_busy_card(sess))
+    assert sess.busy_card_owed is False
