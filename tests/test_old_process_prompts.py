@@ -14,12 +14,11 @@ nothing is closed.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
-
-import asyncio
 
 from aipager.bot.dashboard import ALREADY_ANSWERED
 from aipager.dtach import inject
@@ -342,8 +341,6 @@ def test_the_settle_waits_for_the_old_card_and_spares_the_fresh_turn(
     after it and is never settled), or ``close_turn()`` with no turn (the
     fresh turn gets no card)."""
     import json
-
-    from tests.card_tasks import drain_card_tasks
 
     r = Rig(mk_bot, monkeypatch, run_async, card=False)
     r.bot._app.bot.edit_message_reply_markup = AsyncMock()
