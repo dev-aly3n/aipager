@@ -990,7 +990,7 @@ APP_JS = r"""
     var mod100 = n % 100;
     var millions = n !== 0 && n % 1000000 === 0;
     switch (code) {
-      case "fa":
+      case "fa": case "vi":
         return (n === 0 || n === 1) ? "one" : "other";
       case "es": case "it":
         return n === 1 ? "one" : (millions ? "many" : "other");
@@ -1007,7 +1007,7 @@ APP_JS = r"""
         if (mod100 >= 3 && mod100 <= 10) { return "few"; }
         if (mod100 >= 11 && mod100 <= 99) { return "many"; }
         return "other";
-      case "zh-Hans": case "ko": case "id": case "vi":
+      case "zh-Hans": case "ko": case "id":
         return "other";
       default:
         return n === 1 ? "one" : "other";

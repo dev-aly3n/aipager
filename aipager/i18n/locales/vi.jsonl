@@ -1,13 +1,13 @@
-{"k": "agents.count_agents", "src": "263711d4", "v": {"other": "{n} agent"}}
-{"k": "agents.count_shells", "src": "9b747b65", "v": {"other": "{n} lệnh chạy nền"}}
-{"k": "agents.head.done", "src": "e20b4f9e", "v": {"other": "✅ {n} agent đã xong ({clock})"}}
+{"k": "agents.count_agents", "src": "263711d4", "v": {"one": "{n} agent", "other": "{n} agent"}}
+{"k": "agents.count_shells", "src": "9b747b65", "v": {"one": "{n} lệnh chạy nền", "other": "{n} lệnh chạy nền"}}
+{"k": "agents.head.done", "src": "e20b4f9e", "v": {"one": "✅ {n} agent đã xong ({clock})", "other": "✅ {n} agent đã xong ({clock})"}}
 {"k": "agents.head.join", "src": "ee4893ef", "v": "{first} · {second}"}
-{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"other": "{n} lệnh chạy nền (shell) đã xong ({clock})"}}
-{"k": "agents.head.shells_running", "src": "96153f47", "v": {"other": "🖥 {n} lệnh chạy nền (shell) đang chạy"}}
-{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"other": "{n} lệnh chạy nền (shell) đã dừng ({clock})"}}
-{"k": "agents.head.stopped", "src": "80872fc1", "v": {"other": "⏹ Đã dừng {n} agent ({clock})"}}
-{"k": "agents.head.working", "src": "6d8170f5", "v": {"other": "⏳ {n} agent đang làm việc"}}
-{"k": "agents.more", "src": "0d58b5f8", "v": {"other": "+{n} agent khác"}}
+{"k": "agents.head.shells_finished", "src": "dc33e511", "v": {"one": "{n} lệnh chạy nền (shell) đã xong ({clock})", "other": "{n} lệnh chạy nền (shell) đã xong ({clock})"}}
+{"k": "agents.head.shells_running", "src": "96153f47", "v": {"one": "🖥 {n} lệnh chạy nền (shell) đang chạy", "other": "🖥 {n} lệnh chạy nền (shell) đang chạy"}}
+{"k": "agents.head.shells_stopped", "src": "f16303f8", "v": {"one": "{n} lệnh chạy nền (shell) đã dừng ({clock})", "other": "{n} lệnh chạy nền (shell) đã dừng ({clock})"}}
+{"k": "agents.head.stopped", "src": "80872fc1", "v": {"one": "⏹ Đã dừng {n} agent ({clock})", "other": "⏹ Đã dừng {n} agent ({clock})"}}
+{"k": "agents.head.working", "src": "6d8170f5", "v": {"one": "⏳ {n} agent đang làm việc", "other": "⏳ {n} agent đang làm việc"}}
+{"k": "agents.more", "src": "0d58b5f8", "v": {"one": "+{n} agent khác", "other": "+{n} agent khác"}}
 {"k": "agents.promise", "src": "29723a21", "v": "Khi các agent xong, kết quả sẽ được gửi ngay tại đây."}
 {"k": "agents.row.done", "src": "fb8af87e", "v": "✓ 🤖 **{agent}** · đã xong ({clock})"}
 {"k": "agents.row.item_working", "src": "ef3d6ab7", "v": "🤖 **{agent}** · {activity}"}
@@ -16,25 +16,25 @@
 {"k": "agents.row.waiting", "src": "a1590b5c", "v": "‖ 🤖 **{agent}** · đang chờ các agent của chính nó"}
 {"k": "agents.row.working", "src": "06b07790", "v": "○ 🤖 **{agent}** · {activity}"}
 {"k": "agents.row.working_bare", "src": "0b3c4948", "v": "○ 🤖 **{agent}**"}
-{"k": "ago.days", "src": "3650e46d", "v": {"other": "{n} ngày trước"}}
+{"k": "ago.days", "src": "3650e46d", "v": {"one": "{n} ngày trước", "other": "{n} ngày trước"}}
 {"k": "ago.earlier", "src": "f12e996a", "v": "trước đó"}
-{"k": "ago.hours", "src": "72292bb6", "v": {"other": "{n} giờ trước"}}
+{"k": "ago.hours", "src": "72292bb6", "v": {"one": "{n} giờ trước", "other": "{n} giờ trước"}}
 {"k": "ago.hours_minutes", "src": "5be9939e", "v": "{h} giờ {m} phút trước"}
-{"k": "ago.minutes", "src": "6efbe16f", "v": {"other": "{n} phút trước"}}
-{"k": "ago.seconds", "src": "8a8492dd", "v": {"other": "{n} giây trước"}}
+{"k": "ago.minutes", "src": "6efbe16f", "v": {"one": "{n} phút trước", "other": "{n} phút trước"}}
+{"k": "ago.seconds", "src": "8a8492dd", "v": {"one": "{n} giây trước", "other": "{n} giây trước"}}
 {"k": "ans.answered", "src": "7b370125", "v": "✓ <b>{session}</b> · Đã trả lời · {person} · {question} → {option}"}
 {"k": "ans.answered_anon", "src": "602dabe0", "v": "✓ <b>{session}</b> · Đã trả lời · {question} → {option}"}
 {"k": "ans.arrow_verb", "src": "d2539150", "v": "→ {verb}"}
 {"k": "ans.line", "src": "a90745f2", "v": "{icon} <b>{session}</b> · {verb} · {person} · {detail}"}
 {"k": "ans.line_anon", "src": "76b74d70", "v": "{icon} <b>{session}</b> · {verb} · {detail}"}
-{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"other": "Đã xóa {n} tin nhắn trong hàng đợi."}}
-{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"other": "{n} lệnh chạy nền vẫn tiếp tục chạy."}}
+{"k": "ans.queued_discarded", "src": "f7d07760", "v": {"one": "Đã xóa {n} tin nhắn trong hàng đợi.", "other": "Đã xóa {n} tin nhắn trong hàng đợi."}}
+{"k": "ans.shells_keep_running", "src": "8d9e59b4", "v": {"one": "{n} lệnh chạy nền vẫn tiếp tục chạy.", "other": "{n} lệnh chạy nền vẫn tiếp tục chạy."}}
 {"k": "ans.stopped", "src": "4e9354f4", "v": "⏹ Đã dừng {session}"}
-{"k": "ans.stopped_agents", "src": "869e847b", "v": {"other": "⏹ Đã dừng {n} agent chạy nền của {session}"}}
-{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"other": "⏹ {person} đã dừng {n} agent chạy nền của {session}"}}
+{"k": "ans.stopped_agents", "src": "869e847b", "v": {"one": "⏹ Đã dừng {n} agent chạy nền của {session}", "other": "⏹ Đã dừng {n} agent chạy nền của {session}"}}
+{"k": "ans.stopped_agents_by", "src": "76ae5caa", "v": {"one": "⏹ {person} đã dừng {n} agent chạy nền của {session}", "other": "⏹ {person} đã dừng {n} agent chạy nền của {session}"}}
 {"k": "ans.stopped_by", "src": "1de48151", "v": "⏹ {person} đã dừng {session}"}
-{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"other": "⏹ {person} đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)"}}
-{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"other": "⏹ Đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)"}}
+{"k": "ans.stopped_by_dropped", "src": "64e9d363", "v": {"one": "⏹ {person} đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)", "other": "⏹ {person} đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)"}}
+{"k": "ans.stopped_dropped", "src": "68eb22dc", "v": {"one": "⏹ Đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)", "other": "⏹ Đã dừng {session} (đã xóa {n} tin nhắn trong hàng đợi)"}}
 {"k": "ans.verb.allow", "src": "77c7b490", "v": "Đã cho phép"}
 {"k": "ans.verb.allow_always", "src": "141216b0", "v": "Đã luôn cho phép"}
 {"k": "ans.verb.continue", "src": "0e4aa789", "v": "Đã tiếp tục"}
@@ -110,7 +110,7 @@
 {"k": "app.launch.root_unavailable", "src": "6d332ade", "v": "Không chuẩn bị được thư mục của bạn {folder}. Hãy nhờ chủ sở hữu kiểm tra nó trong aipager config."}
 {"k": "app.launch.session_outside_root", "src": "c501e96d", "v": "Phiên này làm việc bên ngoài thư mục của bạn {folder}, nên vai trò của bạn không được tiếp tục, khởi động lại hay đổi chế độ của nó. Hãy nhờ quản trị viên."}
 {"k": "app.launch.wide_folder", "src": "1da61d6f", "v": "Vai trò của bạn không được bắt đầu phiên trong thư mục home hoặc thư mục phía trên nó. Hãy chọn một thư mục dự án: tạo bằng “Thư mục mới”, hoặc nhờ quản trị viên bắt đầu phiên."}
-{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"other": "🧹 Đã xóa {n} tin nhắn trong hàng đợi của [{session}] từ Mini App"}}
+{"k": "app.mirror.cleared", "src": "b4b3d081", "v": {"one": "🧹 Đã xóa {n} tin nhắn trong hàng đợi của [{session}] từ Mini App", "other": "🧹 Đã xóa {n} tin nhắn trong hàng đợi của [{session}] từ Mini App"}}
 {"k": "app.mirror.compacted", "src": "c31c06fc", "v": "📦 Bắt đầu thu gọn cuộc trò chuyện của [{session}] từ Mini App"}
 {"k": "app.mirror.conversation_cleared", "src": "1e641ff6", "v": "🧹 Đã gửi {command} đến [{session}] từ Mini App"}
 {"k": "app.mirror.created", "src": "9d79881f", "v": "🚀 Đã tạo {session} từ Mini App · {mode}"}
@@ -128,7 +128,7 @@
 {"k": "app.mirror.session_setting_reset", "src": "4502514a", "v": "⚙️ {setting} đã đặt lại về mặc định ({value}) cho phiên {session} (đổi từ Mini App)"}
 {"k": "app.mirror.setting", "src": "6820a9f7", "v": "⚙️ {setting} → {value} (đổi từ Mini App)"}
 {"k": "app.mirror.stopped", "src": "70cd9e81", "v": "⏹️ Đã dừng [{session}] từ Mini App"}
-{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"other": "⏹️ Đã dừng [{session}] từ Mini App (đã xóa {n} tin nhắn trong hàng đợi)"}}
+{"k": "app.mirror.stopped_dropped", "src": "e1ccbf89", "v": {"one": "⏹️ Đã dừng [{session}] từ Mini App (đã xóa {n} tin nhắn trong hàng đợi)", "other": "⏹️ Đã dừng [{session}] từ Mini App (đã xóa {n} tin nhắn trong hàng đợi)"}}
 {"k": "app.mirror.to_ask", "src": "444f46eb", "v": "💬 {session} đã chuyển sang Chế độ Hỏi từ Mini App"}
 {"k": "app.mirror.to_auto", "src": "de5cf0bc", "v": "🤖 {session} đã chuyển sang Chế độ Auto từ Mini App"}
 {"k": "app.mirror.to_full", "src": "9af82282", "v": "🔓 {session} đã chuyển sang Chế độ Toàn quyền từ Mini App"}
@@ -227,21 +227,21 @@
 {"k": "card.denied_terminal", "src": "bf22b497", "v": "🚫 <b>{session}</b> · Đã từ chối trong terminal"}
 {"k": "card.ended_terminal", "src": "f02807e4", "v": "⚠️ <b>{session}</b> · Đã kết thúc trong terminal"}
 {"k": "card.finishing", "src": "1bfd382d", "v": "đang hoàn tất"}
-{"k": "card.fold", "src": "2061ab43", "v": {"other": "▸ {n} công cụ đã chạy"}}
-{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"other": "({n} agent)"}}
-{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"other": "✅ <i>{n} công cụ đã chạy trước đó</i>"}}
+{"k": "card.fold", "src": "2061ab43", "v": {"one": "▸ {n} công cụ đã chạy", "other": "▸ {n} công cụ đã chạy"}}
+{"k": "card.legacy.agents", "src": "51aa5e62", "v": {"one": "({n} agent)", "other": "({n} agent)"}}
+{"k": "card.legacy.earlier", "src": "7062cc28", "v": {"one": "✅ <i>{n} công cụ đã chạy trước đó</i>", "other": "✅ <i>{n} công cụ đã chạy trước đó</i>"}}
 {"k": "card.legacy.head", "src": "50291ef6", "v": "⚙️ <b>{session}</b> · {verb}…"}
 {"k": "card.peer.from", "src": "4f24a3e8", "v": "📨 từ **{session}** ({who})"}
 {"k": "card.peer.from_plain", "src": "42467343", "v": "📨 từ **{session}**"}
 {"k": "card.peer.from_terminal", "src": "90dba2e3", "v": "📨 từ **{session}** (gõ trong terminal của phiên đó)"}
 {"k": "card.peer.unverified", "src": "a704ba8b", "v": "📨 từ một phiên khác (chưa xác minh: không được sửa file, không dùng web)"}
-{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"other": "🤖 {agent} · {n} công cụ đã chạy · {clock}"}}
+{"k": "card.row.agent_done", "src": "d7362ffc", "v": {"one": "🤖 {agent} · {n} công cụ đã chạy · {clock}", "other": "🤖 {agent} · {n} công cụ đã chạy · {clock}"}}
 {"k": "card.row.agent_live", "src": "4779bd39", "v": "🤖 {agent} · {activity} · {clock}"}
 {"k": "card.row.agent_still_running", "src": "607f8f22", "v": "🤖 {agent} (vẫn đang chạy)"}
 {"k": "card.row.agent_stopped", "src": "7571c422", "v": "🤖 {agent} · đã dừng ({clock})"}
 {"k": "card.row.agent_word", "src": "0608c405", "v": "agent"}
 {"k": "card.row.answer", "src": "f4148e7f", "v": "{icon} {detail} → {verb}"}
-{"k": "card.row.sending_files", "src": "d10352ba", "v": {"other": "📎 Đang gửi {n} file"}}
+{"k": "card.row.sending_files", "src": "d10352ba", "v": {"one": "📎 Đang gửi {n} file", "other": "📎 Đang gửi {n} file"}}
 {"k": "card.row.shell_done", "src": "3b615634", "v": "lệnh chạy nền: {label} - đã xong ({clock})"}
 {"k": "card.row.shell_failed", "src": "3e240f07", "v": "lệnh chạy nền: {label} - kết thúc với lỗi ({clock})"}
 {"k": "card.row.shell_failed_exit", "src": "61a38dc5", "v": "lệnh chạy nền: {label} - kết thúc với lỗi (mã thoát {code})"}
@@ -250,12 +250,12 @@
 {"k": "card.row.shell_still_running", "src": "0888b5eb", "v": "lệnh chạy nền: {label} (vẫn đang chạy)"}
 {"k": "card.row.shell_stopped", "src": "315cab29", "v": "lệnh chạy nền: {label} - đã dừng ({clock})"}
 {"k": "card.row.starting", "src": "9493af05", "v": "đang khởi động"}
-{"k": "card.shells", "src": "9b747b65", "v": {"other": "{n} lệnh chạy nền"}}
-{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"other": "🖥 {n} lệnh chạy nền vẫn tiếp tục chạy."}}
+{"k": "card.shells", "src": "9b747b65", "v": {"one": "{n} lệnh chạy nền", "other": "{n} lệnh chạy nền"}}
+{"k": "card.shells_keep_running", "src": "f04133d1", "v": {"one": "🖥 {n} lệnh chạy nền vẫn tiếp tục chạy.", "other": "🖥 {n} lệnh chạy nền vẫn tiếp tục chạy."}}
 {"k": "card.status", "src": "cc5b70de", "v": "{mark} **{session}** · {verb}"}
 {"k": "card.stopped", "src": "1999d2c3", "v": "⚠️ <b>{session}</b> · Đã dừng"}
-{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"other": "⚠️ <b>{session}</b> · Đã dừng {n} agent chạy nền"}}
-{"k": "card.stopped_agents_by", "src": "88160165", "v": {"other": "⚠️ <b>{session}</b> · {person} đã dừng {n} agent chạy nền"}}
+{"k": "card.stopped_agents", "src": "bfe210d9", "v": {"one": "⚠️ <b>{session}</b> · Đã dừng {n} agent chạy nền", "other": "⚠️ <b>{session}</b> · Đã dừng {n} agent chạy nền"}}
+{"k": "card.stopped_agents_by", "src": "88160165", "v": {"one": "⚠️ <b>{session}</b> · {person} đã dừng {n} agent chạy nền", "other": "⚠️ <b>{session}</b> · {person} đã dừng {n} agent chạy nền"}}
 {"k": "card.stopped_by", "src": "709cf02c", "v": "⚠️ <b>{session}</b> · {person} đã dừng"}
 {"k": "card.stopped_running_terminal", "src": "28e2e372", "v": "⚠️ <b>{session}</b> · Lệnh đã bị dừng trong terminal khi đang chạy"}
 {"k": "card.stopped_terminal", "src": "311f9250", "v": "⚠️ <b>{session}</b> · Đã dừng trong terminal"}
@@ -294,7 +294,7 @@
 {"k": "cmd.stop", "src": "7c4cbc32", "v": "Dừng việc Claude đang làm"}
 {"k": "cmd.talk", "src": "a0173425", "v": "Trò chuyện với {session}"}
 {"k": "cmd.usage", "src": "0311ee6e", "v": "Giới hạn gói và token"}
-{"k": "diff.more_lines", "src": "816da678", "v": {"other": "<i>…và {n} dòng nữa</i>"}}
+{"k": "diff.more_lines", "src": "816da678", "v": {"one": "<i>…và {n} dòng nữa</i>", "other": "<i>…và {n} dòng nữa</i>"}}
 {"k": "fin.agent_lost", "src": "5c7b76b6", "v": "⚠️ <b>{session}</b> · Xong (agent chạy nền đã biến mất)"}
 {"k": "fin.agent_lost_after", "src": "3cb77bc5", "v": "⚠️ <b>{session}</b> · Xong ({clock}, agent chạy nền đã biến mất)"}
 {"k": "fin.finished", "src": "6f65069e", "v": "{lead} · Xong ({stats})"}
@@ -309,14 +309,14 @@
 {"k": "flood.paused_hourly", "src": "1be79366", "v": "⏸ thẻ tạm thời không cập nhật (giới hạn mỗi giờ của Telegram)"}
 {"k": "flood.paused_rate", "src": "57af71ab", "v": "⏸ thẻ tạm thời không cập nhật (giới hạn của Telegram)"}
 {"k": "flood.slow", "src": "fd8f3fd7", "v": "🐢 gửi chậm hơn sau cảnh báo của Telegram"}
-{"k": "grp.dropped", "src": "96346149", "v": {"other": "{n} tin nhắn không được gửi tới Claude: {who} không còn được phép gửi tin nhắn ở đây."}}
-{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"other": "{n} tin nhắn không được gửi tới Claude: người gửi này không còn được phép gửi tin nhắn ở đây."}}
+{"k": "grp.dropped", "src": "96346149", "v": {"one": "{n} tin nhắn không được gửi tới Claude: {who} không còn được phép gửi tin nhắn ở đây.", "other": "{n} tin nhắn không được gửi tới Claude: {who} không còn được phép gửi tin nhắn ở đây."}}
+{"k": "grp.dropped_anon", "src": "c67a8cca", "v": {"one": "{n} tin nhắn không được gửi tới Claude: người gửi này không còn được phép gửi tin nhắn ở đây.", "other": "{n} tin nhắn không được gửi tới Claude: người gửi này không còn được phép gửi tin nhắn ở đây."}}
 {"k": "grp.dropped_anon_one", "src": "8946b17f", "v": "Không gửi tới Claude: người gửi này không còn được phép gửi tin nhắn ở đây."}
 {"k": "grp.dropped_one", "src": "4ab273e1", "v": "Không gửi tới Claude: {who} không còn được phép gửi tin nhắn ở đây."}
 {"k": "grp.help_talk", "src": "07beac8e", "v": "<b>Trò chuyện:</b> trả lời tin nhắn của một phiên, hoặc nhắc đến {mention} · /&lt;tên&gt; tin nhắn"}
 {"k": "grp.help_talk_no_username", "src": "4c1fc9fd", "v": "<b>Trò chuyện:</b> trả lời tin nhắn của một phiên, hoặc nhắc đến bot · /&lt;tên&gt; tin nhắn"}
 {"k": "grp.post_as_yourself", "src": "a54c6e98", "v": "Hãy gửi bằng tên của chính bạn để dùng bot."}
-{"k": "held.late_marker", "src": "e38c307b", "v": {"other": "⏳ đến muộn: bị giữ {n} phút vì giới hạn của Telegram"}}
+{"k": "held.late_marker", "src": "e38c307b", "v": {"one": "⏳ đến muộn: bị giữ {n} phút vì giới hạn của Telegram", "other": "⏳ đến muộn: bị giữ {n} phút vì giới hạn của Telegram"}}
 {"k": "held.too_old", "src": "7391de5a", "v": "Tin nhắn đó đã quá cũ nên không được gửi; hãy gửi lại."}
 {"k": "help.admin", "src": "67882dc1", "v": "<b>Quản trị:</b> /update (cập nhật aipager và Claude Code) · /usage (giới hạn gói và token)"}
 {"k": "help.control", "src": "8bb13acf", "v": "<b>Điều khiển:</b> /stop · /now (gửi tin nhắn trong hàng đợi) · /clearqueue"}
@@ -334,7 +334,7 @@
 {"k": "home.start_one", "src": "ef9f6ba9", "v": "Bắt đầu một phiên bằng /new."}
 {"k": "home.tap_session", "src": "f14797d7", "v": "Chạm vào tên một phiên trên bàn phím để nói chuyện với phiên đó."}
 {"k": "home.title", "src": "7f9d39bf", "v": "👋 <b>aipager</b> - Claude Code từ Telegram"}
-{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"other": "đang chờ {n} agent"}}
+{"k": "jobwait.agents", "src": "cdf8fa99", "v": {"one": "đang chờ {n} agent", "other": "đang chờ {n} agent"}}
 {"k": "kb.back", "src": "a4b7fcb6", "v": "« Quay lại"}
 {"k": "kb.commands", "src": "45e5f3f7", "v": "Lệnh"}
 {"k": "kb.kill", "src": "c80f5bc1", "v": "tắt"}
@@ -369,10 +369,10 @@
 {"k": "lang.row", "src": "69fc399f", "v": "🌐 Ngôn ngữ: {language}"}
 {"k": "life.daemon_restarted", "src": "7253e5d2", "v": "🔄 <b>{session}</b> · aipager đã khởi động lại"}
 {"k": "life.session_ended", "src": "84bf802a", "v": "🔴 <b>{session}</b> · Phiên đã kết thúc"}
-{"k": "log.agent", "src": "ff163576", "v": {"other": "- 🤖 {agent} ({clock}, {n} công cụ đã chạy)"}}
+{"k": "log.agent", "src": "ff163576", "v": {"one": "- 🤖 {agent} ({clock}, {n} công cụ đã chạy)", "other": "- 🤖 {agent} ({clock}, {n} công cụ đã chạy)"}}
 {"k": "log.agents", "src": "5db5246b", "v": "## Agent"}
 {"k": "log.final_answer", "src": "f0ea5fc3", "v": "## Câu trả lời cuối cùng"}
-{"k": "log.memory", "src": "df926a90", "v": {"other": "_Chỉ giữ {n} dòng công cụ gần nhất; với những việc rất dài, các dòng cũ hơn có thể đã mất._"}}
+{"k": "log.memory", "src": "df926a90", "v": {"one": "_Chỉ giữ {n} dòng công cụ gần nhất; với những việc rất dài, các dòng cũ hơn có thể đã mất._", "other": "_Chỉ giữ {n} dòng công cụ gần nhất; với những việc rất dài, các dòng cũ hơn có thể đã mất._"}}
 {"k": "log.title", "src": "2d9e96f5", "v": "# {session} - log đầy đủ"}
 {"k": "login.fix.cloud", "src": "99b6f423", "v": "Hãy kiểm tra thông tin đăng nhập của nhà cung cấp đám mây, trên máy tính đang chạy aipager."}
 {"k": "login.fix.gateway", "src": "250eb193", "v": "Hãy kiểm tra khóa cho địa chỉ trong {name}, trên máy tính đang chạy aipager."}
@@ -524,7 +524,7 @@
 {"k": "newflow.title", "src": "79dee51b", "v": "🆕 <b>Phiên mới</b>"}
 {"k": "newflow.title_owner", "src": "b8803b0f", "v": "🆕 <b>Phiên mới</b> ({owner})"}
 {"k": "newflow.working_first", "src": "d5f2342f", "v": "▶️ Đang xử lý tin nhắn đầu tiên của bạn."}
-{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"other": "⏱️ <b>{session}</b> · Đã {n} phút mà việc thu gọn cuộc trò chuyện vẫn chưa báo xong"}}
+{"k": "notice.compact_timeout", "src": "ff6e7c1d", "v": {"one": "⏱️ <b>{session}</b> · Đã {n} phút mà việc thu gọn cuộc trò chuyện vẫn chưa báo xong", "other": "⏱️ <b>{session}</b> · Đã {n} phút mà việc thu gọn cuộc trò chuyện vẫn chưa báo xong"}}
 {"k": "notice.compacted", "src": "b3dbd057", "v": "📦 <b>{session}</b> · Đã thu gọn cuộc trò chuyện: {before} → {after}"}
 {"k": "notice.compacted_from", "src": "debf2105", "v": "📦 <b>{session}</b> · Đã thu gọn cuộc trò chuyện (trước đó {before})"}
 {"k": "notice.compacted_plain", "src": "c2cf16ad", "v": "📦 <b>{session}</b> · Đã thu gọn cuộc trò chuyện"}
@@ -542,7 +542,7 @@
 {"k": "notice.peer.sender", "src": "a2fa9838", "v": "⚠️ <b>{receiver}</b> không làm theo tin nhắn mà <b>{sender}</b> gửi cho nó: {reason}"}
 {"k": "notice.queue_timeout", "src": "dad93d8b", "v": "⏳ <b>{session}</b> · không rõ tin nhắn trong hàng đợi đã được nhận kịp lúc hay chưa; Claude có thể vẫn sẽ xử lý nó."}
 {"k": "notice.queue_timeout_preview", "src": "18bc0f08", "v": "⏳ <b>{session}</b> · không rõ tin nhắn trong hàng đợi (“{preview}”) đã được nhận kịp lúc hay chưa; Claude có thể vẫn sẽ xử lý nó."}
-{"k": "notice.quiet_turn", "src": "baa52794", "v": {"other": "⏳ <b>{session}</b> · vẫn đang làm việc ({n} phút chưa có tin)\n\nChưa có cập nhật mới. Việc này thường là bình thường.\n\n<blockquote expandable>Điều có thể đang diễn ra\n  • Một công cụ chạy lâu (Bash, WebSearch, tải dữ liệu lớn)\n  • Đang viết câu trả lời nặng với ngữ cảnh rất lớn\n  • Đang thu gọn cuộc trò chuyện\n  • Đang chờ vì giới hạn tốc độ hoặc giới hạn gói đăng ký\n  • Mạng bị kẹt hoặc Claude bị crash</blockquote>"}}
+{"k": "notice.quiet_turn", "src": "baa52794", "v": {"one": "⏳ <b>{session}</b> · vẫn đang làm việc ({n} phút chưa có tin)\n\nChưa có cập nhật mới. Việc này thường là bình thường.\n\n<blockquote expandable>Điều có thể đang diễn ra\n  • Một công cụ chạy lâu (Bash, WebSearch, tải dữ liệu lớn)\n  • Đang viết câu trả lời nặng với ngữ cảnh rất lớn\n  • Đang thu gọn cuộc trò chuyện\n  • Đang chờ vì giới hạn tốc độ hoặc giới hạn gói đăng ký\n  • Mạng bị kẹt hoặc Claude bị crash</blockquote>", "other": "⏳ <b>{session}</b> · vẫn đang làm việc ({n} phút chưa có tin)\n\nChưa có cập nhật mới. Việc này thường là bình thường.\n\n<blockquote expandable>Điều có thể đang diễn ra\n  • Một công cụ chạy lâu (Bash, WebSearch, tải dữ liệu lớn)\n  • Đang viết câu trả lời nặng với ngữ cảnh rất lớn\n  • Đang thu gọn cuộc trò chuyện\n  • Đang chờ vì giới hạn tốc độ hoặc giới hạn gói đăng ký\n  • Mạng bị kẹt hoặc Claude bị crash</blockquote>"}}
 {"k": "notice.session_end.clear", "src": "bae1af53", "v": "🔴 <b>{session}</b> · Phiên đã được xóa sạch"}
 {"k": "notice.session_end.crashed", "src": "ba560f1b", "v": "🔴 <b>{session}</b> · Phiên bị crash hoặc đã bị tắt"}
 {"k": "notice.session_end.exit_code", "src": "151e438f", "v": "🔴 <b>{session}</b> · Phiên đã thoát với mã lỗi {code}"}
@@ -585,20 +585,20 @@
 {"k": "perm.rm_refused", "src": "cc0ae045", "v": "⏱ Claude Code đã tự từ chối yêu cầu này vì không ai trả lời kịp."}
 {"k": "perm.separate", "src": "2fe63d57", "v": "🔐 <b>{session}</b> · Cần bạn cấp quyền"}
 {"k": "pin.btn.answer", "src": "24c3485a", "v": "Trả lời {session}"}
-{"k": "pin.count.idle", "src": "6abeefbf", "v": {"other": "{n} sẵn sàng"}}
-{"k": "pin.count.starting", "src": "836f5c27", "v": {"other": "{n} đang khởi động"}}
-{"k": "pin.count.working", "src": "c3aee490", "v": {"other": "{n} đang làm việc"}}
+{"k": "pin.count.idle", "src": "6abeefbf", "v": {"one": "{n} sẵn sàng", "other": "{n} sẵn sàng"}}
+{"k": "pin.count.starting", "src": "836f5c27", "v": {"one": "{n} đang khởi động", "other": "{n} đang khởi động"}}
+{"k": "pin.count.working", "src": "c3aee490", "v": {"one": "{n} đang làm việc", "other": "{n} đang làm việc"}}
 {"k": "pin.first.all_idle", "src": "195ea8a9", "v": "💤 tất cả sẵn sàng"}
 {"k": "pin.first.counts", "src": "b5d804ae", "v": "{glyph} {counts}"}
 {"k": "pin.first.single", "src": "5674b34c", "v": "{glyph} {session} {state}"}
 {"k": "pin.first.waiting", "src": "7fa7cc46", "v": "⏳ {session} đang chờ bạn"}
 {"k": "pin.line", "src": "de9ddb7a", "v": "• <b>{session}</b> {state}"}
-{"k": "pin.more", "src": "66adc298", "v": {"other": "(+{n} nữa)"}}
+{"k": "pin.more", "src": "66adc298", "v": {"one": "(+{n} nữa)", "other": "(+{n} nữa)"}}
 {"k": "pin.needs_input", "src": "9a9d6640", "v": "Đang chờ bạn chọn"}
 {"k": "pin.paren", "src": "d52abc3c", "v": "({running})"}
-{"k": "pin.running_agents", "src": "712d4c75", "v": {"other": "{n} agent đang làm việc"}}
+{"k": "pin.running_agents", "src": "712d4c75", "v": {"one": "{n} agent đang làm việc", "other": "{n} agent đang làm việc"}}
 {"k": "pin.running_both", "src": "48ac24f8", "v": "{agents} và {shells} đang chạy"}
-{"k": "pin.running_shells", "src": "af023360", "v": {"other": "{n} lệnh chạy nền đang chạy"}}
+{"k": "pin.running_shells", "src": "af023360", "v": {"one": "{n} lệnh chạy nền đang chạy", "other": "{n} lệnh chạy nền đang chạy"}}
 {"k": "pin.state", "src": "845c40c2", "v": "({state})"}
 {"k": "pin.state.idle", "src": "1adbcc34", "v": "sẵn sàng"}
 {"k": "pin.state.needs_you", "src": "19622ace", "v": "đang chờ bạn"}
@@ -641,20 +641,20 @@
 {"k": "rep.explanation", "src": "d470a7df", "v": "Đây là toàn bộ nội dung báo cáo. Chưa có gì được gửi.\nTrong đó không có chat, tin nhắn, tên phiên, thư mục, token, ID chat hay tên người dùng.\nBáo cáo được gửi ẩn danh đến hộp thư lỗi (Sentry) của nhà phát triển aipager."}
 {"k": "rep.heading", "src": "ad1633d0", "v": "🐞 <b>Báo cáo sự cố</b>"}
 {"k": "rep.lost", "src": "6b4837a4", "v": "Bản xem trước này không còn mở, nên không có gì được gửi. Hãy mở lại “Báo cáo sự cố” để xem bản mới."}
-{"k": "rep.note.prompt", "src": "dc71be87", "v": {"other": "✏️ Nhập ghi chú của bạn trong một tin nhắn (tối đa {n} ký tự). Trước khi gửi, bạn sẽ thấy đúng cách nó nằm trong báo cáo. Nếu bạn làm việc khác, phần này sẽ đóng."}}
-{"k": "rep.offer.also_other", "src": "2b336900", "v": {"other": "Còn {n} lỗi khác."}}
+{"k": "rep.note.prompt", "src": "dc71be87", "v": {"one": "✏️ Nhập ghi chú của bạn trong một tin nhắn (tối đa {n} ký tự). Trước khi gửi, bạn sẽ thấy đúng cách nó nằm trong báo cáo. Nếu bạn làm việc khác, phần này sẽ đóng.", "other": "✏️ Nhập ghi chú của bạn trong một tin nhắn (tối đa {n} ký tự). Trước khi gửi, bạn sẽ thấy đúng cách nó nằm trong báo cáo. Nếu bạn làm việc khác, phần này sẽ đóng."}}
+{"k": "rep.offer.also_other", "src": "2b336900", "v": {"one": "Còn {n} lỗi khác.", "other": "Còn {n} lỗi khác."}}
 {"k": "rep.offer.declined", "src": "5d912282", "v": "Được. aipager sẽ không hỏi lại về việc này ở phiên bản này."}
-{"k": "rep.offer.internal", "src": "4df624aa", "v": {"other": "aipager gặp lỗi nội bộ {n} lần ({error} ở {area})."}}
+{"k": "rep.offer.internal", "src": "4df624aa", "v": {"one": "aipager gặp lỗi nội bộ {n} lần ({error} ở {area}).", "other": "aipager gặp lỗi nội bộ {n} lần ({error} ở {area})."}}
 {"k": "rep.offer.internal_once", "src": "c9bd4098", "v": "aipager gặp lỗi nội bộ một lần ({error} ở {area})."}
-{"k": "rep.offer.memcap", "src": "698bc999", "v": {"other": "Hook của aipager đã chạm giới hạn bộ nhớ {n} lần."}}
+{"k": "rep.offer.memcap", "src": "698bc999", "v": {"one": "Hook của aipager đã chạm giới hạn bộ nhớ {n} lần.", "other": "Hook của aipager đã chạm giới hạn bộ nhớ {n} lần."}}
 {"k": "rep.offer.memcap_once", "src": "63461898", "v": "Hook của aipager đã chạm giới hạn bộ nhớ một lần."}
 {"k": "rep.offer.not_opened", "src": "1df3fb0a", "v": "Không mở được bản xem trước báo cáo. “Báo cáo sự cố” trong /help sẽ mở một bản mới."}
 {"k": "rep.offer.off", "src": "3706223b", "v": "Đề nghị tự động giờ đã tắt. Để bật lại: /settings, rồi “Báo cáo sự cố”."}
 {"k": "rep.offer.preview", "src": "0835e626", "v": "Đã mở bản xem trước báo cáo bên dưới."}
-{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"other": "aipager bị crash {n} lần."}}
+{"k": "rep.offer.stopped", "src": "1f8a50a5", "v": {"one": "aipager bị crash {n} lần.", "other": "aipager bị crash {n} lần."}}
 {"k": "rep.offer.stopped_once", "src": "98a8d806", "v": "aipager bị crash một lần."}
 {"k": "rep.offer.tail", "src": "e58f2a0c", "v": "Báo cáo giúp lỗi này được sửa sớm hơn. Trong đó chỉ có phiên bản và vị trí lỗi trong mã, không bao giờ có chat, tin nhắn, tên hay đường dẫn của bạn."}
-{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"other": "Mỗi máy tính chỉ gửi được tối đa {n} báo cáo mỗi ngày. Hãy thử lại vào ngày mai."}}
+{"k": "rep.outcome.daily_cap", "src": "2095768c", "v": {"one": "Mỗi máy tính chỉ gửi được tối đa {n} báo cáo mỗi ngày. Hãy thử lại vào ngày mai.", "other": "Mỗi máy tính chỉ gửi được tối đa {n} báo cáo mỗi ngày. Hãy thử lại vào ngày mai."}}
 {"k": "rep.outcome.disabled", "src": "23061011", "v": "Nhà phát triển aipager hiện đang tắt báo cáo sự cố. Không có gì được gửi."}
 {"k": "rep.outcome.invalid", "src": "55ae1194", "v": "Báo cáo này không qua được bước tự kiểm tra, nên đã không được gửi."}
 {"k": "rep.outcome.sent", "src": "3456aede", "v": "Đã gửi. Mã tham chiếu {reference} (hãy ghi mã này nếu bạn mở issue trên GitHub)."}
@@ -662,24 +662,24 @@
 {"k": "rep.outcome.try_later", "src": "ab0f2d7c", "v": "Chưa gửi được lúc này. Không có gì bị mất; hãy thử lại sau."}
 {"k": "rep.status.note_added", "src": "96d23c70", "v": "Đã thêm ghi chú."}
 {"k": "rep.status.note_closed", "src": "8187cfb3", "v": "Chưa thêm ghi chú: bạn đã làm việc khác. Chạm “Thêm ghi chú” để thử lại."}
-{"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"other": "Đã thêm ghi chú, cắt còn {n} ký tự."}}
+{"k": "rep.status.note_cut", "src": "e9ab8458", "v": {"one": "Đã thêm ghi chú, cắt còn {n} ký tự.", "other": "Đã thêm ghi chú, cắt còn {n} ký tự."}}
 {"k": "rep.status.note_empty", "src": "1f872085", "v": "Ghi chú đó trống, nên không có gì được thêm."}
 {"k": "rep.status.note_refused", "src": "c92adef7", "v": "Không thể thêm ghi chú đó. Hãy thử một ghi chú ngắn và đơn giản hơn."}
 {"k": "rep.status.send_failed", "src": "ff84d63e", "v": "Không gửi được báo cáo này do lỗi bên trong aipager. Không có gì được gửi."}
 {"k": "rep.status.sending", "src": "c338c191", "v": "Đang gửi..."}
 {"k": "resume.header", "src": "74554c53", "v": "{icon} <b>[{session}]</b> · {state}"}
 {"k": "resume.header_clock", "src": "b1522d3c", "v": "{icon} <b>[{session}]</b> · {state} {clock}"}
-{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"other": "<i>Còn {n} phiên khác không có cuộc trò chuyện đã lưu để tiếp tục.</i>"}}
+{"k": "resume.more_no_transcript", "src": "d8f1f6e8", "v": {"one": "<i>Còn {n} phiên khác không có cuộc trò chuyện đã lưu để tiếp tục.</i>", "other": "<i>Còn {n} phiên khác không có cuộc trò chuyện đã lưu để tiếp tục.</i>"}}
 {"k": "resume.no_preview", "src": "34384805", "v": "<i>(không có bản xem trước)</i>"}
-{"k": "resume.no_transcript", "src": "65416f58", "v": {"other": "<i>{n} phiên không có cuộc trò chuyện đã lưu để tiếp tục.</i>"}}
+{"k": "resume.no_transcript", "src": "65416f58", "v": {"one": "<i>{n} phiên không có cuộc trò chuyện đã lưu để tiếp tục.</i>", "other": "<i>{n} phiên không có cuộc trò chuyện đã lưu để tiếp tục.</i>"}}
 {"k": "resume.none", "src": "f0e1dc3c", "v": "📭 Không có phiên trước nào để tiếp tục."}
 {"k": "resume.recent", "src": "c14c1ce4", "v": "Gần đây:"}
 {"k": "resume.row", "src": "c75d6298", "v": "🔘 <b>{session}</b> (<i>{when}</i>)"}
 {"k": "resume.row.active", "src": "ebbe643f", "v": "Hoạt động lần cuối: {ago}"}
 {"k": "resume.row.active_now", "src": "95e3adc9", "v": "Hoạt động lần cuối: vừa xong"}
 {"k": "resume.row.active_unknown", "src": "15d90554", "v": "Hoạt động lần cuối: không rõ"}
-{"k": "resume.row.agents", "src": "1344dd37", "v": {"other": "Agent: {n} ({types})"}}
-{"k": "resume.row.agents_count", "src": "abe9706b", "v": {"other": "Agent: {n}"}}
+{"k": "resume.row.agents", "src": "1344dd37", "v": {"one": "Agent: {n} ({types})", "other": "Agent: {n} ({types})"}}
+{"k": "resume.row.agents_count", "src": "abe9706b", "v": {"one": "Agent: {n}", "other": "Agent: {n}"}}
 {"k": "resume.row.cost", "src": "68433bc8", "v": "Chi phí: {cost}"}
 {"k": "resume.row.ctx", "src": "edcc7a6b", "v": "Ngữ cảnh: {percent} {bar}"}
 {"k": "resume.row.lines", "src": "439ccc8a", "v": "Số dòng thay đổi: {changes}"}
@@ -692,13 +692,13 @@
 {"k": "resume.state.interactive", "src": "00753189", "v": "đang chờ bạn"}
 {"k": "resume.state.unknown", "src": "50d8b4a9", "v": "không rõ"}
 {"k": "resume.tap", "src": "c118e3b9", "v": "Chạm vào một nút bên dưới để tiếp tục."}
-{"k": "resume.title", "src": "d5cecda8", "v": {"other": "📚 <b>Các phiên trước</b> (tổng {n})"}}
+{"k": "resume.title", "src": "d5cecda8", "v": {"one": "📚 <b>Các phiên trước</b> (tổng {n})", "other": "📚 <b>Các phiên trước</b> (tổng {n})"}}
 {"k": "route.btn.resume", "src": "2db3fd81", "v": "🔁 Tiếp tục"}
 {"k": "route.btn.resume_label", "src": "5a3f876a", "v": "▶️ Tiếp tục {session}"}
 {"k": "route.cant_clear_busy", "src": "cf8384cd", "v": "⚠️ Không thể xóa cuộc trò chuyện khi phiên đang làm việc"}
 {"k": "route.clear_no_active", "src": "1ada2799", "v": "Chưa chọn phiên nào - hãy chọn một phiên bằng {command} trước."}
 {"k": "route.clear_nothing", "src": "75578929", "v": "Không có gì để xóa trong [{session}]."}
-{"k": "route.cleared", "src": "fd716ebc", "v": {"other": "🗑️ Đã xóa {n} tin nhắn trong hàng đợi của [<b>{session}</b>]."}}
+{"k": "route.cleared", "src": "fd716ebc", "v": {"one": "🗑️ Đã xóa {n} tin nhắn trong hàng đợi của [<b>{session}</b>].", "other": "🗑️ Đã xóa {n} tin nhắn trong hàng đợi của [<b>{session}</b>]."}}
 {"k": "route.ended_which", "src": "eb950d37", "v": "{session} đã kết thúc. Phiên nào?"}
 {"k": "route.file_no_session", "src": "c75d4fbf", "v": "⚠️ Không rõ file này dành cho phiên nào. Hãy chọn một phiên bằng {command} hoặc từ bàn phím."}
 {"k": "route.held_permission", "src": "bf26d315", "v": "❓ Claude vẫn đang chờ bạn trả lời yêu cầu cấp quyền này. Hãy trả lời trước, rồi tin nhắn mới của bạn sẽ được gửi đến Claude ngay sau đó."}
@@ -720,7 +720,7 @@
 {"k": "route.not_alive", "src": "248cf0d5", "v": "⚠️ Phiên [{session}] không chạy"}
 {"k": "route.not_working", "src": "40bb3d05", "v": "<b>{session}</b> hiện không làm gì."}
 {"k": "route.nothing_running", "src": "3c49e2a3", "v": "Hiện không có việc gì đang chạy."}
-{"k": "route.queue_full", "src": "f6582eab", "v": {"other": "⚠️ Hàng đợi của [{session}] đã đầy ({n} tin nhắn đang chờ). Hãy trả lời yêu cầu hoặc xóa hàng đợi."}}
+{"k": "route.queue_full", "src": "f6582eab", "v": {"one": "⚠️ Hàng đợi của [{session}] đã đầy ({n} tin nhắn đang chờ). Hãy trả lời yêu cầu hoặc xóa hàng đợi.", "other": "⚠️ Hàng đợi của [{session}] đã đầy ({n} tin nhắn đang chờ). Hãy trả lời yêu cầu hoặc xóa hàng đợi."}}
 {"k": "route.refusal_frame", "src": "e19d24e3", "v": "⚠️ [{session}] {reason}"}
 {"k": "route.resume_then_resend", "src": "df2cce7e", "v": "Sau khi chạm ▶️ Tiếp tục, hãy gửi lại tin nhắn của bạn."}
 {"k": "route.retry_note_others", "src": "f54d6bb2", "v": "⏸ Chưa gửi lại - đang là lượt của người khác. Khi xong, hãy chạm “Thử lại” lần nữa."}
@@ -795,7 +795,7 @@
 {"k": "sess.delete_which", "src": "b568401d", "v": "Xóa phiên đã kết thúc nào?"}
 {"k": "sess.deleted", "src": "5af8d1c8", "v": "🗑️ Đã xóa [<b>{session}</b>]."}
 {"k": "sess.deleted_by", "src": "38b3ffbc", "v": "🗑️ {person} đã xóa [<b>{session}</b>]."}
-{"k": "sess.diff_files", "src": "84597d92", "v": {"other": "📝 [<b>{session}</b>] {n} file đã thay đổi, +{added}/-{removed}"}}
+{"k": "sess.diff_files", "src": "84597d92", "v": {"one": "📝 [<b>{session}</b>] {n} file đã thay đổi, +{added}/-{removed}", "other": "📝 [<b>{session}</b>] {n} file đã thay đổi, +{added}/-{removed}"}}
 {"k": "sess.diff_none", "src": "3b2e4538", "v": "Không có thay đổi nào trong thư mục của [<b>{session}</b>]."}
 {"k": "sess.diff_none_live", "src": "3f72a95c", "v": "Không có phiên đang chạy nào để xem thay đổi."}
 {"k": "sess.diff_reason.cwd_missing", "src": "e6e5befa", "v": "Thư mục của [{label}] không còn nữa."}
@@ -943,21 +943,21 @@
 {"k": "set.text.spref_root", "src": "b29b833e", "v": "👤 <b>Tùy chọn theo phiên - [{session}]</b>\n\nĐặt kiểu trả lời riêng cho phiên này. Mục nào chưa đặt sẽ theo /settings của chat này. ⭐ đánh dấu mục được đặt riêng cho phiên này."}
 {"k": "status.btn.answer", "src": "a16a4eda", "v": "Trả lời"}
 {"k": "status.btn.clear_all", "src": "4944581b", "v": "🧹 Xóa hết"}
-{"k": "status.btn.ended", "src": "ae183190", "v": {"other": "⚫ Đã kết thúc ({n})"}}
+{"k": "status.btn.ended", "src": "ae183190", "v": {"one": "⚫ Đã kết thúc ({n})", "other": "⚫ Đã kết thúc ({n})"}}
 {"k": "status.btn.more", "src": "a6bc69aa", "v": "⋮ Thêm"}
 {"k": "status.btn.new", "src": "fb873221", "v": "🆕 Mới"}
 {"k": "status.btn.new_session", "src": "19b62fc4", "v": "🆕 Phiên mới"}
 {"k": "status.ctx", "src": "daeecae8", "v": "ctx {percent}"}
-{"k": "status.ended", "src": "63dbdb7e", "v": {"other": "⚫ <b>Các phiên đã kết thúc ({n})</b>\n\nTiếp tục một phiên, xóa một phiên, hoặc xóa hết khỏi /status (chúng vẫn còn trong /resume)."}}
+{"k": "status.ended", "src": "63dbdb7e", "v": {"one": "⚫ <b>Các phiên đã kết thúc ({n})</b>\n\nTiếp tục một phiên, xóa một phiên, hoặc xóa hết khỏi /status (chúng vẫn còn trong /resume).", "other": "⚫ <b>Các phiên đã kết thúc ({n})</b>\n\nTiếp tục một phiên, xóa một phiên, hoặc xóa hết khỏi /status (chúng vẫn còn trong /resume)."}}
 {"k": "status.ended_shown", "src": "cdde3b66", "v": "Đây là {max} phiên mới nhất; tất cả đều có trong /resume."}
 {"k": "status.head", "src": "570c54fe", "v": "{mark}<b>{session}</b> · {glyph} {state}"}
 {"k": "status.no_ended", "src": "a33a986b", "v": "Không có phiên nào đã kết thúc."}
 {"k": "status.no_live", "src": "8f779eb2", "v": "Không có phiên nào đang chạy."}
 {"k": "status.none", "src": "a44ee05c", "v": "Chưa có phiên nào."}
-{"k": "status.notes", "src": "2e411b05", "v": {"other": "{n} ghi chú"}}
+{"k": "status.notes", "src": "2e411b05", "v": {"one": "{n} ghi chú", "other": "{n} ghi chú"}}
 {"k": "status.queue", "src": "20f40005", "v": "hàng đợi {total} ({queued}, {notes})"}
-{"k": "status.queued", "src": "45c54388", "v": {"other": "{n} trong hàng đợi"}}
-{"k": "status.sessions", "src": "65748ab3", "v": {"other": "📊 <b>Phiên ({n})</b>"}}
+{"k": "status.queued", "src": "45c54388", "v": {"one": "{n} trong hàng đợi", "other": "{n} trong hàng đợi"}}
+{"k": "status.sessions", "src": "65748ab3", "v": {"one": "📊 <b>Phiên ({n})</b>", "other": "📊 <b>Phiên ({n})</b>"}}
 {"k": "status.switch", "src": "52424cce", "v": "✍️ Giờ bạn đang nói chuyện với <b>{session}</b> · {glyph} {state} · {mode}"}
 {"k": "status.talk_dm", "src": "777be8ce", "v": "Gửi tin nhắn, nó sẽ đến {session}."}
 {"k": "status.talk_group", "src": "bdc24dfd", "v": "Trả lời một tin nhắn của {session} (hoặc nhắc đến {bot}) để nói chuyện với phiên đó."}
@@ -973,7 +973,7 @@
 {"k": "toast.cant_resend", "src": "3aa4d727", "v": "Không thể hiện lại yêu cầu này - hãy trả lời trong terminal"}
 {"k": "toast.cant_stop", "src": "2bf57e30", "v": "Bạn không được phép dừng phiên này."}
 {"k": "toast.choice_gone", "src": "54298c73", "v": "Lựa chọn đó không còn nữa."}
-{"k": "toast.clear_done", "src": "0e4a4845", "v": {"other": "Đã bỏ {n} phiên khỏi /status (vẫn còn trong /resume)"}}
+{"k": "toast.clear_done", "src": "0e4a4845", "v": {"one": "Đã bỏ {n} phiên khỏi /status (vẫn còn trong /resume)", "other": "Đã bỏ {n} phiên khỏi /status (vẫn còn trong /resume)"}}
 {"k": "toast.clear_nothing", "src": "ec219a9c", "v": "Không có gì để dọn"}
 {"k": "toast.compact_failed", "src": "84398886", "v": "Không gửi được /compact"}
 {"k": "toast.compact_sending", "src": "afcbfe26", "v": "Đang thu gọn cuộc trò chuyện [{session}]"}
@@ -1104,9 +1104,9 @@
 {"k": "tx.truncated", "src": "27710457", "v": "…[đã cắt bớt]"}
 {"k": "ui.action.failed", "src": "1bd1baa4", "v": "Không thực hiện được."}
 {"k": "ui.action.unreachable", "src": "209155a8", "v": "Không kết nối được máy chủ. Không có gì thay đổi."}
-{"k": "ui.activity.aria", "src": "649780e8", "v": {"other": "Hoạt động gần đây: {n} công cụ đã chạy. Mở dòng thời gian."}}
+{"k": "ui.activity.aria", "src": "649780e8", "v": {"one": "Hoạt động gần đây: {n} công cụ đã chạy. Mở dòng thời gian.", "other": "Hoạt động gần đây: {n} công cụ đã chạy. Mở dòng thời gian."}}
 {"k": "ui.activity.failed", "src": "6c746778", "v": "{tool} (lỗi)"}
-{"k": "ui.activity.queued", "src": "45c54388", "v": {"other": "{n} trong hàng đợi"}}
+{"k": "ui.activity.queued", "src": "45c54388", "v": {"one": "{n} trong hàng đợi", "other": "{n} trong hàng đợi"}}
 {"k": "ui.activity.recent", "src": "72d5617f", "v": "Hoạt động gần đây"}
 {"k": "ui.activity.running", "src": "21ceddba", "v": "{tool} (đang chạy)"}
 {"k": "ui.activity.running_for", "src": "181f56b1", "v": "{tool} (đang chạy {clock})"}
@@ -1209,7 +1209,7 @@
 {"k": "ui.diff.reason.no_commits_yet", "src": "cc383c84", "v": "Repo này chưa có commit nào."}
 {"k": "ui.diff.reason.not_a_git_repo", "src": "287b446f", "v": "Thư mục của phiên này không phải repo git."}
 {"k": "ui.diff.title", "src": "fe25abc0", "v": "File đã thay đổi"}
-{"k": "ui.diff.title_n", "src": "6222be44", "v": {"other": "File đã thay đổi ({n})"}}
+{"k": "ui.diff.title_n", "src": "6222be44", "v": {"one": "File đã thay đổi ({n})", "other": "File đã thay đổi ({n})"}}
 {"k": "ui.diff.title_none", "src": "447a466c", "v": "File đã thay đổi (không có)"}
 {"k": "ui.diff.too_large", "src": "7aafaa23", "v": "Diff quá lớn để hiển thị."}
 {"k": "ui.diff.unavailable", "src": "1c577d1a", "v": "Không xem được diff."}
@@ -1230,7 +1230,7 @@
 {"k": "ui.done.stop", "src": "8fcc7be3", "v": "Đã dừng."}
 {"k": "ui.empty.text", "src": "8ff2cab6", "v": "Bắt đầu một phiên ở đây hoặc gửi {command} trong chat."}
 {"k": "ui.empty.title", "src": "a44ee05c", "v": "Chưa có phiên nào."}
-{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"other": "Đã kết thúc ({n})"}}
+{"k": "ui.grid.finished_n", "src": "8e06a605", "v": {"one": "Đã kết thúc ({n})", "other": "Đã kết thúc ({n})"}}
 {"k": "ui.grid.needs_you", "src": "0d9d0df1", "v": "Đang chờ bạn"}
 {"k": "ui.kind.permission", "src": "17857134", "v": "Quyền"}
 {"k": "ui.kind.question", "src": "002ff598", "v": "Câu hỏi"}
@@ -1299,13 +1299,13 @@
 {"k": "ui.preview.nothing_gone", "src": "a9283598", "v": "Chưa ghi lại được gì cho đến khi phiên này kết thúc."}
 {"k": "ui.preview.nothing_yet", "src": "b44c6629", "v": "Chưa có gì. Nội dung sẽ hiện ở đây khi Claude trả lời."}
 {"k": "ui.pulse.all_quiet", "src": "889fd4f7", "v": "Tất cả sẵn sàng"}
-{"k": "ui.pulse.background", "src": "bef491ae", "v": {"other": "{n} đang chạy nền"}}
-{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"other": "{n} đã kết thúc"}}
-{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"other": "{n} đang chờ bạn"}}
-{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"other": "{n} sẵn sàng"}}
+{"k": "ui.pulse.background", "src": "bef491ae", "v": {"one": "{n} đang chạy nền", "other": "{n} đang chạy nền"}}
+{"k": "ui.pulse.finished", "src": "f8fc3a3c", "v": {"one": "{n} đã kết thúc", "other": "{n} đã kết thúc"}}
+{"k": "ui.pulse.need", "src": "1a7b5fbf", "v": {"one": "{n} đang chờ bạn", "other": "{n} đang chờ bạn"}}
+{"k": "ui.pulse.resting", "src": "644f3b40", "v": {"one": "{n} sẵn sàng", "other": "{n} sẵn sàng"}}
 {"k": "ui.pulse.spent", "src": "908f77ef", "v": "đã tiêu {cost}"}
-{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"other": "{n} không rõ"}}
-{"k": "ui.pulse.working", "src": "c3aee490", "v": {"other": "{n} đang làm việc"}}
+{"k": "ui.pulse.unknown", "src": "23ca6f83", "v": {"one": "{n} không rõ", "other": "{n} không rõ"}}
+{"k": "ui.pulse.working", "src": "c3aee490", "v": {"one": "{n} đang làm việc", "other": "{n} đang làm việc"}}
 {"k": "ui.rename.empty", "src": "e00fbfca", "v": "Tên phiên không được để trống."}
 {"k": "ui.rename.failed", "src": "07c216e4", "v": "Không đổi được tên."}
 {"k": "ui.rename.pattern", "src": "b916e083", "v": "Dùng chữ cái không dấu, chữ số, gạch nối và gạch dưới; bắt đầu bằng chữ cái hoặc chữ số."}
@@ -1326,7 +1326,7 @@
 {"k": "ui.report.err_detail", "src": "97fb369f", "v": "{fingerprint}, thấy lần đầu {day}, trên {versions}"}
 {"k": "ui.report.err_sub", "src": "917846a1", "v": "{times}, thấy lần cuối {day}"}
 {"k": "ui.report.errors", "src": "805e86a8", "v": "Lỗi"}
-{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"other": "Lỗi ({n})"}}
+{"k": "ui.report.errors_n", "src": "07ba7666", "v": {"one": "Lỗi ({n})", "other": "Lỗi ({n})"}}
 {"k": "ui.report.exact", "src": "ea8e4b11", "v": "Hiện đúng nội dung báo cáo"}
 {"k": "ui.report.exact_note", "src": "991b0c14", "v": "Đây là đúng văn bản sẽ được gửi, kể cả ghi chú của bạn."}
 {"k": "ui.report.exit.clean", "src": "6a1cec45", "v": "bình thường"}
@@ -1349,12 +1349,12 @@
 {"k": "ui.report.label.stops", "src": "0e648419", "v": "Các lần dừng"}
 {"k": "ui.report.label.system", "src": "bc0792d8", "v": "Hệ thống"}
 {"k": "ui.report.later", "src": "685cd810", "v": "aipager không phản hồi kịp. Hãy chạm “Gửi báo cáo” lần nữa: nếu báo cáo đã được gửi, bạn sẽ thấy mã tham chiếu, và nó không bị gửi hai lần."}
-{"k": "ui.report.limits", "src": "22297d2d", "v": {"other": "{n} lần bị chặn trong 7 ngày, tải giờ bận nhất {load}"}}
-{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"other": "{n} vị trí ghi cảnh báo hoặc lỗi ({times})"}}
+{"k": "ui.report.limits", "src": "22297d2d", "v": {"one": "{n} lần bị chặn trong 7 ngày, tải giờ bận nhất {load}", "other": "{n} lần bị chặn trong 7 ngày, tải giờ bận nhất {load}"}}
+{"k": "ui.report.log_line", "src": "5069aaa9", "v": {"one": "{n} vị trí ghi cảnh báo hoặc lỗi ({times})", "other": "{n} vị trí ghi cảnh báo hoặc lỗi ({times})"}}
 {"k": "ui.report.missing", "src": "995357dd", "v": "(thiếu)"}
 {"k": "ui.report.more", "src": "473710d3", "v": "Thêm chi tiết"}
-{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"other": "{n} nhóm"}}
-{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"other": "{n} chat riêng"}}
+{"k": "ui.report.n_groups", "src": "1a2fac9e", "v": {"one": "{n} nhóm", "other": "{n} nhóm"}}
+{"k": "ui.report.n_private_chats", "src": "5922fc21", "v": {"one": "{n} chat riêng", "other": "{n} chat riêng"}}
 {"k": "ui.report.no_errors", "src": "a5697d50", "v": "Gần đây không có lỗi nào được ghi lại. Các thông tin ở trên và ghi chú của bạn vẫn có ích."}
 {"k": "ui.report.none", "src": "6eef6648", "v": "Không có"}
 {"k": "ui.report.not_found", "src": "475c8486", "v": "Không tìm thấy"}
@@ -1382,16 +1382,16 @@
 {"k": "ui.report.setup_line_bare", "src": "60b4d8c7", "v": "{dms}, đã chạy {uptime}"}
 {"k": "ui.report.setup_line_no_groups", "src": "f0f3ef45", "v": "{mode}, {dms}, đã chạy {uptime}"}
 {"k": "ui.report.setup_line_no_mode", "src": "f94812f3", "v": "{dms}, {groups}, đã chạy {uptime}"}
-{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"other": "Hiện thêm {n}"}}
+{"k": "ui.report.show_more", "src": "fdeb42f8", "v": {"one": "Hiện thêm {n}", "other": "Hiện thêm {n}"}}
 {"k": "ui.report.stale", "src": "25e3d152", "v": "Báo cáo đó không còn ở đây. Đây là bản mới: hãy kiểm tra, rồi chạm “Gửi báo cáo” lần nữa."}
 {"k": "ui.report.still_sending", "src": "5b89eba6", "v": "Vẫn đang gửi. Chờ một chút, rồi chạm “Gửi báo cáo” lần nữa."}
 {"k": "ui.report.stops", "src": "8f971d67", "v": "Lần dừng gần nhất: {last}. Số lần crash trong 7 ngày: {n}."}
 {"k": "ui.report.system_in", "src": "7011d75d", "v": "{system}, trong {container}"}
 {"k": "ui.report.thanks", "src": "04d9993f", "v": "Cảm ơn bạn. Nếu bạn mở issue trên GitHub, hãy ghi kèm mã tham chiếu này:"}
 {"k": "ui.report.tidied", "src": "35efa495", "v": "Ghi chú của bạn đã được chỉnh lại (đã bỏ ký tự ẩn, khoảng trắng thừa hoặc phần vượt quá 500 ký tự). Hãy kiểm tra, rồi chạm “Gửi báo cáo” lần nữa."}
-{"k": "ui.report.times", "src": "766020c6", "v": {"other": "{n} lần"}}
+{"k": "ui.report.times", "src": "766020c6", "v": {"one": "{n} lần", "other": "{n} lần"}}
 {"k": "ui.report.title", "src": "24f3f52d", "v": "Báo cáo sự cố"}
-{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"other": "Dài quá {n} ký tự."}}
+{"k": "ui.report.too_long", "src": "f600d1b3", "v": {"one": "Dài quá {n} ký tự.", "other": "Dài quá {n} ký tự."}}
 {"k": "ui.report.too_many", "src": "392589ae", "v": "Chạm quá nhiều lần. Thử lại sau một phút."}
 {"k": "ui.report.too_old_title", "src": "2a4d2b45", "v": "Cần cập nhật"}
 {"k": "ui.report.try_later", "src": "ab0f2d7c", "v": "Chưa gửi được lúc này. Không có gì bị mất; hãy thử lại sau."}
@@ -1422,7 +1422,7 @@
 {"k": "ui.state.busy", "src": "8178ea20", "v": "đang làm việc"}
 {"k": "ui.state.gone", "src": "f957097d", "v": "đã kết thúc"}
 {"k": "ui.state.idle", "src": "e24cc7a4", "v": "sẵn sàng"}
-{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"other": "đang chờ {n} agent"}}
+{"k": "ui.state.tasks_agents", "src": "cdf8fa99", "v": {"one": "đang chờ {n} agent", "other": "đang chờ {n} agent"}}
 {"k": "ui.state.unknown", "src": "50d8b4a9", "v": "không rõ"}
 {"k": "ui.state.waiting", "src": "19622ace", "v": "đang chờ bạn"}
 {"k": "ui.state_line.background", "src": "cc817ef1", "v": "Trong chế độ chạy nền của Claude Code"}
@@ -1431,7 +1431,7 @@
 {"k": "ui.state_line.needs_you_kind", "src": "28f9a694", "v": "Đang chờ bạn ({kind})"}
 {"k": "ui.state_line.resting", "src": "296d1007", "v": "Sẵn sàng"}
 {"k": "ui.state_line.resting_since", "src": "5ab8f70e", "v": "Sẵn sàng, hoạt động lần cuối {age}"}
-{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"other": "Đang chờ {n} agent"}}
+{"k": "ui.state_line.tasks_agents", "src": "57907838", "v": {"one": "Đang chờ {n} agent", "other": "Đang chờ {n} agent"}}
 {"k": "ui.state_line.unknown", "src": "43a53ffd", "v": "Chưa có thông tin"}
 {"k": "ui.state_line.working", "src": "3b4dfc97", "v": "Đang làm việc"}
 {"k": "ui.state_line.working_for", "src": "f555f372", "v": "Đang làm việc ({clock})"}
@@ -1444,7 +1444,7 @@
 {"k": "ui.timeline.empty", "src": "8bdea321", "v": "Chưa có hoạt động."}
 {"k": "ui.timeline.note", "src": "306606d2", "v": "Dòng thời gian chỉ gồm khoảng thời gian từ lần aipager được bật gần nhất. Nó không được lưu khi aipager khởi động lại, nên phiên cũ hơn sẽ không hiện gì ở đây."}
 {"k": "ui.timeline.title_empty", "src": "44748119", "v": "Dòng thời gian (trống)"}
-{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"other": "Dòng thời gian ({n})"}}
+{"k": "ui.timeline.title_n", "src": "a7f6a618", "v": {"one": "Dòng thời gian ({n})", "other": "Dòng thời gian ({n})"}}
 {"k": "ui.update.check_failed", "src": "a15f1db5", "v": "Không kiểm tra được cập nhật. Hãy thử lại."}
 {"k": "ui.update.finished", "src": "80fa9b82", "v": "Lần cập nhật đó đã xong rồi."}
 {"k": "ui.update.hooks_banner", "src": "c71234bb", "v": "Các hook của Claude Code đã chạy aipager {version}, nhưng bản thân aipager vẫn đang chạy {running}. Hãy khởi động lại để hoàn tất cập nhật."}
@@ -1477,7 +1477,7 @@
 {"k": "ui.update.unreachable", "src": "fc17f70c", "v": "Không kết nối được aipager. Hãy thử lại."}
 {"k": "ui.update.up_to_date", "src": "2772acac", "v": "Mọi thứ đã là bản mới nhất."}
 {"k": "ui.update.updated", "src": "a56afb67", "v": "Đã cập nhật lên {version}."}
-{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"other": "Đã cập nhật lên {version}, đã kết nối lại {n} phiên."}}
+{"k": "ui.update.updated_readopted", "src": "4c3a19c7", "v": {"one": "Đã cập nhật lên {version}, đã kết nối lại {n} phiên.", "other": "Đã cập nhật lên {version}, đã kết nối lại {n} phiên."}}
 {"k": "ui.update.waiting_banner", "src": "a6d41f92", "v": "aipager {version} đã được cài và đang chờ khởi động lại."}
 {"k": "ui.waiting.asking", "src": "36f181a3", "v": "Claude đang hỏi bạn"}
 {"k": "ui.waiting.permission", "src": "c1992204", "v": "Claude cần bạn cấp quyền"}
@@ -1521,8 +1521,8 @@
 {"k": "upd.elapsed.s", "src": "2b434962", "v": "{s} giây"}
 {"k": "upd.fix.claude", "src": "94c58cdc", "v": "hãy chạy lại {command}"}
 {"k": "upd.fix.reinstall", "src": "ae353907", "v": "hãy cài lại bằng {command}"}
-{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"other": "⏰ Đã {n} phút mà các phiên vẫn đang làm việc. Chờ thêm {wait} phút, khởi động lại ngay, hay hủy? Khởi động lại ngay sẽ ngắt mọi thứ bên dưới."}}
-{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"other": "⏰ Đã {n} phút mà các phiên vẫn đang làm việc. Chờ thêm {wait} phút, khởi động lại ngay, hay hủy? Khởi động lại ngay sẽ ngắt mọi thứ bên dưới, kể cả các câu trả lời đang bị giữ chưa gửi."}}
+{"k": "upd.gate.busy", "src": "a8f53f0e", "v": {"one": "⏰ Đã {n} phút mà các phiên vẫn đang làm việc. Chờ thêm {wait} phút, khởi động lại ngay, hay hủy? Khởi động lại ngay sẽ ngắt mọi thứ bên dưới.", "other": "⏰ Đã {n} phút mà các phiên vẫn đang làm việc. Chờ thêm {wait} phút, khởi động lại ngay, hay hủy? Khởi động lại ngay sẽ ngắt mọi thứ bên dưới."}}
+{"k": "upd.gate.busy_held", "src": "cfe2f708", "v": {"one": "⏰ Đã {n} phút mà các phiên vẫn đang làm việc. Chờ thêm {wait} phút, khởi động lại ngay, hay hủy? Khởi động lại ngay sẽ ngắt mọi thứ bên dưới, kể cả các câu trả lời đang bị giữ chưa gửi.", "other": "⏰ Đã {n} phút mà các phiên vẫn đang làm việc. Chờ thêm {wait} phút, khởi động lại ngay, hay hủy? Khởi động lại ngay sẽ ngắt mọi thứ bên dưới, kể cả các câu trả lời đang bị giữ chưa gửi."}}
 {"k": "upd.gate.waiting", "src": "f187eea4", "v": "⏳ <b>aipager</b>: đang chờ mọi phiên sẵn sàng rồi mới khởi động lại."}
 {"k": "upd.heading", "src": "274a6776", "v": "⬆️ <b>Cập nhật</b>"}
 {"k": "upd.hooks.finished", "src": "7aa89c72", "v": "✅ Bản cập nhật aipager đã xong: aipager giờ đang chạy {version}."}
@@ -1539,7 +1539,7 @@
 {"k": "upd.line.cc_unknown", "src": "302340a8", "v": "Claude Code (không kiểm tra được)"}
 {"k": "upd.manual.needed", "src": "9abdaf5e", "v": "Cần khởi động lại: {reason}"}
 {"k": "upd.manual.would_kill", "src": "df06a1e3", "v": "Các phiên sẽ bị đóng nếu khởi động lại: {labels}"}
-{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"other": "✅ Đã cập nhật aipager {frm} → {to}, đã kết nối lại {n} phiên"}}
+{"k": "upd.marker.done", "src": "5a3ca85c", "v": {"one": "✅ Đã cập nhật aipager {frm} → {to}, đã kết nối lại {n} phiên", "other": "✅ Đã cập nhật aipager {frm} → {to}, đã kết nối lại {n} phiên"}}
 {"k": "upd.marker.interrupted", "src": "66f4f0b7", "v": "⚠️ Một lần cập nhật đã bị ngắt khi aipager tắt; bản cài có thể chưa đầy đủ. Hiện đang chạy {running}. Nếu có gì không ổn, {fix}."}
 {"k": "upd.marker.not_back", "src": "d253a83a", "v": "⚠️ Chưa quay lại: {labels}"}
 {"k": "upd.marker.wrong_version", "src": "17ebf14f", "v": "⚠️ aipager đã khởi động lại nhưng đang chạy {running}, không phải {to}."}
@@ -1562,7 +1562,7 @@
 {"k": "upd.sessions.none", "src": "1fe42f86", "v": "Hiện không có phiên nào đang chạy."}
 {"k": "upd.sessions.none_restarted", "src": "5807bbd1", "v": "Các phiên đang chạy vẫn dùng phiên bản cũ cho đến khi được khởi động lại - chưa phiên nào được khởi động lại."}
 {"k": "upd.sessions.old", "src": "2e875cd3", "v": "Vẫn ở phiên bản cũ: {labels}"}
-{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"other": "và {n} phiên trong các chat khác"}}
+{"k": "upd.sessions.other_chats", "src": "7b515e23", "v": {"one": "và {n} phiên trong các chat khác", "other": "và {n} phiên trong các chat khác"}}
 {"k": "upd.shutdown.early", "src": "6b7541f0", "v": "⚠️ aipager đã tắt trước khi cập nhật xong."}
 {"k": "upd.shutdown.partial", "src": "140c77c5", "v": "⚠️ aipager đã tắt trong lúc đang cài bản cập nhật; việc cài đặt đã bị dừng nên có thể chưa đầy đủ. Nếu có gì không ổn, {fix}."}
 {"k": "upd.shutting_down", "src": "4dabffa5", "v": "⏳ aipager đang tắt. Hãy thử lại khi aipager quay lại."}
@@ -1591,13 +1591,13 @@
 {"k": "usage.col.output", "src": "220e06ba", "v": "Ra"}
 {"k": "usage.days.title", "src": "d27d4f9b", "v": "Theo ngày"}
 {"k": "usage.denied", "src": "573cfa99", "v": "🚫 Chỉ quản trị viên mới xem được mức dùng."}
-{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"other": "Tính đến {time} ({n} ngày trước), từ phiên {session}."}}
-{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"other": "Tính đến {time} ({n} giờ trước), từ phiên {session}."}}
-{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"other": "Tính đến {time} ({n} phút trước), từ phiên {session}."}}
+{"k": "usage.fresh.days", "src": "4b723d1d", "v": {"one": "Tính đến {time} ({n} ngày trước), từ phiên {session}.", "other": "Tính đến {time} ({n} ngày trước), từ phiên {session}."}}
+{"k": "usage.fresh.hours", "src": "38dea47a", "v": {"one": "Tính đến {time} ({n} giờ trước), từ phiên {session}.", "other": "Tính đến {time} ({n} giờ trước), từ phiên {session}."}}
+{"k": "usage.fresh.minutes", "src": "f10d9a1b", "v": {"one": "Tính đến {time} ({n} phút trước), từ phiên {session}.", "other": "Tính đến {time} ({n} phút trước), từ phiên {session}."}}
 {"k": "usage.fresh.now", "src": "eb614feb", "v": "Tính đến {time} (vừa xong), từ phiên {session}."}
-{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"other": "Tính đến {time} ({n} ngày trước), từ một phiên trong chat khác."}}
-{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"other": "Tính đến {time} ({n} giờ trước), từ một phiên trong chat khác."}}
-{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"other": "Tính đến {time} ({n} phút trước), từ một phiên trong chat khác."}}
+{"k": "usage.fresh_other.days", "src": "1eed0e3c", "v": {"one": "Tính đến {time} ({n} ngày trước), từ một phiên trong chat khác.", "other": "Tính đến {time} ({n} ngày trước), từ một phiên trong chat khác."}}
+{"k": "usage.fresh_other.hours", "src": "22640cde", "v": {"one": "Tính đến {time} ({n} giờ trước), từ một phiên trong chat khác.", "other": "Tính đến {time} ({n} giờ trước), từ một phiên trong chat khác."}}
+{"k": "usage.fresh_other.minutes", "src": "6d89dd0b", "v": {"one": "Tính đến {time} ({n} phút trước), từ một phiên trong chat khác.", "other": "Tính đến {time} ({n} phút trước), từ một phiên trong chat khác."}}
 {"k": "usage.fresh_other.now", "src": "9c3409c1", "v": "Tính đến {time} (vừa xong), từ một phiên trong chat khác."}
 {"k": "usage.group_note", "src": "827f3d0c", "v": "Giới hạn gói không hiện trong nhóm. Hãy gửi /usage trong chat riêng với bot, hoặc mở Mini App."}
 {"k": "usage.login.cloud", "src": "db9bd808", "v": "Nhà cung cấp đám mây"}
@@ -1618,7 +1618,7 @@
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Đặt lại sau {days} ngày {hours} giờ"}
 {"k": "usage.resets.hours", "src": "80940941", "v": "Đặt lại sau {hours} giờ {minutes} phút, lúc {time}"}
 {"k": "usage.resets.minutes", "src": "75b3d7ab", "v": "Đặt lại sau {minutes} phút, lúc {time}"}
-{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"other": "{n} ngày trước"}}
+{"k": "usage.row.days_ago", "src": "d912ecf9", "v": {"one": "{n} ngày trước", "other": "{n} ngày trước"}}
 {"k": "usage.row.today", "src": "24345a14", "v": "Hôm nay"}
 {"k": "usage.row.week", "src": "df833fe8", "v": "7 ngày qua"}
 {"k": "usage.row.yesterday", "src": "da24830f", "v": "Hôm qua"}

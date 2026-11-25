@@ -135,7 +135,8 @@ def test_the_language_is_offered_as_beta(code):
     assert locales.is_selectable(code)
     assert locales.LOCALES[code].quality == "beta"
     assert locales.LOCALES[code].digits == "latn" and not locales.LOCALES[code].rtl
-    assert plurals.categories(code) == ("other",)
+    # CLDR 48 gave Vietnamese "one" (0 and 1); its words never change.
+    assert plurals.categories(code) == (("one", "other") if code == "vi" else ("other",))
     assert locales.AUTO_DETECT is True    # phase 5: detection on
 
 
@@ -186,7 +187,9 @@ COUNTS = (0, 1, 2, 3, 5, 11, 21, 22, 25, 100)
 
 def _form(code: str, key: str, n: int, **params) -> str:
     forms = core._catalog(code)[key]
-    assert set(forms) == {"other"}, key
+    assert set(forms) == set(plurals.categories(code)), key
+    # These languages never change their words after a number.
+    assert len(set(forms.values())) == 1, key
     text = forms[plurals.category(code, n)].replace("{n}", str(n))
     for name, value in params.items():
         text = text.replace("{" + name + "}", value)
@@ -201,13 +204,14 @@ def _working_header(n: int, tr) -> str:
 
 @pytest.mark.parametrize("code", CODES)
 def test_every_count_reads_the_one_form(mk_bot, run_async, monkeypatch, code):
-    """Every count picks the one form these languages have and fills it
-    (the expected text is the catalog's own form: this proves the plural
-    choice and the filling, not the wording)."""
+    """Every count reads the one wording these languages have (Vietnamese
+    stores it as both "one" and "other", CLDR 48) and fills it (the
+    expected text is the catalog's own form: this proves the plural choice
+    and the filling, not the wording)."""
     from aipager.bot import handlers, held_message
     preferences.set_ui_language(i18n_surfaces.CHAT, code)
     tr = i18n.get(code)
-    assert {plurals.category(code, n) for n in COUNTS} == {"other"}
+    assert {plurals.category(code, n) for n in COUNTS} <= set(plurals.categories(code))
     for n in COUNTS:
         assert animation._tool_fold_summary(n, tr) == _form(code, "card.fold", n)
         row = card_rows.render_md(tr, settled_agent_row("Explore", n, 65))

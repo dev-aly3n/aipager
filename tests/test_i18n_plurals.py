@@ -3,8 +3,9 @@
 Babel (a dev-only dependency) carries CLDR's rules; when it is installed
 every category of every count 0..10000 (plus a few millions) must match,
 and so must the set of categories each language uses. Babel is not in
-every local venv, so a frozen table recorded from Babel 2.10.3 always
-runs and fails a broken rule without it.
+every local venv, so a frozen table recorded from Babel 2.10.3 (the vi
+row from Babel 2.19.0, CLDR 48) always runs and fails a broken rule
+without it.
 """
 
 from __future__ import annotations
@@ -46,7 +47,9 @@ _FROZEN = {
           "other other other other other other other other",
     "fa": "one one other other other other other other other other other other other "
           "other other other other other other other other",
-    "vi": " ".join(["other"] * len(_COUNTS)),
+    # CLDR 48 (Babel 2.19.0) gave Vietnamese "one" for 0 and 1.
+    "vi": "one one other other other other other other other other other other other "
+          "other other other other other other other other",
 }
 
 _FROZEN_SETS = {
@@ -55,7 +58,8 @@ _FROZEN_SETS = {
     "pt-BR": {"one", "many"},
     "ru": {"one", "few", "many"}, "uk": {"one", "few", "many"},
     "ar": {"zero", "one", "two", "few", "many"},
-    "zh-Hans": set(), "ko": set(), "id": set(), "vi": set(),
+    "vi": {"one"},
+    "zh-Hans": set(), "ko": set(), "id": set(),
 }
 
 
