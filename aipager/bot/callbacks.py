@@ -1863,6 +1863,7 @@ class CallbackDispatchMixin:
                     sock = (f"{inject.SOCK_PREFIX}"
                             f"{session_name.removeprefix('claude-')}.sock")
                     from pathlib import Path as _Path
+                    old_gone = False
                     try:
                         await inject.kill_session(session_name)
                         # Wait briefly for socket to disappear so the next
@@ -1876,11 +1877,20 @@ class CallbackDispatchMixin:
                             # Gone, its dialogs with it: never typed, by a
                             # retry or by the fresh claude's first prompt.
                             sess.abandon_auto_denies()
+                            old_gone = True
                         else:
                             # The kill failed: the old claude and its
                             # dialog live on (the launch below refuses), so
                             # its refusal stays and is looked at again.
                             await self._rerun_kept_auto_denies(sess)
+                    if old_gone:
+                        # The entry is kept for the fresh claude, so the old
+                        # one's turn and prompts end here: none of its
+                        # buttons may type into the new process, and its
+                        # card must not stay Working.
+                        self._end_replaced_turn(sess, by=self._actor_label(
+                            tapper, calling_chat_id(update),
+                            getattr(query, "from_user", None)))
                 # Drop the resume metadata so the new session is truly fresh.
                 if sess:
                     sess.claude_session_id = ""

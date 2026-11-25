@@ -3411,6 +3411,97 @@ class SessionOpsMixin:
     # ── Mini App session menu actions (perms / clear-queue / compact /
     #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──
 
+    def _close_old_process_prompts(self, sess: TrackedSession) -> list[dict]:
+        """The old claude is gone (its socket is, after a kill): every
+        prompt it showed went with its dialogs. Each is closed now, so a
+        tap on one types nothing into the claude started in its place
+        under the same entry (a restart, /new's Replace); the card's inline
+        prompt is marked closed with the card. Synchronous: nothing may
+        wait on Telegram between the kill and the launch (a restart's quiet
+        window is short, and a slow chat's edits wait for its pace). Read
+        while the entry still waits, when the open records are listed.
+        Returns the records whose own messages should lose their buttons
+        (:meth:`_strip_old_prompts_later`)."""
+        records = [rec for _where, _perm, rec in sess.open_prompt_records()
+                   if isinstance(rec, dict) and not rec.get("final_shown")]
+        sess.close_all_prompts()
+        self.registry.mark_dirty()
+        return records
+
+    def _after_old_process(self, coro) -> None:
+        """Run the Telegram side of an old claude's end (*coro*) in its own
+        task, off the kill-and-launch path, tracked with the card steps."""
+        from aipager.bot.animation import _CARD_TASKS, _card_task_done
+        task = _spawn(coro)
+        _CARD_TASKS.add(task)
+        task.add_done_callback(_card_task_done)
+
+    def _strip_old_prompts_later(self, sess: TrackedSession, records: list[dict]) -> None:
+        """The closed prompts' own messages lose their buttons the way a
+        Stop's do (:meth:`_show_prompts_closed`), in the background."""
+        if records:
+            self._after_old_process(self._show_prompts_closed(sess, records))
+
+    def _end_replaced_turn(self, sess: TrackedSession, *, by: str = "") -> None:
+        """/new's Replace killed the old claude and confirmed it gone. Its
+        prompts close and its turn ends here, as a Stop ends one, because
+        the entry is kept for the fresh claude and no SessionEnd will come
+        to do it: the job's agents and the reply target go, the messages
+        held for its dialog or turn are not delivered (they were for the
+        old conversation), and a working or waiting entry is idle again.
+        All of that now, before the launch; the card's Stopped line (by
+        *by*, in a group), the buttons and the reactions go out in the
+        background (:meth:`_settle_replaced_turn`)."""
+        records = self._close_old_process_prompts(sess)
+        turn = sess.turn_seq
+        held = reactions.held_entries(sess.pending_queue)
+        sess.pending_queue.clear()
+        hold, sess.dialog_hold = sess.dialog_hold, None
+        notices = list(hold.get("notices") or []) if isinstance(hold, dict) else []
+        sess.active_subagents.clear()
+        sess.bg_shells_leave_job()
+        sess.job_interim_seen = False
+        sess.job_continuation_active = False
+        sess.job_grace_until = 0.0
+        sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
+        _clear_turn_open(sess.name)
+        sess.turn_sender_id = None
+        if sess.status in (Status.BUSY, Status.INTERACTIVE):
+            self.registry.transition(sess.name, Status.IDLE)
+        self.registry.mark_dirty()
+        text = _stopped_card_text(sess.label, by, i18n.for_sess(sess))
+        self._after_old_process(self._settle_replaced_turn(
+            sess, turn=turn, text=text, records=records, held=held, notices=notices))
+
+    async def _settle_replaced_turn(self, sess: TrackedSession, *, turn: int, text: str,
+                                    records: list[dict], held: list[dict],
+                                    notices: list) -> None:
+        """The Telegram side of :meth:`_end_replaced_turn`. Under the card
+        lock first, so a card whose send is in flight lands and is the one
+        settled; only the replaced turn (*turn*) is closed, never a turn the
+        fresh claude has begun since, whose card waits behind this lock."""
+        from aipager.bot.animation import _card_edit_lock
+        from aipager.bot.transport import resolve_chat_id
+        async with sess.animate_lock:
+            self._cancel_lazy_card(sess)
+            sess.close_turn(turn)
+            old = sess.busy_msg_id if (sess.busy_msg_id or 0) > 0 else None
+            self._stop_animation(sess)
+            sess.busy_msg_id = None
+        if old is not None:
+            async with _card_edit_lock(sess):
+                try:
+                    await self._edit_busy_raw(old, text, chat_id=resolve_chat_id(sess))
+                except Exception:  # noqa: BLE001 - the card is retired either way
+                    log.debug("[%s] replaced turn's card not settled", sess.label,
+                              exc_info=True)
+        await self._show_prompts_closed(sess, records)
+        if held:
+            await self._mark_not_delivered(sess, held)
+        if notices:
+            await self._delete_hold_notices(sess, notices)
+
     async def _kill_and_relaunch_core(
         self, sess: TrackedSession, *, target_mode: str,
         interrupt_first: bool, force: bool = False,
@@ -3609,8 +3700,10 @@ class SessionOpsMixin:
 
         # The old process is gone, and its dialogs with it: a refusal still
         # waiting for one is never typed, whether the launch below works or
-        # fails (this entry stays INTERACTIVE until then).
+        # fails (this entry stays INTERACTIVE until then), and no prompt it
+        # showed can be answered into the relaunched claude.
         sess.abandon_auto_denies()
+        self._strip_old_prompts_later(sess, self._close_old_process_prompts(sess))
 
         short_name = session_name.removeprefix("claude-")
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)

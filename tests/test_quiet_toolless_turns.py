@@ -945,7 +945,16 @@ def test_a_teardown_during_the_late_cards_send_waits_for_it(
         return running
 
     animating_after = run_async(_bounded(_scenario()))
-    assert sess.busy_msg_id == 88
+    if how == "new_replace":
+        # Replace ends the old turn (the entry is kept for the fresh
+        # claude): the card that went out is the one it settles as
+        # Stopped, after waiting for it under the card lock, and retires.
+        assert sess.busy_msg_id is None
+        assert [p.get("_args") for n, p in wire.calls
+                if n == "edit_message_text" and p.get("message_id") == 88] == [
+                    ("⚠️ <b>cat</b> · Stopped",)]
+    else:
+        assert sess.busy_msg_id == 88
     assert sess.lazy_card_at == 0.0
     if how == "kill":
         # /kill stops the animation AFTER waiting for the card, so the late

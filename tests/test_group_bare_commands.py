@@ -529,13 +529,15 @@ def test_dm_one_session_is_acted_on(dbot, run_async, mk_update, diffs, command):
 @pytest.mark.parametrize("command", ALL)
 def test_dm_several_is_a_picker_with_the_target_first(dbot, run_async, mk_update,
                                                       diffs, command):
+    # d2 is the DM's target: made while it lived (a message of a session
+    # that has ended no longer moves the target).
+    dbot.registry.track_message(101, D2, DM)
     if command == "stop":
         for n in (D1, D2):
             _sess(dbot, n).status = Status.BUSY
     if command == "delete":
         for n in (D1, D2):
             _sess(dbot, n).status = Status.GONE
-    dbot.registry.track_message(101, D2, DM)        # d2 is the DM's target
     u = _msg(mk_update, f"/{command}", ALICE, chat=DM)
     _run(dbot, run_async, u)
     if command in ("mode", "perms", "diff"):

@@ -29,7 +29,7 @@ def test_animate_lock_serializes_concurrent_callers(monkeypatch, run_async):
 
     send_count = {"n": 0}
 
-    async def _send_busy_returning_msg(sess_arg):
+    async def _send_busy_returning_msg(sess_arg, **_kw):
         # Simulate work that yields to the event loop, allowing a competing
         # coroutine to race in if no lock is held.
         await asyncio.sleep(0.01)

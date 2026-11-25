@@ -305,6 +305,44 @@ class FloodSkipped(Exception):
         self.endpoint = endpoint
 
 
+class SendNotWanted(FloodSkipped):
+    """Raised instead of making a call whose caller said, while it waited
+    for room, that it no longer wants it (``rate_limit_args["wanted"]``
+    returned False): the busy card of a session that ended while the card
+    queued behind the chat's pace. No token is spent and nothing is sent.
+    A :class:`FloodSkipped`, so every caller that reads that as "nothing
+    sent" reads this the same way.
+    """
+
+
+#: How often a call that can be withdrawn (``wanted``) asks again while
+#: it waits for room: a card queued for 30 s behind a busy chat is dropped
+#: within this long of its session ending, and nothing that waits for it
+#: (the session's end takes the card lock) waits longer.
+WANTED_POLL_SECONDS = 1.0
+
+
+def _wanted_of(rate_limit_args):
+    """The caller's ``wanted`` predicate, or None (always wanted)."""
+    if isinstance(rate_limit_args, dict):
+        wanted = rate_limit_args.get("wanted")
+        if callable(wanted):
+            return wanted
+    return None
+
+
+def _still_wanted(wanted) -> bool:
+    """Ask *wanted*; one that raises counts as wanted (fail-open: a broken
+    predicate must never drop a message)."""
+    if wanted is None:
+        return True
+    try:
+        return bool(wanted())
+    except Exception:  # noqa: BLE001 - the predicate is the caller's
+        log.debug("a send's wanted check raised; sending it", exc_info=True)
+        return True
+
+
 class TokenBucket:
     """A continuously-refilling token bucket with an injectable clock.
 
@@ -913,6 +951,7 @@ def _class_of(rate_limit_args) -> str:
 
 def rate_limit_args(
     *, kind: str = "blocking", priority: str = PRIORITY_ESSENTIAL,
+    wanted=None,
 ) -> dict | None:
     """Build the wire dict a caller passes as ``rate_limit_args=``.
 
@@ -924,12 +963,18 @@ def rate_limit_args(
     One builder so no call site hand-rolls the dict and quietly misspells
     a key into "unclassified" — which, by :func:`_class_of`, would be a
     silent demotion to ESSENTIAL rather than a visible error.
+
+    *wanted*: a synchronous, side-effect-free callable the limiter asks
+    before it makes the call and while the call waits for room; False
+    withdraws it (:class:`SendNotWanted`, nothing sent, no token spent).
     """
     args: dict = {}
     if kind == "skip":
         args["kind"] = "skip"
     if priority != PRIORITY_ESSENTIAL:
         args["class"] = priority
+    if wanted is not None:
+        args["wanted"] = wanted
     return args or None
 
 
@@ -1839,6 +1884,7 @@ class BudgetRateLimiter(BaseRateLimiter):
     async def _acquire_blocking(
         self, budget: ChatBudget | None, *, reserve: float = 0.0,
         cls: str = PRIORITY_ESSENTIAL, endpoint: str = "", cost: int = 1,
+        wanted=None,
     ) -> None:
         """Wait until every limit that applies has room, then spend it.
 
@@ -1875,6 +1921,12 @@ class BudgetRateLimiter(BaseRateLimiter):
         makes N, :func:`_request_cost`): it waits for and spends that many
         of each limit, clamped to what each limit can ever hold, so a
         10-item album never waits for ever on a smaller bucket.
+
+        ``wanted`` (the caller's predicate, :func:`rate_limit_args`): asked
+        at least every :data:`WANTED_POLL_SECONDS` while this call waits,
+        in the queue or at its head, and in the synchronous block that
+        takes; False raises :class:`SendNotWanted` there, before any
+        token is spent, and hands the queue on.
         """
         if budget is None:
             await self._wait_for_overall()
@@ -1912,8 +1964,16 @@ class BudgetRateLimiter(BaseRateLimiter):
             budget.waiters.insert(index, ticket)
         try:
             if budget.waiters[0] is not ticket:
-                await ticket
+                if wanted is None:
+                    await ticket
+                else:
+                    while not ticket.done():
+                        await asyncio.wait({ticket}, timeout=WANTED_POLL_SECONDS)
+                        if not ticket.done() and not _still_wanted(wanted):
+                            raise SendNotWanted(budget.chat_id, endpoint)
             while True:
+                if not _still_wanted(wanted):
+                    raise SendNotWanted(budget.chat_id, endpoint)
                 now = self._clock()
                 self._decay(budget, now)
                 wait = max(
@@ -1945,7 +2005,8 @@ class BudgetRateLimiter(BaseRateLimiter):
                     self._overall.take(overall_cost)
                     self._record(budget, cls)
                     return
-                await self._sleep(wait)
+                await self._sleep(wait if wanted is None
+                                  else min(wait, WANTED_POLL_SECONDS))
         finally:
             if budget.waiters and budget.waiters[0] is ticket:
                 budget.waiters.popleft()
@@ -2027,6 +2088,11 @@ class BudgetRateLimiter(BaseRateLimiter):
         # minimal mode suspends it, and it never counts as an answer.
         cls = (PRIORITY_ORNAMENT if endpoint == CHAT_ACTION_ENDPOINT
                else _class_of(rate_limit_args))
+        # A call its caller has already withdrawn is not made, whatever
+        # path it would take below (the blocking wait asks again).
+        wanted = _wanted_of(rate_limit_args)
+        if not _still_wanted(wanted):
+            raise SendNotWanted(chat_id, endpoint)
 
         # ── MINIMAL MODE (R3) ────────────────────────────────────────────
         # Below `FLOOD_MINIMAL_MODE_RATE_FLOOR` a chat can no longer afford
@@ -2140,16 +2206,17 @@ class BudgetRateLimiter(BaseRateLimiter):
                 budget,
                 reserve=(_SKIP_RESERVE if cls == PRIORITY_ORNAMENT else 0.0),
                 cls=cls, endpoint=endpoint, cost=_request_cost(endpoint, data),
+                wanted=wanted,
             )
         return await self._run(
             budget, callback, args, kwargs, endpoint, chat_id, kind=kind,
-            cls=cls, cost=_request_cost(endpoint, data),
+            cls=cls, cost=_request_cost(endpoint, data), wanted=wanted,
         )
 
     async def _run(
         self, budget, callback, args, kwargs, endpoint, chat_id,
         *, kind: str = "blocking", allow_retry: bool = True,
-        cls: str = PRIORITY_ESSENTIAL, cost: int = 1,
+        cls: str = PRIORITY_ESSENTIAL, cost: int = 1, wanted=None,
     ):
         """Run the callback whose budget has already been paid.
 
@@ -2227,7 +2294,7 @@ class BudgetRateLimiter(BaseRateLimiter):
             # under its OWN class, and an ornament retry is refused if the
             # hour's ornament share went while it waited (8.30 Q7).
             await self._acquire_blocking(budget, cls=cls, endpoint=endpoint,
-                                         cost=cost)
+                                         cost=cost, wanted=wanted)
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,
                 kind=kind, allow_retry=False, cls=cls, cost=cost,

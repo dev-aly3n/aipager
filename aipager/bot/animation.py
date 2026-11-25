@@ -43,6 +43,7 @@ from aipager.bot.flood_budget import (
     PRIORITY_INSTANT,
     PRIORITY_ORNAMENT,
     FloodSkipped,
+    SendNotWanted,
     rate_limit_args as _rl_args,
     _retry_after_seconds as _retry_after_secs,
     card_interval,
@@ -2122,7 +2123,7 @@ class AnimationMixin:
     async def send_busy(
         self, sess: TrackedSession, *,
         reply_to: int | None = None, disable_notification: bool = False,
-        priority: str = PRIORITY_ORNAMENT,
+        priority: str = PRIORITY_ORNAMENT, wanted=None,
     ) -> int | None:
         """Send initial 'Working...' message and start animation. Returns message_id.
 
@@ -2140,6 +2141,10 @@ class AnimationMixin:
         successful send records ``sess.busy_card_trigger`` — which
         message THIS card currently replies to — so a later mismatch
         against ``trigger_msg_id`` (R3) can be detected.
+
+        ``wanted``: the limiter asks it while the card waits for room in
+        the chat's pace, and drops the card unsent once it says False
+        (:meth:`_open_busy_card`: the session ended meanwhile).
         """
         if not self._app:
             return None
@@ -2157,7 +2162,7 @@ class AnimationMixin:
                 # the first thing pressure sheds. The card's move passes
                 # INSTANT for its two-step fallback
                 # (`_reanchor_busy_card_locked`).
-                rate_limit_args=_rl_args(priority=priority),
+                rate_limit_args=_rl_args(priority=priority, wanted=wanted),
             )
             # Read INSIDE the try, as this always has been: a send that
             # answers something without a `message_id` (a stub, a mocked
@@ -2178,6 +2183,12 @@ class AnimationMixin:
             # so nothing downstream changes. This is the site whose
             # missing mute check cost 9.5 hours on 2026-09-15.
             log.debug("[%s] busy card not sent — chat flood-muted", sess.label)
+            return None
+        except SendNotWanted:
+            # Withdrawn while it waited for room: its session ended (the
+            # caller's `wanted`). Nothing was sent and nothing is owed.
+            log.info("[%s] busy card dropped unsent - the session ended "
+                     "while it waited for the chat's pace", sess.label)
             return None
         except FloodSkipped:
             # The budget's refusal (roadmap 8.17c): the chat is in minimal
@@ -3835,7 +3846,16 @@ class AnimationMixin:
         is no event to retry it on, and the watchdog never acts on a
         session with no card.
         """
-        msg_id = await self.send_busy(sess)
+        registry = self.registry
+
+        def _wanted() -> bool:
+            # A card that waited behind the chat's pace (a busy group:
+            # tens of seconds) is not sent once its session has ended:
+            # the session's end would only delete it, and its tracking
+            # would make the ended session the chat's target.
+            return sess.status is not Status.GONE and registry.get(sess.name) is sess
+
+        msg_id = await self.send_busy(sess, wanted=_wanted)
         if msg_id:
             sess.busy_msg_id = msg_id
             sess.last_tool_edit_at = 0.0
@@ -3848,7 +3868,7 @@ class AnimationMixin:
             self._start_animation(sess)
             return msg_id
         sess.busy_msg_id = None  # release the slot
-        if self._card_refused_now(sess):
+        if self._card_refused_now(sess) and sess.status is not Status.GONE:
             sess.busy_card_owed = True
             log.info("[%s] busy card held back — the chat is flood-muted or "
                      "in minimal mode; it is sent when the chat can take it, "
