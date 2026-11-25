@@ -87,7 +87,7 @@ _RULES = {
     "zh-Hans": (_other, ("other",)),
     "ko": (_other, ("other",)),
     "id": (_other, ("other",)),
-    "vi": (_other, ("other",)),
+    "vi": (_zero_one, _ONE_OTHER),  # CLDR 48: 0 and 1 are "one"
     # The pseudo locales follow English.
     "qps": (_one, _ONE_OTHER),
     "qps-rtl": (_one, _ONE_OTHER),

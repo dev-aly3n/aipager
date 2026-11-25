@@ -75,4 +75,4 @@ Keep every {placeholder} and every HTML tag of the English, exactly once each. N
 - Use "bạn", and the plain imperative for requests ("Gửi lại /new").
 
 ## Plurals
-other only: Vietnamese does not mark the plural after a number (2 phiên).
+one and other (CLDR 48: "one" is 0 and 1), always the same words: Vietnamese does not mark the plural after a number (1 phiên, 2 phiên).
