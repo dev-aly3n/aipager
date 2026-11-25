@@ -58,6 +58,10 @@ def test_a_message_right_after_start_still_gets_the_first_contact_line(fake):
         bot = TelegramBot(SessionRegistry())
         await asyncio.wait_for(bot.start(), 30)
         try:
+            # start() can return before the first getUpdates on a slow
+            # runner, and Telegram drops whatever came before it.
+            assert await asyncio.to_thread(fake.polling_started.wait, 30), \
+                "the bot never polled"
             since = fake.calls()[-1].seq if fake.calls() else 0
             sender = fake.user(CHAT, "owner", "Owner")
             sender["language_code"] = "fa"
