@@ -1649,14 +1649,21 @@ class HookReceiver:
         does not carry ``rate_limits`` (the hook stays as it is). A payload
         without them (the first of every session, an API key, a gateway
         without a spend limit) changes nothing. A bad file never breaks
-        the branch."""
+        the branch.
+
+        It also stamps the session's sign-in key (``usage_plan_key``): the
+        busy card's near-limit note shows only the reading of the sign-in
+        the session runs under, never another's ("" when it is unknown)."""
         try:
             windows = statusline_file.parse_rate_limits(statusline_file.read_raw(sess.name))
             if windows:
+                login = usage_store.login_for(sess)
                 # The session's chat goes with it: its name is shown only
                 # to who may see that chat (usage_cmd).
-                usage_store.note_plan(sess.label, windows, usage_store.login_for(sess),
+                usage_store.note_plan(sess.label, windows, login,
                                       scope=getattr(sess, "scope_chat_id", 0))
+                key = usage_store.plan_key(login)
+                sess.usage_plan_key = "" if key == "unknown" else key
         except Exception:
             log.debug("[%s] plan usage not read", getattr(sess, "label", "?"), exc_info=True)
 

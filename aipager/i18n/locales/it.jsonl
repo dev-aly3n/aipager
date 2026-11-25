@@ -1607,6 +1607,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Token di accesso Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Accesso sconosciuto"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "Per modello, ultimi 7 giorni"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ Limite di 5 ore quasi raggiunto: {pct} usato"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ Limite di 5 ore raggiunto: {pct} usato"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Limite settimanale quasi raggiunto: {pct} usato"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Limite settimanale raggiunto: {pct} usato"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Limite di spesa quasi raggiunto: {pct} usato"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Limite di spesa raggiunto: {pct} usato"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "I limiti del piano compaiono qui dopo che Claude risponde in una sessione collegata con un abbonamento Claude. Le chiavi API e i gateway senza limite di spesa non li riportano."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Limiti del piano"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Si azzera tra {days} g {hours} h"}

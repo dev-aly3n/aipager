@@ -1607,6 +1607,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Token de connexion Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Connexion inconnue"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "Par modèle, 7 derniers jours"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ Limite de 5 heures presque atteinte : {pct} utilisé"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ Limite de 5 heures atteinte : {pct} utilisé"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Limite hebdomadaire presque atteinte : {pct} utilisé"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Limite hebdomadaire atteinte : {pct} utilisé"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Plafond de dépenses presque atteint : {pct} utilisé"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Plafond de dépenses atteint : {pct} utilisé"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Les limites du forfait s'affichent ici dès que Claude répond dans une session connectée avec un abonnement Claude. Les clés API et les passerelles sans plafond de dépenses ne les indiquent pas."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Limites du forfait"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Réinitialisation dans {days} j {hours} h"}

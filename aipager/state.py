@@ -1287,6 +1287,17 @@ class TrackedSession:
     card_elapsed_unit: str = "s"
     card_frame_state: tuple | None = None
     card_bypass_at: float = 0.0
+    # roadmap 8.131 (near-limit note): `usage_plan_key` is the usage
+    # store's key of the sign-in this session runs under, stamped by the
+    # hook receiver when a status payload with plan usage arrives ("" when
+    # the sign-in is unknown). `card_usage_windows` is that sign-in's
+    # newest windows, stamped by the card's edit paths before they build
+    # (so the renderer stays pure), or None when this card's chat may not
+    # see plan usage. Both transient, never in _PERSIST_FIELDS: a key kept
+    # across a restart could belong to a sign-in the relaunched session no
+    # longer uses, so the note waits for the session's next reading.
+    usage_plan_key: str = ""
+    card_usage_windows: dict | None = None
     # roadmap 8.24: the "typing…" task for this session's busy card —
     # `animation._animate_typing`, started and cancelled alongside
     # `animate_task` by `_start_animation` / `_stop_animation`. A SECOND

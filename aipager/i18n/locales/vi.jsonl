@@ -1607,6 +1607,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Token đăng nhập Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Đăng nhập không rõ"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "Theo mô hình, 7 ngày qua"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ Sắp hết giới hạn 5 giờ: đã dùng {pct}"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ Hết giới hạn 5 giờ: đã dùng {pct}"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Sắp hết giới hạn tuần: đã dùng {pct}"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Hết giới hạn tuần: đã dùng {pct}"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Sắp hết hạn mức chi tiêu: đã dùng {pct}"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Hết hạn mức chi tiêu: đã dùng {pct}"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Giới hạn gói sẽ hiện ở đây sau khi Claude trả lời trong một phiên đăng nhập bằng gói đăng ký Claude. Khóa API và gateway không có hạn mức chi tiêu không báo các giới hạn này."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Giới hạn gói"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Đặt lại sau {days} ngày {hours} giờ"}

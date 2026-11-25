@@ -1607,6 +1607,12 @@
 {"k": "usage.login.token", "src": "64d01959", "v": "Токен входа Claude"}
 {"k": "usage.login.unknown", "src": "1bf1c689", "v": "Неизвестный вход"}
 {"k": "usage.models.title", "src": "cd5eb0b5", "v": "По моделям, за 7 дней"}
+{"k": "usage.note.five_hour_near", "src": "13051f69", "v": "⚠️ 5-часовой лимит почти исчерпан: использовано {pct}"}
+{"k": "usage.note.five_hour_reached", "src": "9f863c7f", "v": "⛔ 5-часовой лимит исчерпан: использовано {pct}"}
+{"k": "usage.note.seven_day_near", "src": "b9ac5278", "v": "⚠️ Недельный лимит почти исчерпан: использовано {pct}"}
+{"k": "usage.note.seven_day_reached", "src": "bf0e4307", "v": "⛔ Недельный лимит исчерпан: использовано {pct}"}
+{"k": "usage.note.spend_limit_near", "src": "efedc894", "v": "⚠️ Лимит расходов почти исчерпан: использовано {pct}"}
+{"k": "usage.note.spend_limit_reached", "src": "5b294d9b", "v": "⛔ Лимит расходов исчерпан: использовано {pct}"}
 {"k": "usage.plan.none", "src": "dbfa3286", "v": "Лимиты плана появятся здесь, когда Claude ответит в сессии, где вход выполнен по подписке Claude. API-ключи и шлюзы без лимита расходов их не сообщают."}
 {"k": "usage.plan.title", "src": "f65ebee7", "v": "Лимиты плана"}
 {"k": "usage.resets.days", "src": "8ec71dd7", "v": "Сброс через {days} д {hours} ч"}

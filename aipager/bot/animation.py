@@ -22,7 +22,8 @@ import httpx
 from telegram.error import RetryAfter
 
 from aipager import agent_tree, bg_shells, flood_policy, i18n, preferences
-from aipager.bot import card_rows, claude_bidi, job_wait, question_form, rm_refusal
+from aipager.bot import (card_rows, claude_bidi, job_wait, question_form, rm_refusal,
+                         usage_note)
 from aipager.bot.divider import DIVIDER_SEP, without_dividers
 from aipager.bot.footer import footer, without_last_footer
 from aipager.i18n import Msg, Plural, Safe, Span
@@ -1528,6 +1529,17 @@ def build_stream_card_ex(
     peer_line = peer_notice.card_line(tr, getattr(sess, "peer_from", None))
     if peer_line:
         peer_line = claude_bidi.row(tr, peer_line)
+    # A plan limit at 90% or more (roadmap 8.131): one row per window,
+    # right above the divider, from the windows the edit path stamped
+    # (`usage_note.windows_for`: a private chat whose person may see plan
+    # usage, the session's own sign-in). Never on the finished card: it
+    # stays on screen, and "resets in 3 h" would turn false.
+    note_block = ""
+    if not final:
+        note_rows = usage_note.card_rows(tr, getattr(sess, "card_usage_windows", None),
+                                         now=time.time())
+        note_block = _ROW_SEP.join(claude_bidi.row(tr, tr.line(row, kind="md"))
+                                   for row in note_rows)
 
     # Reserve: the status line plus the divider above it
     # (`_assemble_card`), so the fitter's budget is exactly what the BODY
@@ -1543,9 +1555,15 @@ def build_stream_card_ex(
         reserve_chars += len(peer_line) + len(_ROW_SEP)
         reserve_bytes += (len(peer_line.encode("utf-8"))
                           + len(_ROW_SEP.encode("utf-8")))
+    if note_block:
+        reserve_chars += len(note_block) + len(_ROW_SEP)
+        reserve_bytes += (len(note_block.encode("utf-8"))
+                          + len(_ROW_SEP.encode("utf-8")))
 
     sections = _build_sections(sess, final=final, tr=tr)
     body, dropped = _fit_sections(sections, reserve_chars, reserve_bytes, tr=tr)
+    if note_block:
+        body = f"{body}{_ROW_SEP}{note_block}" if body else note_block
 
     raw = _assemble_card(body, status)
     if peer_line:
@@ -2489,6 +2507,10 @@ class AnimationMixin:
             # BEFORE the build so the renderer itself stays pure.
             sess.card_elapsed_unit = (
                 "s" if final else self._card_elapsed_unit(sess))
+            # The near-limit note's windows (roadmap 8.131), asked again
+            # on every edit so an access change shows at the next frame.
+            sess.card_usage_windows = (
+                None if final else usage_note.windows_for(self, sess))
             markdown, hid = build_stream_card_ex(
                 sess, verb, final=final, waiting=waiting,
             )
@@ -2743,6 +2765,7 @@ class AnimationMixin:
             return None
         paused = not final and sess.stream_last_rendered == _PAUSED_CARD_TEXT
         sess.card_elapsed_unit = "s" if final else self._card_elapsed_unit(sess)
+        sess.card_usage_windows = None if final else usage_note.windows_for(self, sess)
         tr = i18n.for_sess(sess)
         is_rtl = _card_rtl(sess, tr)
         if paused:

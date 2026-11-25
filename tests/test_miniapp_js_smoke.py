@@ -2448,6 +2448,7 @@ def test_the_report_harness_detects_a_broken_page(node_bin, tmp_path):
     ("chats_usage_settings", "ok: settings tab + chat switch -> the Usage tab follows the chat"),
     ("usage_absent", "ok: no can_usage -> no Usage tab"),
     ("usage_no_tokens", "ok: no tokens -> no chart"),
+    ("usage_near_flag", "ok: the server's near flag decides the amber bar"),
     ("usage_chart_fits", "ok: chart labels usage_chart_fits"),
     ("usage_chart_today", "ok: chart labels usage_chart_today"),
     ("usage_chart_narrow", "ok: chart labels usage_chart_narrow"),
@@ -2512,7 +2513,7 @@ _USAGE_MUTANTS = [
         "",
         "chats_usage_settings_race", id="opening-settings-asks-for-the-tab"),
     pytest.param(
-        '            var fill = make("div", pct >= 90 ? "ubar-fill is-near" : "ubar-fill");',
+        '            var fill = make("div", w.near ? "ubar-fill is-near" : "ubar-fill");',
         '            var fill = make("div", "ubar-fill");',
         "usage_open", id="near-the-limit-is-amber"),
     pytest.param(
