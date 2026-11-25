@@ -202,7 +202,7 @@ _UPDATES_CARD_ADDED = {
 
 #: A session waiting for its own background agents or shells (roadmap
 #: 8.121, status ``tasks``) looks like a working one: each busy rule is
-#: followed by its ``tasks`` twin, and the tile's state word may be cut.
+#: followed by its ``tasks`` twin (its state word wraps, _NARROW_ADDED).
 _TASKS_ADDED = {
     ("", ".tile-busy"): [
         ["", ".tile-tasks", [
@@ -212,8 +212,7 @@ _TASKS_ADDED = {
     ],
     ("", ".tile-busy .tile-state"): [
         ["", ".tile-tasks .tile-state", [
-            ["background", "var(--lamp-work-soft)"], ["color", "var(--ink)"],
-            ["max-width", "100%"], ["overflow", "hidden"], ["text-overflow", "ellipsis"]]],
+            ["background", "var(--lamp-work-soft)"], ["color", "var(--ink)"]]],
     ],
     ("", ".status-busy::before"): [
         ["", ".status-tasks", [["background", "var(--lamp-work-soft)"], ["color", "var(--ink)"]]],
@@ -285,6 +284,37 @@ _USAGE_TAB_ADDED = {
     ],
 }
 
+#: Narrow phones (320px) in every language: a tile's state word and age
+#: drop below the ring and may wrap between words (the tile grows; a
+#: little less padding under 360px), "no folder" wraps, and a beacon's age
+#: drops to its own line before the name is cut. A tab's count goes under
+#: its label rather than break the word.
+_NARROW_ADDED = {
+    ("", ".tabbar-btn"): [
+        ["", ".tabbar-btn", [["column-gap", "var(--s2)"], ["flex-wrap", "wrap"],
+                             ["row-gap", "0"]]],
+    ],
+    ("", ".beacon-age"): [
+        ["", ".beacon-top", [["flex-wrap", "wrap"], ["row-gap", "2px"]]],
+    ],
+    ("", ".tile-age"): [
+        ["", ".tile", [["height", "auto"], ["min-height", "132px"]]],
+        ["", ".tile-top", [["flex-wrap", "wrap"]]],
+        ["", ".tile-side", [["flex", "1 1 auto"]]],
+        ["", ".tile-state, .tile-age", [["max-width", "100%"], ["overflow-wrap", "break-word"],
+                                        ["text-align", "right"], ["white-space", "normal"]]],
+        ["", ".tile-state", [["border-radius", "var(--r-chip)"]]],
+        ["", ".tile-project.tile-none", [["overflow-wrap", "break-word"],
+                                         ["white-space", "normal"]]],
+        ["", ":root:lang(ko) .tile-state, :root:lang(ko) .tile-age",
+         [["word-break", "keep-all"]]],
+        ["@media (max-width: 359px)", ".tile", [["padding-left", "12px"],
+                                                ["padding-right", "12px"]]],
+        ["@media (max-width: 359px)", ".tile-state", [["padding-left", "6px"],
+                                                      ["padding-right", "6px"]]],
+    ],
+}
+
 # The per-script fonts: the @font-face rules first (one per bundled file,
 # checked in tests/test_miniapp_fonts.py), and each script's font stack
 # after the light scheme rule. Fonts only; no layout changes.
@@ -324,6 +354,7 @@ def _expected_now(golden: list) -> list:
         out.extend(_USAGE_ADDED.get((ctx, sel), []))
         out.extend(_USAGE_TAB_ADDED.get((ctx, sel), []))
         out.extend(_FONTS_ADDED.get((ctx, sel), []))
+        out.extend(_NARROW_ADDED.get((ctx, sel), []))
     return out
 
 

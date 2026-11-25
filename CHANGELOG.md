@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A busy card that was still waiting for its turn to be sent when its session ended is now dropped unsent, instead of popping up and vanishing seconds later; and a late message from a session that has ended no longer makes it the chat's current session, so your next message no longer gets "session not found".
 - After a restart, a mode switch that restarts the session, or `/new`'s Replace, the old Claude's permission prompts and questions are closed and lose their buttons: a tap on one could type keys into the freshly started Claude. Replace of a working session now also ends its old turn (the card shows Stopped) instead of leaving it marked as working, and messages that were waiting for the old Claude are marked not delivered instead of reaching the fresh one.
 - One corrupted, absurdly large number in aipager's saved usage file no longer makes the whole file read as empty (and the next save wipe every plan reading and token count); only the entry holding it is dropped.
+- On a narrow phone the Mini App's session tiles no longer cut their state word ("working", "waiting for 2 agents") or draw it and its time over the ring in any language: it moves below the ring and wraps, a waiting session's name is no longer squeezed to a letter or two, and the Sessions tab's count goes under its label instead of splitting the word.
 
 ## [1.6.0] - 2026-11-18
 

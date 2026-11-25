@@ -232,7 +232,10 @@ def test_code_in_an_arabic_script_page_keeps_the_script_font_behind_it(code, fon
 
 
 def test_other_languages_keep_the_system_font():
-    assert sorted(re.findall(r":lang\(([^)]+)\)", CSS)) == ["ar", "fa", "ko", "vi", "zh"]
+    # The font stacks: a rule of its own per language (a layout rule such
+    # as Korean's word-break names an element after the language).
+    assert sorted(re.findall(r":lang\(([^)]+)\) \{", CSS)) == ["ar", "fa", "ko", "vi", "zh"]
+    assert sorted(re.findall(r":lang\(([^)]+)\)", CSS)) == ["ar", "fa", "ko", "ko", "ko", "vi", "zh"]
     assert ('--font: ' + _SYS + ";") in CSS
     for code in ("ko", "zh", "vi"):
         assert "--mono" not in _lang_rule(code)
