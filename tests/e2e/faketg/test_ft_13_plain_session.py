@@ -293,10 +293,22 @@ def test_plain_claude_dialog_marked_turn_and_loop(fresh):
         assert not (inst.project / "plainmarked.txt").exists()
 
         # 3. A /loop: its scheduled fires run the command, never refused.
-        n = len(_tool_results(transcript))
+        # In a fresh conversation: real Claude that has just seen Bash
+        # refused may decline to schedule it at all (seen 2026-11-25).
+        seen = set(_transcripts(inst.home))
+        mark = term.mark()
+        term.type("/clear")
+        fti.wait_until(lambda: "\u276f" in term.text(mark), 60,
+                       "the plain claude's prompt after /clear",
+                       lambda: term.text(mark)[-1500:])
+        time.sleep(3)
         loop_file = inst.project / "plainloop.txt"
         term.type("/loop 1m Run this Bash command exactly: `date +%s >> plainloop.txt` "
                   "(one Bash call, nothing else).")
+        transcript = fti.wait_until(
+            lambda: next(iter(set(_transcripts(inst.home)) - seen - {transcript}), None), 60,
+            "the fresh conversation's transcript")
+        n = 0
 
         def _fires():
             try:

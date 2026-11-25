@@ -5,8 +5,8 @@ alice's private session asks to write a file (its prompt is on the busy
 card), and alice sends ``/new`` with the same name and taps Replace. The
 old Claude is killed and a fresh one starts under the same entry. Then:
 
-- the old turn is over: its card says Stopped and has no buttons left,
-  and the entry is not left working or waiting;
+- the old turn is over: the prompt has no buttons left, its busy card
+  (when it was sent) says Stopped, and the entry is not left working;
 - a tap on the old prompt's Allow (an old client still showing it) is
   answered "already answered" and types nothing into the fresh Claude:
   no dialog key reaches it and the file is never written;
@@ -17,6 +17,8 @@ real Claude the file and the control turn do.
 """
 
 from __future__ import annotations
+
+import time
 
 from tests.e2e.fake_telegram import instance as fti
 from tests.e2e.faketg import conftest as ftc
@@ -55,12 +57,21 @@ def test_replace_closes_the_old_prompt_and_ends_its_turn(fresh):
                                    for e in inst.standin_log(name)[events_before:]),
                        60, "the fresh stand-in to start")
     else:
-        inst.wait_log(f"[{LABEL}] Launched session", since=log_since, timeout=90)
+        inst.wait_log(f"Launched session {name} (", since=log_since, timeout=90)
+        time.sleep(3)
 
-    # The old turn's card: Stopped, no buttons.
-    flows.wait_text(fake, DM, f"{LABEL} · Stopped", since=since, timeout=60)
+    # The old prompt has no buttons left, whether it was on the busy card or
+    # sent as its own message (real Claude can ask before the card is out).
     fti.wait_until(lambda: not _buttons(fake.message(DM, card["message_id"])), 60,
-                   "the old card's buttons to go")
+                   "the old prompt's buttons to go")
+    on_card = card["message_id"] in flows.busy_card_ids(inst.log_lines(0), LABEL)
+    if on_card:
+        # The old turn's card: Stopped.
+        flows.wait_text(fake, DM, f"{LABEL} · Stopped", since=since, timeout=60)
+    # No card of the old turn turns up after the Replace (one still waiting
+    # for the chat's pace is dropped unsent).
+    assert not flows.busy_card_ids(inst.log_lines(log_since), LABEL), \
+        "a busy card was sent after the replace"
     lines = inst.log_lines(log_since)
     assert not [ln for ln in lines if f"[{LABEL}]" in ln and "→ BUSY" in ln], \
         "the replaced entry went back to working"
