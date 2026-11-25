@@ -1,6 +1,6 @@
 # Perintah dan antarmuka bot
 
-<!-- i18n-source: docs/commands.md @ 347acc60 -->
+<!-- i18n-source: docs/commands.md @ e0491e1c -->
 
 > Halaman ini diterjemahkan dari bahasa Inggris; kalau keduanya berbeda, versi bahasa Inggris yang berlaku. ([English](../../commands.md))
 
